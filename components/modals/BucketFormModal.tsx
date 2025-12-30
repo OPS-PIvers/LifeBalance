@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { BudgetBucket } from '../../types/schema';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 interface BucketFormModalProps {
   isOpen: boolean;

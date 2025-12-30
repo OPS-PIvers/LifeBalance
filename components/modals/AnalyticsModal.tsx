@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, ResponsiveContainer } from 'recharts';
 
 interface AnalyticsModalProps {

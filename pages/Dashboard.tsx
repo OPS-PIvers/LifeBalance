@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useHousehold } from '../contexts/HouseholdContext';
+import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeFormModal from '../components/modals/ChallengeFormModal';
@@ -51,9 +51,9 @@ const Dashboard: React.FC = () => {
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
 
   // Widget B Data
-  const linkedHabits = habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id));
-  const completedHabitsCount = linkedHabits.reduce((acc, h) => acc + h.totalCount, 0); 
-  const challengeTarget = activeChallenge.targetTotalCount;
+  const linkedHabits = activeChallenge ? habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id)) : [];
+  const completedHabitsCount = linkedHabits.reduce((acc, h) => acc + h.totalCount, 0);
+  const challengeTarget = activeChallenge?.targetTotalCount || 1;
   const challengeProgress = Math.min(100, (completedHabitsCount / challengeTarget) * 100);
 
   return (

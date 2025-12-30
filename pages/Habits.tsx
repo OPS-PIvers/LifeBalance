@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useHousehold } from '../contexts/HouseholdContext';
+import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
 import { Plus } from 'lucide-react';

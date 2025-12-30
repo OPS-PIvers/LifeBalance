@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Lock } from 'lucide-react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 interface RewardsModalProps {
   isOpen: boolean;

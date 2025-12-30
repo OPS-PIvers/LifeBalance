@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { X, Flame, MoreVertical, Edit2, Trash2, Target, CloudSun } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';

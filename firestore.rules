@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function: Check if user is member of household
+    function isMemberOf(householdId) {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
+    }
+
+    // Helper function: Check if user is admin of household
+    function isAdminOf(householdId) {
+      return isAuthenticated() &&
+             get(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Households collection
+    match /households/{householdId} {
+      // Allow reading if user is in memberUids array OR checking membership
+      allow read: if isAuthenticated() &&
+                     (request.auth.uid in resource.data.memberUids ||
+                      isMemberOf(householdId));
+      allow list: if isAuthenticated(); // Allow querying for households user belongs to
+      allow create: if isAuthenticated();
+      allow update: if isMemberOf(householdId);
+      allow delete: if isAdminOf(householdId);
+
+      // Members subcollection
+      match /members/{memberId} {
+        allow read: if isMemberOf(householdId);
+        allow create: if isAuthenticated(); // Allow joining
+        allow update: if isMemberOf(householdId);
+        allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
+      }
+
+      // All other subcollections (accounts, buckets, transactions, etc.)
+      match /{subcollection}/{document} {
+        allow read: if isMemberOf(householdId);
+        allow write: if isMemberOf(householdId);
+      }
+    }
+
+    // Invite codes collection
+    match /inviteCodes/{code} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Invite codes shouldn't be modified or deleted
+    }
+  }
+}

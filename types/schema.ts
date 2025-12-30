@@ -4,6 +4,8 @@ export type Role = 'admin' | 'member';
 export interface HouseholdMember {
   uid: string;
   displayName: string;
+  email?: string;
+  photoURL?: string;
   role: Role;
   telegramChatId?: string;
   points: { daily: number; weekly: number; total: number };
@@ -56,20 +58,25 @@ export interface Habit {
   title: string;
   category: string;
   type: 'positive' | 'negative';
-  
+
   // Scoring & Frequency
   basePoints: number;
-  scoringType: 'incremental' | 'threshold'; 
-  period: 'daily' | 'weekly'; 
-  targetCount: number; 
-  
+  scoringType: 'incremental' | 'threshold';
+  period: 'daily' | 'weekly';
+  targetCount: number;
+
   // State
   count: number;
   totalCount: number; // Lifetime count
   completedDates: string[]; // YYYY-MM-DD
   streakDays: number;
   lastUpdated: string; // To handle resets
-  
+
+  // Ownership (for Firebase multi-user support)
+  isShared?: boolean; // true = household-wide, false/undefined = personal
+  ownerId?: string; // uid if personal habit
+  createdBy?: string; // uid of creator
+
   // Legacy/Optional
   weatherSensitive: boolean;
   telegramAlias?: string;

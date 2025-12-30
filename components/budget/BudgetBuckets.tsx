@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { AlertTriangle, ArrowRightLeft, Plus, X, Pencil, Check, MoreVertical } from 'lucide-react';
 import { BudgetBucket } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';

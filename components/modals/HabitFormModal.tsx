@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { Habit } from '../../types/schema';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 interface HabitFormModalProps {
   isOpen: boolean;

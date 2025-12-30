@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star } from 'lucide-react';
 import { Account } from '../../types/schema';
 

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { X, Wallet, Receipt, CreditCard } from 'lucide-react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { startOfToday, endOfMonth, parseISO, isAfter, isBefore } from 'date-fns';
 
 interface SafeToSpendModalProps {

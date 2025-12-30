@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { X, Camera, Type, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { analyzeReceipt, ReceiptData } from '../../services/geminiService';
 import { Transaction } from '../../types/schema';
 

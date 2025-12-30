@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';

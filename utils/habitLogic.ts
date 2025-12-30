@@ -1,0 +1,165 @@
+import { Habit, HouseholdMember } from '@/types/schema';
+import { format, subDays, parseISO } from 'date-fns';
+
+/**
+ * Calculate the current streak for a habit based on completion dates
+ * @param dates - Array of completion dates in YYYY-MM-DD format
+ * @returns The current streak count
+ */
+export const calculateStreak = (dates: string[]): number => {
+  if (dates.length === 0) return 0;
+  const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  let currentStreak = 0;
+  let checkDate = sortedDates[0] === today ? today : yesterday;
+  if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
+  for (const dateStr of sortedDates) {
+    if (dateStr === checkDate) {
+      currentStreak++;
+      checkDate = format(subDays(parseISO(checkDate), 1), 'yyyy-MM-dd');
+    } else {
+      break;
+    }
+  }
+  return currentStreak;
+};
+
+/**
+ * Get the point multiplier based on streak, habit type, and weather sensitivity
+ * @param streak - Current streak count
+ * @param isPositive - Whether this is a positive habit
+ * @param weatherSensitive - Whether this habit is affected by weather
+ * @returns The multiplier to apply to base points
+ */
+export const getMultiplier = (streak: number, isPositive: boolean, weatherSensitive: boolean): number => {
+  let multiplier = 1.0;
+  if (isPositive) {
+    if (streak >= 7) multiplier = 2.0;
+    else if (streak >= 3) multiplier = 1.5;
+  }
+  const isNiceDay = true; // TODO: Integrate with weather API
+  if (weatherSensitive && isNiceDay) multiplier += 1.0;
+  return multiplier;
+};
+
+export interface ToggleHabitResult {
+  updatedHabit: Partial<Habit>;
+  pointsChange: number;
+  multiplier: number;
+}
+
+/**
+ * Process a habit toggle (increment/decrement) and calculate resulting state changes
+ * This function contains the core business logic for habit scoring and streak tracking
+ *
+ * @param habit - The habit being toggled
+ * @param direction - Whether to increment ('up') or decrement ('down')
+ * @param currentUser - The current user (for validation, not modified)
+ * @returns Object containing updated habit state and points change, or null if invalid
+ */
+export const processToggleHabit = (
+  habit: Habit,
+  direction: 'up' | 'down',
+  currentUser: HouseholdMember
+): ToggleHabitResult | null => {
+  const today = format(new Date(), 'yyyy-MM-dd');
+
+  let newCount = habit.count;
+  let newTotalCount = habit.totalCount;
+  let newCompletedDates = [...habit.completedDates];
+  let pointsChange = 0;
+
+  // 1. Update Counts
+  if (direction === 'up') {
+    newCount++;
+    newTotalCount++;
+  } else {
+    if (newCount > 0) newCount--;
+    if (newTotalCount > 0) newTotalCount--;
+    if (newCount === 0 && direction === 'down') {
+      // Can't go below 0
+      return null;
+    }
+  }
+
+  // 2. Determine if Scorable (Points + Completion)
+  const currentStreak = calculateStreak(habit.completedDates);
+  const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.weatherSensitive);
+
+  let isCompletedNow = false;
+  let wasCompletedBefore = false;
+
+  // Logic Split by Scoring Type
+  if (habit.scoringType === 'incremental') {
+    // Incremental: Points on every action
+    if (direction === 'up') {
+      pointsChange = Math.floor(habit.basePoints * multiplier);
+    } else {
+      pointsChange = -Math.floor(habit.basePoints * multiplier);
+    }
+    // Completion: Hit target (or 1 if 0)
+    const target = habit.targetCount > 0 ? habit.targetCount : 1;
+    isCompletedNow = newCount >= target;
+    wasCompletedBefore = habit.count >= target;
+  } else {
+    // Threshold: Points only when target hit
+    const target = habit.targetCount;
+    isCompletedNow = newCount >= target;
+    wasCompletedBefore = habit.count >= target;
+
+    if (isCompletedNow && !wasCompletedBefore) {
+      // Just hit target -> Award Points
+      pointsChange = Math.floor(habit.basePoints * multiplier);
+    } else if (!isCompletedNow && wasCompletedBefore) {
+      // Just lost target -> Remove Points
+      pointsChange = -Math.floor(habit.basePoints * multiplier);
+    }
+  }
+
+  // 3. Update Completion History (for streaks)
+  if (isCompletedNow) {
+    if (!newCompletedDates.includes(today)) {
+      newCompletedDates.push(today);
+      newCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    }
+  } else {
+    // Only remove if we fell below threshold
+    newCompletedDates = newCompletedDates.filter(d => d !== today);
+  }
+
+  return {
+    updatedHabit: {
+      count: newCount,
+      totalCount: newTotalCount,
+      completedDates: newCompletedDates,
+      streakDays: calculateStreak(newCompletedDates),
+      lastUpdated: new Date().toISOString(),
+    },
+    pointsChange,
+    multiplier,
+  };
+};
+
+/**
+ * Calculate points to remove when resetting a habit
+ * @param habit - The habit being reset
+ * @returns The number of points to deduct
+ */
+export const calculateResetPoints = (habit: Habit): number => {
+  if (habit.count === 0) return 0;
+
+  let pointsToRemove = 0;
+  const currentStreak = calculateStreak(habit.completedDates);
+  const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.weatherSensitive);
+
+  if (habit.scoringType === 'incremental') {
+    pointsToRemove = habit.count * Math.floor(habit.basePoints * multiplier);
+  } else {
+    if (habit.count >= habit.targetCount) {
+      pointsToRemove = Math.floor(habit.basePoints * multiplier);
+    }
+  }
+
+  return pointsToRemove;
+};

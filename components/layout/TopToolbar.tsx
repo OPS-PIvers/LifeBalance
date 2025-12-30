@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Star } from 'lucide-react';
-import { useHousehold } from '../../contexts/HouseholdContext';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useNavigate } from 'react-router-dom';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
