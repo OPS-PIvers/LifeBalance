@@ -36,7 +36,7 @@ const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({ isOpen, onClose
   };
 
   const handleSave = () => {
-    if (!title || !targetCount) return;
+    if (!title || !targetCount || !activeChallenge) return;
 
     const updatedChallenge: Challenge = {
       ...activeChallenge,

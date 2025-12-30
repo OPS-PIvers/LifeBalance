@@ -10,7 +10,7 @@ interface RewardsModalProps {
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, currentUser, redeemReward } = useHousehold();
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentUser) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

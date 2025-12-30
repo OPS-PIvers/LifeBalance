@@ -62,7 +62,7 @@ const Dashboard: React.FC = () => {
       {/* Dashboard Header */}
       <div className="px-4 py-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-brand-800">Hi, {currentUser.displayName}</h1>
+          <h1 className="text-2xl font-bold text-brand-800">Hi, {currentUser?.displayName || 'there'}</h1>
           <p className="text-sm text-brand-400">Let's make today count.</p>
         </div>
         <button 
@@ -164,39 +164,41 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Widget B: Monthly Challenge */}
-        <div className="bg-brand-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group">
-          {/* Background decoration */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-          
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="font-bold text-lg">{activeChallenge.title}</h2>
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-white/10 px-2 py-1 rounded-lg">
-                  {format(new Date(), 'MMM yyyy')}
-                </span>
-                <button 
-                  onClick={() => setIsChallengeModalOpen(true)}
-                  className="p-1 text-brand-300 hover:text-white transition-colors rounded-full hover:bg-white/10"
-                >
-                  <Pencil size={14} />
-                </button>
+        {activeChallenge && (
+          <div className="bg-brand-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group">
+            {/* Background decoration */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
+
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="font-bold text-lg">{activeChallenge.title}</h2>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-white/10 px-2 py-1 rounded-lg">
+                    {format(new Date(), 'MMM yyyy')}
+                  </span>
+                  <button
+                    onClick={() => setIsChallengeModalOpen(true)}
+                    className="p-1 text-brand-300 hover:text-white transition-colors rounded-full hover:bg-white/10"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-brand-300 mb-4">Complete habits to unlock {activeChallenge.yearlyRewardLabel}</p>
+
+              <div className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2">
+                <div
+                  className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
+                  style={{ width: `${challengeProgress}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px] font-medium text-brand-300">
+                <span>{completedHabitsCount} Habits</span>
+                <span>{challengeTarget} Target</span>
               </div>
             </div>
-            <p className="text-xs text-brand-300 mb-4">Complete habits to unlock {activeChallenge.yearlyRewardLabel}</p>
-            
-            <div className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2">
-              <div 
-                className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
-                style={{ width: `${challengeProgress}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-[10px] font-medium text-brand-300">
-              <span>{completedHabitsCount} Habits</span>
-              <span>{challengeTarget} Target</span>
-            </div>
           </div>
-        </div>
+        )}
 
         {/* Widget C: Gemini Insight */}
         <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100 shadow-sm">

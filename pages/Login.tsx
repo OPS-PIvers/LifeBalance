@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { signInWithGoogle } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -40,8 +40,12 @@ const Login: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Logo/Brand */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
-              <Home className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+              <img
+                src="/lifebalance_icon.png"
+                alt="LifeBalance"
+                className="w-full h-full object-contain rounded-2xl"
+              />
             </div>
             <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
             <p className="text-brand-500 text-sm">
