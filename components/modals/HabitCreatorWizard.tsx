@@ -94,31 +94,36 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   const handleTogglePreset = async (preset: PresetHabit) => {
     const existingHabit = habits.find(h => h.presetId === preset.id);
 
-    if (existingHabit) {
-      await deleteHabit(existingHabit.id);
-      toast.success(`Removed "${preset.title}"`);
-    } else {
-      const newHabit: Habit = {
-        id: generateId(),
-        title: preset.title,
-        category: preset.category,
-        type: preset.type,
-        basePoints: calculateBasePoints(preset.type, preset.effortLevel),
-        scoringType: preset.scoringType,
-        period: preset.period,
-        targetCount: preset.targetCount,
-        count: 0,
-        totalCount: 0,
-        completedDates: [],
-        streakDays: 0,
-        lastUpdated: new Date().toISOString(),
-        weatherSensitive: preset.weatherSensitive,
-        presetId: preset.id,
-        isCustom: false,
-        effortLevel: preset.effortLevel,
-      };
-      await addHabit(newHabit);
-      toast.success(`Added "${preset.title}"`);
+    try {
+      if (existingHabit) {
+        await deleteHabit(existingHabit.id);
+        toast.success(`Removed "${preset.title}"`);
+      } else {
+        const newHabit: Habit = {
+          id: generateId(),
+          title: preset.title,
+          category: preset.category,
+          type: preset.type,
+          basePoints: calculateBasePoints(preset.type, preset.effortLevel),
+          scoringType: preset.scoringType,
+          period: preset.period,
+          targetCount: preset.targetCount,
+          count: 0,
+          totalCount: 0,
+          completedDates: [],
+          streakDays: 0,
+          lastUpdated: new Date().toISOString(),
+          weatherSensitive: preset.weatherSensitive,
+          presetId: preset.id,
+          isCustom: false,
+          effortLevel: preset.effortLevel,
+        };
+        await addHabit(newHabit);
+        toast.success(`Added "${preset.title}"`);
+      }
+    } catch (error) {
+      console.error('[HabitCreatorWizard] Toggle preset failed:', error);
+      // Error toast is handled by addHabit/deleteHabit
     }
   };
 
@@ -177,21 +182,31 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       completedDates: editingHabit ? editingHabit.completedDates : [],
       streakDays: editingHabit ? editingHabit.streakDays : 0,
       lastUpdated: new Date().toISOString(),
-      weatherSensitive: false,
+      weatherSensitive: editingHabit?.weatherSensitive ?? false,
       isCustom: true,
       effortLevel: formData.effortLevel,
+      // Preserve ownership fields when editing
+      isShared: editingHabit?.isShared,
+      ownerId: editingHabit?.ownerId,
+      telegramAlias: editingHabit?.telegramAlias,
+      presetId: editingHabit?.presetId,
     };
 
-    if (editingHabit) {
-      await updateHabit(habitData);
-      toast.success('Habit updated!');
-    } else {
-      await addHabit(habitData);
-      toast.success('Custom habit created!');
-    }
+    try {
+      if (editingHabit) {
+        await updateHabit(habitData);
+        toast.success('Habit updated!');
+      } else {
+        await addHabit(habitData);
+        toast.success('Custom habit created!');
+      }
 
-    setView('main');
-    resetForm();
+      setView('main');
+      resetForm();
+    } catch (error) {
+      console.error('[HabitCreatorWizard] Save failed:', error);
+      // Error toast is handled by updateHabit/addHabit
+    }
   };
 
   // Show delete confirmation
@@ -203,14 +218,19 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   const handleDeleteConfirmed = async () => {
     if (!deleteConfirmHabit) return;
 
-    await deleteHabit(deleteConfirmHabit.id);
-    toast.success(`Deleted "${deleteConfirmHabit.title}"`);
+    try {
+      await deleteHabit(deleteConfirmHabit.id);
+      toast.success(`Deleted "${deleteConfirmHabit.title}"`);
 
-    if (editingHabit?.id === deleteConfirmHabit.id) {
-      setView('main');
-      resetForm();
+      if (editingHabit?.id === deleteConfirmHabit.id) {
+        setView('main');
+        resetForm();
+      }
+      setDeleteConfirmHabit(null);
+    } catch (error) {
+      console.error('[HabitCreatorWizard] Delete failed:', error);
+      toast.error('Failed to delete habit. Please try again.');
     }
-    setDeleteConfirmHabit(null);
   };
 
   // Cancel delete
