@@ -54,13 +54,13 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div 
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
         className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
-      <div className="relative w-full h-[90vh] sm:h-[80vh] max-w-2xl bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-10">
+      <div className="relative w-full max-h-[90vh] max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100">
           <h2 className="text-xl font-bold text-brand-800">Analytics</h2>

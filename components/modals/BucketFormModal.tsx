@@ -64,10 +64,10 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 sm:slide-in-from-bottom-0 duration-200">
+      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100">
           <h2 className="text-lg font-bold text-brand-800">
             {editingBucket ? 'Edit Bucket' : 'New Bucket'}
