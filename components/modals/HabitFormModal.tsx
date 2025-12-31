@@ -45,8 +45,10 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     }
   }, [editingHabit, isOpen]);
 
-  const handleSave = () => {
-    if (!title || !basePoints || !targetCount) return;
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!title || !basePoints || !targetCount || isSaving) return;
 
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
@@ -71,12 +73,20 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     };
 
     console.log('[HabitFormModal] Saving habit with scoringType:', scoringType, 'habitData:', habitData);
-    if (editingHabit) {
-      updateHabit(habitData);
-    } else {
-      addHabit(habitData);
+    setIsSaving(true);
+    try {
+      if (editingHabit) {
+        await updateHabit(habitData);
+      } else {
+        await addHabit(habitData);
+      }
+      onClose();
+    } catch (error) {
+      console.error('[HabitFormModal] Save failed:', error);
+      // Error toast is handled by updateHabit/addHabit
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   };
 
   if (!isOpen) return null;
@@ -192,9 +202,10 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         <div className="p-4 border-t border-brand-100 flex-shrink-0">
           <button
             onClick={handleSave}
-            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
+            disabled={isSaving}
+            className={`w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
           >
-            {editingHabit ? 'Save Changes' : 'Create Habit'}
+            {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
           </button>
         </div>
       </div>

@@ -475,34 +475,46 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addHabit = async (habit: Habit) => {
     if (!householdId || !user) return;
-    await addDoc(collection(db, `households/${householdId}/habits`), {
-      ...habit,
-      createdBy: user.uid,
-      isShared: habit.isShared ?? true,
-      ownerId: habit.isShared ? null : user.uid,
-      lastUpdated: serverTimestamp(),
-    });
-    toast.success('Habit created');
+    try {
+      await addDoc(collection(db, `households/${householdId}/habits`), {
+        ...habit,
+        createdBy: user.uid,
+        isShared: habit.isShared ?? true,
+        ownerId: habit.isShared ? null : user.uid,
+        lastUpdated: serverTimestamp(),
+      });
+      toast.success('Habit created');
+    } catch (error) {
+      console.error('[addHabit] Failed to create habit:', error);
+      toast.error('Failed to create habit. Please try again.');
+      throw error;
+    }
   };
 
   const updateHabit = async (habit: Habit) => {
     if (!householdId) return;
     console.log('[updateHabit] Updating habit with scoringType:', habit.scoringType, 'full habit:', habit);
-    await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
-      title: habit.title,
-      category: habit.category,
-      type: habit.type,
-      basePoints: habit.basePoints,
-      scoringType: habit.scoringType,
-      period: habit.period,
-      targetCount: habit.targetCount,
-      weatherSensitive: habit.weatherSensitive,
-      telegramAlias: habit.telegramAlias,
-      isShared: habit.isShared,
-      ownerId: habit.ownerId,
-    });
-    console.log('[updateHabit] Update complete');
-    toast.success('Habit updated');
+    try {
+      await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+        title: habit.title,
+        category: habit.category,
+        type: habit.type,
+        basePoints: habit.basePoints,
+        scoringType: habit.scoringType,
+        period: habit.period,
+        targetCount: habit.targetCount,
+        weatherSensitive: habit.weatherSensitive,
+        telegramAlias: habit.telegramAlias,
+        isShared: habit.isShared,
+        ownerId: habit.ownerId,
+      });
+      console.log('[updateHabit] Update complete');
+      toast.success('Habit updated');
+    } catch (error) {
+      console.error('[updateHabit] Failed to update habit:', error);
+      toast.error('Failed to save habit. Please try again.');
+      throw error;
+    }
   };
 
   const deleteHabit = async (id: string) => {
