@@ -495,32 +495,45 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     console.log('[updateHabit] Updating habit with scoringType:', habit.scoringType, 'full habit:', habit);
     try {
+      // Build update object, filtering out undefined values (Firestore rejects undefined)
+      const updateData = Object.fromEntries(
+        Object.entries({
+          title: habit.title,
+          category: habit.category,
+          type: habit.type,
+          basePoints: habit.basePoints,
+          scoringType: habit.scoringType,
+          period: habit.period,
+          targetCount: habit.targetCount,
+          weatherSensitive: habit.weatherSensitive ?? false,
+          telegramAlias: habit.telegramAlias,
+          isShared: habit.isShared,
+          ownerId: habit.ownerId,
+          isCustom: habit.isCustom,
+          effortLevel: habit.effortLevel,
+          presetId: habit.presetId,
+        }).filter(([, value]) => value !== undefined)
+      );
+
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
-        title: habit.title,
-        category: habit.category,
-        type: habit.type,
-        basePoints: habit.basePoints,
-        scoringType: habit.scoringType,
-        period: habit.period,
-        targetCount: habit.targetCount,
-        weatherSensitive: habit.weatherSensitive,
-        telegramAlias: habit.telegramAlias,
-        isShared: habit.isShared,
-        ownerId: habit.ownerId,
+        ...updateData,
+        lastUpdated: serverTimestamp(),
       });
       console.log('[updateHabit] Update complete');
-      toast.success('Habit updated');
     } catch (error) {
       console.error('[updateHabit] Failed to update habit:', error);
-      toast.error('Failed to save habit. Please try again.');
       throw error;
     }
   };
 
   const deleteHabit = async (id: string) => {
     if (!householdId) return;
-    await deleteDoc(doc(db, `households/${householdId}/habits`, id));
-    toast.success('Habit deleted');
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/habits`, id));
+    } catch (error) {
+      console.error('[deleteHabit] Failed to delete habit:', error);
+      throw error;
+    }
   };
 
   const toggleHabit = async (id: string, direction: 'up' | 'down') => {
