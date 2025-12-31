@@ -1,7 +1,7 @@
 // Preset Habits Configuration
 // Effort levels map to base points for habits
 
-export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
+import { EffortLevel } from '@/types/schema';
 
 // Points scale: easy = 1, medium = 2, hard = 3, very_hard = 5
 // For negative habits, these become -1, -2, -3, -5
@@ -25,6 +25,9 @@ export const EFFORT_COLORS: Record<EffortLevel, { bg: string; text: string }> = 
   hard: { bg: 'bg-orange-100', text: 'text-orange-700' },
   very_hard: { bg: 'bg-red-100', text: 'text-red-700' },
 };
+
+// Category constant for negative habits
+export const NEGATIVE_CATEGORY = 'Negative / Avoidance';
 
 export interface PresetHabit {
   id: string;
@@ -471,7 +474,7 @@ export const PRESET_HABITS: PresetHabit[] = [
   },
   {
     id: 'preset_homemade_dinner',
-    title: 'Home made dinner',
+    title: 'Homemade dinner',
     category: 'Meal Planning',
     type: 'positive',
     effortLevel: 'easy',
@@ -483,7 +486,7 @@ export const PRESET_HABITS: PresetHabit[] = [
   },
   {
     id: 'preset_lunch_prep',
-    title: 'Lunch prep day before',
+    title: 'Prep lunch the day before',
     category: 'Meal Planning',
     type: 'positive',
     effortLevel: 'easy',

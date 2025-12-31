@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Plus, Edit2, Trash2, Check, ChevronRight, Sparkles, Settings } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Check, ChevronRight, Sparkles, Settings, AlertTriangle } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
@@ -8,6 +8,7 @@ import {
   EFFORT_LABELS,
   EFFORT_COLORS,
   HABIT_CATEGORIES,
+  NEGATIVE_CATEGORY,
   getPresetHabitsByCategory
 } from '@/data/presetHabits';
 import toast from 'react-hot-toast';
@@ -19,8 +20,15 @@ interface HabitCreatorWizardProps {
 
 type WizardView = 'main' | 'create-custom' | 'edit-custom';
 
-// Categories for custom habit creation (subset of main categories)
-const CUSTOM_CATEGORIES = ['Health', 'Meal Planning', 'Household', 'Financial Planning', 'Self-Discipline', 'Negative / Avoidance'];
+// Header titles for each view
+const VIEW_TITLES: Record<WizardView, string> = {
+  'main': 'Manage Habits',
+  'create-custom': 'Create Custom Habit',
+  'edit-custom': 'Edit Habit',
+};
+
+// Categories for custom habit creation
+const CUSTOM_CATEGORIES = ['Health', 'Meal Planning', 'Household', 'Financial Planning', 'Self-Discipline', NEGATIVE_CATEGORY];
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
   const { habits, addHabit, updateHabit, deleteHabit } = useHousehold();
@@ -29,6 +37,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   const [view, setView] = useState<WizardView>('main');
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>('Health');
+  const [deleteConfirmHabit, setDeleteConfirmHabit] = useState<Habit | null>(null);
 
   // Create/Edit form state
   const [formTitle, setFormTitle] = useState('');
@@ -95,6 +104,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     setFormScoringType('threshold');
     setFormPeriod('daily');
     setFormTargetCount('1');
+    setEditingHabit(null);
   };
 
   // Open create custom view
@@ -155,14 +165,28 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     resetForm();
   };
 
-  // Delete custom habit
-  const handleDeleteCustom = async (habit: Habit) => {
-    await deleteHabit(habit.id);
-    toast.success(`Deleted "${habit.title}"`);
-    if (editingHabit?.id === habit.id) {
+  // Show delete confirmation
+  const confirmDelete = (habit: Habit) => {
+    setDeleteConfirmHabit(habit);
+  };
+
+  // Delete custom habit after confirmation
+  const handleDeleteCustom = async () => {
+    if (!deleteConfirmHabit) return;
+
+    await deleteHabit(deleteConfirmHabit.id);
+    toast.success(`Deleted "${deleteConfirmHabit.title}"`);
+
+    if (editingHabit?.id === deleteConfirmHabit.id) {
       setView('main');
       resetForm();
     }
+    setDeleteConfirmHabit(null);
+  };
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setDeleteConfirmHabit(null);
   };
 
   if (!isOpen) return null;
@@ -180,17 +204,20 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               <button
                 onClick={() => setView('main')}
                 className="p-1 text-brand-400 hover:text-brand-600 -ml-1"
+                aria-label="Back to main view"
               >
                 <ChevronRight size={20} className="rotate-180" />
               </button>
             )}
             <h2 className="text-lg font-bold text-brand-800">
-              {view === 'main' && 'Manage Habits'}
-              {view === 'create-custom' && 'Create Custom Habit'}
-              {view === 'edit-custom' && 'Edit Habit'}
+              {VIEW_TITLES[view]}
             </h2>
           </div>
-          <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-50 rounded-full">
+          <button
+            onClick={onClose}
+            className="p-2 text-brand-400 hover:bg-brand-50 rounded-full"
+            aria-label="Close habit manager"
+          >
             <X size={20} />
           </button>
         </div>
@@ -252,12 +279,14 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
                           <button
                             onClick={() => openEditCustom(habit)}
                             className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                            aria-label={`Edit habit: ${habit.title}`}
                           >
                             <Edit2 size={16} />
                           </button>
                           <button
-                            onClick={() => handleDeleteCustom(habit)}
+                            onClick={() => confirmDelete(habit)}
                             className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
+                            aria-label={`Delete habit: ${habit.title}`}
                           >
                             <Trash2 size={16} />
                           </button>
@@ -285,7 +314,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
 
                     const enabledCount = categoryPresets.filter(p => enabledPresetIds.has(p.id)).length;
                     const isExpanded = expandedCategory === category;
-                    const isNegativeCategory = category === 'Negative / Avoidance';
+                    const isNegativeCategory = category === NEGATIVE_CATEGORY;
 
                     return (
                       <div key={category} className={`border rounded-xl overflow-hidden ${isNegativeCategory ? 'border-rose-200' : 'border-brand-100'}`}>
@@ -505,8 +534,9 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               {/* Delete Button (Edit mode only) */}
               {view === 'edit-custom' && editingHabit && (
                 <button
-                  onClick={() => handleDeleteCustom(editingHabit)}
+                  onClick={() => confirmDelete(editingHabit)}
                   className="w-full py-3 text-money-neg font-semibold rounded-xl border border-rose-200 hover:bg-rose-50 transition-colors flex items-center justify-center gap-2"
+                  aria-label={`Delete habit: ${editingHabit.title}`}
                 >
                   <Trash2 size={16} />
                   Delete This Habit
@@ -517,27 +547,57 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           )}
         </div>
 
-        {/* Footer Actions */}
-        {(view === 'create-custom' || view === 'edit-custom') && (
-          <div className="p-4 border-t border-brand-100 flex-shrink-0">
-            <button
-              onClick={handleSaveCustom}
-              className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
-            >
-              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
-            </button>
-          </div>
-        )}
-
-        {/* Done button for main view */}
-        {view === 'main' && (
-          <div className="p-4 border-t border-brand-100 flex-shrink-0">
+        {/* Footer Actions - consolidated */}
+        <div className="p-4 border-t border-brand-100 flex-shrink-0">
+          {view === 'main' ? (
             <button
               onClick={onClose}
               className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
             >
               Done
             </button>
+          ) : (
+            <button
+              onClick={handleSaveCustom}
+              className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
+            >
+              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
+            </button>
+          )}
+        </div>
+
+        {/* Delete Confirmation Dialog */}
+        {deleteConfirmHabit && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40" onClick={cancelDelete} />
+            <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-money-neg">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-brand-800">Delete Habit?</h3>
+                  <p className="text-sm text-brand-400">This action cannot be undone.</p>
+                </div>
+              </div>
+              <p className="text-sm text-brand-600 mb-6">
+                Are you sure you want to delete <span className="font-semibold">"{deleteConfirmHabit.title}"</span>?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelDelete}
+                  className="flex-1 py-2.5 bg-brand-100 text-brand-700 font-semibold rounded-xl hover:bg-brand-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteCustom}
+                  className="flex-1 py-2.5 bg-money-neg text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
