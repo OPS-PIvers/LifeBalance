@@ -3,12 +3,12 @@ import React, { useState } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Plus } from 'lucide-react';
-import HabitFormModal from '../components/modals/HabitFormModal';
+import { Settings } from 'lucide-react';
+import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 
 const Habits: React.FC = () => {
   const { habits } = useHousehold();
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Group Habits by Category
   const categories: string[] = Array.from(new Set(habits.map(h => h.category)));
@@ -19,18 +19,18 @@ const Habits: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-brand-50 pb-28 pt-6">
-      
+
       {/* Page Title & Action */}
       <div className="px-4 mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-brand-800">Daily Habits</h1>
           <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
         </div>
-        <button 
-          onClick={() => setIsAddModalOpen(true)}
+        <button
+          onClick={() => setIsWizardOpen(true)}
           className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
         >
-          <Plus size={16} /> New
+          <Settings size={16} /> Manage
         </button>
       </div>
 
@@ -57,7 +57,7 @@ const Habits: React.FC = () => {
         ))}
       </div>
 
-      <HabitFormModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+      <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
     </div>
   );
 };

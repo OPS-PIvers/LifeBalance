@@ -53,6 +53,8 @@ export interface CalendarItem {
   frequency?: 'weekly' | 'bi-weekly' | 'monthly';
 }
 
+export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
+
 export interface Habit {
   id: string;
   title: string;
@@ -76,6 +78,11 @@ export interface Habit {
   isShared?: boolean; // true = household-wide, false/undefined = personal
   ownerId?: string; // uid if personal habit
   createdBy?: string; // uid of creator
+
+  // Preset vs Custom tracking
+  presetId?: string; // If from a preset, stores the preset ID
+  isCustom?: boolean; // true = user-created, false/undefined = from preset
+  effortLevel?: EffortLevel; // Effort level for the habit
 
   // Legacy/Optional
   weatherSensitive: boolean;
