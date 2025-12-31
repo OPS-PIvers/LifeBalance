@@ -165,6 +165,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           return {
             ...d,
             id: doc.id,
+            scoringType: d.scoringType || 'threshold',
             lastUpdated: d.lastUpdated instanceof Timestamp ? d.lastUpdated.toDate().toISOString() : d.lastUpdated,
           } as Habit;
         });
