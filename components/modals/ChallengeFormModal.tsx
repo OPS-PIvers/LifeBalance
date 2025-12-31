@@ -64,7 +64,7 @@ const ChallengeFormModal: React.FC<ChallengeFormModalProps> = ({ isOpen, onClose
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-10 flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 sm:slide-in-from-bottom-0 duration-200 flex flex-col max-h-[85vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50">
           <h2 className="text-lg font-bold text-brand-800">Edit Monthly Goal</h2>
           <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-100 rounded-full transition-colors">
