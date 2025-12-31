@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { X, Plus, Edit2, Trash2, Check, ChevronRight, Sparkles, Settings, AlertTriangle } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
@@ -12,6 +12,25 @@ import {
   getPresetHabitsByCategory
 } from '@/data/presetHabits';
 import toast from 'react-hot-toast';
+
+// UUID generator with fallback for non-secure contexts
+const generateId = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for non-secure contexts
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+// Helper to calculate basePoints based on type and effort level
+const calculateBasePoints = (type: 'positive' | 'negative', effortLevel: EffortLevel): number => {
+  const points = EFFORT_POINTS[effortLevel];
+  return type === 'negative' ? -points : points;
+};
 
 interface HabitCreatorWizardProps {
   isOpen: boolean;
@@ -72,11 +91,11 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     } else {
       // Add the habit from preset
       const newHabit: Habit = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         title: preset.title,
         category: preset.category,
         type: preset.type,
-        basePoints: EFFORT_POINTS[preset.effortLevel],
+        basePoints: calculateBasePoints(preset.type, preset.effortLevel),
         scoringType: preset.scoringType,
         period: preset.period,
         targetCount: preset.targetCount,
@@ -134,15 +153,17 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       return;
     }
 
+    const targetCount = parseTargetCount(formTargetCount);
+
     const habitData: Habit = {
-      id: editingHabit ? editingHabit.id : crypto.randomUUID(),
+      id: editingHabit ? editingHabit.id : generateId(),
       title: formTitle.trim(),
       category: formCategory,
       type: formType,
-      basePoints: EFFORT_POINTS[formEffortLevel],
+      basePoints: calculateBasePoints(formType, formEffortLevel),
       scoringType: formScoringType,
       period: formPeriod,
-      targetCount: parseInt(formTargetCount) || 1,
+      targetCount,
       count: editingHabit ? editingHabit.count : 0,
       totalCount: editingHabit ? editingHabit.totalCount : 0,
       completedDates: editingHabit ? editingHabit.completedDates : [],
@@ -189,11 +210,46 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     setDeleteConfirmHabit(null);
   };
 
+  // Handle modal close - reset state to main view
+  const handleClose = useCallback(() => {
+    setView('main');
+    resetForm();
+    setDeleteConfirmHabit(null);
+    onClose();
+  }, [onClose]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (deleteConfirmHabit) {
+          cancelDelete();
+        } else {
+          handleClose();
+        }
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, deleteConfirmHabit, handleClose]);
+
+  // Validate and parse target count
+  const parseTargetCount = (value: string): number => {
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed) || parsed < 1) {
+      return 1;
+    }
+    return parsed;
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleClose} />
 
       <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 sm:slide-in-from-bottom-0 duration-200 max-h-[90vh] flex flex-col">
 
@@ -214,7 +270,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 text-brand-400 hover:bg-brand-50 rounded-full"
             aria-label="Close habit manager"
           >
@@ -551,7 +607,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         <div className="p-4 border-t border-brand-100 flex-shrink-0">
           {view === 'main' ? (
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
             >
               Done
