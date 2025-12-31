@@ -487,6 +487,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const updateHabit = async (habit: Habit) => {
     if (!householdId) return;
+    console.log('[updateHabit] Updating habit with scoringType:', habit.scoringType, 'full habit:', habit);
     await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
       title: habit.title,
       category: habit.category,
@@ -500,6 +501,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       isShared: habit.isShared,
       ownerId: habit.ownerId,
     });
+    console.log('[updateHabit] Update complete');
     toast.success('Habit updated');
   };
 

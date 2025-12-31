@@ -64,8 +64,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       streakDays: editingHabit ? editingHabit.streakDays : 0,
       lastUpdated: new Date().toISOString(),
       weatherSensitive: editingHabit ? editingHabit.weatherSensitive : false,
+      // Preserve ownership fields when editing
+      isShared: editingHabit?.isShared,
+      ownerId: editingHabit?.ownerId,
+      telegramAlias: editingHabit?.telegramAlias,
     };
 
+    console.log('[HabitFormModal] Saving habit with scoringType:', scoringType, 'habitData:', habitData);
     if (editingHabit) {
       updateHabit(habitData);
     } else {
