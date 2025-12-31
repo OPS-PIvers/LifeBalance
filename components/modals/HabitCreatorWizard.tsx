@@ -1,17 +1,16 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { X, Plus, Edit2, Trash2, Check, ChevronRight, Sparkles, Settings, AlertTriangle } from 'lucide-react';
+import { X, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
   PresetHabit,
   EFFORT_POINTS,
-  EFFORT_LABELS,
-  EFFORT_COLORS,
-  HABIT_CATEGORIES,
-  NEGATIVE_CATEGORY,
   getPresetHabitsByCategory
 } from '@/data/presetHabits';
 import toast from 'react-hot-toast';
+import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/CustomHabitForm';
+import CustomHabitList from '@/components/habits/CustomHabitList';
+import PresetHabitList from '@/components/habits/PresetHabitList';
 
 // UUID generator with fallback for non-secure contexts
 const generateId = (): string => {
@@ -32,6 +31,15 @@ const calculateBasePoints = (type: 'positive' | 'negative', effortLevel: EffortL
   return type === 'negative' ? -points : points;
 };
 
+// Validate and parse target count
+const parseTargetCount = (value: string): number => {
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    return 1;
+  }
+  return parsed;
+};
+
 interface HabitCreatorWizardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -46,8 +54,16 @@ const VIEW_TITLES: Record<WizardView, string> = {
   'edit-custom': 'Edit Habit',
 };
 
-// Categories for custom habit creation
-const CUSTOM_CATEGORIES = ['Health', 'Meal Planning', 'Household', 'Financial Planning', 'Self-Discipline', NEGATIVE_CATEGORY];
+// Default form state
+const DEFAULT_FORM_DATA: CustomHabitFormData = {
+  title: '',
+  category: 'Health',
+  type: 'positive',
+  effortLevel: 'medium',
+  scoringType: 'threshold',
+  period: 'daily',
+  targetCount: '1',
+};
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
   const { habits, addHabit, updateHabit, deleteHabit } = useHousehold();
@@ -58,14 +74,8 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   const [expandedCategory, setExpandedCategory] = useState<string | null>('Health');
   const [deleteConfirmHabit, setDeleteConfirmHabit] = useState<Habit | null>(null);
 
-  // Create/Edit form state
-  const [formTitle, setFormTitle] = useState('');
-  const [formCategory, setFormCategory] = useState('Health');
-  const [formType, setFormType] = useState<'positive' | 'negative'>('positive');
-  const [formEffortLevel, setFormEffortLevel] = useState<EffortLevel>('medium');
-  const [formScoringType, setFormScoringType] = useState<'incremental' | 'threshold'>('threshold');
-  const [formPeriod, setFormPeriod] = useState<'daily' | 'weekly'>('daily');
-  const [formTargetCount, setFormTargetCount] = useState('1');
+  // Form state
+  const [formData, setFormData] = useState<CustomHabitFormData>(DEFAULT_FORM_DATA);
 
   // Get enabled preset IDs from current habits
   const enabledPresetIds = useMemo(() => {
@@ -85,11 +95,9 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     const existingHabit = habits.find(h => h.presetId === preset.id);
 
     if (existingHabit) {
-      // Remove the habit
       await deleteHabit(existingHabit.id);
       toast.success(`Removed "${preset.title}"`);
     } else {
-      // Add the habit from preset
       const newHabit: Habit = {
         id: generateId(),
         title: preset.title,
@@ -114,55 +122,55 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     }
   };
 
-  // Reset form for new custom habit
-  const resetForm = () => {
-    setFormTitle('');
-    setFormCategory('Health');
-    setFormType('positive');
-    setFormEffortLevel('medium');
-    setFormScoringType('threshold');
-    setFormPeriod('daily');
-    setFormTargetCount('1');
+  // Reset form
+  const resetForm = useCallback(() => {
+    setFormData(DEFAULT_FORM_DATA);
     setEditingHabit(null);
-  };
+  }, []);
 
   // Open create custom view
   const openCreateCustom = () => {
     resetForm();
-    setEditingHabit(null);
     setView('create-custom');
   };
 
   // Open edit custom view
   const openEditCustom = (habit: Habit) => {
     setEditingHabit(habit);
-    setFormTitle(habit.title);
-    setFormCategory(habit.category);
-    setFormType(habit.type);
-    setFormEffortLevel(habit.effortLevel || 'medium');
-    setFormScoringType(habit.scoringType);
-    setFormPeriod(habit.period);
-    setFormTargetCount(habit.targetCount.toString());
+    setFormData({
+      title: habit.title,
+      category: habit.category,
+      type: habit.type,
+      effortLevel: habit.effortLevel || 'medium',
+      scoringType: habit.scoringType,
+      period: habit.period,
+      targetCount: habit.targetCount.toString(),
+    });
     setView('edit-custom');
+  };
+
+  // Handle form changes
+  const handleFormChange = (data: Partial<CustomHabitFormData>) => {
+    setFormData(prev => ({ ...prev, ...data }));
   };
 
   // Save custom habit (create or update)
   const handleSaveCustom = async () => {
-    if (!formTitle.trim()) {
+    if (!formData.title.trim()) {
       toast.error('Please enter a habit name');
       return;
     }
 
-    const targetCount = parseTargetCount(formTargetCount);
+    const targetCount = parseTargetCount(formData.targetCount);
 
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : generateId(),
-      title: formTitle.trim(),
-      category: formCategory,
-      type: formType,
-      basePoints: calculateBasePoints(formType, formEffortLevel),
-      scoringType: formScoringType,
-      period: formPeriod,
+      title: formData.title.trim(),
+      category: formData.category,
+      type: formData.type,
+      basePoints: calculateBasePoints(formData.type, formData.effortLevel),
+      scoringType: formData.scoringType,
+      period: formData.period,
       targetCount,
       count: editingHabit ? editingHabit.count : 0,
       totalCount: editingHabit ? editingHabit.totalCount : 0,
@@ -171,7 +179,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       lastUpdated: new Date().toISOString(),
       weatherSensitive: false,
       isCustom: true,
-      effortLevel: formEffortLevel,
+      effortLevel: formData.effortLevel,
     };
 
     if (editingHabit) {
@@ -191,8 +199,8 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     setDeleteConfirmHabit(habit);
   };
 
-  // Delete custom habit after confirmation
-  const handleDeleteCustom = async () => {
+  // Delete habit after confirmation
+  const handleDeleteConfirmed = async () => {
     if (!deleteConfirmHabit) return;
 
     await deleteHabit(deleteConfirmHabit.id);
@@ -216,7 +224,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     resetForm();
     setDeleteConfirmHabit(null);
     onClose();
-  }, [onClose]);
+  }, [onClose, resetForm]);
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -235,15 +243,6 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
   }, [isOpen, deleteConfirmHabit, handleClose]);
-
-  // Validate and parse target count
-  const parseTargetCount = (value: string): number => {
-    const parsed = parseInt(value, 10);
-    if (isNaN(parsed) || parsed < 1) {
-      return 1;
-    }
-    return parsed;
-  };
 
   if (!isOpen) return null;
 
@@ -302,308 +301,36 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
                 <ChevronRight size={18} className="text-brand-400" />
               </button>
 
-              {/* Custom Habits Section */}
-              {customHabits.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Settings size={14} className="text-brand-400" />
-                    <h3 className="text-xs font-bold text-brand-400 uppercase tracking-wider">
-                      Your Custom Habits
-                    </h3>
-                  </div>
-                  <div className="space-y-2">
-                    {customHabits.map(habit => (
-                      <div
-                        key={habit.id}
-                        className="flex items-center justify-between p-3 bg-white border border-brand-100 rounded-xl"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-2 h-8 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
-                          <div>
-                            <p className="font-semibold text-brand-800 text-sm">{habit.title}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] text-brand-400">{habit.category}</span>
-                              {habit.effortLevel && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${EFFORT_COLORS[habit.effortLevel].bg} ${EFFORT_COLORS[habit.effortLevel].text}`}>
-                                  {EFFORT_LABELS[habit.effortLevel]}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => openEditCustom(habit)}
-                            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
-                            aria-label={`Edit habit: ${habit.title}`}
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            onClick={() => confirmDelete(habit)}
-                            className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
-                            aria-label={`Delete habit: ${habit.title}`}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* Custom Habits List */}
+              <CustomHabitList
+                habits={customHabits}
+                onEdit={openEditCustom}
+                onDelete={confirmDelete}
+              />
 
-              {/* Preset Habits Section */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Sparkles size={14} className="text-brand-400" />
-                  <h3 className="text-xs font-bold text-brand-400 uppercase tracking-wider">
-                    Preset Habits
-                  </h3>
-                </div>
-
-                {/* Category Accordion */}
-                <div className="space-y-2">
-                  {HABIT_CATEGORIES.map(category => {
-                    const categoryPresets = presetsByCategory[category] || [];
-                    if (categoryPresets.length === 0) return null;
-
-                    const enabledCount = categoryPresets.filter(p => enabledPresetIds.has(p.id)).length;
-                    const isExpanded = expandedCategory === category;
-                    const isNegativeCategory = category === NEGATIVE_CATEGORY;
-
-                    return (
-                      <div key={category} className={`border rounded-xl overflow-hidden ${isNegativeCategory ? 'border-rose-200' : 'border-brand-100'}`}>
-                        {/* Category Header */}
-                        <button
-                          onClick={() => setExpandedCategory(isExpanded ? null : category)}
-                          className={`w-full flex items-center justify-between p-3 transition-colors ${isNegativeCategory ? 'bg-rose-50 hover:bg-rose-100' : 'bg-brand-50 hover:bg-brand-100'}`}
-                        >
-                          <span className={`font-semibold text-sm ${isNegativeCategory ? 'text-rose-700' : 'text-brand-700'}`}>{category}</span>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs ${isNegativeCategory ? 'text-rose-400' : 'text-brand-400'}`}>
-                              {enabledCount} / {categoryPresets.length} active
-                            </span>
-                            <ChevronRight
-                              size={16}
-                              className={`transition-transform ${isNegativeCategory ? 'text-rose-400' : 'text-brand-400'} ${isExpanded ? 'rotate-90' : ''}`}
-                            />
-                          </div>
-                        </button>
-
-                        {/* Category Presets */}
-                        {isExpanded && (
-                          <div className="divide-y divide-brand-50">
-                            {categoryPresets.map(preset => {
-                              const isEnabled = enabledPresetIds.has(preset.id);
-                              const pointsDisplay = preset.type === 'negative'
-                                ? `-${EFFORT_POINTS[preset.effortLevel]}`
-                                : `+${EFFORT_POINTS[preset.effortLevel]}`;
-
-                              return (
-                                <button
-                                  key={preset.id}
-                                  onClick={() => handleTogglePreset(preset)}
-                                  className="w-full flex items-center justify-between p-3 hover:bg-brand-50 transition-colors text-left"
-                                >
-                                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${
-                                      isEnabled
-                                        ? preset.type === 'negative'
-                                          ? 'bg-money-neg border-money-neg text-white'
-                                          : 'bg-money-pos border-money-pos text-white'
-                                        : 'border-brand-200 text-transparent'
-                                    }`}>
-                                      <Check size={12} strokeWidth={3} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className={`font-medium text-sm truncate ${isEnabled ? 'text-brand-800' : 'text-brand-600'}`}>
-                                        {preset.title}
-                                      </p>
-                                      <div className="flex items-center gap-2 mt-0.5">
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                          preset.type === 'negative'
-                                            ? 'bg-rose-100 text-rose-700'
-                                            : `${EFFORT_COLORS[preset.effortLevel].bg} ${EFFORT_COLORS[preset.effortLevel].text}`
-                                        }`}>
-                                          {pointsDisplay} pts
-                                        </span>
-                                        <span className="text-[10px] text-brand-400">
-                                          {preset.period}
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* Preset Habits List */}
+              <PresetHabitList
+                presetsByCategory={presetsByCategory}
+                enabledPresetIds={enabledPresetIds}
+                expandedCategory={expandedCategory}
+                onToggleCategory={setExpandedCategory}
+                onTogglePreset={handleTogglePreset}
+              />
             </div>
           )}
 
           {/* Create/Edit Custom View */}
           {(view === 'create-custom' || view === 'edit-custom') && (
-            <div className="p-6 space-y-5">
-
-              {/* Title */}
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase">Habit Name</label>
-                <input
-                  type="text"
-                  value={formTitle}
-                  onChange={e => setFormTitle(e.target.value)}
-                  placeholder="e.g., Practice guitar"
-                  className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-none"
-                />
-              </div>
-
-              {/* Category & Type */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
-                  <select
-                    value={formCategory}
-                    onChange={e => setFormCategory(e.target.value)}
-                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
-                  >
-                    {CUSTOM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">Type</label>
-                  <div className="flex bg-brand-50 p-1 rounded-xl mt-1 border border-brand-200">
-                    <button
-                      onClick={() => setFormType('positive')}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                        formType === 'positive' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'
-                      }`}
-                    >
-                      Good
-                    </button>
-                    <button
-                      onClick={() => setFormType('negative')}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                        formType === 'negative' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'
-                      }`}
-                    >
-                      Bad
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Effort Level */}
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase mb-2 block">
-                  Effort Level <span className="font-normal text-brand-300">(determines points)</span>
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['easy', 'medium', 'hard', 'very_hard'] as EffortLevel[]).map(level => (
-                    <button
-                      key={level}
-                      onClick={() => setFormEffortLevel(level)}
-                      className={`p-3 rounded-xl border text-center transition-all ${
-                        formEffortLevel === level
-                          ? `${EFFORT_COLORS[level].bg} ${EFFORT_COLORS[level].text} border-current ring-1 ring-current`
-                          : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50'
-                      }`}
-                    >
-                      <span className="block text-xs font-bold">{EFFORT_LABELS[level]}</span>
-                      <span className="block text-[10px] mt-0.5 opacity-75">
-                        {formType === 'positive' ? '+' : '-'}{EFFORT_POINTS[level]} pts
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Scoring Type */}
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase mb-2 block">Scoring Strategy</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setFormScoringType('threshold')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      formScoringType === 'threshold'
-                        ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200'
-                        : 'bg-brand-50 border-transparent hover:bg-white'
-                    }`}
-                  >
-                    <span className="block font-bold text-sm text-brand-800">Threshold</span>
-                    <span className="block text-[10px] text-brand-400 mt-0.5">Points when target is met</span>
-                  </button>
-                  <button
-                    onClick={() => setFormScoringType('incremental')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      formScoringType === 'incremental'
-                        ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200'
-                        : 'bg-brand-50 border-transparent hover:bg-white'
-                    }`}
-                  >
-                    <span className="block font-bold text-sm text-brand-800">Incremental</span>
-                    <span className="block text-[10px] text-brand-400 mt-0.5">Points for every tap</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Target & Period */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">Target Count</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={formTargetCount}
-                    onChange={e => setFormTargetCount(e.target.value)}
-                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl text-center font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">Period</label>
-                  <div className="flex bg-brand-50 p-1 rounded-xl mt-1 border border-brand-200">
-                    <button
-                      onClick={() => setFormPeriod('daily')}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                        formPeriod === 'daily' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'
-                      }`}
-                    >
-                      Daily
-                    </button>
-                    <button
-                      onClick={() => setFormPeriod('weekly')}
-                      className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                        formPeriod === 'weekly' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'
-                      }`}
-                    >
-                      Weekly
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delete Button (Edit mode only) */}
-              {view === 'edit-custom' && editingHabit && (
-                <button
-                  onClick={() => confirmDelete(editingHabit)}
-                  className="w-full py-3 text-money-neg font-semibold rounded-xl border border-rose-200 hover:bg-rose-50 transition-colors flex items-center justify-center gap-2"
-                  aria-label={`Delete habit: ${editingHabit.title}`}
-                >
-                  <Trash2 size={16} />
-                  Delete This Habit
-                </button>
-              )}
-
-            </div>
+            <CustomHabitForm
+              formData={formData}
+              onFormChange={handleFormChange}
+              editingHabit={editingHabit}
+              onDelete={confirmDelete}
+            />
           )}
         </div>
 
-        {/* Footer Actions - consolidated */}
+        {/* Footer Actions */}
         <div className="p-4 border-t border-brand-100 flex-shrink-0">
           {view === 'main' ? (
             <button
@@ -647,7 +374,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
                   Cancel
                 </button>
                 <button
-                  onClick={handleDeleteCustom}
+                  onClick={handleDeleteConfirmed}
                   className="flex-1 py-2.5 bg-money-neg text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
                 >
                   Delete

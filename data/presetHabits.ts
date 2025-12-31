@@ -3,27 +3,58 @@
 
 import { EffortLevel } from '@/types/schema';
 
+// Consolidated effort level configuration
 // Points scale: easy = 1, medium = 2, hard = 3, very_hard = 5
 // For negative habits, these become -1, -2, -3, -5
+interface EffortConfig {
+  points: number;
+  label: string;
+  colors: { bg: string; text: string };
+}
+
+export const EFFORT_CONFIG: Record<EffortLevel, EffortConfig> = {
+  easy: {
+    points: 1,
+    label: 'Easy',
+    colors: { bg: 'bg-green-100', text: 'text-green-700' },
+  },
+  medium: {
+    points: 2,
+    label: 'Medium',
+    colors: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  },
+  hard: {
+    points: 3,
+    label: 'Hard',
+    colors: { bg: 'bg-orange-100', text: 'text-orange-700' },
+  },
+  very_hard: {
+    points: 5,
+    label: 'Very Hard',
+    colors: { bg: 'bg-red-100', text: 'text-red-700' },
+  },
+};
+
+// Helper accessors for backwards compatibility
 export const EFFORT_POINTS: Record<EffortLevel, number> = {
-  easy: 1,
-  medium: 2,
-  hard: 3,
-  very_hard: 5,
+  easy: EFFORT_CONFIG.easy.points,
+  medium: EFFORT_CONFIG.medium.points,
+  hard: EFFORT_CONFIG.hard.points,
+  very_hard: EFFORT_CONFIG.very_hard.points,
 };
 
 export const EFFORT_LABELS: Record<EffortLevel, string> = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-  very_hard: 'Very Hard',
+  easy: EFFORT_CONFIG.easy.label,
+  medium: EFFORT_CONFIG.medium.label,
+  hard: EFFORT_CONFIG.hard.label,
+  very_hard: EFFORT_CONFIG.very_hard.label,
 };
 
 export const EFFORT_COLORS: Record<EffortLevel, { bg: string; text: string }> = {
-  easy: { bg: 'bg-green-100', text: 'text-green-700' },
-  medium: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  hard: { bg: 'bg-orange-100', text: 'text-orange-700' },
-  very_hard: { bg: 'bg-red-100', text: 'text-red-700' },
+  easy: EFFORT_CONFIG.easy.colors,
+  medium: EFFORT_CONFIG.medium.colors,
+  hard: EFFORT_CONFIG.hard.colors,
+  very_hard: EFFORT_CONFIG.very_hard.colors,
 };
 
 // Category constant for negative habits
