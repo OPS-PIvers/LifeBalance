@@ -495,44 +495,30 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     console.log('[updateHabit] Updating habit with scoringType:', habit.scoringType, 'full habit:', habit);
     try {
-      // Build update object, excluding undefined values (Firestore rejects undefined)
-      const updateData: Record<string, unknown> = {
-        title: habit.title,
-        category: habit.category,
-        type: habit.type,
-        basePoints: habit.basePoints,
-        scoringType: habit.scoringType,
-        period: habit.period,
-        targetCount: habit.targetCount,
-        weatherSensitive: habit.weatherSensitive ?? false,
-      };
-
-      // Only include optional fields if they are defined
-      if (habit.telegramAlias !== undefined) {
-        updateData.telegramAlias = habit.telegramAlias;
-      }
-      if (habit.isShared !== undefined) {
-        updateData.isShared = habit.isShared;
-      }
-      if (habit.ownerId !== undefined) {
-        updateData.ownerId = habit.ownerId;
-      }
-      if (habit.isCustom !== undefined) {
-        updateData.isCustom = habit.isCustom;
-      }
-      if (habit.effortLevel !== undefined) {
-        updateData.effortLevel = habit.effortLevel;
-      }
-      if (habit.presetId !== undefined) {
-        updateData.presetId = habit.presetId;
-      }
+      // Build update object, filtering out undefined values (Firestore rejects undefined)
+      const updateData = Object.fromEntries(
+        Object.entries({
+          title: habit.title,
+          category: habit.category,
+          type: habit.type,
+          basePoints: habit.basePoints,
+          scoringType: habit.scoringType,
+          period: habit.period,
+          targetCount: habit.targetCount,
+          weatherSensitive: habit.weatherSensitive ?? false,
+          telegramAlias: habit.telegramAlias,
+          isShared: habit.isShared,
+          ownerId: habit.ownerId,
+          isCustom: habit.isCustom,
+          effortLevel: habit.effortLevel,
+          presetId: habit.presetId,
+        }).filter(([, value]) => value !== undefined)
+      );
 
       await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), updateData);
       console.log('[updateHabit] Update complete');
-      toast.success('Habit updated');
     } catch (error) {
       console.error('[updateHabit] Failed to update habit:', error);
-      toast.error('Failed to save habit. Please try again.');
       throw error;
     }
   };
@@ -541,10 +527,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/habits`, id));
-      toast.success('Habit deleted');
     } catch (error) {
       console.error('[deleteHabit] Failed to delete habit:', error);
-      toast.error('Failed to delete habit. Please try again.');
       throw error;
     }
   };

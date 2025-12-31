@@ -123,7 +123,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       }
     } catch (error) {
       console.error('[HabitCreatorWizard] Toggle preset failed:', error);
-      // Error toast is handled by addHabit/deleteHabit
+      toast.error('Failed to update habit. Please try again.');
     }
   };
 
@@ -168,6 +168,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
 
     const targetCount = parseTargetCount(formData.targetCount);
 
+    // Build base habit data
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : generateId(),
       title: formData.title.trim(),
@@ -185,11 +186,13 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       weatherSensitive: editingHabit?.weatherSensitive ?? false,
       isCustom: true,
       effortLevel: formData.effortLevel,
-      // Preserve ownership fields when editing
-      isShared: editingHabit?.isShared,
-      ownerId: editingHabit?.ownerId,
-      telegramAlias: editingHabit?.telegramAlias,
-      presetId: editingHabit?.presetId,
+      // Only include ownership fields when editing (avoid undefined for new habits)
+      ...(editingHabit && {
+        isShared: editingHabit.isShared,
+        ownerId: editingHabit.ownerId,
+        telegramAlias: editingHabit.telegramAlias,
+      }),
+      // Custom habits should not have presetId (contradicts isCustom: true)
     };
 
     try {
@@ -205,7 +208,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       resetForm();
     } catch (error) {
       console.error('[HabitCreatorWizard] Save failed:', error);
-      // Error toast is handled by updateHabit/addHabit
+      toast.error('Failed to save habit. Please try again.');
     }
   };
 
