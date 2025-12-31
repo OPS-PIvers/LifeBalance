@@ -515,7 +515,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }).filter(([, value]) => value !== undefined)
       );
 
-      await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), updateData);
+      await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+        ...updateData,
+        lastUpdated: serverTimestamp(),
+      });
       console.log('[updateHabit] Update complete');
     } catch (error) {
       console.error('[updateHabit] Failed to update habit:', error);
