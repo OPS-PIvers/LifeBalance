@@ -25,7 +25,7 @@ import {
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, startOfDay, differenceInMilliseconds, format } from 'date-fns';
 
 interface HouseholdContextType {
   // State
@@ -210,6 +210,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, user]);
 
   // Habit auto-reset logic
+  // Runs on mount, when habits change, and on a periodic interval to catch midnight resets
   useEffect(() => {
     if (!householdId || habits.length === 0) return;
 
@@ -222,9 +223,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         let shouldReset = false;
 
         if (habit.period === 'daily') {
+          // Reset at midnight each night (user's local time)
           shouldReset = !isSameDay(now, lastUpdate);
         } else if (habit.period === 'weekly') {
-          shouldReset = !isSameWeek(now, lastUpdate);
+          // Reset Sunday night into Monday at midnight
+          // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+          shouldReset = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
         }
 
         if (shouldReset) {
@@ -241,8 +245,86 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
     };
 
+    // Run immediately on mount/change
     checkResets();
+
+    // Set up interval to check for midnight resets
+    // Check every minute to ensure we catch the midnight boundary
+    const intervalId = setInterval(checkResets, 60 * 1000);
+
+    // Also schedule a check right at the next midnight for precision
+    const now = new Date();
+    const tomorrow = startOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+    const msUntilMidnight = differenceInMilliseconds(tomorrow, now);
+    const midnightTimeoutId = setTimeout(() => {
+      checkResets();
+    }, msUntilMidnight);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(midnightTimeoutId);
+    };
   }, [habits, householdId]);
+
+  // User points auto-reset logic
+  // Daily points reset at midnight, weekly points reset Sunday night into Monday
+  useEffect(() => {
+    if (!householdId || !currentUser) return;
+
+    const checkPointsReset = async () => {
+      const now = new Date();
+      const today = format(now, 'yyyy-MM-dd');
+      const memberRef = doc(db, `households/${householdId}/members`, currentUser.uid);
+
+      // We need to track when points were last reset
+      // This is stored as lastDailyPointsReset and lastWeeklyPointsReset on the member doc
+      // These fields may not exist yet, so we handle that case
+      const lastDailyReset = currentUser.lastDailyPointsReset
+        ? parseISO(currentUser.lastDailyPointsReset)
+        : new Date(0); // If never set, treat as very old
+
+      const lastWeeklyReset = currentUser.lastWeeklyPointsReset
+        ? parseISO(currentUser.lastWeeklyPointsReset)
+        : new Date(0);
+
+      const updates: Record<string, number | string> = {};
+
+      // Check if daily points need reset (new day since last reset)
+      if (!isSameDay(now, lastDailyReset)) {
+        updates['points.daily'] = 0;
+        updates['lastDailyPointsReset'] = today;
+      }
+
+      // Check if weekly points need reset (new week since last reset)
+      // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+      if (!isSameWeek(now, lastWeeklyReset, { weekStartsOn: 1 })) {
+        updates['points.weekly'] = 0;
+        updates['lastWeeklyPointsReset'] = today;
+      }
+
+      // Only update if there are changes
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(memberRef, updates);
+      }
+    };
+
+    // Run on mount and when user changes
+    checkPointsReset();
+
+    // Also run periodically to catch midnight boundary
+    const intervalId = setInterval(checkPointsReset, 60 * 1000);
+
+    // Schedule check at next midnight
+    const now = new Date();
+    const tomorrow = startOfDay(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+    const msUntilMidnight = differenceInMilliseconds(tomorrow, now);
+    const midnightTimeoutId = setTimeout(checkPointsReset, msUntilMidnight);
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(midnightTimeoutId);
+    };
+  }, [householdId, currentUser]);
 
   // --- ACTIONS: ACCOUNTS ---
 

@@ -9,6 +9,9 @@ export interface HouseholdMember {
   role: Role;
   telegramChatId?: string;
   points: { daily: number; weekly: number; total: number };
+  // Tracking when points were last reset (YYYY-MM-DD format)
+  lastDailyPointsReset?: string;
+  lastWeeklyPointsReset?: string;
 }
 
 export interface Account {
