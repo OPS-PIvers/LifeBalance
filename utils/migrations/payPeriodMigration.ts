@@ -5,49 +5,19 @@ import {
   writeBatch,
   doc,
   deleteField,
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { Transaction, BudgetBucket } from '@/types/schema';
-import { getPayPeriodForDate } from '../payPeriodCalculator';
+import { Transaction, BudgetBucket, Household } from '@/types/schema';
+import toast from 'react-hot-toast';
 
-/**
- * One-time migration to assign payPeriodId to existing transactions
- * Call this on app initialization if householdSettings.startDate exists
- * but transactions without payPeriodId are found
- *
- * @param householdId - The household ID
- * @param startDate - Pay period anchor date (YYYY-MM-DD)
- */
+// DEPRECATED: Old date-based period migration - no longer used
+// Kept for reference only
 export async function migrateTransactionsToPeriods(
   householdId: string,
   startDate: string
 ): Promise<void> {
-  try {
-    const txQuery = query(collection(db, `households/${householdId}/transactions`));
-    const snapshot = await getDocs(txQuery);
-
-    const batch = writeBatch(db);
-    let count = 0;
-
-    snapshot.docs.forEach(docSnapshot => {
-      const tx = docSnapshot.data() as Transaction;
-
-      // Only migrate if missing payPeriodId
-      if (!tx.payPeriodId) {
-        const period = getPayPeriodForDate(tx.date, startDate);
-        batch.update(docSnapshot.ref, { payPeriodId: period.periodId });
-        count++;
-      }
-    });
-
-    if (count > 0) {
-      await batch.commit();
-      console.log(`[Migration] Assigned payPeriodId to ${count} transactions`);
-    }
-  } catch (error) {
-    console.error('[Migration] Failed to migrate transactions:', error);
-    throw error;
-  }
+  console.warn('[Migration] migrateTransactionsToPeriods is deprecated');
 }
 
 /**
@@ -113,4 +83,43 @@ export function needsMigration(
   const bucketsNeedMigration = buckets.some(b => !b.currentPeriodId);
 
   return transactionsNeedMigration || bucketsNeedMigration;
+}
+
+/**
+ * Migrate from date-based pay periods to paycheck-triggered pay periods
+ * Converts payPeriodSettings to lastPaycheckDate
+ *
+ * @param householdId - The household ID
+ * @param oldStartDate - The old payPeriodSettings.startDate value
+ */
+export async function migrateToPaycheckPeriods(
+  householdId: string,
+  oldStartDate: string
+): Promise<void> {
+  try {
+    const householdRef = doc(db, `households/${householdId}`);
+
+    // Convert old startDate to lastPaycheckDate and remove old settings
+    await updateDoc(householdRef, {
+      lastPaycheckDate: oldStartDate,
+      payPeriodSettings: deleteField(),
+    });
+
+    console.log('[Migration] Converted to paycheck-based period tracking');
+    toast.success('Updated to paycheck-based period tracking');
+  } catch (error) {
+    console.error('[Migration] Failed to migrate to paycheck periods:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if paycheck period migration is needed
+ * Returns true if old payPeriodSettings exists but lastPaycheckDate doesn't
+ *
+ * @param householdSettings - The household settings object
+ * @returns true if migration is needed
+ */
+export function needsPaycheckMigration(householdSettings: any): boolean {
+  return !!(householdSettings?.payPeriodSettings?.startDate && !householdSettings?.lastPaycheckDate);
 }

@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
+import { expandCalendarItems } from '../../utils/calendarRecurrence';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem } = useHousehold();
@@ -29,8 +30,14 @@ const BudgetCalendar: React.FC = () => {
   const days = eachDayOfInterval({ start: startDate, end: endDate });
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
+  // Expand recurring calendar items for the visible date range
+  const expandedCalendarItems = useMemo(
+    () => expandCalendarItems(calendarItems, startDate, endDate),
+    [calendarItems, startDate, endDate]
+  );
+
   // Filter items for the selected date
-  const selectedItems = calendarItems.filter(item => 
+  const selectedItems = expandedCalendarItems.filter(item =>
     isSameDay(parseISO(item.date), selectedDate)
   );
 
@@ -44,13 +51,28 @@ const BudgetCalendar: React.FC = () => {
     setIsAddModalOpen(true);
   };
 
+  // Helper to check if an item is a generated recurring instance (vs. the original)
+  const isRecurringInstance = (item: CalendarItem): boolean => {
+    return item.isRecurring === true && item.id.includes('-202'); // Synthetic IDs contain date like "-2024-01-15"
+  };
+
+  // Helper to find the original calendar item for a recurring instance
+  const findOriginalItem = (instanceId: string): CalendarItem | undefined => {
+    // Extract original ID (everything before the date suffix)
+    const originalId = instanceId.split('-202')[0]; // Split on "-202" to get base ID
+    return calendarItems.find(item => item.id === originalId);
+  };
+
   const openEditModal = (item: CalendarItem) => {
-    setTitle(item.title);
-    setAmount(item.amount.toString());
-    setType(item.type);
-    setIsRecurring(!!item.isRecurring);
-    setFrequency(item.frequency || 'monthly');
-    setEditingItem(item);
+    // If this is a recurring instance, edit the original item instead
+    const itemToEdit = isRecurringInstance(item) ? findOriginalItem(item.id) || item : item;
+
+    setTitle(itemToEdit.title);
+    setAmount(itemToEdit.amount.toString());
+    setType(itemToEdit.type);
+    setIsRecurring(!!itemToEdit.isRecurring);
+    setFrequency(itemToEdit.frequency || 'monthly');
+    setEditingItem(itemToEdit);
     setIsAddModalOpen(true);
   };
 
@@ -105,7 +127,7 @@ const BudgetCalendar: React.FC = () => {
         </div>
         <div className="grid grid-cols-7 gap-y-2">
           {days.map(day => {
-            const dateItems = calendarItems.filter(i => isSameDay(parseISO(i.date), day));
+            const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
             const hasIncome = dateItems.some(i => i.type === 'income');
             const hasExpense = dateItems.some(i => i.type === 'expense');
             const isSelected = isSameDay(day, selectedDate);
@@ -192,7 +214,16 @@ const BudgetCalendar: React.FC = () => {
                         <Edit2 size={14} />
                       </button>
                     )}
-                    <button onClick={() => deleteCalendarItem(item.id)} className="p-1 text-brand-300 hover:text-money-neg">
+                    <button
+                      onClick={() => {
+                        // If this is a recurring instance, delete the original item
+                        const idToDelete = isRecurringInstance(item)
+                          ? item.id.split('-202')[0]
+                          : item.id;
+                        deleteCalendarItem(idToDelete);
+                      }}
+                      className="p-1 text-brand-300 hover:text-money-neg"
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
