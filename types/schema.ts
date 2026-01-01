@@ -41,7 +41,7 @@ export interface Transaction {
   date: string;
   status: 'verified' | 'pending_review';
   isRecurring: boolean;
-  source: 'manual' | 'telegram' | 'recurring';
+  source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring';
   autoCategorized: boolean;
 }
 
