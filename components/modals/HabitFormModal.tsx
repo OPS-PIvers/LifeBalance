@@ -92,7 +92,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pb-24 sm:pb-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative w-full max-w-md max-h-[calc(100vh-8rem)] sm:max-h-[85vh] bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
