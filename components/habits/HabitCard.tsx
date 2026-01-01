@@ -115,14 +115,9 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start">
             <div>
-              <h3 className={cn("font-bold text-sm truncate mb-1", isActive ? "text-brand-800" : "text-brand-700")}>
+              <h3 className={cn("font-bold text-sm truncate", isActive ? "text-brand-800" : "text-brand-700")}>
                 {habit.title}
               </h3>
-              <p className="text-[10px] text-brand-400 font-medium mb-2">
-                {habit.scoringType === 'threshold' 
-                  ? `Goal: ${habit.targetCount} / ${habit.period}` 
-                  : `+${habit.basePoints} pts each`}
-              </p>
             </div>
             
             {/* Context Menu Trigger */}
