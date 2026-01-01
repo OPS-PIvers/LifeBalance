@@ -2,7 +2,18 @@ import { GoogleGenAI, Type } from "@google/genai";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
+
+/**
+ * Validates that the Gemini API key is configured
+ * @throws Error if API key is not configured
+ */
+const validateApiKey = () => {
+  if (!apiKey) {
+    throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your environment.");
+  }
+};
 
 export interface ReceiptData {
   merchant: string;
@@ -20,10 +31,18 @@ export interface BankTransactionData {
 
 /**
  * Extracts MIME type from base64 data URL
+ * Supports formats like image/jpeg, image/png, image/webp, image/svg+xml
  */
 const extractMimeType = (base64Image: string): string => {
-  const match = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+  const match = base64Image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
   return match ? match[1] : 'image/jpeg';
+};
+
+/**
+ * Strips the data URL prefix from base64 image data
+ */
+const stripDataUrlPrefix = (base64Image: string): string => {
+  return base64Image.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "");
 };
 
 /**
@@ -35,9 +54,11 @@ export const analyzeReceipt = async (
   base64Image: string,
   availableCategories?: string[]
 ): Promise<ReceiptData> => {
+  validateApiKey();
+
   try {
     const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+    const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')
@@ -93,9 +114,11 @@ export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[]
 ): Promise<BankTransactionData[]> => {
+  validateApiKey();
+
   try {
     const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+    const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')

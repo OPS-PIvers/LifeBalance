@@ -47,9 +47,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // Parsed transactions from bank statement
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
 
-  // Track source for scanned transactions
-  const [scanSource, setScanSource] = useState<'camera' | 'upload' | null>(null);
-
   // Initialize Category default when modal opens or buckets change
   useEffect(() => {
     if (isOpen && !category && dynamicCategories.length > 0) {
@@ -66,7 +63,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (dynamicCategories.length > 0) setCategory(dynamicCategories[0]);
     setIsRecurring(false);
     setParsedTransactions([]);
-    setScanSource(null);
     onClose();
   };
 
@@ -138,7 +134,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       stopCamera();
       setView('processing');
       setProcessingMessage('Scanning receipt...');
-      setScanSource('camera');
 
       try {
         const data: ReceiptData = await analyzeReceipt(base64Image, dynamicCategories);
@@ -177,9 +172,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
+    // Validate file size (10MB limit)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error('Image too large. Please upload an image under 10MB.');
+      return;
+    }
+
     setView('processing');
     setProcessingMessage('Analyzing image...');
-    setScanSource('upload');
 
     try {
       // Convert file to base64
@@ -264,32 +265,41 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setView('processing');
     setProcessingMessage(`Adding ${selectedTx.length} transaction(s)...`);
 
-    try {
-      // Use Promise.all for parallel transaction addition (performance improvement)
-      await Promise.all(
-        selectedTx.map(tx => {
-          const newTransaction: Transaction = {
-            id: tx.id,
-            amount: tx.amount,
-            merchant: tx.merchant,
-            category: tx.category,
-            date: tx.date,
-            status: 'pending_review', // Goes to action queue for review
-            isRecurring: false,
-            source: 'file-upload',
-            autoCategorized: true
-          };
-          return addTransaction(newTransaction);
-        })
-      );
+    // Use Promise.allSettled for better partial failure handling
+    const results = await Promise.allSettled(
+      selectedTx.map(tx => {
+        const newTransaction: Transaction = {
+          id: tx.id,
+          amount: tx.amount,
+          merchant: tx.merchant,
+          category: tx.category,
+          date: tx.date,
+          status: 'pending_review', // Goes to action queue for review
+          isRecurring: false,
+          source: 'file-upload',
+          autoCategorized: true
+        };
+        return addTransaction(newTransaction);
+      })
+    );
 
-      toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
-      handleClose();
-    } catch (error) {
-      console.error('Error adding transactions:', error);
-      toast.error('Failed to add some transactions');
-      setView('review');
+    const succeeded = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    if (failed > 0) {
+      console.error('Some transactions failed:', results.filter(r => r.status === 'rejected'));
+      if (succeeded > 0) {
+        toast.success(`${succeeded} transaction(s) added. ${failed} failed.`);
+      } else {
+        toast.error('Failed to add transactions');
+        setView('review');
+        return;
+      }
+    } else {
+      toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     }
+
+    handleClose();
   };
 
   // Manual entry - creates verified transaction (immediate budget update)
@@ -585,6 +595,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       // Prevent negative values - only allow positive numbers
                       if (value === '' || parseFloat(value) >= 0) {
                         setAmount(value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      // Block scientific notation and negative sign characters
+                      if (['e', 'E', '+', '-'].includes(e.key)) {
+                        e.preventDefault();
                       }
                     }}
                     placeholder="0.00"
