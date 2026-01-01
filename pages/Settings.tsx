@@ -11,14 +11,19 @@ import {
   LogOut,
   Loader2,
   User,
-  Shield
+  Shield,
+  Pencil,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import MemberModal from '@/components/modals/MemberModal';
+import { HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
-  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints } = useHousehold();
+  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints, addMember, updateMember, removeMember } = useHousehold();
   const navigate = useNavigate();
 
   const [householdDetails, setHouseholdDetails] = useState<{
@@ -26,6 +31,10 @@ const Settings: React.FC = () => {
     inviteCode: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
 
   useEffect(() => {
     const fetchHouseholdDetails = async () => {
@@ -63,6 +72,42 @@ const Settings: React.FC = () => {
       </div>
     );
   }
+
+  const handleAddMember = () => {
+    setSelectedMember(null);
+    setIsModalOpen(true);
+  };
+
+  const handleEditMember = (member: HouseholdMember) => {
+    setSelectedMember(member);
+    setIsModalOpen(true);
+  };
+
+  const handleRemoveMember = async (member: HouseholdMember) => {
+    if (!confirm(`Are you sure you want to remove ${member.displayName} from the household?`)) {
+      return;
+    }
+    try {
+      await removeMember(member.uid);
+    } catch (error) {
+      console.error('Error removing member:', error);
+    }
+  };
+
+  const handleSaveMember = async (memberData: Partial<HouseholdMember>) => {
+    try {
+      if (selectedMember) {
+        // Update existing
+        await updateMember(selectedMember.uid, memberData);
+      } else {
+        // Add new
+        await addMember(memberData);
+      }
+    } catch (error) {
+      console.error('Error saving member:', error);
+      throw error; // Let modal handle error state if needed
+    }
+  };
 
   return (
     <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
@@ -149,9 +194,20 @@ const Settings: React.FC = () => {
 
         {/* Members List */}
         <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h3 className="text-lg font-bold text-brand-800 mb-4">
-            Household Members
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-brand-800">
+              Household Members
+            </h3>
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={handleAddMember}
+                className="p-2 bg-brand-100 text-brand-700 rounded-xl hover:bg-brand-200 transition-colors"
+                title="Add Member"
+              >
+                <Plus size={20} />
+              </button>
+            )}
+          </div>
           <div className="space-y-3">
             {members
               .sort((a, b) => {
@@ -192,6 +248,27 @@ const Settings: React.FC = () => {
                       <p className="text-xs text-brand-500 truncate">{member.email}</p>
                     )}
                   </div>
+                  {/* Admin Actions */}
+                  {currentUser?.role === 'admin' && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleEditMember(member)}
+                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
+                        title="Edit Member"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      {member.uid !== currentUser.uid && (
+                        <button
+                          onClick={() => handleRemoveMember(member)}
+                          className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Remove Member"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
           </div>
@@ -209,6 +286,14 @@ const Settings: React.FC = () => {
         </div>
 
       </div>
+
+      <MemberModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveMember}
+        initialMember={selectedMember}
+        title={selectedMember ? 'Edit Member' : 'Add Member'}
+      />
     </div>
   );
 };
