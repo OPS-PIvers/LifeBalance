@@ -1236,9 +1236,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         displayName: memberData.displayName || 'New Member',
         email: memberData.email || '',
         role: memberData.role || 'member',
+        // Spread memberData first, then override points to ensure new members start at 0
+        ...memberData,
         points: { daily: 0, weekly: 0, total: 0 },
-        // We will just store what we have.
-        ...memberData
       } as HouseholdMember;
 
       // 1. Add to members subcollection
@@ -1278,13 +1278,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
 
     try {
+      // Use batch to make both operations atomic
+      const batch = writeBatch(db);
+
       // 1. Remove from household memberUids array
-      await updateDoc(doc(db, `households/${householdId}`), {
+      const householdRef = doc(db, `households/${householdId}`);
+      batch.update(householdRef, {
         memberUids: arrayRemove(memberId),
       });
 
       // 2. Delete member document from subcollection
-      await deleteDoc(doc(db, `households/${householdId}/members`, memberId));
+      const memberRef = doc(db, `households/${householdId}/members`, memberId);
+      batch.delete(memberRef);
+
+      // Commit both changes atomically
+      await batch.commit();
 
       toast.success('Member removed successfully');
     } catch (error) {
