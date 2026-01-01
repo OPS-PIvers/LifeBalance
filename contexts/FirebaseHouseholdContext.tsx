@@ -11,6 +11,8 @@ import {
   Timestamp,
   writeBatch,
   getDoc,
+  increment,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -928,15 +930,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     // Update household points (shared across all members)
+    // Use increment() for atomic server-side calculation to avoid race conditions
     if (result.pointsChange !== 0) {
-      const currentDailyPoints = householdSettings.points?.daily || 0;
-      const currentWeeklyPoints = householdSettings.points?.weekly || 0;
-      const currentTotalPoints = householdSettings.points?.total || 0;
-
       await updateDoc(doc(db, `households/${householdId}`), {
-        'points.daily': currentDailyPoints + result.pointsChange,
-        'points.weekly': currentWeeklyPoints + result.pointsChange,
-        'points.total': currentTotalPoints + result.pointsChange,
+        'points.daily': increment(result.pointsChange),
+        'points.weekly': increment(result.pointsChange),
+        'points.total': increment(result.pointsChange),
       });
 
       // Toast feedback
@@ -974,15 +973,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       lastUpdated: serverTimestamp(),
     });
 
+    // Use increment() with negative value for atomic server-side calculation
     if (pointsToRemove > 0) {
-      const currentDailyPoints = householdSettings.points?.daily || 0;
-      const currentWeeklyPoints = householdSettings.points?.weekly || 0;
-      const currentTotalPoints = householdSettings.points?.total || 0;
-
       await updateDoc(doc(db, `households/${householdId}`), {
-        'points.daily': currentDailyPoints - pointsToRemove,
-        'points.weekly': currentWeeklyPoints - pointsToRemove,
-        'points.total': currentTotalPoints - pointsToRemove,
+        'points.daily': increment(-pointsToRemove),
+        'points.weekly': increment(-pointsToRemove),
+        'points.total': increment(-pointsToRemove),
       });
     }
 
@@ -1040,23 +1036,43 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const redeemReward = async (rewardId: string) => {
-    if (!householdId || !householdSettings) return;
+    if (!householdId) return;
 
     const reward = rewards.find(r => r.id === rewardId);
     if (!reward) return;
 
-    const currentTotalPoints = householdSettings.points?.total || 0;
+    // Use transaction to atomically check and deduct points
+    // This prevents race conditions where multiple users redeem simultaneously
+    try {
+      await runTransaction(db, async (transaction) => {
+        const householdRef = doc(db, `households/${householdId}`);
+        const householdDoc = await transaction.get(householdRef);
 
-    if (currentTotalPoints < reward.cost) {
-      toast.error('Not enough points');
-      return;
+        if (!householdDoc.exists()) {
+          throw new Error('Household not found');
+        }
+
+        const currentTotalPoints = householdDoc.data().points?.total || 0;
+
+        if (currentTotalPoints < reward.cost) {
+          throw new Error('Not enough points');
+        }
+
+        // Atomically deduct points
+        transaction.update(householdRef, {
+          'points.total': increment(-reward.cost),
+        });
+      });
+
+      toast.success(`Redeemed: ${reward.title}`);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Not enough points') {
+        toast.error('Not enough points');
+      } else {
+        console.error('[redeemReward] Transaction failed:', error);
+        toast.error('Failed to redeem reward');
+      }
     }
-
-    await updateDoc(doc(db, `households/${householdId}`), {
-      'points.total': currentTotalPoints - reward.cost,
-    });
-
-    toast.success(`Redeemed: ${reward.title}`);
   };
 
   // --- ACTIONS: YEARLY GOALS ---
