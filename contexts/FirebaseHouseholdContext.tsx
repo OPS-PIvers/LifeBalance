@@ -249,7 +249,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // Use local date string for consistency with points reset (yyyy-MM-dd format)
         await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
           count: 0,
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: format(new Date(), 'yyyy-MM-dd'),
         });
       } catch (error) {
         console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
