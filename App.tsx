@@ -12,6 +12,7 @@ import HouseholdSetup from './pages/HouseholdSetup';
 import Dashboard from './pages/Dashboard';
 import Budget from './pages/Budget';
 import Habits from './pages/Habits';
+import Settings from './pages/Settings';
 import PlaceholderPage from './pages/PlaceholderPage';
 
 const App: React.FC = () => {
@@ -76,6 +77,20 @@ const App: React.FC = () => {
                       <TopToolbar />
                       <main>
                         <PlaceholderPage />
+                      </main>
+                      <BottomNav />
+                    </>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <ProtectedRoute>
+                    <>
+                      <TopToolbar />
+                      <main>
+                        <Settings />
                       </main>
                       <BottomNav />
                     </>

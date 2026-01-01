@@ -42,6 +42,7 @@ interface HouseholdContextType {
   weeklyPoints: number;
   totalPoints: number;
   currentUser: HouseholdMember | null;
+  members: HouseholdMember[];
   accounts: Account[];
   buckets: BudgetBucket[];
   calendarItems: CalendarItem[];
@@ -911,6 +912,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         weeklyPoints,
         totalPoints,
         currentUser,
+        members,
         accounts,
         buckets,
         calendarItems,
