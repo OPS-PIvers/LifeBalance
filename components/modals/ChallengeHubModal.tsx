@@ -57,17 +57,30 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
   };
 
   const handleSaveChallenge = async () => {
-    if (!title || !activeChallenge) return;
+    if (!title) return;
 
-    const updatedChallenge: Challenge = {
-      ...activeChallenge,
-      title,
-      description,
-      targetType,
-      targetValue,
-      relatedHabitIds: selectedHabitIds,
-      yearlyGoalId: selectedYearlyGoalId || undefined,
-    };
+    const updatedChallenge: Challenge = activeChallenge
+      ? {
+          ...activeChallenge,
+          title,
+          description,
+          targetType,
+          targetValue,
+          relatedHabitIds: selectedHabitIds,
+          yearlyGoalId: selectedYearlyGoalId || undefined,
+        }
+      : {
+          id: 'new', // Placeholder ID, ignored by addDoc
+          month: format(new Date(), 'yyyy-MM'),
+          status: 'active',
+          title,
+          description,
+          targetType,
+          targetValue,
+          relatedHabitIds: selectedHabitIds,
+          yearlyGoalId: selectedYearlyGoalId || undefined,
+          yearlyRewardLabel: 'Badge', // Default reward
+        };
 
     await updateChallenge(updatedChallenge);
     onClose();

@@ -1002,8 +1002,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (activeChallenge?.id) {
       await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
     } else {
+      // Remove placeholder ID if it exists
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, ...newChallengeData } = updatedChallenge;
+
       await addDoc(collection(db, `households/${householdId}/challenges`), {
-        ...updatedChallenge,
+        ...newChallengeData,
         createdBy: user?.uid,
         createdAt: serverTimestamp(),
       });
