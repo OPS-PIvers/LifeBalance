@@ -182,6 +182,9 @@ export interface Household {
   name: string;
   inviteCode: string;
   members: HouseholdMember[];
+  points?: { daily: number; weekly: number; total: number }; // Shared household points
+  lastDailyPointsReset?: string; // YYYY-MM-DD format
+  lastWeeklyPointsReset?: string; // YYYY-MM-DD format
   freezeBank: FreezeBank | { current: number; accrued: number; lastMonth: string }; // Support both old and new format
   accounts: Account[];
   rewardsInventory: RewardItem[];

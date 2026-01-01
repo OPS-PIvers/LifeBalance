@@ -11,6 +11,8 @@ import {
   Timestamp,
   writeBatch,
   getDoc,
+  increment,
+  runTransaction,
   setDoc,
   arrayUnion,
   arrayRemove,
@@ -157,9 +159,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions, currentPeriodId),
     [accounts, calendarItems, buckets, transactions, currentPeriodId]
   );
-  const dailyPoints = currentUser?.points.daily || 0;
-  const weeklyPoints = currentUser?.points.weekly || 0;
-  const totalPoints = currentUser?.points.total || 0;
+  const dailyPoints = householdSettings?.points?.daily || 0;
+  const weeklyPoints = householdSettings?.points?.weekly || 0;
+  const totalPoints = householdSettings?.points?.total || 0;
 
   // Real-time listeners
   useEffect(() => {
@@ -355,18 +357,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useMidnightScheduler(checkHabitResets, !!(householdId && habitResetData.length > 0));
 
   // Extract specific fields to narrow dependency array and prevent unnecessary re-runs
-  const currentUserUid = currentUser?.uid;
-  const lastDailyPointsReset = currentUser?.lastDailyPointsReset;
-  const lastWeeklyPointsReset = currentUser?.lastWeeklyPointsReset;
+  const lastDailyPointsReset = householdSettings?.lastDailyPointsReset;
+  const lastWeeklyPointsReset = householdSettings?.lastWeeklyPointsReset;
 
-  // User points auto-reset callback
+  // Household points auto-reset callback
   // Daily points reset at midnight, weekly points reset Sunday night into Monday
   const checkPointsReset = useCallback(async () => {
-    if (!householdId || !currentUserUid) return;
+    if (!householdId) return;
 
     const now = new Date();
     const today = format(now, 'yyyy-MM-dd');
-    const memberRef = doc(db, `households/${householdId}/members`, currentUserUid);
+    const householdRef = doc(db, `households/${householdId}`);
 
     // We need to track when points were last reset
     // These fields may not exist yet, so we handle that case
@@ -396,16 +397,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Only update if there are changes
     if (Object.keys(updates).length > 0) {
       try {
-        await updateDoc(memberRef, updates);
+        await updateDoc(householdRef, updates);
       } catch (error) {
         console.error('[checkPointsReset] Failed to reset points:', error);
       }
     }
-  }, [householdId, currentUserUid, lastDailyPointsReset, lastWeeklyPointsReset]);
+  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset]);
 
   // Use the midnight scheduler hook for points resets
   // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
-  useMidnightScheduler(checkPointsReset, !!(householdId && currentUserUid), { initialDelayMs: 100 });
+  useMidnightScheduler(checkPointsReset, !!householdId, { initialDelayMs: 100 });
 
   // --- PAY PERIOD TRACKING EFFECTS ---
 
@@ -918,7 +919,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const toggleHabit = async (id: string, direction: 'up' | 'down') => {
-    if (!householdId || !currentUser) return;
+    if (!householdId || !currentUser || !householdSettings) return;
 
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
@@ -936,12 +937,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       lastUpdated: serverTimestamp(),
     });
 
-    // Update user points
+    // Update household points (shared across all members)
+    // Use increment() for atomic server-side calculation to avoid race conditions
     if (result.pointsChange !== 0) {
-      await updateDoc(doc(db, `households/${householdId}/members`, currentUser.uid), {
-        'points.daily': currentUser.points.daily + result.pointsChange,
-        'points.weekly': currentUser.points.weekly + result.pointsChange,
-        'points.total': currentUser.points.total + result.pointsChange,
+      await updateDoc(doc(db, `households/${householdId}`), {
+        'points.daily': increment(result.pointsChange),
+        'points.weekly': increment(result.pointsChange),
+        'points.total': increment(result.pointsChange),
       });
 
       // Toast feedback
@@ -965,7 +967,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const resetHabit = async (id: string) => {
-    if (!householdId || !currentUser) return;
+    if (!householdId || !householdSettings) return;
 
     const habit = habits.find(h => h.id === id);
     if (!habit || habit.count === 0) return;
@@ -979,11 +981,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       lastUpdated: serverTimestamp(),
     });
 
+    // Use increment() with negative value for atomic server-side calculation
     if (pointsToRemove > 0) {
-      await updateDoc(doc(db, `households/${householdId}/members`, currentUser.uid), {
-        'points.daily': currentUser.points.daily - pointsToRemove,
-        'points.weekly': currentUser.points.weekly - pointsToRemove,
-        'points.total': currentUser.points.total - pointsToRemove,
+      await updateDoc(doc(db, `households/${householdId}`), {
+        'points.daily': increment(-pointsToRemove),
+        'points.weekly': increment(-pointsToRemove),
+        'points.total': increment(-pointsToRemove),
       });
     }
 
@@ -1045,21 +1048,43 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const redeemReward = async (rewardId: string) => {
-    if (!householdId || !currentUser) return;
+    if (!householdId) return;
 
     const reward = rewards.find(r => r.id === rewardId);
     if (!reward) return;
 
-    if (currentUser.points.total < reward.cost) {
-      toast.error('Not enough points');
-      return;
+    // Use transaction to atomically check and deduct points
+    // This prevents race conditions where multiple users redeem simultaneously
+    try {
+      await runTransaction(db, async (transaction) => {
+        const householdRef = doc(db, `households/${householdId}`);
+        const householdDoc = await transaction.get(householdRef);
+
+        if (!householdDoc.exists()) {
+          throw new Error('Household not found');
+        }
+
+        const currentTotalPoints = householdDoc.data().points?.total || 0;
+
+        if (currentTotalPoints < reward.cost) {
+          throw new Error('Not enough points');
+        }
+
+        // Atomically deduct points
+        transaction.update(householdRef, {
+          'points.total': increment(-reward.cost),
+        });
+      });
+
+      toast.success(`Redeemed: ${reward.title}`);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Not enough points') {
+        toast.error('Not enough points');
+      } else {
+        console.error('[redeemReward] Transaction failed:', error);
+        toast.error('Failed to redeem reward');
+      }
     }
-
-    await updateDoc(doc(db, `households/${householdId}/members`, currentUser.uid), {
-      'points.total': currentUser.points.total - reward.cost,
-    });
-
-    toast.success(`Redeemed: ${reward.title}`);
   };
 
   // --- ACTIONS: YEARLY GOALS ---
