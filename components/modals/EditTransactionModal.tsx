@@ -35,6 +35,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     }
   }, [transaction]);
 
+  // Reset delete confirmation when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setShowDeleteConfirm(false);
+    }
+  }, [isOpen]);
+
   const handleSave = async () => {
     if (!transaction) return;
 
