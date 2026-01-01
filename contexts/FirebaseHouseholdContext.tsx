@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
 import {
   collection,
   query,
@@ -24,8 +24,9 @@ import {
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak } from '@/utils/habitLogic';
+import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, format } from 'date-fns';
 
 interface HouseholdContextType {
   // State
@@ -209,40 +210,108 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
   }, [householdId, user]);
 
-  // Habit auto-reset logic
-  useEffect(() => {
-    if (!householdId || habits.length === 0) return;
+  // Memoize habit reset data to avoid unnecessary callback re-creation
+  // Only recreate when habit IDs, periods, or lastUpdated values change
+  const habitResetData = useMemo(() =>
+    habits.map(h => ({ id: h.id, period: h.period, lastUpdated: h.lastUpdated })),
+    [habits]
+  );
 
-    const checkResets = async () => {
-      const now = new Date();
-      const habitsToReset: string[] = [];
+  // Habit auto-reset callback
+  // Resets daily habits at midnight and weekly habits on Monday at midnight
+  const checkHabitResets = useCallback(async () => {
+    if (!householdId || habitResetData.length === 0) return;
 
-      habits.forEach(habit => {
-        const lastUpdate = parseISO(habit.lastUpdated);
-        let shouldReset = false;
+    const now = new Date();
+    const habitsToReset: string[] = [];
 
-        if (habit.period === 'daily') {
-          shouldReset = !isSameDay(now, lastUpdate);
-        } else if (habit.period === 'weekly') {
-          shouldReset = !isSameWeek(now, lastUpdate);
-        }
+    habitResetData.forEach(habit => {
+      const lastUpdate = parseISO(habit.lastUpdated);
+      let shouldReset = false;
 
-        if (shouldReset) {
-          habitsToReset.push(habit.id);
-        }
-      });
+      if (habit.period === 'daily') {
+        // Reset at midnight each night (user's local time)
+        shouldReset = !isSameDay(now, lastUpdate);
+      } else if (habit.period === 'weekly') {
+        // Reset Sunday night into Monday at midnight
+        // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+        shouldReset = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+      }
 
-      // Batch update all habits that need reset
-      for (const habitId of habitsToReset) {
+      if (shouldReset) {
+        habitsToReset.push(habit.id);
+      }
+    });
+
+    // Batch update all habits that need reset with error handling
+    for (const habitId of habitsToReset) {
+      try {
+        // Use local date string for consistency with points reset (yyyy-MM-dd format)
         await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
           count: 0,
-          lastUpdated: serverTimestamp(),
+          lastUpdated: format(new Date(), 'yyyy-MM-dd'),
         });
+      } catch (error) {
+        console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
       }
-    };
+    }
+  }, [householdId, habitResetData]);
 
-    checkResets();
-  }, [habits, householdId]);
+  // Use the midnight scheduler hook for habit resets
+  useMidnightScheduler(checkHabitResets, !!(householdId && habitResetData.length > 0));
+
+  // Extract specific fields to narrow dependency array and prevent unnecessary re-runs
+  const currentUserUid = currentUser?.uid;
+  const lastDailyPointsReset = currentUser?.lastDailyPointsReset;
+  const lastWeeklyPointsReset = currentUser?.lastWeeklyPointsReset;
+
+  // User points auto-reset callback
+  // Daily points reset at midnight, weekly points reset Sunday night into Monday
+  const checkPointsReset = useCallback(async () => {
+    if (!householdId || !currentUserUid) return;
+
+    const now = new Date();
+    const today = format(now, 'yyyy-MM-dd');
+    const memberRef = doc(db, `households/${householdId}/members`, currentUserUid);
+
+    // We need to track when points were last reset
+    // These fields may not exist yet, so we handle that case
+    const lastDailyReset = lastDailyPointsReset
+      ? parseISO(lastDailyPointsReset)
+      : new Date(0); // If never set, treat as very old
+
+    const lastWeeklyReset = lastWeeklyPointsReset
+      ? parseISO(lastWeeklyPointsReset)
+      : new Date(0);
+
+    const updates: Record<string, number | string> = {};
+
+    // Check if daily points need reset (new day since last reset)
+    if (!isSameDay(now, lastDailyReset)) {
+      updates['points.daily'] = 0;
+      updates['lastDailyPointsReset'] = today;
+    }
+
+    // Check if weekly points need reset (new week since last reset)
+    // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+    if (!isSameWeek(now, lastWeeklyReset, { weekStartsOn: 1 })) {
+      updates['points.weekly'] = 0;
+      updates['lastWeeklyPointsReset'] = today;
+    }
+
+    // Only update if there are changes
+    if (Object.keys(updates).length > 0) {
+      try {
+        await updateDoc(memberRef, updates);
+      } catch (error) {
+        console.error('[checkPointsReset] Failed to reset points:', error);
+      }
+    }
+  }, [householdId, currentUserUid, lastDailyPointsReset, lastWeeklyPointsReset]);
+
+  // Use the midnight scheduler hook for points resets
+  // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
+  useMidnightScheduler(checkPointsReset, !!(householdId && currentUserUid), { initialDelayMs: 100 });
 
   // --- ACTIONS: ACCOUNTS ---
 
