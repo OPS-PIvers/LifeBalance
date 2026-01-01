@@ -85,11 +85,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         video: { facingMode: 'environment' }
       });
       setCameraStream(stream);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      }, 100);
+      // Assign stream when video element is ready
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
     } catch (err) {
       toast.error("Could not access camera.");
       console.error(err);
@@ -151,9 +150,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         const data: ReceiptData = await analyzeReceipt(base64Image, dynamicCategories);
 
         // Create transaction with pending_review status (goes to action queue)
+        // Note: Gemini is instructed to return positive amounts, no Math.abs needed
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
-          amount: Math.abs(data.amount),
+          amount: data.amount,
           merchant: data.merchant,
           category: matchCategory(data.category),
           date: data.date || getLocalDateString(),
@@ -192,21 +192,29 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
 
     setView('processing');
-    setProcessingMessage('Analyzing image...');
+    setProcessingMessage('Reading image...');
 
+    let base64: string;
+
+    // Convert file to base64 with specific error handling
     try {
-      // Convert file to base64
-      const base64 = await new Promise<string>((resolve, reject) => {
+      base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
+        reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
       });
+    } catch (error) {
+      console.error('File read error:', error);
+      toast.error('Failed to read image file. Please try again.');
+      setView('menu');
+      return;
+    }
 
-      // Determine if it's a single receipt or bank statement
-      // For now, we'll try bank statement parsing which handles both
-      setProcessingMessage('Extracting transactions...');
+    // Try to parse as bank statement first (handles multiple transactions)
+    setProcessingMessage('Extracting transactions...');
 
+    try {
       const transactions = await parseBankStatement(base64, dynamicCategories);
 
       if (transactions.length === 0) {
@@ -214,21 +222,23 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         setProcessingMessage('Trying receipt analysis...');
         const receipt = await analyzeReceipt(base64, dynamicCategories);
 
+        // Gemini returns positive amounts per our prompt
         setParsedTransactions([{
           id: crypto.randomUUID(),
           merchant: receipt.merchant,
-          amount: Math.abs(receipt.amount),
+          amount: receipt.amount,
           category: matchCategory(receipt.category),
           date: receipt.date || getLocalDateString(),
           selected: true
         }]);
       } else {
+        // Amounts already normalized by geminiService
         setParsedTransactions(transactions.map(tx => ({
           id: crypto.randomUUID(),
           merchant: tx.merchant,
-          amount: Math.abs(tx.amount),
+          amount: tx.amount,
           category: matchCategory(tx.category),
-          date: tx.date,
+          date: tx.date || getLocalDateString(),
           selected: true
         })));
       }
@@ -236,8 +246,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setView('review');
       toast.success(`Found ${transactions.length || 1} transaction(s)`);
     } catch (error) {
-      console.error('Upload processing error:', error);
-      toast.error('Failed to process image. Try manual entry.');
+      console.error('AI processing error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`AI analysis failed: ${errorMessage}`);
       setView('manual');
     }
 
@@ -517,7 +528,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                 </button>
               </div>
 
-              <div className="space-y-3 max-h-[40vh] overflow-y-auto">
+              <div className="space-y-3 max-h-[35vh] min-h-[120px] overflow-y-auto">
                 {parsedTransactions.map(tx => (
                   <div
                     key={tx.id}
@@ -549,12 +560,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                         <p className="text-xs text-brand-400 mb-2">{tx.date}</p>
 
                         {/* Category selector */}
-                        <div className="flex gap-1.5 flex-wrap">
-                          {dynamicCategories.slice(0, 4).map(cat => (
+                        <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Category selection">
+                          {dynamicCategories.slice(0, 4).map((cat, index) => (
                             <button
                               key={cat}
+                              tabIndex={0}
                               onClick={() => updateParsedCategory(tx.id, cat)}
-                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  updateParsedCategory(tx.id, cat);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                                 tx.category === cat
                                   ? 'bg-brand-800 text-white'
                                   : 'bg-brand-100 text-brand-600 hover:bg-brand-200'
@@ -645,13 +663,20 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
               {/* Category Selector */}
               <div>
                 <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">Category</label>
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar" role="group" aria-label="Category selection">
                   {dynamicCategories.length === 0 && <span className="text-sm text-brand-400">No buckets found.</span>}
                   {dynamicCategories.map(cat => (
                     <button
                       key={cat}
+                      tabIndex={0}
                       onClick={() => setCategory(cat)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setCategory(cat);
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                         category === cat
                           ? 'bg-brand-800 text-white'
                           : 'bg-brand-50 text-brand-600 border border-brand-200 hover:bg-brand-100'

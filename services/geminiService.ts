@@ -19,7 +19,7 @@ export interface ReceiptData {
   merchant: string;
   amount: number;
   category: string;
-  date: string;
+  date?: string; // Optional - may not be visible on all receipts
 }
 
 export interface BankTransactionData {
@@ -65,7 +65,7 @@ export const analyzeReceipt = async (
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
@@ -125,7 +125,7 @@ export const parseBankStatement = async (
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
