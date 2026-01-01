@@ -11,6 +11,9 @@ import {
   Timestamp,
   writeBatch,
   getDoc,
+  setDoc,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -115,6 +118,11 @@ interface HouseholdContextType {
   // Freeze Bank Actions
   useFreezeBankToken: (habitId: string, targetDate: string) => Promise<void>;
   rolloverFreezeBankTokens: () => Promise<void>;
+
+  // Member Management Actions
+  addMember: (memberData: Partial<HouseholdMember>) => Promise<void>;
+  updateMember: (memberId: string, updates: Partial<HouseholdMember>) => Promise<void>;
+  removeMember: (memberId: string) => Promise<void>;
 }
 
 const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -1217,6 +1225,87 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success(`❄️ Freeze Bank rollover: ${tokensAdded} tokens added!`);
   };
 
+  // --- ACTIONS: MEMBER MANAGEMENT ---
+
+  const addMember = async (memberData: Partial<HouseholdMember>) => {
+    if (!householdId) return;
+
+    try {
+      // If UID is not provided (e.g. manual add), generate one
+      // Note: These users cannot log in unless linked to a real auth account later
+      const newMemberUid = memberData.uid || crypto.randomUUID();
+
+      const member: HouseholdMember = {
+        uid: newMemberUid,
+        displayName: memberData.displayName || 'New Member',
+        email: memberData.email || '',
+        role: memberData.role || 'member',
+        // Spread memberData first, then override points to ensure new members start at 0
+        ...memberData,
+        points: { daily: 0, weekly: 0, total: 0 },
+      } as HouseholdMember;
+
+      // 1. Add to members subcollection
+      // Using setDoc with the UID as document ID
+      await setDoc(doc(db, `households/${householdId}/members`, newMemberUid), {
+        ...member,
+        joinedAt: serverTimestamp(),
+      });
+
+      // 2. Add to household memberUids array
+      await updateDoc(doc(db, `households/${householdId}`), {
+        memberUids: arrayUnion(newMemberUid),
+      });
+
+      toast.success('Member added successfully');
+    } catch (error) {
+      console.error('[addMember] Failed:', error);
+      toast.error('Failed to add member');
+      throw error;
+    }
+  };
+
+  const updateMember = async (memberId: string, updates: Partial<HouseholdMember>) => {
+    if (!householdId) return;
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}/members`, memberId), updates);
+      toast.success('Member updated successfully');
+    } catch (error) {
+      console.error('[updateMember] Failed:', error);
+      toast.error('Failed to update member');
+      throw error;
+    }
+  };
+
+  const removeMember = async (memberId: string) => {
+    if (!householdId) return;
+
+    try {
+      // Use batch to make both operations atomic
+      const batch = writeBatch(db);
+
+      // 1. Remove from household memberUids array
+      const householdRef = doc(db, `households/${householdId}`);
+      batch.update(householdRef, {
+        memberUids: arrayRemove(memberId),
+      });
+
+      // 2. Delete member document from subcollection
+      const memberRef = doc(db, `households/${householdId}/members`, memberId);
+      batch.delete(memberRef);
+
+      // Commit both changes atomically
+      await batch.commit();
+
+      toast.success('Member removed successfully');
+    } catch (error) {
+      console.error('[removeMember] Failed:', error);
+      toast.error('Failed to remove member');
+      throw error;
+    }
+  };
+
   // --- ACTIONS: PAY PERIOD MANAGEMENT ---
 
   const resetBucketsForNewPeriod = async (newPeriodId: string) => {
@@ -1397,6 +1486,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         deleteYearlyGoal,
         useFreezeBankToken,
         rolloverFreezeBankTokens,
+        addMember,
+        updateMember,
+        removeMember,
       }}
     >
       {children}
