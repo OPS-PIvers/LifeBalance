@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, CloudSun } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -33,9 +33,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
   
   // Multipliers
   const streakMultiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
-  const weatherBonus = habit.weatherSensitive; 
-  const totalMultiplier = streakMultiplier + (weatherBonus ? 1.0 : 0);
-  
+  const totalMultiplier = streakMultiplier;
+
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
 
   const containerClasses = cn(
@@ -156,13 +155,6 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               )}>
                 <Flame size={10} fill={habit.streakDays >= 3 ? "currentColor" : "none"} />
                 {habit.streakDays} Day{habit.streakDays !== 1 ? 's' : ''}
-              </span>
-            )}
-            
-            {/* Weather Bonus (Positive Only) */}
-            {isPositive && habit.weatherSensitive && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-700">
-                <CloudSun size={10} /> Weather
               </span>
             )}
 

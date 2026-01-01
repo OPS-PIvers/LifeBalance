@@ -26,20 +26,17 @@ export const calculateStreak = (dates: string[]): number => {
 };
 
 /**
- * Get the point multiplier based on streak, habit type, and weather sensitivity
+ * Get the point multiplier based on streak and habit type
  * @param streak - Current streak count
  * @param isPositive - Whether this is a positive habit
- * @param weatherSensitive - Whether this habit is affected by weather
  * @returns The multiplier to apply to base points
  */
-export const getMultiplier = (streak: number, isPositive: boolean, weatherSensitive: boolean): number => {
+export const getMultiplier = (streak: number, isPositive: boolean): number => {
   let multiplier = 1.0;
   if (isPositive) {
     if (streak >= 7) multiplier = 2.0;
     else if (streak >= 3) multiplier = 1.5;
   }
-  const isNiceDay = true; // TODO: Integrate with weather API
-  if (weatherSensitive && isNiceDay) multiplier += 1.0;
   return multiplier;
 };
 
@@ -85,7 +82,7 @@ export const processToggleHabit = (
 
   // 2. Determine if Scorable (Points + Completion)
   const currentStreak = calculateStreak(habit.completedDates);
-  const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.weatherSensitive);
+  const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
 
   let isCompletedNow = false;
   let wasCompletedBefore = false;
@@ -151,7 +148,7 @@ export const calculateResetPoints = (habit: Habit): number => {
 
   let pointsToRemove = 0;
   const currentStreak = calculateStreak(habit.completedDates);
-  const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.weatherSensitive);
+  const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
 
   if (habit.scoringType === 'incremental') {
     pointsToRemove = habit.count * Math.floor(habit.basePoints * multiplier);

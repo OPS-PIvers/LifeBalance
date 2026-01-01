@@ -83,9 +83,10 @@ Habits support two scoring modes:
 **Streak Multipliers:**
 - 3-6 days: 1.5x points
 - 7+ days: 2.0x points
-- Weather-sensitive habits: +1.0x on nice days
 
-Habits auto-reset based on their `period` (daily/weekly). Logic in [contexts/HouseholdContext.tsx:519-633](contexts/HouseholdContext.tsx#L519-L633).
+**Note:** Weather-sensitive bonuses are temporarily disabled. See [WEATHER_IMPLEMENTATION.md](WEATHER_IMPLEMENTATION.md) for future implementation plan.
+
+Habits auto-reset based on their `period` (daily/weekly).
 
 ### Routing
 
