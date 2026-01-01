@@ -8,9 +8,9 @@ interface RewardsModalProps {
 }
 
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
-  const { rewardsInventory, currentUser, redeemReward } = useHousehold();
+  const { rewardsInventory, totalPoints, redeemReward } = useHousehold();
 
-  if (!isOpen || !currentUser) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -26,7 +26,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white">
           <div>
             <h2 className="text-xl font-bold">Rewards Store</h2>
-            <p className="text-xs text-brand-300">Balance: {currentUser.points.total} pts</p>
+            <p className="text-xs text-brand-300">Household Balance: {totalPoints} pts</p>
           </div>
           <button 
             onClick={onClose}
@@ -39,7 +39,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
         {/* Grid */}
         <div className="p-6 overflow-y-auto grid grid-cols-2 gap-4">
           {rewardsInventory.map(reward => {
-            const canAfford = currentUser.points.total >= reward.cost;
+            const canAfford = totalPoints >= reward.cost;
 
             return (
               <div 

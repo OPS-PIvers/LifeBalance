@@ -18,7 +18,7 @@ import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
-  const { members, currentUser } = useHousehold();
+  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints } = useHousehold();
   const navigate = useNavigate();
 
   const [householdDetails, setHouseholdDetails] = useState<{
@@ -125,6 +125,25 @@ const Settings: React.FC = () => {
 
             {/* Invite Code */}
             <HouseholdInviteCard inviteCode={householdDetails.inviteCode} />
+
+            {/* Shared Household Points */}
+            <div className="mt-4 p-4 bg-gradient-to-r from-brand-50 to-habit-blue-50 rounded-xl border border-brand-200">
+              <h4 className="text-sm font-bold text-brand-700 mb-3">Shared Household Points</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <p className="text-xs text-brand-600 mb-1">Daily</p>
+                  <p className="text-lg font-bold text-brand-800">{dailyPoints}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-brand-600 mb-1">Weekly</p>
+                  <p className="text-lg font-bold text-brand-800">{weeklyPoints}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-brand-600 mb-1">Total</p>
+                  <p className="text-lg font-bold text-brand-800">{totalPoints.toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -172,12 +191,6 @@ const Settings: React.FC = () => {
                     {member.email && (
                       <p className="text-xs text-brand-500 truncate">{member.email}</p>
                     )}
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold text-brand-800">
-                      {member.points.total.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-brand-500">points</p>
                   </div>
                 </div>
               ))}
