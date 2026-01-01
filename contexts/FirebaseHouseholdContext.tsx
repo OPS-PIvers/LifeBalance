@@ -25,12 +25,18 @@ import {
   HouseholdMember,
   Household,
   BucketPeriodSnapshot,
+  YearlyGoal,
+  FreezeBank,
+  FreezeBankHistoryEntry,
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak } from '@/utils/habitLogic';
-import { getCurrentPayPeriod, getPayPeriodForDate, hasNewPeriodStarted } from '@/utils/payPeriodCalculator';
+import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
-import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration } from '@/utils/migrations/payPeriodMigration';
+import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
+import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
+import { calculateChallengeProgress } from '@/utils/challengeCalculator';
+import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays } from 'date-fns';
@@ -49,14 +55,18 @@ interface HouseholdContextType {
   transactions: Transaction[];
   habits: Habit[];
   activeChallenge: Challenge | null;
+  challenges: Challenge[];
+  yearlyGoals: YearlyGoal[];
+  activeYearlyGoals: YearlyGoal[];
+  primaryYearlyGoal: YearlyGoal | null;
   rewardsInventory: RewardItem[];
-  freezeBank: { current: number; accrued: number; lastMonth: string };
+  freezeBank: FreezeBank | null;
   insight: string;
 
   // Pay Period Tracking State
   currentPeriodId: string;
   bucketSpentMap: Map<string, BucketSpent>;
-  householdSettings: Household['payPeriodSettings'] | null;
+  householdSettings: Household | null;
 
   // Account Actions
   addAccount: (account: Account) => Promise<void>;
@@ -92,12 +102,19 @@ interface HouseholdContextType {
 
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
+  markChallengeComplete: (challengeId: string, success: boolean) => Promise<void>;
   redeemReward: (rewardId: string) => Promise<void>;
   refreshInsight: () => void;
 
-  // Pay Period Actions
-  setPayPeriodStartDate: (startDate: string) => Promise<void>;
-  manuallyResetPeriod: () => Promise<void>;
+  // Yearly Goal Actions
+  createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
+  updateYearlyGoal: (goalId: string, updates: Partial<YearlyGoal>) => Promise<void>;
+  updateYearlyGoalProgress: (goalId: string, month: string, success: boolean) => Promise<void>;
+  deleteYearlyGoal: (goalId: string) => Promise<void>;
+
+  // Freeze Bank Actions
+  useFreezeBankToken: (habitId: string, targetDate: string) => Promise<void>;
+  rolloverFreezeBankTokens: () => Promise<void>;
 }
 
 const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -116,15 +133,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
   const [insight, setInsight] = useState("You spend 20% less on days you exercise.");
-  const [freezeBank] = useState({ current: 2, accrued: 4, lastMonth: '2023-10' });
+  const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
+  const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
 
   // Pay Period Tracking State
-  const [householdSettings, setHouseholdSettings] = useState<Household['payPeriodSettings'] | null>(null);
+  const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
   const [currentPeriodId, setCurrentPeriodId] = useState<string>('');
   const [bucketSpentMap, setBucketSpentMap] = useState<Map<string, BucketSpent>>(new Map());
 
   // Derived state
   const activeChallenge = challenges.find(c => c.status === 'active') || null;
+  const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
+  const primaryYearlyGoal = activeYearlyGoals[0] || null;
   const safeToSpend = useMemo(
     () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions, currentPeriodId),
     [accounts, calendarItems, buckets, transactions, currentPeriodId]
@@ -208,6 +228,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
+    // Yearly Goals listener
+    const yearlyGoalsQuery = query(collection(db, `households/${householdId}/yearlyGoals`));
+    unsubscribers.push(
+      onSnapshot(yearlyGoalsQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as YearlyGoal));
+        setYearlyGoals(data);
+      })
+    );
+
     // Rewards listener
     const rewardsQuery = query(collection(db, `households/${householdId}/rewards`));
     unsubscribers.push(
@@ -230,12 +259,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Household settings listener (for pay period tracking)
+    // Household settings listener (for pay period tracking and freeze bank)
     const householdDocRef = doc(db, `households/${householdId}`);
     unsubscribers.push(
-      onSnapshot(householdDocRef, (snapshot) => {
+      onSnapshot(householdDocRef, async (snapshot) => {
         const data = snapshot.data() as Household | undefined;
-        setHouseholdSettings(data?.payPeriodSettings || null);
+        setHouseholdSettings(data || null);
+
+        // Extract and set freezeBank
+        if (data?.freezeBank) {
+          // Check if migration is needed
+          if (needsFreezeBankMigration(data.freezeBank)) {
+            try {
+              await migrateFreezeBankToEnhanced(householdId, data.freezeBank as any);
+              // Migration will trigger a new snapshot with updated data
+            } catch (error) {
+              console.error('[FreezeBank] Migration failed:', error);
+              // Fall back to a default freeze bank
+              setFreezeBank({
+                tokens: 2,
+                maxTokens: 3,
+                lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
+                lastRolloverMonth: format(new Date(), 'yyyy-MM'),
+                history: []
+              });
+            }
+          } else {
+            setFreezeBank(data.freezeBank as FreezeBank);
+          }
+        }
       })
     );
 
@@ -349,16 +401,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- PAY PERIOD TRACKING EFFECTS ---
 
-  // Calculate current period whenever settings change
+  // Sync current period ID from household settings (paycheck-based tracking)
   useEffect(() => {
-    if (!householdSettings?.startDate) {
-      setCurrentPeriodId(''); // No period tracking enabled
-      return;
-    }
-
-    const period = getCurrentPayPeriod(householdSettings.startDate);
-    setCurrentPeriodId(period.periodId);
-  }, [householdSettings]);
+    setCurrentPeriodId(householdSettings?.lastPaycheckDate || '');
+  }, [householdSettings?.lastPaycheckDate]);
 
   // Calculate bucket spent amounts whenever transactions, buckets, or period changes
   useEffect(() => {
@@ -388,24 +434,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runMigrations();
   }, [householdId, householdSettings, currentPeriodId, transactions, buckets]);
 
-  // Auto-reset check at midnight
-  const checkPeriodReset = useCallback(async () => {
-    if (!householdId || !householdSettings?.startDate || !currentPeriodId) return;
+  // Migrate from date-based periods to paycheck-based periods if needed
+  useEffect(() => {
+    if (!householdId || !householdSettings) return;
 
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const runPaycheckMigration = async () => {
+      if (needsPaycheckMigration(householdSettings)) {
+        console.log('[Migration] Starting paycheck period migration...');
+        try {
+          await migrateToPaycheckPeriods(
+            householdId,
+            householdSettings.payPeriodSettings!.startDate
+          );
+        } catch (error) {
+          console.error('[Migration] Failed to migrate to paycheck periods:', error);
+          toast.error('Migration failed. Please refresh the page.');
+        }
+      }
+    };
 
-    if (hasNewPeriodStarted(currentPeriodId, today, householdSettings.startDate)) {
-      const newPeriod = getCurrentPayPeriod(householdSettings.startDate);
-      console.log(`[Period Reset] New period detected: ${newPeriod.periodId}`);
-
-      // Reset buckets for the new period
-      await resetBucketsForNewPeriod(newPeriod.periodId);
-    }
-  }, [householdId, householdSettings, currentPeriodId, buckets, bucketSpentMap, transactions]); // Added dependencies for resetBucketsForNewPeriod
-
-  // Use midnight scheduler for period reset check
-  // Add 200ms delay to run after habit and points resets
-  useMidnightScheduler(checkPeriodReset, !!(householdId && householdSettings?.startDate), { initialDelayMs: 200 });
+    runPaycheckMigration();
+  }, [householdId, householdSettings]);
 
   // --- ACTIONS: ACCOUNTS ---
 
@@ -527,15 +576,68 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const payCalendarItem = async (itemId: string, accountId: string) => {
     if (!householdId || !user) return;
 
-    const item = calendarItems.find(i => i.id === itemId);
     const account = accounts.find(a => a.id === accountId);
+    if (!account) return;
 
-    if (!item || !account || item.isPaid) return;
+    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
+    const isRecurringInstance = itemId.includes('-202');
 
-    // 1. Mark as paid
-    await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
-      isPaid: true,
-    });
+    let item: CalendarItem | undefined;
+    let parentRecurringId: string | undefined;
+    let specificDate: string;
+
+    if (isRecurringInstance) {
+      // Parse synthetic ID to get original template ID and date
+      const parts = itemId.split('-202');
+      parentRecurringId = parts[0];
+      specificDate = '202' + parts[1]; // Reconstruct the date part
+
+      // Find the recurring template
+      const template = calendarItems.find(i => i.id === parentRecurringId);
+      if (!template) return;
+
+      // Check if this specific date has already been paid
+      const existingPaidInstance = calendarItems.find(
+        i => i.parentRecurringId === parentRecurringId && i.date === specificDate && i.isPaid
+      );
+      if (existingPaidInstance) return;
+
+      // Create item object for this specific instance
+      item = {
+        ...template,
+        date: specificDate,
+      };
+    } else {
+      // Non-recurring item
+      item = calendarItems.find(i => i.id === itemId);
+      if (!item || item.isPaid) return;
+      specificDate = item.date;
+    }
+
+    // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction
+    if (item.type === 'income') {
+      await handlePaycheckApproval(specificDate);
+    }
+
+    // 1. Create or update the paid calendar item
+    if (isRecurringInstance) {
+      // Create a new paid instance record
+      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        title: item.title,
+        amount: item.amount,
+        date: specificDate,
+        type: item.type,
+        isPaid: true,
+        isRecurring: false, // Individual instances are not recurring
+        parentRecurringId: parentRecurringId,
+        createdBy: user.uid,
+      });
+    } else {
+      // Mark non-recurring item as paid
+      await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
+        isPaid: true,
+      });
+    }
 
     // 2. Update account balance
     const newBalance = item.type === 'expense' ? account.balance - item.amount : account.balance + item.amount;
@@ -556,9 +658,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // 4. Create transaction
     const transactionDate = new Date().toISOString().split('T')[0];
-    const payPeriodId = householdSettings?.startDate
-      ? getPayPeriodForDate(transactionDate, householdSettings.startDate).periodId
-      : '';
+    const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
 
     await addDoc(collection(db, `households/${householdId}/transactions`), {
       amount: item.amount,
@@ -580,20 +680,51 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const deferCalendarItem = async (itemId: string) => {
-    if (!householdId) return;
+    if (!householdId || !user) return;
 
-    const item = calendarItems.find(i => i.id === itemId);
-    if (!item) return;
+    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
+    const isRecurringInstance = itemId.includes('-202');
 
-    // Move the date forward by 1 day
-    const currentDate = parseISO(item.date);
-    const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+    if (isRecurringInstance) {
+      // For recurring instances, create a one-time reminder for tomorrow
+      const parts = itemId.split('-202');
+      const parentRecurringId = parts[0];
+      const specificDate = '202' + parts[1];
 
-    await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
-      date: newDate,
-    });
+      // Find the recurring template
+      const template = calendarItems.find(i => i.id === parentRecurringId);
+      if (!template) return;
 
-    toast.success('Deferred to tomorrow');
+      // Calculate tomorrow's date from the specific instance date
+      const currentDate = parseISO(specificDate);
+      const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+
+      // Create a one-time non-recurring item for tomorrow
+      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        title: template.title,
+        amount: template.amount,
+        date: newDate,
+        type: template.type,
+        isPaid: false,
+        isRecurring: false,
+        createdBy: user.uid,
+      });
+
+      toast.success('Deferred to tomorrow (one-time)');
+    } else {
+      // Non-recurring item - just move the date
+      const item = calendarItems.find(i => i.id === itemId);
+      if (!item) return;
+
+      const currentDate = parseISO(item.date);
+      const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+
+      await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
+        date: newDate,
+      });
+
+      toast.success('Deferred to tomorrow');
+    }
   };
 
   // --- ACTIONS: TRANSACTIONS ---
@@ -601,10 +732,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addTransaction = async (tx: Transaction) => {
     if (!householdId || !user) return;
 
-    // Assign pay period ID if period tracking is enabled
-    const payPeriodId = householdSettings?.startDate
-      ? getPayPeriodForDate(tx.date, householdSettings.startDate).periodId
-      : '';
+    // Assign pay period ID based on paycheck approval
+    const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
     await addDoc(collection(db, `households/${householdId}/transactions`), {
       ...tx,
@@ -656,9 +785,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Recalculate pay period if date changed
       let payPeriodId = transaction.payPeriodId;
-      if (updates.date && householdSettings?.startDate) {
-        const { periodId } = getPayPeriodForDate(updates.date, householdSettings.startDate);
-        payPeriodId = periodId;
+      if (updates.date) {
+        payPeriodId = getPayPeriodForTransaction(updates.date, householdSettings?.lastPaycheckDate);
       }
 
       // Update transaction in Firestore
@@ -858,19 +986,50 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const updateChallenge = async (challenge: Challenge) => {
     if (!householdId) return;
-    if (activeChallenge) {
-      await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), {
-        month: challenge.month,
-        title: challenge.title,
-        relatedHabitIds: challenge.relatedHabitIds,
-        targetTotalCount: challenge.targetTotalCount,
-        yearlyRewardLabel: challenge.yearlyRewardLabel,
-        status: challenge.status,
-      });
+
+    // Calculate currentValue from linked habits
+    const linkedHabits = habits.filter(h => challenge.relatedHabitIds.includes(h.id));
+    const { currentValue, progress } = calculateChallengeProgress(challenge, linkedHabits);
+
+    const updatedChallenge = {
+      ...challenge,
+      currentValue,
+      // Support both old and new schema fields
+      targetValue: challenge.targetValue || challenge.targetTotalCount,
+      targetType: challenge.targetType || 'count',
+    };
+
+    if (activeChallenge?.id) {
+      await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
     } else {
-      await addDoc(collection(db, `households/${householdId}/challenges`), challenge);
+      await addDoc(collection(db, `households/${householdId}/challenges`), {
+        ...updatedChallenge,
+        createdBy: user?.uid,
+        createdAt: serverTimestamp(),
+      });
     }
     toast.success('Challenge Updated');
+  };
+
+  const markChallengeComplete = async (challengeId: string, success: boolean) => {
+    if (!householdId) return;
+
+    const challenge = challenges.find(c => c.id === challengeId);
+    if (!challenge) return;
+
+    // Update challenge status
+    await updateDoc(doc(db, `households/${householdId}/challenges`, challengeId), {
+      status: success ? 'success' : 'failed',
+      completedAt: serverTimestamp(),
+    });
+
+    // If successful and linked to yearly goal, update yearly goal progress
+    if (success && challenge.yearlyGoalId) {
+      const monthKey = challenge.month; // Already in YYYY-MM format
+      await updateYearlyGoalProgress(challenge.yearlyGoalId, monthKey, true);
+    }
+
+    toast.success(success ? '🎉 Challenge completed!' : 'Challenge marked failed');
   };
 
   const redeemReward = async (rewardId: string) => {
@@ -891,23 +1050,170 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success(`Redeemed: ${reward.title}`);
   };
 
-  // --- ACTIONS: PAY PERIOD MANAGEMENT ---
+  // --- ACTIONS: YEARLY GOALS ---
 
-  const setPayPeriodStartDate = async (startDate: string) => {
+  const createYearlyGoal = async (goal: Omit<YearlyGoal, 'id'>) => {
+    if (!householdId || !user) return;
+
+    await addDoc(collection(db, `households/${householdId}/yearlyGoals`), {
+      ...goal,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      status: 'in_progress',
+      successfulMonths: [],
+    });
+
+    toast.success('Yearly goal created!');
+  };
+
+  const updateYearlyGoal = async (goalId: string, updates: Partial<YearlyGoal>) => {
     if (!householdId) return;
 
-    try {
-      const householdRef = doc(db, `households/${householdId}`);
-      await updateDoc(householdRef, {
-        'payPeriodSettings.startDate': startDate,
-        'payPeriodSettings.frequency': 'bi-weekly',
-      });
-      toast.success('Pay period configured');
-    } catch (error) {
-      console.error('[setPayPeriodStartDate] Failed:', error);
-      toast.error('Failed to configure pay period');
+    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
+    toast.success('Yearly goal updated');
+  };
+
+  const updateYearlyGoalProgress = async (goalId: string, month: string, success: boolean) => {
+    if (!householdId) return;
+
+    const goal = yearlyGoals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    let updatedMonths = [...goal.successfulMonths];
+
+    if (success && !updatedMonths.includes(month)) {
+      updatedMonths.push(month);
+    } else if (!success && updatedMonths.includes(month)) {
+      updatedMonths = updatedMonths.filter(m => m !== month);
+    }
+
+    // Check if yearly goal is achieved
+    const isAchieved = updatedMonths.length >= goal.requiredMonths;
+
+    const updates: any = {
+      successfulMonths: updatedMonths,
+    };
+
+    if (isAchieved && goal.status !== 'achieved') {
+      updates.status = 'achieved';
+      updates.achievedAt = serverTimestamp();
+    }
+
+    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
+
+    if (isAchieved) {
+      toast.success(`🎉 Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
     }
   };
+
+  const deleteYearlyGoal = async (goalId: string) => {
+    if (!householdId) return;
+
+    await deleteDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId));
+    toast.success('Yearly goal deleted');
+  };
+
+  // --- ACTIONS: FREEZE BANK ---
+
+  const useFreezeBankToken = async (habitId: string, targetDate: string) => {
+    if (!householdId || !freezeBank || freezeBank.tokens <= 0) {
+      toast.error('No freeze tokens available');
+      return;
+    }
+
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) return;
+
+    // Validate token usage
+    const validation = canUseFreezeBankToken(habit, targetDate, freezeBank.tokens);
+    if (!validation.allowed) {
+      toast.error(validation.reason || 'Cannot use freeze token');
+      return;
+    }
+
+    // Add the date to completedDates if not already present
+    const updatedCompletedDates = [...habit.completedDates];
+    if (!updatedCompletedDates.includes(targetDate)) {
+      updatedCompletedDates.push(targetDate);
+      updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    }
+
+    // Recalculate streak with patched date
+    const newStreak = calculateStreak(updatedCompletedDates);
+
+    // Update habit
+    await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+      completedDates: updatedCompletedDates,
+      streakDays: newStreak,
+    });
+
+    // Create history entry
+    const historyEntry: FreezeBankHistoryEntry = {
+      id: crypto.randomUUID(),
+      type: 'used',
+      amount: -1,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      habitId,
+      habitDate: targetDate,
+      notes: `Used token to patch ${habit.title} on ${targetDate}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Update freezeBank balance and history
+    const updatedFreezeBank: FreezeBank = {
+      ...freezeBank,
+      tokens: freezeBank.tokens - 1,
+      history: [...freezeBank.history, historyEntry],
+    };
+
+    await updateDoc(doc(db, `households/${householdId}`), {
+      freezeBank: updatedFreezeBank,
+    });
+
+    toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
+  };
+
+  const rolloverFreezeBankTokens = async () => {
+    if (!householdId || !freezeBank) return;
+
+    const now = new Date();
+    const currentMonth = format(now, 'yyyy-MM');
+
+    // Only rollover if we're in a new month
+    if (freezeBank.lastRolloverMonth === currentMonth) return;
+
+    // Calculate new balance: min(current, 1) + 2, max 3
+    const rolloverAmount = Math.min(freezeBank.tokens, 1);
+    const newBalance = Math.min(rolloverAmount + 2, 3);
+    const tokensAdded = newBalance - freezeBank.tokens;
+
+    // Create history entry
+    const historyEntry: FreezeBankHistoryEntry = {
+      id: crypto.randomUUID(),
+      type: 'rollover',
+      amount: tokensAdded,
+      date: format(now, 'yyyy-MM-dd'),
+      notes: `Monthly rollover: ${rolloverAmount} carried + 2 new = ${newBalance} total`,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Update freezeBank
+    const updatedFreezeBank: FreezeBank = {
+      ...freezeBank,
+      tokens: newBalance,
+      lastRolloverDate: format(now, 'yyyy-MM-dd'),
+      lastRolloverMonth: currentMonth,
+      history: [...freezeBank.history, historyEntry],
+    };
+
+    await updateDoc(doc(db, `households/${householdId}`), {
+      freezeBank: updatedFreezeBank,
+    });
+
+    toast.success(`❄️ Freeze Bank rollover: ${tokensAdded} tokens added!`);
+  };
+
+  // --- ACTIONS: PAY PERIOD MANAGEMENT ---
 
   const resetBucketsForNewPeriod = async (newPeriodId: string) => {
     if (!householdId || !currentPeriodId) return;
@@ -955,18 +1261,51 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
-  const manuallyResetPeriod = async () => {
-    if (!householdSettings?.startDate) {
-      toast.error('Pay period not configured');
+  const handlePaycheckApproval = async (paycheckDate: string) => {
+    if (!householdId || !user) return;
+
+    if (!currentPeriodId) {
+      // First paycheck ever - initialize period tracking
+      await initializeFirstPeriod(paycheckDate);
       return;
     }
 
+    // Reset buckets for the period that just ended
+    await resetBucketsForNewPeriod(paycheckDate);
+
+    // Update household's last paycheck date
+    const householdRef = doc(db, `households/${householdId}`);
+    await updateDoc(householdRef, {
+      lastPaycheckDate: paycheckDate,
+    });
+  };
+
+  const initializeFirstPeriod = async (paycheckDate: string) => {
+    if (!householdId || !user) return;
+
     try {
-      const newPeriod = getCurrentPayPeriod(householdSettings.startDate);
-      await resetBucketsForNewPeriod(newPeriod.periodId);
+      const batch = writeBatch(db);
+
+      // Set household's first paycheck
+      const householdRef = doc(db, `households/${householdId}`);
+      batch.update(householdRef, {
+        lastPaycheckDate: paycheckDate,
+      });
+
+      // Initialize all buckets with this period ID
+      for (const bucket of buckets) {
+        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
+        batch.update(bucketRef, {
+          currentPeriodId: paycheckDate,
+          lastResetDate: paycheckDate,
+        });
+      }
+
+      await batch.commit();
+      toast.success('Pay period tracking initialized!');
     } catch (error) {
-      console.error('[manuallyResetPeriod] Failed:', error);
-      toast.error('Failed to reset period');
+      console.error('[initializeFirstPeriod] Failed:', error);
+      toast.error('Failed to initialize period tracking');
     }
   };
 
@@ -981,6 +1320,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setInsight(random);
     toast('Insight refreshed', { icon: '✨' });
   };
+
+  // Check for freeze bank rollover on 1st of month (or first login)
+  const checkFreezeBankRollover = useCallback(async () => {
+    if (!householdId || !freezeBank) return;
+
+    const currentMonth = format(new Date(), 'yyyy-MM');
+
+    // Check if we're in a new month
+    if (freezeBank.lastRolloverMonth !== currentMonth) {
+      await rolloverFreezeBankTokens();
+    }
+  }, [householdId, freezeBank]);
+
+  // Use midnight scheduler to check for rollover with a delay to avoid conflicts
+  useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
 
   return (
     <FirebaseHouseholdContext.Provider
@@ -997,6 +1351,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         transactions,
         habits,
         activeChallenge,
+        challenges,
+        yearlyGoals,
+        activeYearlyGoals,
+        primaryYearlyGoal,
         rewardsInventory: rewards,
         freezeBank,
         insight,
@@ -1026,10 +1384,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toggleHabit,
         resetHabit,
         updateChallenge,
+        markChallengeComplete,
         redeemReward,
         refreshInsight,
-        setPayPeriodStartDate,
-        manuallyResetPeriod,
+        createYearlyGoal,
+        updateYearlyGoal,
+        updateYearlyGoalProgress,
+        deleteYearlyGoal,
+        useFreezeBankToken,
+        rolloverFreezeBankTokens,
       }}
     >
       {children}

@@ -1,10 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
-import ChallengeFormModal from '../components/modals/ChallengeFormModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format } from 'date-fns';
+import ChallengeHubModal from '../components/modals/ChallengeHubModal';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths } from 'date-fns';
+import { expandCalendarItems } from '../utils/calendarRecurrence';
+import { calculateChallengeProgress } from '../utils/challengeCalculator';
+import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
 
 const Dashboard: React.FC = () => {
   const {
@@ -20,7 +23,8 @@ const Dashboard: React.FC = () => {
     payCalendarItem,
     deferCalendarItem,
     deleteCalendarItem,
-    accounts
+    accounts,
+    primaryYearlyGoal
   } = useHousehold();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -30,8 +34,15 @@ const Dashboard: React.FC = () => {
   const today = new Date();
   const endToday = endOfDay(today);
 
+  // Expand recurring calendar items for a reasonable range (1 month past to 3 months future)
+  // This ensures we catch any due recurring items
+  const expandedCalendarItems = useMemo(
+    () => expandCalendarItems(calendarItems, subMonths(today, 1), addMonths(today, 3)),
+    [calendarItems, today]
+  );
+
   // 1. Due Calendar Items (Past or Today, Unpaid)
-  const dueCalendarItems = calendarItems.filter(item => 
+  const dueCalendarItems = expandedCalendarItems.filter(item =>
     !item.isPaid && (isBefore(parseISO(item.date), endToday) || isSameDay(parseISO(item.date), today))
   ).map(i => ({ ...i, queueType: 'calendar' as const }));
 
@@ -52,11 +63,13 @@ const Dashboard: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
 
-  // Widget B Data
+  // Widget B Data - Enhanced Challenge Progress
   const linkedHabits = activeChallenge ? habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id)) : [];
-  const completedHabitsCount = linkedHabits.reduce((acc, h) => acc + h.totalCount, 0);
-  const challengeTarget = activeChallenge?.targetTotalCount || 1;
-  const challengeProgress = Math.min(100, (completedHabitsCount / challengeTarget) * 100);
+  const challengeProgressData = activeChallenge
+    ? calculateChallengeProgress(activeChallenge, linkedHabits)
+    : { currentValue: 0, progress: 0 };
+  const challengeTarget = activeChallenge ? getEffectiveTargetValue(activeChallenge) : 1;
+  const challengeProgress = challengeProgressData.progress;
 
   return (
     <div className="min-h-screen bg-brand-50 pb-28">
@@ -164,7 +177,9 @@ const Dashboard: React.FC = () => {
                               <button
                                 onClick={async () => {
                                   if (confirm('Delete this calendar item permanently?')) {
-                                    await deleteCalendarItem(item.id);
+                                    // If this is a recurring instance, delete the entire series
+                                    const idToDelete = item.id.includes('-202') ? item.id.split('-202')[0] : item.id;
+                                    await deleteCalendarItem(idToDelete);
                                     setExpandedId(null);
                                   }
                                 }}
@@ -210,39 +225,78 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Widget B: Monthly Challenge */}
+        {/* Widget B: Monthly Challenge (Enhanced) */}
         {activeChallenge && (
-          <div className="bg-brand-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden group">
+          <div
+            onClick={() => setIsChallengeModalOpen(true)}
+            className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+          >
             {/* Background decoration */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
 
             <div className="relative z-10">
+              {/* Header with Day Indicator */}
               <div className="flex items-center justify-between mb-1">
                 <h2 className="font-bold text-lg">{activeChallenge.title}</h2>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs bg-white/10 px-2 py-1 rounded-lg">
-                    {format(new Date(), 'MMM yyyy')}
+                  <span className="text-xs bg-white/10 px-2 py-1 rounded-lg font-medium">
+                    Day {new Date().getDate()} of 30
                   </span>
-                  <button
-                    onClick={() => setIsChallengeModalOpen(true)}
-                    className="p-1 text-brand-300 hover:text-white transition-colors rounded-full hover:bg-white/10"
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  <Pencil size={14} className="text-brand-300 opacity-70" />
                 </div>
               </div>
-              <p className="text-xs text-brand-300 mb-4">Complete habits to unlock {activeChallenge.yearlyRewardLabel}</p>
 
+              {/* Description (if exists) */}
+              {activeChallenge.description && (
+                <p className="text-xs text-brand-200 mb-2">{activeChallenge.description}</p>
+              )}
+
+              {/* Reward Label */}
+              <p className="text-xs text-brand-300 mb-3">
+                Complete to unlock {activeChallenge.yearlyRewardLabel}
+              </p>
+
+              {/* Progress Bar */}
               <div className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2">
                 <div
                   className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
                   style={{ width: `${challengeProgress}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] font-medium text-brand-300">
-                <span>{completedHabitsCount} Habits</span>
-                <span>{challengeTarget} Target</span>
+
+              {/* Progress Stats */}
+              <div className="flex justify-between text-[10px] font-medium text-brand-300 mb-3">
+                <span>
+                  {challengeProgressData.currentValue} / {challengeTarget}{' '}
+                  {activeChallenge.targetType === 'percentage' ? '%' : ''}
+                </span>
+                <span>{challengeProgress.toFixed(0)}% Complete</span>
               </div>
+
+              {/* Yearly Goal Status (if exists) */}
+              {primaryYearlyGoal && (
+                <div className="pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-brand-300">Yearly Goal:</span>
+                      <span className="text-xs font-bold">{primaryYearlyGoal.title}</span>
+                    </div>
+                    <div
+                      className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                        primaryYearlyGoal.successfulMonths.length >=
+                        primaryYearlyGoal.requiredMonths - 2
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-orange-500/20 text-orange-300'
+                      }`}
+                    >
+                      {primaryYearlyGoal.successfulMonths.length >=
+                      primaryYearlyGoal.requiredMonths - 2
+                        ? 'On Track'
+                        : 'Needs Attention'}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -270,7 +324,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
-      <ChallengeFormModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />
+      <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
@@ -283,7 +337,7 @@ const Dashboard: React.FC = () => {
              
              <div className="space-y-2 mb-4">
                {accounts.filter(a => a.type !== 'credit').map(acc => (
-                 <button 
+                 <button
                    key={acc.id}
                    onClick={() => {
                      payCalendarItem(payModalItemId, acc.id);

@@ -71,6 +71,7 @@ export interface CalendarItem {
   isPaid: boolean;
   isRecurring?: boolean;
   frequency?: 'weekly' | 'bi-weekly' | 'monthly';
+  parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
@@ -119,12 +120,61 @@ export interface RewardItem {
 
 export interface Challenge {
   id: string;
-  month: string;
+  month: string; // YYYY-MM format
   title: string;
+  description?: string; // Optional challenge description
   relatedHabitIds: string[];
-  targetTotalCount: number; // Replaced goalPercent
+
+  // Enhanced targeting (backward compatible)
+  targetType?: 'count' | 'percentage'; // Defaults to 'count' if not set
+  targetValue?: number; // Replaces targetTotalCount
+  targetTotalCount?: number; // DEPRECATED: Keep for backward compatibility, use targetValue
+  currentValue?: number; // Calculated field
+
+  // Yearly Goal Connection
+  yearlyGoalId?: string; // Link to specific yearly goal
   yearlyRewardLabel: string;
+
   status: 'active' | 'success' | 'failed';
+
+  // Metadata
+  createdAt?: string;
+  createdBy?: string;
+  completedAt?: string; // When status changed to success/failed
+}
+
+export interface YearlyGoal {
+  id: string;
+  year: number; // e.g., 2025
+  title: string; // e.g., "Family Trip to Disney"
+  description?: string;
+  requiredMonths: number; // e.g., 10 (out of 12)
+  successfulMonths: string[]; // Array of YYYY-MM strings
+  status: 'in_progress' | 'achieved' | 'failed';
+
+  // Metadata
+  createdBy: string;
+  createdAt: string;
+  achievedAt?: string;
+}
+
+export interface FreezeBankHistoryEntry {
+  id: string;
+  type: 'earned' | 'used' | 'rollover' | 'expired';
+  amount: number; // +2 for earned, -1 for used
+  date: string; // YYYY-MM-DD
+  habitId?: string; // If type === 'used'
+  habitDate?: string; // YYYY-MM-DD of patched date
+  notes?: string;
+  createdAt: string;
+}
+
+export interface FreezeBank {
+  tokens: number; // Current balance (0-3)
+  maxTokens: number; // Always 3
+  lastRolloverDate: string; // YYYY-MM-DD
+  lastRolloverMonth: string; // YYYY-MM for tracking
+  history: FreezeBankHistoryEntry[]; // Audit trail
 }
 
 export interface Household {
@@ -132,7 +182,7 @@ export interface Household {
   name: string;
   inviteCode: string;
   members: HouseholdMember[];
-  freezeBank: { current: number; accrued: number; lastMonth: string };
+  freezeBank: FreezeBank | { current: number; accrued: number; lastMonth: string }; // Support both old and new format
   accounts: Account[];
   rewardsInventory: RewardItem[];
   coreTemplates: {
@@ -140,8 +190,5 @@ export interface Household {
     buckets: BudgetBucket[];
   };
   location?: { lat: number; lon: number };
-  payPeriodSettings?: {
-    startDate: string; // YYYY-MM-DD - anchor date for first pay period
-    frequency: 'bi-weekly' | 'weekly' | 'monthly'; // For future extensibility
-  };
+  lastPaycheckDate?: string; // YYYY-MM-DD of most recent approved paycheck
 }
