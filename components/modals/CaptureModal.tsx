@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Camera, Type, Loader2, Upload, Image, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Camera, Type, Loader2, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { analyzeReceipt, parseBankStatement, ReceiptData, BankTransactionData } from '../../services/geminiService';
+import { analyzeReceipt, parseBankStatement, ReceiptData } from '../../services/geminiService';
 import { Transaction } from '../../types/schema';
 
 interface CaptureModalProps {
@@ -152,7 +152,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           date: data.date || new Date().toISOString().split('T')[0],
           status: 'pending_review', // Shows in action queue
           isRecurring: false,
-          source: 'manual',
+          source: 'camera-scan',
           autoCategorized: true
         };
 
@@ -265,21 +265,23 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setProcessingMessage(`Adding ${selectedTx.length} transaction(s)...`);
 
     try {
-      for (const tx of selectedTx) {
-        const newTransaction: Transaction = {
-          id: tx.id,
-          amount: tx.amount,
-          merchant: tx.merchant,
-          category: tx.category,
-          date: tx.date,
-          status: 'pending_review', // Goes to action queue for review
-          isRecurring: false,
-          source: 'manual',
-          autoCategorized: true
-        };
-
-        await addTransaction(newTransaction);
-      }
+      // Use Promise.all for parallel transaction addition (performance improvement)
+      await Promise.all(
+        selectedTx.map(tx => {
+          const newTransaction: Transaction = {
+            id: tx.id,
+            amount: tx.amount,
+            merchant: tx.merchant,
+            category: tx.category,
+            date: tx.date,
+            status: 'pending_review', // Goes to action queue for review
+            isRecurring: false,
+            source: 'file-upload',
+            autoCategorized: true
+          };
+          return addTransaction(newTransaction);
+        })
+      );
 
       toast.success(`${selectedTx.length} transaction(s) added to Action Queue!`);
       handleClose();
@@ -475,9 +477,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   {parsedTransactions.filter(t => t.selected).length} of {parsedTransactions.length} selected
                 </p>
                 <button
-                  onClick={() => setParsedTransactions(prev =>
-                    prev.map(t => ({ ...t, selected: !prev.every(p => p.selected) }))
-                  )}
+                  onClick={() => {
+                    const allSelected = parsedTransactions.every(t => t.selected);
+                    setParsedTransactions(prev =>
+                      prev.map(t => ({ ...t, selected: !allSelected }))
+                    );
+                  }}
                   className="text-xs font-bold text-brand-600 hover:text-brand-800"
                 >
                   {parsedTransactions.every(t => t.selected) ? 'Deselect All' : 'Select All'}
@@ -575,7 +580,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   <input
                     type="number"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Prevent negative values - only allow positive numbers
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setAmount(value);
+                      }
+                    }}
                     placeholder="0.00"
                     autoFocus
                     step="0.01"

@@ -19,6 +19,14 @@ export interface BankTransactionData {
 }
 
 /**
+ * Extracts MIME type from base64 data URL
+ */
+const extractMimeType = (base64Image: string): string => {
+  const match = base64Image.match(/^data:(image\/[a-zA-Z+]+);base64,/);
+  return match ? match[1] : 'image/jpeg';
+};
+
+/**
  * Analyzes a receipt image and extracts transaction data
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
@@ -28,7 +36,8 @@ export const analyzeReceipt = async (
   availableCategories?: string[]
 ): Promise<ReceiptData> => {
   try {
-    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
+    const mimeType = extractMimeType(base64Image);
+    const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
 
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')
@@ -40,7 +49,7 @@ export const analyzeReceipt = async (
         parts: [
             {
                 inlineData: {
-                    mimeType: 'image/jpeg',
+                    mimeType,
                     data: cleanBase64
                 }
             },
@@ -85,7 +94,8 @@ export const parseBankStatement = async (
   availableCategories?: string[]
 ): Promise<BankTransactionData[]> => {
   try {
-    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
+    const mimeType = extractMimeType(base64Image);
+    const cleanBase64 = base64Image.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
 
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')
@@ -97,7 +107,7 @@ export const parseBankStatement = async (
         parts: [
             {
                 inlineData: {
-                    mimeType: 'image/jpeg',
+                    mimeType,
                     data: cleanBase64
                 }
             },
