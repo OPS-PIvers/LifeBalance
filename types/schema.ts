@@ -27,10 +27,26 @@ export interface BudgetBucket {
   id: string;
   name: string;
   limit: number;
-  spent: number;
+  spent?: number; // DEPRECATED: Now calculated in real-time from transactions. Will be removed after migration.
   color: string;
   isVariable: boolean;
   isCore: boolean;
+  currentPeriodId?: string; // Current pay period ID (YYYY-MM-DD)
+  lastResetDate?: string; // YYYY-MM-DD when last reset occurred
+}
+
+export interface BucketPeriodSnapshot {
+  id: string;
+  bucketId: string;
+  bucketName: string; // Snapshot of name (in case bucket is renamed or deleted)
+  periodId: string; // YYYY-MM-DD format of period start
+  periodStartDate: string; // YYYY-MM-DD
+  periodEndDate: string; // YYYY-MM-DD
+  limit: number; // Snapshot of limit for this period
+  totalSpent: number; // Final verified spent amount for the period
+  totalPending: number; // Final pending amount when period closed
+  transactionCount: number; // Number of transactions in this bucket for this period
+  createdAt: string; // Timestamp when snapshot was created
 }
 
 export interface Transaction {
@@ -43,6 +59,7 @@ export interface Transaction {
   isRecurring: boolean;
   source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring';
   autoCategorized: boolean;
+  payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
 }
 
 export interface CalendarItem {
@@ -123,4 +140,8 @@ export interface Household {
     buckets: BudgetBucket[];
   };
   location?: { lat: number; lon: number };
+  payPeriodSettings?: {
+    startDate: string; // YYYY-MM-DD - anchor date for first pay period
+    frequency: 'bi-weekly' | 'weekly' | 'monthly'; // For future extensibility
+  };
 }

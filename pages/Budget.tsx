@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import BudgetCalendar from '../components/budget/BudgetCalendar';
 import BudgetBuckets from '../components/budget/BudgetBuckets';
 import BudgetAccounts from '../components/budget/BudgetAccounts';
+import PayPeriodSettings from '../components/budget/PayPeriodSettings';
 
 type Tab = 'calendar' | 'buckets' | 'accounts';
 
@@ -43,7 +44,12 @@ const Budget: React.FC = () => {
         {/* View Container */}
         <div className="animate-in fade-in duration-300">
           {activeTab === 'calendar' && <BudgetCalendar />}
-          {activeTab === 'buckets' && <BudgetBuckets />}
+          {activeTab === 'buckets' && (
+            <div className="space-y-4">
+              <PayPeriodSettings />
+              <BudgetBuckets />
+            </div>
+          )}
           {activeTab === 'accounts' && <BudgetAccounts />}
         </div>
       </div>

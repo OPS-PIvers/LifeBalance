@@ -1,23 +1,25 @@
 
 import React, { useState } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil } from 'lucide-react';
+import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeFormModal from '../components/modals/ChallengeFormModal';
 import { endOfDay, isBefore, parseISO, isSameDay, format } from 'date-fns';
 
 const Dashboard: React.FC = () => {
-  const { 
-    transactions, 
-    buckets, 
-    updateTransactionCategory, 
-    activeChallenge, 
-    habits, 
-    insight, 
+  const {
+    transactions,
+    buckets,
+    updateTransactionCategory,
+    activeChallenge,
+    habits,
+    insight,
     refreshInsight,
     currentUser,
     calendarItems,
     payCalendarItem,
+    deferCalendarItem,
+    deleteCalendarItem,
     accounts
   } = useHousehold();
   
@@ -112,48 +114,93 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
                         {!isExpanded && (
-                          <button 
-                            onClick={() => isCalendar ? setPayModalItemId(item.id) : setExpandedId(item.id)}
-                            className={`text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 ${
-                                isCalendar ? 'bg-brand-800' : 'bg-brand-600'
-                            }`}
+                          <button
+                            onClick={() => setExpandedId(item.id)}
+                            className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
                           >
-                            {isCalendar ? 'Pay' : 'Review'}
+                            Review
                           </button>
                         )}
                       </div>
                     </div>
 
-                    {/* Expanded Category Selector (Transactions Only) */}
-                    {!isCalendar && isExpanded && (
+                    {/* Expanded Actions */}
+                    {isExpanded && (
                       <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
                         <div className="flex justify-between items-center mb-2">
-                           <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Select Category</p>
+                           <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
+                             {isCalendar ? 'Actions' : 'Select Category'}
+                           </p>
                            <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                          {buckets.map(bucket => (
+
+                        {isCalendar ? (
+                          /* Calendar Item Actions */
+                          <div className="space-y-2">
+                            <p className="text-xs text-brand-500 mb-3">
+                              {(item as any).type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setPayModalItemId(item.id);
+                                  setExpandedId(null);
+                                }}
+                                className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <Check size={16} />
+                                Approve
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await deferCalendarItem(item.id);
+                                  setExpandedId(null);
+                                }}
+                                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <Clock size={16} />
+                                Defer
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm('Delete this calendar item permanently?')) {
+                                    await deleteCalendarItem(item.id);
+                                    setExpandedId(null);
+                                  }
+                                }}
+                                className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                              >
+                                <Trash2 size={16} />
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Transaction Category Selector */
+                          <div className="flex flex-wrap gap-2">
+                            {buckets.map(bucket => (
+                              <button
+                                key={bucket.id}
+                                onClick={() => {
+                                  updateTransactionCategory(item.id, bucket.name);
+                                  setExpandedId(null);
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 hover:bg-brand-100 active:bg-brand-200 transition-colors"
+                              >
+                                {bucket.name}
+                              </button>
+                            ))}
                             <button
-                              key={bucket.id}
-                              onClick={() => {
-                                updateTransactionCategory(item.id, bucket.name);
-                                setExpandedId(null);
-                              }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 hover:bg-brand-100 active:bg-brand-200 transition-colors"
-                            >
-                              {bucket.name}
+                                onClick={() => {
+                                  updateTransactionCategory(item.id, 'Budgeted in Calendar');
+                                  setExpandedId(null);
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
+                              >
+                                Budgeted in Calendar
                             </button>
-                          ))}
-                          <button
-                              onClick={() => {
-                                updateTransactionCategory(item.id, 'Budgeted in Calendar');
-                                setExpandedId(null);
-                              }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
-                            >
-                              Budgeted in Calendar
-                          </button>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

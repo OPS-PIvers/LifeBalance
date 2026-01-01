@@ -6,13 +6,12 @@ import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X
 import { CalendarItem } from '../../types/schema';
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, payCalendarItem, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useHousehold();
+  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem } = useHousehold();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  
+
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isPayModalOpen, setIsPayModalOpen] = useState<string | null>(null); // itemId
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
 
   // Form State
@@ -178,15 +177,15 @@ const BudgetCalendar: React.FC = () => {
                   
                   {/* Action Buttons */}
                   <div className="flex items-center gap-2">
-                    {/* Pay/Check Button */}
-                    <button onClick={() => !item.isPaid && setIsPayModalOpen(item.id)} disabled={item.isPaid}>
+                    {/* Status Indicator (non-interactive - use Dashboard queue to approve) */}
+                    <div>
                       {item.isPaid ? (
                         <CheckCircle2 size={18} className="text-money-pos" />
                       ) : (
-                        <Circle size={18} className="text-brand-300 hover:text-money-pos" />
+                        <Circle size={18} className="text-brand-300" />
                       )}
-                    </button>
-                    
+                    </div>
+
                     {/* Edit/Delete (visible mostly on hover in desktop, but always accessible) */}
                     {!item.isPaid && (
                       <button onClick={() => openEditModal(item)} className="p-1 text-brand-300 hover:text-brand-600">
@@ -274,41 +273,6 @@ const BudgetCalendar: React.FC = () => {
                </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Pay Confirmation Modal */}
-      {isPayModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-             <h3 className="font-bold text-lg text-brand-800 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-brand-500 mb-4">
-               Select which account to deduct this payment from.
-             </p>
-             
-             <div className="space-y-2 mb-4">
-               {accounts.filter(a => a.type !== 'credit').map(acc => (
-                 <button 
-                   key={acc.id}
-                   onClick={() => {
-                     payCalendarItem(isPayModalOpen, acc.id);
-                     setIsPayModalOpen(null);
-                   }}
-                   className="w-full p-3 flex justify-between items-center bg-brand-50 hover:bg-brand-100 rounded-xl border border-brand-200 text-left"
-                 >
-                   <span className="font-bold text-brand-700 text-sm">{acc.name}</span>
-                   <span className="font-mono text-xs text-brand-500">${acc.balance.toLocaleString()}</span>
-                 </button>
-               ))}
-             </div>
-             
-             <button 
-               onClick={() => setIsPayModalOpen(null)}
-               className="w-full py-3 text-brand-400 font-bold"
-             >
-               Cancel
-             </button>
-           </div>
         </div>
       )}
     </div>

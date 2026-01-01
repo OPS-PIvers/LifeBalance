@@ -9,6 +9,8 @@ import {
   deleteDoc,
   serverTimestamp,
   Timestamp,
+  writeBatch,
+  getDoc,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,12 +23,17 @@ import {
   Challenge,
   RewardItem,
   HouseholdMember,
+  Household,
+  BucketPeriodSnapshot,
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak } from '@/utils/habitLogic';
+import { getCurrentPayPeriod, getPayPeriodForDate, hasNewPeriodStarted } from '@/utils/payPeriodCalculator';
+import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
+import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration } from '@/utils/migrations/payPeriodMigration';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO, format } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, format, subDays } from 'date-fns';
 
 interface HouseholdContextType {
   // State
@@ -45,6 +52,11 @@ interface HouseholdContextType {
   freezeBank: { current: number; accrued: number; lastMonth: string };
   insight: string;
 
+  // Pay Period Tracking State
+  currentPeriodId: string;
+  bucketSpentMap: Map<string, BucketSpent>;
+  householdSettings: Household['payPeriodSettings'] | null;
+
   // Account Actions
   addAccount: (account: Account) => Promise<void>;
   updateAccountBalance: (id: string, newBalance: number) => Promise<void>;
@@ -62,6 +74,7 @@ interface HouseholdContextType {
   updateCalendarItem: (item: CalendarItem) => Promise<void>;
   deleteCalendarItem: (id: string) => Promise<void>;
   payCalendarItem: (itemId: string, accountId: string) => Promise<void>;
+  deferCalendarItem: (itemId: string) => Promise<void>;
 
   // Transaction Actions
   addTransaction: (tx: Transaction) => Promise<void>;
@@ -78,6 +91,10 @@ interface HouseholdContextType {
   updateChallenge: (challenge: Challenge) => Promise<void>;
   redeemReward: (rewardId: string) => Promise<void>;
   refreshInsight: () => void;
+
+  // Pay Period Actions
+  setPayPeriodStartDate: (startDate: string) => Promise<void>;
+  manuallyResetPeriod: () => Promise<void>;
 }
 
 const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -98,11 +115,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [insight, setInsight] = useState("You spend 20% less on days you exercise.");
   const [freezeBank] = useState({ current: 2, accrued: 4, lastMonth: '2023-10' });
 
+  // Pay Period Tracking State
+  const [householdSettings, setHouseholdSettings] = useState<Household['payPeriodSettings'] | null>(null);
+  const [currentPeriodId, setCurrentPeriodId] = useState<string>('');
+  const [bucketSpentMap, setBucketSpentMap] = useState<Map<string, BucketSpent>>(new Map());
+
   // Derived state
   const activeChallenge = challenges.find(c => c.status === 'active') || null;
   const safeToSpend = useMemo(
-    () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions),
-    [accounts, calendarItems, buckets, transactions]
+    () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions, currentPeriodId),
+    [accounts, calendarItems, buckets, transactions, currentPeriodId]
   );
   const dailyPoints = currentUser?.points.daily || 0;
   const weeklyPoints = currentUser?.points.weekly || 0;
@@ -202,6 +224,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // Set current user
         const current = data.find(m => m.uid === user?.uid);
         setCurrentUser(current || null);
+      })
+    );
+
+    // Household settings listener (for pay period tracking)
+    const householdDocRef = doc(db, `households/${householdId}`);
+    unsubscribers.push(
+      onSnapshot(householdDocRef, (snapshot) => {
+        const data = snapshot.data() as Household | undefined;
+        setHouseholdSettings(data?.payPeriodSettings || null);
       })
     );
 
@@ -313,6 +344,66 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
   useMidnightScheduler(checkPointsReset, !!(householdId && currentUserUid), { initialDelayMs: 100 });
 
+  // --- PAY PERIOD TRACKING EFFECTS ---
+
+  // Calculate current period whenever settings change
+  useEffect(() => {
+    if (!householdSettings?.startDate) {
+      setCurrentPeriodId(''); // No period tracking enabled
+      return;
+    }
+
+    const period = getCurrentPayPeriod(householdSettings.startDate);
+    setCurrentPeriodId(period.periodId);
+  }, [householdSettings]);
+
+  // Calculate bucket spent amounts whenever transactions, buckets, or period changes
+  useEffect(() => {
+    const spentMap = calculateBucketSpent(buckets, transactions, currentPeriodId);
+    setBucketSpentMap(spentMap);
+  }, [buckets, transactions, currentPeriodId]);
+
+  // Run data migration if needed
+  useEffect(() => {
+    if (!householdId || !householdSettings?.startDate || !currentPeriodId) return;
+    if (transactions.length === 0 && buckets.length === 0) return; // No data to migrate
+
+    const runMigrations = async () => {
+      if (needsMigration(transactions, buckets)) {
+        console.log('[Migration] Starting pay period migration...');
+        try {
+          await migrateTransactionsToPeriods(householdId, householdSettings.startDate!);
+          await migrateBucketsToPeriods(householdId, currentPeriodId);
+          toast.success('Data migrated to pay period tracking');
+        } catch (error) {
+          console.error('[Migration] Failed:', error);
+          toast.error('Migration failed. Please refresh the page.');
+        }
+      }
+    };
+
+    runMigrations();
+  }, [householdId, householdSettings, currentPeriodId, transactions, buckets]);
+
+  // Auto-reset check at midnight
+  const checkPeriodReset = useCallback(async () => {
+    if (!householdId || !householdSettings?.startDate || !currentPeriodId) return;
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+
+    if (hasNewPeriodStarted(currentPeriodId, today, householdSettings.startDate)) {
+      const newPeriod = getCurrentPayPeriod(householdSettings.startDate);
+      console.log(`[Period Reset] New period detected: ${newPeriod.periodId}`);
+
+      // Reset buckets for the new period
+      await resetBucketsForNewPeriod(newPeriod.periodId);
+    }
+  }, [householdId, householdSettings, currentPeriodId, buckets, bucketSpentMap, transactions]); // Added dependencies for resetBucketsForNewPeriod
+
+  // Use midnight scheduler for period reset check
+  // Add 200ms delay to run after habit and points resets
+  useMidnightScheduler(checkPeriodReset, !!(householdId && householdSettings?.startDate), { initialDelayMs: 200 });
+
   // --- ACTIONS: ACCOUNTS ---
 
   const addAccount = async (account: Account) => {
@@ -358,10 +449,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
       name: bucket.name,
       limit: bucket.limit,
-      spent: bucket.spent,
       color: bucket.color,
       isVariable: bucket.isVariable,
       isCore: bucket.isCore,
+      // DO NOT update spent - it's calculated in real-time
     });
     toast.success('Bucket updated');
   };
@@ -461,30 +552,45 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     // 4. Create transaction
+    const transactionDate = new Date().toISOString().split('T')[0];
+    const payPeriodId = householdSettings?.startDate
+      ? getPayPeriodForDate(transactionDate, householdSettings.startDate).periodId
+      : '';
+
     await addDoc(collection(db, `households/${householdId}/transactions`), {
       amount: item.amount,
       merchant: item.title,
       category: category,
-      date: new Date().toISOString().split('T')[0],
+      date: transactionDate,
       status: 'verified',
       isRecurring: !!item.isRecurring,
       source: 'recurring',
       autoCategorized: true,
+      payPeriodId,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
     });
 
-    // Update bucket if applicable
-    if (item.type === 'expense' && category !== 'Bills' && category !== 'Income') {
-      const bucket = buckets.find(b => b.name.toLowerCase() === category.toLowerCase());
-      if (bucket) {
-        await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
-          spent: bucket.spent + item.amount,
-        });
-      }
-    }
+    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
 
     toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
+  };
+
+  const deferCalendarItem = async (itemId: string) => {
+    if (!householdId) return;
+
+    const item = calendarItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Move the date forward by 1 day
+    const currentDate = parseISO(item.date);
+    const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+
+    await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
+      date: newDate,
+    });
+
+    toast.success('Deferred to tomorrow');
   };
 
   // --- ACTIONS: TRANSACTIONS ---
@@ -492,8 +598,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addTransaction = async (tx: Transaction) => {
     if (!householdId || !user) return;
 
+    // Assign pay period ID if period tracking is enabled
+    const payPeriodId = householdSettings?.startDate
+      ? getPayPeriodForDate(tx.date, householdSettings.startDate).periodId
+      : '';
+
     await addDoc(collection(db, `households/${householdId}/transactions`), {
       ...tx,
+      payPeriodId,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
     });
@@ -507,35 +619,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       });
     }
 
-    // Update bucket if categorized and verified
-    if (tx.category && tx.status === 'verified') {
-      const bucket = buckets.find(b => b.name.toLowerCase() === tx.category.toLowerCase());
-      if (bucket) {
-        await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
-          spent: bucket.spent + tx.amount,
-        });
-      }
-    }
+    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+    // The bucketSpentMap effect will automatically recalculate when transactions change
   };
 
   const updateTransactionCategory = async (id: string, category: string) => {
     if (!householdId) return;
-
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
 
     await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
       category,
       status: 'verified',
     });
 
-    // Update bucket spent
-    const bucket = buckets.find(b => b.name.toLowerCase() === category.toLowerCase());
-    if (bucket) {
-      await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
-        spent: bucket.spent + tx.amount,
-      });
-    }
+    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+    // The bucketSpentMap effect will automatically recalculate when transactions change
 
     toast.success('Categorized!');
   };
@@ -715,6 +812,85 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success(`Redeemed: ${reward.title}`);
   };
 
+  // --- ACTIONS: PAY PERIOD MANAGEMENT ---
+
+  const setPayPeriodStartDate = async (startDate: string) => {
+    if (!householdId) return;
+
+    try {
+      const householdRef = doc(db, `households/${householdId}`);
+      await updateDoc(householdRef, {
+        'payPeriodSettings.startDate': startDate,
+        'payPeriodSettings.frequency': 'bi-weekly',
+      });
+      toast.success('Pay period configured');
+    } catch (error) {
+      console.error('[setPayPeriodStartDate] Failed:', error);
+      toast.error('Failed to configure pay period');
+    }
+  };
+
+  const resetBucketsForNewPeriod = async (newPeriodId: string) => {
+    if (!householdId || !currentPeriodId) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Create snapshots for all buckets from the old period
+      for (const bucket of buckets) {
+        const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
+        const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
+
+        const periodStart = currentPeriodId;
+        const periodEnd = format(subDays(parseISO(newPeriodId), 1), 'yyyy-MM-dd');
+
+        // Create snapshot in bucketHistory subcollection
+        const snapshotRef = doc(collection(db, `households/${householdId}/bucketHistory`));
+        batch.set(snapshotRef, {
+          bucketId: bucket.id,
+          bucketName: bucket.name,
+          periodId: currentPeriodId,
+          periodStartDate: periodStart,
+          periodEndDate: periodEnd,
+          limit: bucket.limit,
+          totalSpent: spent.verified,
+          totalPending: spent.pending,
+          transactionCount: bucketTransactions.length,
+          createdAt: new Date().toISOString(),
+        } as BucketPeriodSnapshot);
+
+        // Update bucket's current period
+        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
+        batch.update(bucketRef, {
+          currentPeriodId: newPeriodId,
+          lastResetDate: periodStart,
+        });
+      }
+
+      // Commit all changes atomically
+      await batch.commit();
+      toast.success('Buckets reset for new pay period');
+    } catch (error) {
+      console.error('[resetBucketsForNewPeriod] Failed:', error);
+      toast.error('Failed to reset period. Please try again.');
+    }
+  };
+
+  const manuallyResetPeriod = async () => {
+    if (!householdSettings?.startDate) {
+      toast.error('Pay period not configured');
+      return;
+    }
+
+    try {
+      const newPeriod = getCurrentPayPeriod(householdSettings.startDate);
+      await resetBucketsForNewPeriod(newPeriod.periodId);
+    } catch (error) {
+      console.error('[manuallyResetPeriod] Failed:', error);
+      toast.error('Failed to reset period');
+    }
+  };
+
   const refreshInsight = () => {
     const insights = [
       "You spend 20% less on days you exercise.",
@@ -744,6 +920,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         rewardsInventory: rewards,
         freezeBank,
         insight,
+        currentPeriodId,
+        bucketSpentMap,
+        householdSettings,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
@@ -756,6 +935,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         updateCalendarItem,
         deleteCalendarItem,
         payCalendarItem,
+        deferCalendarItem,
         addTransaction,
         updateTransactionCategory,
         addHabit,
@@ -766,6 +946,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         updateChallenge,
         redeemReward,
         refreshInsight,
+        setPayPeriodStartDate,
+        manuallyResetPeriod,
       }}
     >
       {children}

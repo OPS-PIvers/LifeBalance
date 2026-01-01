@@ -1,8 +1,9 @@
 
-import React from 'react';
-import { X, Wallet, Receipt, CreditCard } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Wallet, Receipt, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { startOfToday, endOfMonth, parseISO, isAfter, isBefore } from 'date-fns';
+import { startOfToday, endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
+import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -10,7 +11,17 @@ interface SafeToSpendModalProps {
 }
 
 const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) => {
-  const { accounts, buckets, calendarItems, safeToSpend, transactions } = useHousehold();
+  const {
+    accounts,
+    buckets,
+    calendarItems,
+    safeToSpend,
+    transactions,
+    bucketSpentMap,
+    currentPeriodId,
+  } = useHousehold();
+
+  const [expandedBucketId, setExpandedBucketId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -41,15 +52,21 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
   // 3. Buckets
   const bucketBreakdown = buckets.map(b => {
-    const remaining = Math.max(0, b.limit - b.spent);
-    return { ...b, remaining };
+    const spent = bucketSpentMap.get(b.id) || { verified: 0, pending: 0 };
+    const remaining = Math.max(0, b.limit - spent.verified);
+    const bucketTxs = getTransactionsForBucket(b.name, transactions, currentPeriodId);
+    return { ...b, spent, remaining, transactions: bucketTxs };
   }).filter(b => b.remaining > 0);
-  
+
   const totalBucketLiability = bucketBreakdown.reduce((sum, b) => sum + b.remaining, 0);
 
   // Pending Adjustment Display (Just for transparency)
   const pendingSpend = transactions
-      .filter(t => t.status === 'pending_review')
+      .filter(t => {
+        const isPending = t.status === 'pending_review';
+        const inCurrentPeriod = currentPeriodId ? t.payPeriodId === currentPeriodId : true;
+        return isPending && inCurrentPeriod;
+      })
       .reduce((sum, t) => sum + t.amount, 0);
 
   return (
@@ -118,15 +135,49 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                   -${Math.max(0, totalBucketLiability - pendingSpend).toLocaleString()}
                 </span>
              </div>
-             
+
              {bucketBreakdown.length > 0 ? (
-               <div className="pl-6 space-y-1 max-h-32 overflow-y-auto pr-2 no-scrollbar">
-                 {bucketBreakdown.map(b => (
-                   <div key={b.id} className="flex justify-between text-xs text-brand-400">
-                     <span>{b.name}</span>
-                     <span>${b.remaining}</span>
-                   </div>
-                 ))}
+               <div className="pl-6 space-y-2 max-h-64 overflow-y-auto pr-2">
+                 {bucketBreakdown.map(b => {
+                   const isExpanded = expandedBucketId === b.id;
+                   return (
+                     <div key={b.id} className="space-y-1">
+                       <div
+                         className="flex justify-between items-center text-xs text-brand-400 cursor-pointer hover:text-brand-600"
+                         onClick={() => setExpandedBucketId(isExpanded ? null : b.id)}
+                       >
+                         <div className="flex items-center gap-2">
+                           <span>{b.name}</span>
+                           {b.spent.pending > 0 && (
+                             <span className="text-[10px] text-amber-600">
+                               ({b.spent.pending} pending)
+                             </span>
+                           )}
+                         </div>
+                         <div className="flex items-center gap-2">
+                           <span>${b.remaining}</span>
+                           {b.transactions.length > 0 && (
+                             isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />
+                           )}
+                         </div>
+                       </div>
+
+                       {/* Transaction list for bucket */}
+                       {isExpanded && b.transactions.length > 0 && (
+                         <div className="pl-4 space-y-1 py-2 animate-in fade-in slide-in-from-top-1">
+                           {b.transactions.map(tx => (
+                             <div key={tx.id} className="flex justify-between text-[10px] text-brand-300">
+                               <span>{tx.merchant} • {format(parseISO(tx.date), 'MMM d')}</span>
+                               <span className={tx.status === 'pending_review' ? 'text-amber-500' : ''}>
+                                 ${tx.amount}
+                               </span>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                     </div>
+                   );
+                 })}
                </div>
              ) : (
                <p className="pl-6 text-xs text-brand-300 italic">No remaining bucket funds.</p>
