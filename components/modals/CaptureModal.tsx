@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Camera, Type, Loader2, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { analyzeReceipt, parseBankStatement, ReceiptData } from '../../services/geminiService';
@@ -21,6 +21,18 @@ interface ParsedTransaction {
   date: string;
   selected: boolean;
 }
+
+/**
+ * Returns today's date in YYYY-MM-DD format using local timezone
+ * (avoids UTC conversion issues with toISOString)
+ */
+const getLocalDateString = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const { addTransaction, buckets } = useHousehold();
@@ -144,7 +156,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           amount: Math.abs(data.amount),
           merchant: data.merchant,
           category: matchCategory(data.category),
-          date: data.date || new Date().toISOString().split('T')[0],
+          date: data.date || getLocalDateString(),
           status: 'pending_review', // Shows in action queue
           isRecurring: false,
           source: 'camera-scan',
@@ -207,7 +219,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           merchant: receipt.merchant,
           amount: Math.abs(receipt.amount),
           category: matchCategory(receipt.category),
-          date: receipt.date || new Date().toISOString().split('T')[0],
+          date: receipt.date || getLocalDateString(),
           selected: true
         }]);
       } else {
@@ -315,12 +327,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
+    // Validate category is selected
+    if (!category || !dynamicCategories.includes(category)) {
+      toast.error("Please select a valid category");
+      return;
+    }
+
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       amount: parsedAmount,
       merchant,
       category,
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalDateString(),
       status: 'verified', // Immediately reflected in budget
       isRecurring,
       source: 'manual',
@@ -518,7 +536,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                             : 'border-2 border-brand-300'
                         }`}
                       >
-                        {tx.selected && <CheckCircle2 size={14} />}
+                        {tx.selected && <Check size={14} />}
                       </button>
 
                       <div className="flex-1 min-w-0">
