@@ -465,6 +465,77 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runPaycheckMigration();
   }, [householdId, householdSettings]);
 
+  // Migrate household points: Calculate correct totals from existing habit completions
+  // This fixes the issue where habits were completed before points tracking was added
+  useEffect(() => {
+    if (!householdId || !householdSettings || habits.length === 0) return;
+
+    const migrateHouseholdPoints = async () => {
+      // Only run if points haven't been initialized yet (undefined or all zeros with completed habits)
+      const currentPoints = householdSettings.points;
+      const hasCompletedHabitsToday = habits.some(h => {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        return h.completedDates.includes(today) || h.count > 0;
+      });
+
+      // Skip if points are already properly set
+      if (currentPoints && (currentPoints.daily !== 0 || currentPoints.weekly !== 0 || currentPoints.total !== 0)) {
+        return;
+      }
+
+      // Skip if no habits are completed - nothing to migrate
+      if (!hasCompletedHabitsToday) {
+        return;
+      }
+
+      console.log('[Migration] Calculating household points from existing habit completions...');
+
+      // Calculate points from all currently completed habits
+      let calculatedPoints = 0;
+      const today = format(new Date(), 'yyyy-MM-dd');
+
+      for (const habit of habits) {
+        // Only count habits with current completions
+        if (habit.count === 0) continue;
+
+        const currentStreak = habit.streakDays || 0;
+        let multiplier = 1.0;
+        if (habit.type === 'positive') {
+          if (currentStreak >= 7) multiplier = 2.0;
+          else if (currentStreak >= 3) multiplier = 1.5;
+        }
+
+        if (habit.scoringType === 'incremental') {
+          // For incremental: points per count
+          calculatedPoints += habit.count * Math.floor(habit.basePoints * multiplier);
+        } else {
+          // For threshold: points only if target met
+          if (habit.count >= habit.targetCount) {
+            calculatedPoints += Math.floor(habit.basePoints * multiplier);
+          }
+        }
+      }
+
+      if (calculatedPoints > 0) {
+        try {
+          await updateDoc(doc(db, `households/${householdId}`), {
+            'points.daily': calculatedPoints,
+            'points.weekly': calculatedPoints,
+            'points.total': calculatedPoints,
+            'lastDailyPointsReset': today,
+            'lastWeeklyPointsReset': today,
+          });
+          console.log(`[Migration] Initialized household points to ${calculatedPoints}`);
+          toast.success(`Points synced: ${calculatedPoints} pts`);
+        } catch (error) {
+          console.error('[Migration] Failed to initialize household points:', error);
+        }
+      }
+    };
+
+    migrateHouseholdPoints();
+  }, [householdId, householdSettings?.points, habits]);
+
   // --- ACTIONS: ACCOUNTS ---
 
   const addAccount = async (account: Account) => {
