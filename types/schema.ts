@@ -21,6 +21,7 @@ export interface Account {
   balance: number;
   lastUpdated: string;
   monthlyGoal?: number;
+  order?: number; // Display order within asset/liability group
 }
 
 export interface BudgetBucket {

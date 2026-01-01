@@ -77,6 +77,9 @@ interface HouseholdContextType {
   addAccount: (account: Account) => Promise<void>;
   updateAccountBalance: (id: string, newBalance: number) => Promise<void>;
   setAccountGoal: (id: string, goal: number) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
+  updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
+  reorderAccounts: (orderedIds: string[]) => Promise<void>;
 
   // Bucket Actions
   addBucket: (bucket: BudgetBucket) => Promise<void>;
@@ -563,6 +566,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       monthlyGoal: goal,
     });
     toast.success('Goal set');
+  };
+
+  const deleteAccount = async (id: string) => {
+    if (!householdId) return;
+    await deleteDoc(doc(db, `households/${householdId}/accounts`, id));
+    toast.success('Account deleted');
+  };
+
+  const updateAccountOrder = async (accountId: string, newOrder: number) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
+      order: newOrder,
+    });
+  };
+
+  const reorderAccounts = async (orderedIds: string[]) => {
+    if (!householdId) return;
+    try {
+      const batch = writeBatch(db);
+      orderedIds.forEach((id, index) => {
+        const accountRef = doc(db, `households/${householdId}/accounts`, id);
+        batch.update(accountRef, { order: index });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('[reorderAccounts] Failed:', error);
+      toast.error('Failed to reorder accounts');
+      throw error;
+    }
   };
 
   // --- ACTIONS: BUCKETS ---
@@ -1553,6 +1585,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         addAccount,
         updateAccountBalance,
         setAccountGoal,
+        deleteAccount,
+        updateAccountOrder,
+        reorderAccounts,
         addBucket,
         updateBucket,
         deleteBucket,
