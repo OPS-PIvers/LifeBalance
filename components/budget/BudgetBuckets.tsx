@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { AlertTriangle, ArrowRightLeft, Plus, X, Pencil, Check, MoreVertical, ChevronDown, ChevronUp } from 'lucide-react';
-import { BudgetBucket } from '../../types/schema';
+import { AlertTriangle, ArrowRightLeft, Plus, X, Pencil, Check, MoreVertical, ChevronDown, ChevronUp, Edit } from 'lucide-react';
+import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
+import EditTransactionModal from '../modals/EditTransactionModal';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { format, parseISO } from 'date-fns';
 
@@ -33,6 +34,10 @@ const BudgetBuckets: React.FC = () => {
   // Expandable transaction list state
   const [expandedBucketId, setExpandedBucketId] = useState<string | null>(null);
 
+  // Edit Transaction Modal State
+  const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
   const handleEditBucket = (bucket: BudgetBucket) => {
     setEditingBucket(bucket);
     setIsFormModalOpen(true);
@@ -41,6 +46,11 @@ const BudgetBuckets: React.FC = () => {
   const handleAddBucket = () => {
     setEditingBucket(undefined);
     setIsFormModalOpen(true);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setIsEditTransactionModalOpen(true);
   };
 
   const startEditingLimit = (id: string, limit: number) => {
@@ -219,7 +229,7 @@ const BudgetBuckets: React.FC = () => {
                   {bucketTransactions.map(tx => (
                     <div
                       key={tx.id}
-                      className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg"
+                      className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors group"
                     >
                       <div className="flex-1">
                         <p className="font-medium text-brand-800">{tx.merchant}</p>
@@ -230,11 +240,20 @@ const BudgetBuckets: React.FC = () => {
                           )}
                         </p>
                       </div>
-                      <span className={`font-mono font-bold ${
-                        tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
-                      }`}>
-                        ${tx.amount}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-mono font-bold ${
+                          tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
+                        }`}>
+                          ${tx.amount}
+                        </span>
+                        <button
+                          onClick={() => handleEditTransaction(tx)}
+                          className="opacity-0 group-hover:opacity-100 text-brand-400 hover:text-brand-600 p-1 transition-opacity"
+                          title="Edit transaction"
+                        >
+                          <Edit size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -269,10 +288,17 @@ const BudgetBuckets: React.FC = () => {
       </button>
 
       {/* Bucket Form Modal (Add/Edit) */}
-      <BucketFormModal 
-        isOpen={isFormModalOpen} 
-        onClose={() => setIsFormModalOpen(false)} 
-        editingBucket={editingBucket} 
+      <BucketFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        editingBucket={editingBucket}
+      />
+
+      {/* Edit Transaction Modal */}
+      <EditTransactionModal
+        isOpen={isEditTransactionModalOpen}
+        onClose={() => setIsEditTransactionModalOpen(false)}
+        transaction={editingTransaction}
       />
 
       {/* Reallocate Modal */}
