@@ -7,13 +7,16 @@ import { startOfDay, addDays, differenceInMilliseconds } from 'date-fns';
  *
  * @param callback - The async function to run at midnight and periodically
  * @param enabled - Whether the scheduler should be active
- * @param intervalMs - How often to run the callback (default: 60000ms = 1 minute)
+ * @param options - Configuration options
+ * @param options.intervalMs - How often to run the callback (default: 300000ms = 5 minutes)
+ * @param options.initialDelayMs - Delay before first execution to prevent race conditions (default: 0)
  */
 export const useMidnightScheduler = (
   callback: () => Promise<void>,
   enabled: boolean,
-  intervalMs: number = 60 * 1000
+  options: { intervalMs?: number; initialDelayMs?: number } = {}
 ): void => {
+  const { intervalMs = 5 * 60 * 1000, initialDelayMs = 0 } = options;
   const callbackRef = useRef(callback);
   const isMountedRef = useRef(true);
 
@@ -35,39 +38,52 @@ export const useMidnightScheduler = (
     if (!enabled) return;
 
     isMountedRef.current = true;
-
-    // Run immediately on mount
-    safeCallback();
-
-    // Set up periodic interval
-    const intervalId = setInterval(safeCallback, intervalMs);
-
-    // Self-rescheduling midnight timeout
+    let intervalId: ReturnType<typeof setInterval>;
     let midnightTimeoutId: ReturnType<typeof setTimeout>;
+    let initialDelayTimeoutId: ReturnType<typeof setTimeout>;
 
-    const scheduleMidnightCheck = () => {
+    const startScheduler = () => {
       if (!isMountedRef.current) return;
 
-      const now = new Date();
-      // Use addDays for DST safety instead of manual 24h calculation
-      const tomorrow = startOfDay(addDays(now, 1));
-      const msUntilMidnight = differenceInMilliseconds(tomorrow, now);
+      // Run callback immediately after initial delay
+      safeCallback();
 
-      midnightTimeoutId = setTimeout(() => {
+      // Set up periodic interval (5 min default - midnight timeout handles precision)
+      intervalId = setInterval(safeCallback, intervalMs);
+
+      // Self-rescheduling midnight timeout
+      const scheduleMidnightCheck = () => {
         if (!isMountedRef.current) return;
-        safeCallback();
-        // Reschedule for the next midnight
-        scheduleMidnightCheck();
-      }, msUntilMidnight);
+
+        const now = new Date();
+        // Use addDays for DST safety instead of manual 24h calculation
+        const tomorrow = startOfDay(addDays(now, 1));
+        const msUntilMidnight = differenceInMilliseconds(tomorrow, now);
+
+        midnightTimeoutId = setTimeout(() => {
+          if (!isMountedRef.current) return;
+          safeCallback();
+          // Reschedule for the next midnight
+          scheduleMidnightCheck();
+        }, msUntilMidnight);
+      };
+
+      // Schedule the first midnight check
+      scheduleMidnightCheck();
     };
 
-    // Schedule the first midnight check
-    scheduleMidnightCheck();
+    // Apply initial delay to stagger initialization and prevent race conditions
+    if (initialDelayMs > 0) {
+      initialDelayTimeoutId = setTimeout(startScheduler, initialDelayMs);
+    } else {
+      startScheduler();
+    }
 
     return () => {
       isMountedRef.current = false;
+      clearTimeout(initialDelayTimeoutId);
       clearInterval(intervalId);
       clearTimeout(midnightTimeoutId);
     };
-  }, [enabled, intervalMs, safeCallback]);
+  }, [enabled, intervalMs, initialDelayMs, safeCallback]);
 };

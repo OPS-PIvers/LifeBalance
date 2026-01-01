@@ -210,15 +210,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
   }, [householdId, user]);
 
+  // Memoize habit reset data to avoid unnecessary callback re-creation
+  // Only recreate when habit IDs, periods, or lastUpdated values change
+  const habitResetData = useMemo(() =>
+    habits.map(h => ({ id: h.id, period: h.period, lastUpdated: h.lastUpdated })),
+    [habits]
+  );
+
   // Habit auto-reset callback
   // Resets daily habits at midnight and weekly habits on Monday at midnight
   const checkHabitResets = useCallback(async () => {
-    if (!householdId || habits.length === 0) return;
+    if (!householdId || habitResetData.length === 0) return;
 
     const now = new Date();
     const habitsToReset: string[] = [];
 
-    habits.forEach(habit => {
+    habitResetData.forEach(habit => {
       const lastUpdate = parseISO(habit.lastUpdated);
       let shouldReset = false;
 
@@ -239,18 +246,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Batch update all habits that need reset with error handling
     for (const habitId of habitsToReset) {
       try {
+        // Use local date string for consistency with points reset (yyyy-MM-dd format)
         await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
           count: 0,
-          lastUpdated: serverTimestamp(),
+          lastUpdated: new Date().toISOString(),
         });
       } catch (error) {
         console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
       }
     }
-  }, [householdId, habits]);
+  }, [householdId, habitResetData]);
 
   // Use the midnight scheduler hook for habit resets
-  useMidnightScheduler(checkHabitResets, !!(householdId && habits.length > 0));
+  useMidnightScheduler(checkHabitResets, !!(householdId && habitResetData.length > 0));
 
   // Extract specific fields to narrow dependency array and prevent unnecessary re-runs
   const currentUserUid = currentUser?.uid;
@@ -302,7 +310,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, currentUserUid, lastDailyPointsReset, lastWeeklyPointsReset]);
 
   // Use the midnight scheduler hook for points resets
-  useMidnightScheduler(checkPointsReset, !!(householdId && currentUserUid));
+  // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
+  useMidnightScheduler(checkPointsReset, !!(householdId && currentUserUid), { initialDelayMs: 100 });
 
   // --- ACTIONS: ACCOUNTS ---
 
