@@ -80,6 +80,8 @@ interface HouseholdContextType {
   // Transaction Actions
   addTransaction: (tx: Transaction) => Promise<void>;
   updateTransactionCategory: (id: string, category: string) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
 
   // Habit Actions
   addHabit: (habit: Habit) => Promise<void>;
@@ -638,6 +640,82 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success('Categorized!');
   };
 
+  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    if (!householdId) return;
+
+    try {
+      const transaction = transactions.find(tx => tx.id === id);
+      if (!transaction) {
+        toast.error('Transaction not found');
+        return;
+      }
+
+      const oldAmount = transaction.amount;
+      const newAmount = updates.amount ?? oldAmount;
+      const amountDifference = newAmount - oldAmount;
+
+      // Recalculate pay period if date changed
+      let payPeriodId = transaction.payPeriodId;
+      if (updates.date && householdSettings?.startDate) {
+        const { periodId } = getPayPeriodForDate(updates.date, householdSettings.startDate);
+        payPeriodId = periodId;
+      }
+
+      // Update transaction in Firestore
+      await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
+        ...updates,
+        payPeriodId,
+      });
+
+      // Update checking account balance if amount changed
+      if (amountDifference !== 0) {
+        const checkingAcc = accounts.find(a => a.type === 'checking');
+        if (checkingAcc) {
+          await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+            balance: checkingAcc.balance - amountDifference,
+            lastUpdated: serverTimestamp(),
+          });
+        }
+      }
+
+      toast.success('Transaction updated!');
+    } catch (error) {
+      console.error('[updateTransaction] Failed:', error);
+      toast.error('Failed to update transaction');
+      throw error;
+    }
+  };
+
+  const deleteTransaction = async (id: string) => {
+    if (!householdId) return;
+
+    try {
+      const transaction = transactions.find(tx => tx.id === id);
+      if (!transaction) {
+        toast.error('Transaction not found');
+        return;
+      }
+
+      // Restore checking account balance
+      const checkingAcc = accounts.find(a => a.type === 'checking');
+      if (checkingAcc) {
+        await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          balance: checkingAcc.balance + transaction.amount,
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      // Delete transaction from Firestore
+      await deleteDoc(doc(db, `households/${householdId}/transactions`, id));
+
+      toast.success('Transaction deleted');
+    } catch (error) {
+      console.error('[deleteTransaction] Failed:', error);
+      toast.error('Failed to delete transaction');
+      throw error;
+    }
+  };
+
   // --- ACTIONS: HABITS ---
 
   const addHabit = async (habit: Habit) => {
@@ -940,6 +1018,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         deferCalendarItem,
         addTransaction,
         updateTransactionCategory,
+        updateTransaction,
+        deleteTransaction,
         addHabit,
         updateHabit,
         deleteHabit,
