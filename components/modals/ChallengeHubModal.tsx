@@ -104,7 +104,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 pb-24">
         {/* Backdrop */}
         <div
           className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"
@@ -112,7 +112,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
         />
 
         {/* Modal */}
-        <div className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="relative w-full max-w-2xl max-h-full bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50">
             <div className="flex items-center justify-between">
