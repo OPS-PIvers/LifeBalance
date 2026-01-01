@@ -171,5 +171,5 @@ Before submitting ANY change, you must verify:
 
 - **❌ Importing from `src/`**: It will fail. Import from root or use `@/`.
 - **❌ Modifying `tailwind.config.js`**: It doesn't exist. Edit `index.html`.
-- **❌ Modifying `safeToSpend`**: Unless explicitly told to change the formula, TOUCH NOTHING.
-- **❌ "Fixing" HashRouter**: Do not change it to BrowserRouter. It is intentional.
+- **❌ modifying `safeToSpend`**: Unless explicitly told to change the formula, TOUCH NOTHING.
+- **❌ "Fixing" `HashRouter`**: Do not change it to `BrowserRouter`. It is intentional.
