@@ -35,7 +35,7 @@ import {
   FreezeBankHistoryEntry,
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculateResetPoints, calculateStreak } from '@/utils/habitLogic';
+import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -44,7 +44,7 @@ import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO, format, subDays } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek } from 'date-fns';
 
 interface HouseholdContextType {
   // State
@@ -365,6 +365,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Household points auto-reset callback
   // Daily points reset at midnight, weekly points reset Sunday night into Monday
+  // IMPORTANT: This recalculates points from habits completed today, not just zeros them
   const checkPointsReset = useCallback(async () => {
     if (!householdId) return;
 
@@ -386,15 +387,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // Check if daily points need reset (new day since last reset)
     if (!isSameDay(now, lastDailyReset)) {
-      updates['points.daily'] = 0;
+      // Recalculate daily points from habits completed today
+      // This handles the case where habits were completed earlier today but the user
+      // just logged in and this reset logic is running
+      const todayPoints = calculatePointsForDate(habits, today);
+      updates['points.daily'] = todayPoints;
       updates['lastDailyPointsReset'] = today;
+      console.log(`[checkPointsReset] Daily reset: recalculated ${todayPoints} pts from today's habits`);
     }
 
     // Check if weekly points need reset (new week since last reset)
     // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
     if (!isSameWeek(now, lastWeeklyReset, { weekStartsOn: 1 })) {
-      updates['points.weekly'] = 0;
+      // Calculate points from all days this week (Monday through today)
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const weeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
+      updates['points.weekly'] = weeklyPoints;
       updates['lastWeeklyPointsReset'] = today;
+      console.log(`[checkPointsReset] Weekly reset: recalculated ${weeklyPoints} pts from ${weekStartStr} to ${today}`);
     }
 
     // Only update if there are changes
@@ -405,7 +416,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         console.error('[checkPointsReset] Failed to reset points:', error);
       }
     }
-  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset]);
+  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset, habits]);
 
   // Use the midnight scheduler hook for points resets
   // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
@@ -468,76 +479,65 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runPaycheckMigration();
   }, [householdId, householdSettings]);
 
-  // Migrate household points: Calculate correct totals from existing habit completions
-  // This fixes the issue where habits were completed before points tracking was added
+  // Sync daily/weekly points from actual habit completions
+  // This ensures points accurately reflect completed habits, fixing any desync issues
   useEffect(() => {
     if (!householdId || !householdSettings || habits.length === 0) return;
 
-    const migrateHouseholdPoints = async () => {
-      // Only run if points haven't been initialized yet (undefined or all zeros with completed habits)
+    const syncHouseholdPoints = async () => {
+      const now = new Date();
+      const today = format(now, 'yyyy-MM-dd');
       const currentPoints = householdSettings.points;
-      const hasCompletedHabitsToday = habits.some(h => {
-        const today = format(new Date(), 'yyyy-MM-dd');
-        return h.completedDates.includes(today) || h.count > 0;
-      });
+      const lastDailyReset = householdSettings.lastDailyPointsReset;
 
-      // Skip if points are already properly set
-      if (currentPoints && (currentPoints.daily !== 0 || currentPoints.weekly !== 0 || currentPoints.total !== 0)) {
-        return;
-      }
+      // Calculate what points SHOULD be based on actual habit completions
+      const correctDailyPoints = calculatePointsForDate(habits, today);
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const correctWeeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
 
-      // Skip if no habits are completed - nothing to migrate
-      if (!hasCompletedHabitsToday) {
-        return;
-      }
+      // Check if daily points are incorrect (mismatch with calculated value)
+      const dailyMismatch = currentPoints &&
+        lastDailyReset === today &&
+        currentPoints.daily !== correctDailyPoints;
 
-      console.log('[Migration] Calculating household points from existing habit completions...');
+      // Check if weekly points are incorrect
+      const weeklyMismatch = currentPoints &&
+        currentPoints.weekly !== correctWeeklyPoints;
 
-      // Calculate points from all currently completed habits
-      let calculatedPoints = 0;
-      const today = format(new Date(), 'yyyy-MM-dd');
+      // Also handle the case where all points are 0 but habits are completed (initial migration)
+      const needsInitialMigration = currentPoints &&
+        currentPoints.daily === 0 &&
+        currentPoints.weekly === 0 &&
+        currentPoints.total === 0 &&
+        (correctDailyPoints > 0 || correctWeeklyPoints > 0);
 
-      for (const habit of habits) {
-        // Only count habits with current completions
-        if (habit.count === 0) continue;
+      if (dailyMismatch || weeklyMismatch || needsInitialMigration) {
+        console.log(`[PointsSync] Fixing points mismatch - daily: ${currentPoints?.daily} -> ${correctDailyPoints}, weekly: ${currentPoints?.weekly} -> ${correctWeeklyPoints}`);
 
-        const currentStreak = habit.streakDays || 0;
-        let multiplier = 1.0;
-        if (habit.type === 'positive') {
-          if (currentStreak >= 7) multiplier = 2.0;
-          else if (currentStreak >= 3) multiplier = 1.5;
+        const updates: Record<string, number | string> = {
+          'points.daily': correctDailyPoints,
+          'points.weekly': correctWeeklyPoints,
+          'lastDailyPointsReset': today,
+          'lastWeeklyPointsReset': today,
+        };
+
+        // If this is initial migration, also set total
+        if (needsInitialMigration) {
+          updates['points.total'] = correctDailyPoints;
         }
 
-        if (habit.scoringType === 'incremental') {
-          // For incremental: points per count
-          calculatedPoints += habit.count * Math.floor(habit.basePoints * multiplier);
-        } else {
-          // For threshold: points only if target met
-          if (habit.count >= habit.targetCount) {
-            calculatedPoints += Math.floor(habit.basePoints * multiplier);
-          }
-        }
-      }
-
-      if (calculatedPoints > 0) {
         try {
-          await updateDoc(doc(db, `households/${householdId}`), {
-            'points.daily': calculatedPoints,
-            'points.weekly': calculatedPoints,
-            'points.total': calculatedPoints,
-            'lastDailyPointsReset': today,
-            'lastWeeklyPointsReset': today,
-          });
-          console.log(`[Migration] Initialized household points to ${calculatedPoints}`);
-          toast.success(`Points synced: ${calculatedPoints} pts`);
+          await updateDoc(doc(db, `households/${householdId}`), updates);
+          console.log(`[PointsSync] Points corrected - daily: ${correctDailyPoints}, weekly: ${correctWeeklyPoints}`);
         } catch (error) {
-          console.error('[Migration] Failed to initialize household points:', error);
+          console.error('[PointsSync] Failed to sync points:', error);
         }
       }
     };
 
-    migrateHouseholdPoints();
-  }, [householdId, householdSettings?.points, habits]);
+    syncHouseholdPoints();
+  }, [householdId, householdSettings?.points, householdSettings?.lastDailyPointsReset, habits]);
 
   // --- ACTIONS: ACCOUNTS ---
 

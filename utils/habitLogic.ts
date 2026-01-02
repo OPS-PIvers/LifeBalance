@@ -160,3 +160,80 @@ export const calculateResetPoints = (habit: Habit): number => {
 
   return pointsToRemove;
 };
+
+/**
+ * Calculate points earned from habits completed on a specific date
+ * Used to recalculate daily points after a reset or on login
+ * @param habits - Array of all habits
+ * @param targetDate - The date to check completions for (YYYY-MM-DD format)
+ * @returns Total points earned from habits completed on that date
+ */
+export const calculatePointsForDate = (habits: Habit[], targetDate: string): number => {
+  let totalPoints = 0;
+
+  for (const habit of habits) {
+    // Check if habit was completed on the target date
+    if (!habit.completedDates.includes(targetDate)) continue;
+
+    // Only count if the habit currently has a count > 0 (hasn't been reset yet)
+    // or if the targetDate is in completedDates (which means it was completed)
+    if (habit.count === 0) continue;
+
+    const currentStreak = calculateStreak(habit.completedDates);
+    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+
+    if (habit.scoringType === 'incremental') {
+      // For incremental: points per count
+      totalPoints += habit.count * Math.floor(habit.basePoints * multiplier);
+    } else {
+      // For threshold: points only if target met
+      if (habit.count >= habit.targetCount) {
+        totalPoints += Math.floor(habit.basePoints * multiplier);
+      }
+    }
+  }
+
+  return totalPoints;
+};
+
+/**
+ * Calculate points earned from habits completed within a date range
+ * Used to recalculate weekly points (Monday-Sunday)
+ * @param habits - Array of all habits
+ * @param startDate - Start of the range (YYYY-MM-DD format, inclusive)
+ * @param endDate - End of the range (YYYY-MM-DD format, inclusive)
+ * @returns Total points earned from habits completed in that range
+ */
+export const calculatePointsForDateRange = (
+  habits: Habit[],
+  startDate: string,
+  endDate: string
+): number => {
+  let totalPoints = 0;
+
+  for (const habit of habits) {
+    // Find all completion dates within the range
+    const completionsInRange = habit.completedDates.filter(date =>
+      date >= startDate && date <= endDate
+    );
+
+    if (completionsInRange.length === 0) continue;
+
+    // For each completion date in range, calculate points
+    // Note: We use the current streak for multiplier calculation
+    const currentStreak = calculateStreak(habit.completedDates);
+    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+
+    if (habit.scoringType === 'incremental') {
+      // For incremental habits, we need to estimate points per completion
+      // Since we don't store historical counts, use basePoints * multiplier per completion day
+      // This is an approximation - for accurate tracking we'd need per-day snapshots
+      totalPoints += completionsInRange.length * Math.floor(habit.basePoints * multiplier);
+    } else {
+      // For threshold: each completed day in range earns the threshold points
+      totalPoints += completionsInRange.length * Math.floor(habit.basePoints * multiplier);
+    }
+  }
+
+  return totalPoints;
+};
