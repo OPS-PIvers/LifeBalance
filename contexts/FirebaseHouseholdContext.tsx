@@ -505,6 +505,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const weeklyMismatch = currentPoints &&
         currentPoints.weekly !== correctWeeklyPoints;
 
+      // Check if total is less than weekly (should never happen - total is cumulative)
+      const totalTooLow = currentPoints &&
+        currentPoints.total < correctWeeklyPoints;
+
       // Also handle the case where all points are 0 but habits are completed (initial migration)
       const needsInitialMigration = currentPoints &&
         currentPoints.daily === 0 &&
@@ -512,8 +516,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         currentPoints.total === 0 &&
         (correctDailyPoints > 0 || correctWeeklyPoints > 0);
 
-      if (dailyMismatch || weeklyMismatch || needsInitialMigration) {
-        console.log(`[PointsSync] Fixing points mismatch - daily: ${currentPoints?.daily} -> ${correctDailyPoints}, weekly: ${currentPoints?.weekly} -> ${correctWeeklyPoints}`);
+      if (dailyMismatch || weeklyMismatch || totalTooLow || needsInitialMigration) {
+        console.log(`[PointsSync] Fixing points mismatch - daily: ${currentPoints?.daily} -> ${correctDailyPoints}, weekly: ${currentPoints?.weekly} -> ${correctWeeklyPoints}, total: ${currentPoints?.total}${totalTooLow ? ` -> ${correctWeeklyPoints}` : ''}`);
 
         const updates: Record<string, number | string> = {
           'points.daily': correctDailyPoints,
@@ -522,9 +526,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           'lastWeeklyPointsReset': today,
         };
 
-        // If this is initial migration, also set total
-        if (needsInitialMigration) {
-          updates['points.total'] = correctDailyPoints;
+        // Fix total if it's less than weekly (data corruption) or initial migration
+        if (totalTooLow || needsInitialMigration) {
+          updates['points.total'] = correctWeeklyPoints;
         }
 
         try {
