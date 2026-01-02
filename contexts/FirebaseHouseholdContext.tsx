@@ -97,7 +97,7 @@ interface HouseholdContextType {
 
   // Transaction Actions
   addTransaction: (tx: Transaction) => Promise<void>;
-  updateTransactionCategory: (id: string, category: string) => Promise<void>;
+  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
@@ -858,18 +858,87 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // The bucketSpentMap effect will automatically recalculate when transactions change
   };
 
-  const updateTransactionCategory = async (id: string, category: string) => {
-    if (!householdId) return;
+  const updateTransactionCategory = async (id: string, category: string, relatedHabitIds?: string[]) => {
+    if (!householdId || !currentUser) return;
 
+    // Get current transaction status to check if we are verifying a pending one
+    // Only increment habits if transitioning from pending_review -> verified (which this function implies by setting status='verified')
+    // Ideally we should check the current status, but for now assuming this is called from Action Queue (pending items)
+
+    // 1. Update Transaction
     await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
       category,
       status: 'verified',
+      relatedHabitIds: relatedHabitIds || []
     });
+
+    // 2. Increment Habits if any
+    if (relatedHabitIds && relatedHabitIds.length > 0) {
+      let totalPointsChange = 0;
+      let successfulHabitsCount = 0;
+
+      // We need to process each habit sequentially or carefully to update household points correctly
+      // Since toggleHabit updates household points atomically with increment(), calling it multiple times is safe for the counter
+      // However, we need to be careful not to trigger race conditions on the habit document if updated in parallel
+      // Ideally, we should do this in a batch or transaction, but `processToggleHabit` returns derived state that depends on reads
+
+      // Let's loop and process
+      for (const habitId of relatedHabitIds) {
+        const habit = habits.find(h => h.id === habitId);
+        if (habit) {
+          // Use extracted business logic
+          const result = processToggleHabit(habit, 'up', currentUser);
+          if (result) {
+            // Update habit doc
+            await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+              count: result.updatedHabit.count,
+              totalCount: result.updatedHabit.totalCount,
+              completedDates: result.updatedHabit.completedDates,
+              streakDays: result.updatedHabit.streakDays,
+              lastUpdated: serverTimestamp(),
+            });
+
+            // Accumulate points change
+            totalPointsChange += result.pointsChange;
+            successfulHabitsCount++;
+          }
+        } else {
+          console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
+        }
+      }
+
+      // 3. Update Household Points (Batch the points update if possible, or just one big increment)
+      if (totalPointsChange !== 0) {
+        await updateDoc(doc(db, `households/${householdId}`), {
+          'points.daily': increment(totalPointsChange),
+          'points.weekly': increment(totalPointsChange),
+          'points.total': increment(totalPointsChange),
+        });
+
+        // Toast feedback for habits
+        const sign = totalPointsChange > 0 ? '+' : '';
+        toast(
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{sign}{totalPointsChange} pts</span>
+            <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
+          </div>,
+          {
+            duration: 2000,
+            icon: '🌟',
+            style: {
+              background: '#ECFDF5',
+              color: '#065F46',
+              border: '1px solid #A7F3D0',
+            },
+          }
+        );
+      }
+    }
 
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
 
-    toast.success('Categorized!');
+    toast.success('Verified & Categorized!');
   };
 
   const updateTransaction = async (id: string, updates: Partial<Transaction>) => {

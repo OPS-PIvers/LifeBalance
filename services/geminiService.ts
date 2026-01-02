@@ -20,6 +20,7 @@ export interface ReceiptData {
   amount: number;
   category: string;
   date?: string; // Optional - may not be visible on all receipts
+  suggestedHabits?: string[];
 }
 
 export interface BankTransactionData {
@@ -27,6 +28,7 @@ export interface BankTransactionData {
   amount: number;
   category: string;
   date: string;
+  suggestedHabits?: string[];
 }
 
 /**
@@ -49,10 +51,12 @@ const stripDataUrlPrefix = (base64Image: string): string => {
  * Analyzes a receipt image and extracts transaction data
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
+ * @param availableHabits - List of available habits for smart matching
  */
 export const analyzeReceipt = async (
   base64Image: string,
-  availableCategories?: string[]
+  availableCategories?: string[],
+  availableHabits?: string[]
 ): Promise<ReceiptData> => {
   validateApiKey();
 
@@ -63,6 +67,10 @@ export const analyzeReceipt = async (
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
+
+    const habitList = availableHabits?.length
+      ? availableHabits.join(', ')
+      : '';
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -75,7 +83,7 @@ export const analyzeReceipt = async (
                 }
             },
             {
-                text: `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. Return JSON.`
+                text: `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''} Return JSON.`
             }
         ]
       },
@@ -87,7 +95,8 @@ export const analyzeReceipt = async (
             merchant: { type: Type.STRING },
             amount: { type: Type.NUMBER },
             category: { type: Type.STRING },
-            date: { type: Type.STRING }
+            date: { type: Type.STRING },
+            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["merchant", "amount", "category"]
         }
@@ -109,10 +118,12 @@ export const analyzeReceipt = async (
  * Analyzes a bank statement screenshot and extracts multiple transactions
  * @param base64Image - Base64 encoded image of bank statement/transaction list
  * @param availableCategories - List of available budget categories for smart matching
+ * @param availableHabits - List of available habits for smart matching
  */
 export const parseBankStatement = async (
   base64Image: string,
-  availableCategories?: string[]
+  availableCategories?: string[],
+  availableHabits?: string[]
 ): Promise<BankTransactionData[]> => {
   validateApiKey();
 
@@ -123,6 +134,10 @@ export const parseBankStatement = async (
     const categoryList = availableCategories?.length
       ? availableCategories.join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
+
+    const habitList = availableHabits?.length
+      ? availableHabits.join(', ')
+      : '';
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -140,6 +155,7 @@ export const parseBankStatement = async (
 - amount: The transaction amount as a POSITIVE number (even if shown as negative/debit)
 - date: The transaction date in YYYY-MM-DD format
 - category: Suggest the most appropriate category from: ${categoryList}
+${habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : ''}
 
 Only include expense transactions (debits/withdrawals). Skip any credits, deposits, or payments received.
 Return a JSON array of transactions.`
@@ -156,7 +172,8 @@ Return a JSON array of transactions.`
               merchant: { type: Type.STRING },
               amount: { type: Type.NUMBER },
               category: { type: Type.STRING },
-              date: { type: Type.STRING }
+              date: { type: Type.STRING },
+              suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
             },
             required: ["merchant", "amount", "category", "date"]
           }

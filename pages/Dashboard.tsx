@@ -62,6 +62,7 @@ const Dashboard: React.FC = () => {
   // State for expansions/modals
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
+  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
 
   // Widget B Data - Enhanced Challenge Progress
   const linkedHabits = activeChallenge ? habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id)) : [];
@@ -128,7 +129,16 @@ const Dashboard: React.FC = () => {
                         <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
                         {!isExpanded && (
                           <button
-                            onClick={() => setExpandedId(item.id)}
+                            onClick={() => {
+                              setExpandedId(item.id);
+                              // Initialize selected habits from transaction if any, or empty
+                              // Cast is necessary because actionQueue combines CalendarItem (no relatedHabitIds) and Transaction
+                              if (!isCalendar && (item as any).relatedHabitIds) {
+                                setSelectedHabitIds((item as any).relatedHabitIds);
+                              } else {
+                                setSelectedHabitIds([]);
+                              }
+                            }}
                             className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
                           >
                             Review
@@ -192,28 +202,67 @@ const Dashboard: React.FC = () => {
                           </div>
                         ) : (
                           /* Transaction Category Selector */
-                          <div className="flex flex-wrap gap-2">
-                            {buckets.map(bucket => (
-                              <button
-                                key={bucket.id}
-                                onClick={() => {
-                                  updateTransactionCategory(item.id, bucket.name);
-                                  setExpandedId(null);
-                                }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 hover:bg-brand-100 active:bg-brand-200 transition-colors"
-                              >
-                                {bucket.name}
-                              </button>
-                            ))}
-                            <button
-                                onClick={() => {
-                                  updateTransactionCategory(item.id, 'Budgeted in Calendar');
-                                  setExpandedId(null);
-                                }}
-                                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
-                              >
-                                Budgeted in Calendar
-                            </button>
+                          <div className="space-y-3">
+                            {/* Habits Section */}
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
+                              {habits.length === 0 && <p className="text-xs text-brand-400 italic">No habits found. Create some in Habits tab.</p>}
+                              <div className="flex flex-wrap gap-2">
+                                {habits.map(habit => {
+                                  const isSelected = selectedHabitIds.includes(habit.id);
+                                  return (
+                                    <button
+                                      key={habit.id}
+                                      onClick={() => {
+                                        setSelectedHabitIds(prev =>
+                                          isSelected
+                                            ? prev.filter(id => id !== habit.id)
+                                            : [...prev, habit.id]
+                                        );
+                                      }}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${
+                                        isSelected
+                                          ? 'bg-habit-green text-white shadow-sm'
+                                          : 'bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100'
+                                      }`}
+                                    >
+                                      {isSelected && <Check size={12} strokeWidth={3} />}
+                                      {habit.title}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Categories Section */}
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Select Category to Confirm</p>
+                              <div className="flex flex-wrap gap-2">
+                                {buckets.map(bucket => (
+                                  <button
+                                    key={bucket.id}
+                                    onClick={() => {
+                                      updateTransactionCategory(item.id, bucket.name, selectedHabitIds);
+                                      setExpandedId(null);
+                                      setSelectedHabitIds([]); // Reset
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 hover:bg-brand-100 active:bg-brand-200 transition-colors"
+                                  >
+                                    {bucket.name}
+                                  </button>
+                                ))}
+                                <button
+                                    onClick={() => {
+                                      updateTransactionCategory(item.id, 'Budgeted in Calendar', selectedHabitIds);
+                                      setExpandedId(null);
+                                      setSelectedHabitIds([]); // Reset
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
+                                  >
+                                    Budgeted in Calendar
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         )}
                       </div>
