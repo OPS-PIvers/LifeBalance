@@ -20,6 +20,7 @@ interface ParsedTransaction {
   category: string;
   date: string;
   selected: boolean;
+  relatedHabitIds?: string[];
 }
 
 /**
@@ -35,12 +36,15 @@ const getLocalDateString = (): string => {
 };
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
-  const { addTransaction, buckets } = useHousehold();
+  const { addTransaction, buckets, habits } = useHousehold();
   const [view, setView] = useState<ModalView>('menu');
   const [processingMessage, setProcessingMessage] = useState('Processing...');
 
   // Dynamic Categories from buckets
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
+
+  // Dynamic Habits for matching
+  const habitTitles = habits.map(h => h.title);
 
   // Form State for Manual Entry
   const [amount, setAmount] = useState('');
@@ -128,6 +132,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     return dynamicCategories[0] || '';
   };
 
+  // Match suggested habit titles to IDs
+  const matchHabits = (suggestedHabits?: string[]): string[] => {
+    if (!suggestedHabits || suggestedHabits.length === 0) return [];
+
+    return habits
+      .filter(h => suggestedHabits.some(sh =>
+        sh.toLowerCase() === h.title.toLowerCase() ||
+        h.title.toLowerCase().includes(sh.toLowerCase())
+      ))
+      .map(h => h.id);
+  };
+
   // Camera capture - creates pending_review transaction
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -147,7 +163,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setProcessingMessage('Scanning receipt...');
 
       try {
-        const data: ReceiptData = await analyzeReceipt(base64Image, dynamicCategories);
+        const data: ReceiptData = await analyzeReceipt(base64Image, dynamicCategories, habitTitles);
 
         // Create transaction with pending_review status (goes to action queue)
         // Note: Gemini is instructed to return positive amounts, no Math.abs needed
@@ -160,7 +176,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           status: 'pending_review', // Shows in action queue
           isRecurring: false,
           source: 'camera-scan',
-          autoCategorized: true
+          autoCategorized: true,
+          relatedHabitIds: matchHabits(data.suggestedHabits)
         };
 
         await addTransaction(newTransaction);
@@ -171,7 +188,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         setView('manual');
       }
     }
-  }, [cameraStream, dynamicCategories, addTransaction]);
+  }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
 
   // Handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -215,12 +232,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setProcessingMessage('Extracting transactions...');
 
     try {
-      const transactions = await parseBankStatement(base64, dynamicCategories);
+      const transactions = await parseBankStatement(base64, dynamicCategories, habitTitles);
 
       if (transactions.length === 0) {
         // Fallback to single receipt analysis
         setProcessingMessage('Trying receipt analysis...');
-        const receipt = await analyzeReceipt(base64, dynamicCategories);
+        const receipt = await analyzeReceipt(base64, dynamicCategories, habitTitles);
 
         // Gemini returns positive amounts per our prompt
         setParsedTransactions([{
@@ -229,7 +246,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           amount: receipt.amount,
           category: matchCategory(receipt.category),
           date: receipt.date || getLocalDateString(),
-          selected: true
+          selected: true,
+          relatedHabitIds: matchHabits(receipt.suggestedHabits)
         }]);
       } else {
         // Amounts already normalized by geminiService
@@ -239,7 +257,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           amount: tx.amount,
           category: matchCategory(tx.category),
           date: tx.date || getLocalDateString(),
-          selected: true
+          selected: true,
+          relatedHabitIds: matchHabits(tx.suggestedHabits)
         })));
       }
 
@@ -300,7 +319,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           status: 'pending_review', // Goes to action queue for review
           isRecurring: false,
           source: 'file-upload',
-          autoCategorized: true
+          autoCategorized: true,
+          relatedHabitIds: tx.relatedHabitIds
         };
         return addTransaction(newTransaction);
       })

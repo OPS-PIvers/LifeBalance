@@ -61,6 +61,7 @@ export interface Transaction {
   source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring';
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
+  relatedHabitIds?: string[];
 }
 
 export interface CalendarItem {
