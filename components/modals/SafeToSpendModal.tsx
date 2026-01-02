@@ -4,6 +4,8 @@ import { X, Wallet, Receipt, CreditCard, ChevronDown, ChevronUp } from 'lucide-r
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { startOfToday, endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
+import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
+import { CalendarItem } from '../../types/schema';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -25,32 +27,51 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
   if (!isOpen) return null;
 
-  // Re-calculate the breakdown for display (logic mirrors HouseholdContext)
-  
+  // Re-calculate the breakdown for display (logic mirrors safeToSpendCalculator)
+
   // 1. Checking
   const checkingAccounts = accounts.filter(a => a.type === 'checking');
   const totalChecking = checkingAccounts.reduce((sum, a) => sum + a.balance, 0);
 
-  // 2. Bills
-  const today = startOfToday();
-  const endOfMonthDate = endOfMonth(today);
-  const unpaidBillsItems = calendarItems.filter(item => {
-    const itemDate = parseISO(item.date);
-    const isCoveredByBucket = buckets.some(b => 
-        item.title.toLowerCase().includes(b.name.toLowerCase()) || 
-        b.name.toLowerCase().includes(item.title.toLowerCase())
-    );
-    return (
-      item.type === 'expense' &&
-      !item.isPaid &&
-      (isAfter(itemDate, today) || itemDate.getTime() === today.getTime()) &&
-      (isBefore(itemDate, endOfMonthDate) || itemDate.getTime() === endOfMonthDate.getTime()) &&
-      !isCoveredByBucket
-    );
-  });
-  const totalUnpaidBills = unpaidBillsItems.reduce((sum, i) => sum + i.amount, 0);
+  // 2. Bills (paycheck-based date range)
+  let unpaidBillsItems: CalendarItem[] = [];
+  let totalUnpaidBills = 0;
+  let rangeLabel = '';
 
-  // 3. Buckets
+  if (!currentPeriodId) {
+    // No paycheck tracking enabled
+    rangeLabel = 'No paycheck tracking';
+  } else {
+    const paycheckA = parseISO(currentPeriodId);
+    const paycheckBDate = findNextPaycheckDate(calendarItems, currentPeriodId);
+
+    let rangeEndDate: Date;
+    if (paycheckBDate) {
+      rangeEndDate = parseISO(paycheckBDate);
+      rangeLabel = `Until next paycheck (${format(rangeEndDate, 'MMM d')})`;
+    } else {
+      rangeEndDate = endOfMonth(paycheckA);
+      rangeLabel = `Until end of month (${format(rangeEndDate, 'MMM d')})`;
+    }
+
+    unpaidBillsItems = calendarItems.filter(item => {
+      const itemDate = parseISO(item.date);
+      const isCoveredByBucket = buckets.some(b =>
+        item.title.toLowerCase().includes(b.name.toLowerCase()) ||
+        b.name.toLowerCase().includes(item.title.toLowerCase())
+      );
+      return (
+        item.type === 'expense' &&
+        !item.isPaid &&
+        isAfter(itemDate, paycheckA) &&
+        (isBefore(itemDate, rangeEndDate) || itemDate.getTime() === rangeEndDate.getTime()) &&
+        !isCoveredByBucket
+      );
+    });
+    totalUnpaidBills = unpaidBillsItems.reduce((sum, i) => sum + i.amount, 0);
+  }
+
+  // 3. Buckets (for informational display only)
   const bucketBreakdown = buckets.map(b => {
     const spent = bucketSpentMap.get(b.id) || { verified: 0, pending: 0 };
     const remaining = Math.max(0, b.limit - spent.verified);
@@ -59,15 +80,6 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
   }).filter(b => b.remaining > 0);
 
   const totalBucketLiability = bucketBreakdown.reduce((sum, b) => sum + b.remaining, 0);
-
-  // Pending Adjustment Display (Just for transparency)
-  const pendingSpend = transactions
-      .filter(t => {
-        const isPending = t.status === 'pending_review';
-        const inCurrentPeriod = currentPeriodId ? t.payPeriodId === currentPeriodId : true;
-        return isPending && inCurrentPeriod;
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -108,7 +120,10 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              <div className="flex items-center justify-between text-rose-600">
                 <div className="flex items-center gap-2">
                   <Receipt size={16} />
-                  <span className="font-bold text-sm">Reserved for Bills</span>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sm">Reserved for Bills</span>
+                    <span className="text-[10px] text-brand-400">{rangeLabel}</span>
+                  </div>
                 </div>
                 <span className="font-mono font-bold">-${totalUnpaidBills.toLocaleString()}</span>
              </div>
@@ -116,7 +131,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                <div className="pl-6 space-y-1">
                  {unpaidBillsItems.map(bill => (
                    <div key={bill.id} className="flex justify-between text-xs text-brand-400">
-                     <span>{bill.title} ({bill.date.split('-')[2]})</span>
+                     <span>{bill.title} ({format(parseISO(bill.date), 'MMM d')})</span>
                      <span>${bill.amount}</span>
                    </div>
                  ))}
@@ -124,15 +139,18 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              )}
           </div>
 
-          {/* Reserved: Buckets */}
+          {/* Informational: Bucket Balances */}
           <div className="space-y-3">
-             <div className="flex items-center justify-between text-brand-600">
+             <div className="flex items-center justify-between text-brand-500">
                 <div className="flex items-center gap-2">
                   <CreditCard size={16} />
-                  <span className="font-bold text-sm">Allocated to Buckets</span>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-sm">Bucket Balances</span>
+                    <span className="text-[10px] text-brand-400">For reference only</span>
+                  </div>
                 </div>
-                <span className="font-mono font-bold">
-                  -${Math.max(0, totalBucketLiability - pendingSpend).toLocaleString()}
+                <span className="font-mono font-bold text-brand-600">
+                  ${totalBucketLiability.toLocaleString()}
                 </span>
              </div>
 
@@ -192,7 +210,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
           </div>
           
           <p className="text-[10px] text-center text-brand-400">
-            This is your true liquid cash after accounting for all bills and bucket commitments. Savings accounts are excluded.
+            This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
 
         </div>
