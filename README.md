@@ -31,7 +31,7 @@ LifeBalance is a comprehensive household management application designed to gami
 | **Styling** | Tailwind CSS | Utility-first CSS framework (loaded via CDN). |
 | **Backend** | Firebase | Auth, Firestore (NoSQL DB), and Hosting. |
 | **AI** | Google Gemini | Receipt OCR and statement parsing (`@google/genai`). |
-| **Routing** | React Router (Hash) | Hash-based routing for static hosting compatibility. |
+| **Routing** | react-router-dom | Hash-based routing for static hosting compatibility. |
 | **Icons** | Lucide React | Clean, consistent icon set. |
 | **Dates** | date-fns | Robust date manipulation library. |
 
@@ -95,8 +95,10 @@ This is the application's "God Metric", located in `utils/safeToSpendCalculator.
 ```
 Safe-to-Spend = (Checking Balance)
               - (Unpaid Bills due this month)
-              - (Remaining Limits of Budget Buckets)
-              - (Pending Transactions)
+              - (Adjusted Bucket Liabilities)
+
+Where:
+Adjusted Bucket Liabilities = max(0, Bucket Liabilities - Pending Spend)
 ```
 
 ### Routing
