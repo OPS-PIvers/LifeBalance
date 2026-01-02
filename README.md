@@ -45,7 +45,7 @@ LifeBalance is a comprehensive household management application designed to gami
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/lifebalance.git
+    git clone https://github.com/lifebalance/lifebalance.git
     cd lifebalance
     ```
 
@@ -57,7 +57,9 @@ LifeBalance is a comprehensive household management application designed to gami
 
 ### Configuration
 
-Create a `.env.local` file in the root directory with your Firebase and Gemini credentials:
+Create a `.env.local` file in the root directory with your Firebase and Gemini credentials.
+
+> **Note:** The values below (e.g., `your_api_key`, `your_project_id`) are placeholders. You must replace them with your actual Firebase and Gemini API keys.
 
 ```env
 # Firebase Configuration
