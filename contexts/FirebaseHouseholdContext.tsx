@@ -479,16 +479,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runPaycheckMigration();
   }, [householdId, householdSettings]);
 
-  // Sync daily/weekly points from actual habit completions
+  // Sync daily/weekly/total points from actual habit completions
   // This ensures points accurately reflect completed habits, fixing any desync issues
+  // ALWAYS recalculates and updates if values don't match - no complex conditional logic
   useEffect(() => {
     if (!householdId || !householdSettings || habits.length === 0) return;
 
     const syncHouseholdPoints = async () => {
       const now = new Date();
       const today = format(now, 'yyyy-MM-dd');
-      const currentPoints = householdSettings.points;
-      const lastDailyReset = householdSettings.lastDailyPointsReset;
+      const currentPoints = householdSettings.points || { daily: 0, weekly: 0, total: 0 };
 
       // Calculate what points SHOULD be based on actual habit completions
       const correctDailyPoints = calculatePointsForDate(habits, today);
@@ -496,44 +496,31 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const correctWeeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
 
-      // Check if daily points are incorrect (mismatch with calculated value)
-      const dailyMismatch = currentPoints &&
-        lastDailyReset === today &&
-        currentPoints.daily !== correctDailyPoints;
+      // Total should be at least as much as weekly (it's cumulative and never resets)
+      // If total < weekly, something is wrong - fix it
+      const correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
 
-      // Check if weekly points are incorrect
-      const weeklyMismatch = currentPoints &&
-        currentPoints.weekly !== correctWeeklyPoints;
+      // Check if ANY value needs fixing
+      const needsUpdate =
+        currentPoints.daily !== correctDailyPoints ||
+        currentPoints.weekly !== correctWeeklyPoints ||
+        currentPoints.total !== correctTotalPoints;
 
-      // Check if total is less than weekly (should never happen - total is cumulative)
-      const totalTooLow = currentPoints &&
-        currentPoints.total < correctWeeklyPoints;
-
-      // Also handle the case where all points are 0 but habits are completed (initial migration)
-      const needsInitialMigration = currentPoints &&
-        currentPoints.daily === 0 &&
-        currentPoints.weekly === 0 &&
-        currentPoints.total === 0 &&
-        (correctDailyPoints > 0 || correctWeeklyPoints > 0);
-
-      if (dailyMismatch || weeklyMismatch || totalTooLow || needsInitialMigration) {
-        console.log(`[PointsSync] Fixing points mismatch - daily: ${currentPoints?.daily} -> ${correctDailyPoints}, weekly: ${currentPoints?.weekly} -> ${correctWeeklyPoints}, total: ${currentPoints?.total}${totalTooLow ? ` -> ${correctWeeklyPoints}` : ''}`);
-
-        const updates: Record<string, number | string> = {
-          'points.daily': correctDailyPoints,
-          'points.weekly': correctWeeklyPoints,
-          'lastDailyPointsReset': today,
-          'lastWeeklyPointsReset': today,
-        };
-
-        // Fix total if it's less than weekly (data corruption) or initial migration
-        if (totalTooLow || needsInitialMigration) {
-          updates['points.total'] = correctWeeklyPoints;
-        }
+      if (needsUpdate) {
+        console.log(`[PointsSync] Correcting points:
+          daily: ${currentPoints.daily} -> ${correctDailyPoints}
+          weekly: ${currentPoints.weekly} -> ${correctWeeklyPoints}
+          total: ${currentPoints.total} -> ${correctTotalPoints}`);
 
         try {
-          await updateDoc(doc(db, `households/${householdId}`), updates);
-          console.log(`[PointsSync] Points corrected - daily: ${correctDailyPoints}, weekly: ${correctWeeklyPoints}`);
+          await updateDoc(doc(db, `households/${householdId}`), {
+            'points.daily': correctDailyPoints,
+            'points.weekly': correctWeeklyPoints,
+            'points.total': correctTotalPoints,
+            'lastDailyPointsReset': today,
+            'lastWeeklyPointsReset': today,
+          });
+          console.log(`[PointsSync] Points corrected successfully`);
         } catch (error) {
           console.error('[PointsSync] Failed to sync points:', error);
         }
@@ -541,7 +528,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     syncHouseholdPoints();
-  }, [householdId, householdSettings?.points, householdSettings?.lastDailyPointsReset, habits]);
+  }, [householdId, householdSettings?.points, habits]);
 
   // --- ACTIONS: ACCOUNTS ---
 
