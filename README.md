@@ -45,8 +45,8 @@ LifeBalance is a comprehensive household management application designed to gami
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/lifebalance/lifebalance.git
-    cd lifebalance
+    git clone https://github.com/OPS-PIvers/LifeBalance.git
+    cd LifeBalance
     ```
 
 2.  **Install dependencies:**
@@ -98,8 +98,14 @@ Safe-to-Spend = (Checking Balance)
               - (Adjusted Bucket Liabilities)
 
 Where:
+Checking Balance      = Sum of all checking account balances (excludes savings/credit)
+Unpaid Bills          = Bills due this month that aren't covered by budget buckets
+Bucket Liabilities    = Sum of remaining limits across all budget buckets
+Pending Spend         = Sum of pending_review transactions
 Adjusted Bucket Liabilities = max(0, Bucket Liabilities - Pending Spend)
 ```
+
+**Note:** Bills are automatically excluded from the calculation if they match a budget bucket name to avoid double-counting liabilities.
 
 ### Routing
 The app uses `HashRouter` (e.g., `/#/dashboard`) instead of `BrowserRouter`. This is a deliberate choice to ensure compatibility with simple static hosting environments (like Firebase Hosting) without requiring complex server-side rewrite rules.
