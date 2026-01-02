@@ -2,6 +2,27 @@
 
 This document outlines high-reward opportunities to integrate Google Gemini's advanced reasoning and analysis capabilities into the LifeBalance application. These integrations aim to transform the app from a passive tracker into an active financial and lifestyle coach.
 
+## 0. Technical Considerations & Best Practices
+
+Before implementing the features below, adhere to these cross-cutting concerns to ensure a secure, cost-effective, and robust integration.
+
+### Privacy & Security
+- **Data Anonymization:** Never send PII (names, emails, exact addresses) to the AI. Use IDs or generic labels (e.g., "User A", "Merchant X") where possible, though merchant names are often needed for context.
+- **Transparency:** Clearly label all AI-generated content (e.g., "✨ Suggestion by Gemini") so users know the source.
+- **Consent:** Ensure users are aware that their transaction/habit data is being processed by an external provider for these features.
+
+### Rate Limiting & Cost Management
+- **Throttling:** Implement client-side throttling to prevent users from spamming AI actions (e.g., "Analyze" buttons should have a cooldown).
+- **Quota Management:** Monitor usage to stay within API limits.
+- **Efficient Prompts:** Minimize token usage by sending only necessary fields. Use summarized data rather than raw dumps where possible.
+
+### Testing Strategy
+- **Non-Determinism:** AI responses vary. Do not test for exact string matches.
+- **Mocking:** For unit tests, mock the `geminiService` responses to test the UI's handling of success/failure states.
+- **Integration Tests:** Create a suite of "golden prompts" and verify that the *structure* of the returned JSON matches the schema, even if the content varies.
+
+---
+
 ## 1. Smart Budget Insights & Anomaly Detection
 
 **File Paths:**
@@ -10,21 +31,19 @@ This document outlines high-reward opportunities to integrate Google Gemini's ad
 - `components/budget/BudgetBuckets.tsx`
 
 **Description:**
-Instead of just showing progress bars, use Gemini to analyze spending trends, detect anomalies (e.g., "Grocery spending is 30% higher than usual this week"), and suggest proactive bucket adjustments.
+Use Gemini to analyze spending trends, detect anomalies (e.g., "Grocery spending is 30% higher than usual this week"), and suggest proactive bucket adjustments.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
-    - Create a function `analyzeBudgetTrends(transactions: Transaction[], buckets: BudgetBucket[])`.
-    - Prompt Gemini to look for recurring payments that have increased, categories that are trending to overspend, and opportunities to save.
+    - Create `analyzeBudgetTrends(transactions: Transaction[], buckets: BudgetBucket[])`.
     - Return a structured JSON with `insights` (array of strings) and `suggestedAdjustments` (array of objects with `bucketId` and `suggestedLimit`).
 
 2.  **Update `pages/Budget.tsx`:**
-    - Add a "Smart Analysis" button in the sub-navigation or header.
-    - Create a state to hold the analysis result.
+    - Add a "Smart Analysis" button.
 
 3.  **Create `components/budget/BudgetInsights.tsx`:**
-    - Display the insights in a dismissible card at the top of the budget view.
-    - Allow users to "Apply" suggested bucket limit adjustments with one click (using `updateBucketLimit` from context).
+    - **Review Flow:** Display insights and suggested changes in a list.
+    - **Confirmation:** Do not apply changes automatically. Provide "Approve" checkboxes for each suggestion, then a "Confirm Selected Changes" button to apply them via `updateBucketLimit`.
 
 ## 2. Intelligent Daily Briefing
 
@@ -33,40 +52,37 @@ Instead of just showing progress bars, use Gemini to analyze spending trends, de
 - `pages/Dashboard.tsx`
 
 **Description:**
-Replace the current simple "AI Insight" on the Dashboard with a comprehensive "Daily Briefing" that synthesizes financial health, upcoming bills, and habit goals into a cohesive narrative.
+A comprehensive "Daily Briefing" that synthesizes financial health, upcoming bills, and habit goals.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
     - Create `generateDailyBriefing(context: DashboardContextData)`.
-    - Pass `safeToSpend`, `dueCalendarItems`, `todaysHabits`, and `activeChallenge` status.
-    - Prompt Gemini to act as a supportive but firm coach. Example output: "Good morning! You have $150 safe to spend. Note that your Electric Bill ($45) is due tomorrow. You're on a 3-day streak with 'Morning Run'—keep it up!"
+    - Prompt Gemini to act as a supportive coach.
 
 2.  **Update `pages/Dashboard.tsx`:**
-    - Call this service on mount (cache the result in localStorage for 24h to save tokens).
-    - Replace the existing `Widget C: Gemini Insight` with a richer `DailyBriefingWidget` that supports markdown formatting for bold text and lists.
+    - **Caching:** Call on mount but cache the result in `localStorage` with a **short TTL (1-2 hours)** or invalidate when key data (transactions/habits) changes. This balances freshness with cost.
+    - Display using a `DailyBriefingWidget`.
 
 ## 3. Habit Coach & Pattern Recognition
 
 **File Paths:**
 - `services/geminiService.ts`
 - `pages/Habits.tsx`
-- `components/modals/HabitCreatorWizard.tsx` (New Component)
+- `components/modals/HabitCreatorWizard.tsx`
 
 **Description:**
-Identify hidden patterns in habit completion and offer personalized advice. For example, realizing a user always misses their gym habit on days they have high "Dining Out" spending.
+Identify hidden patterns in habit completion and offer personalized advice.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
     - Create `analyzeHabitPatterns(habits: Habit[], transactions: Transaction[])`.
-    - Send the last 30 days of habit completion history and transaction history.
-    - Ask Gemini to find correlations (positive or negative) and suggest optimizations.
+    - **Data Strategy:** Do NOT send 30 days of raw history. Send a **summarized view** (e.g., "Completed 'Gym' 2/4 Mondays, 0/4 Fridays") or a shorter window (last 14 days) to save tokens and reduce latency.
 
 2.  **Update `pages/Habits.tsx`:**
-    - Add a "Coach" tab or button.
-    - Display findings like "You tend to miss 'Read' on Fridays. Try moving this habit to the morning?"
+    - Add a "Coach" tab.
 
 3.  **Enhance `HabitCreatorWizard.tsx`:**
-    - When creating a habit, ask Gemini: "What is a realistic starting frequency for a 'Marathon Training' habit for a beginner?" to pre-fill the form defaults.
+    - **Labeled Suggestions:** When offering advice (e.g., frequency), explicitly label it: "Gemini suggests starting with...". Allow the user to edit the value before accepting.
 
 ## 4. "Safe-to-Spend" Explainer
 
@@ -75,17 +91,14 @@ Identify hidden patterns in habit completion and offer personalized advice. For 
 - `components/modals/SafeToSpendModal.tsx`
 
 **Description:**
-The "Safe-to-Spend" number can be confusing. Use Gemini to generate a natural language explanation of *why* the number is what it is, building trust in the algorithm.
+Natural language explanation of the Safe-to-Spend calculation.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
-    - Create `explainSafeToSpend(calculationData: SafeToSpendComponents)`.
-    - Pass the raw components: `checkingBalance`, `unpaidBills`, `bucketRemaining`, `pendingTx`.
-    - Prompt: "Explain to a 5-year-old why they only have $X to spend despite having $Y in the bank. Mention the specific bills and buckets actively reducing the amount."
+    - Create `explainSafeToSpend`. Pass summarized component data.
 
 2.  **Update `components/modals/SafeToSpendModal.tsx`:**
-    - Add a "Why is this my number?" dropdown or section.
-    - Display the generated text (e.g., "You see $1,000 in your account, but $400 is reserved for Rent and $300 is set aside for Groceries. That leaves you $300 to play with.").
+    - Add a "Why is this my number?" section displaying the explanation.
 
 ## 5. Personalized Challenge Generator
 
@@ -94,16 +107,15 @@ The "Safe-to-Spend" number can be confusing. Use Gemini to generate a natural la
 - `components/modals/ChallengeHubModal.tsx`
 
 **Description:**
-Users often don't know what to challenge themselves with. Gemini can analyze their weakest financial areas (e.g., "Shopping") or lowest habit streaks and generate a custom monthly challenge.
+Generate custom monthly challenges based on weak financial areas or low habit streaks.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
-    - Create `generateChallengeSuggestion(habits: Habit[], budgetStats: BucketStats)`.
-    - Prompt Gemini to create a challenge title, description, and target (e.g., "The 'No-Takeout' Sprint: Limit Dining Out to $50 this month").
+    - Create `generateChallengeSuggestion`.
 
 2.  **Update `components/modals/ChallengeHubModal.tsx`:**
-    - Add a "Suggest a Challenge" button in the creation form.
-    - When clicked, show a loading state, then auto-fill the Title, Description, Related Habits, and Target fields with Gemini's response.
+    - Add "Suggest a Challenge" button.
+    - **Review:** Auto-fill form fields but allow user editing before saving.
 
 ## 6. Natural Language Transaction Entry
 
@@ -112,13 +124,19 @@ Users often don't know what to challenge themselves with. Gemini can analyze the
 - `components/modals/CaptureModal.tsx`
 
 **Description:**
-Allow users to type (or dictate) a transaction in plain English instead of filling out a form manually.
+Allow users to type/dictate a transaction in plain English.
 
 **Implementation Guide:**
 1.  **Update `services/geminiService.ts`:**
     - Create `parseNaturalLanguageTransaction(input: string, categories: string[])`.
-    - Prompt: "Extract merchant, amount, category, and date from this text: '${input}'. Map category to one of: ${categories}."
+    - **Prompt Syntax:** Use a standard TypeScript template literal:
+      ```typescript
+      const prompt = `Extract merchant, amount, category, and date from this text: '${input}'. Map category to one of: ${categories.join(', ')}. Return JSON.`;
+      ```
 
 2.  **Update `components/modals/CaptureModal.tsx`:**
-    - Add a text input field "Quick Add" at the top (e.g., "Lunch at Chipotle $14.50").
-    - On blur or enter, call the service and auto-populate the existing form fields (Merchant, Amount, Category, Date) for user verification.
+    - Add "Quick Add" input.
+    - **Validation:** BEFORE calling the API, check that input is non-empty and has reasonable length (> 5 chars).
+    - **Error Handling:** Wrap the API call in a try/catch.
+        - *Success:* Auto-populate form fields.
+        - *Failure:* Show a toast ("Couldn't understand text") and fall back to manual entry.
