@@ -875,7 +875,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // 2. Increment Habits if any
     if (relatedHabitIds && relatedHabitIds.length > 0) {
       let totalPointsChange = 0;
-      let totalMultiplier = 0; // Just for feedback (use last one)
+      let successfulHabitsCount = 0;
 
       // We need to process each habit sequentially or carefully to update household points correctly
       // Since toggleHabit updates household points atomically with increment(), calling it multiple times is safe for the counter
@@ -890,7 +890,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           const result = processToggleHabit(habit, 'up', currentUser);
           if (result) {
             // Update habit doc
-             await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+            await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
               count: result.updatedHabit.count,
               totalCount: result.updatedHabit.totalCount,
               completedDates: result.updatedHabit.completedDates,
@@ -900,8 +900,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
             // Accumulate points change
             totalPointsChange += result.pointsChange;
-            totalMultiplier = result.multiplier;
+            successfulHabitsCount++;
           }
+        } else {
+          console.warn(`Habit ID ${habitId} not found in habits array. Skipping habit increment.`);
         }
       }
 
@@ -918,7 +920,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toast(
           <div className="flex items-center gap-2">
             <span className="font-bold">{sign}{totalPointsChange} pts</span>
-            <span className="text-sm opacity-80">from {relatedHabitIds.length} habit(s)</span>
+            <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
           </div>,
           {
             duration: 2000,

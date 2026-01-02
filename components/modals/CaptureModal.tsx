@@ -137,10 +137,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (!suggestedHabits || suggestedHabits.length === 0) return [];
 
     return habits
-      .filter(h => suggestedHabits.some(sh =>
-        sh.toLowerCase() === h.title.toLowerCase() ||
-        h.title.toLowerCase().includes(sh.toLowerCase())
-      ))
+      .filter(h => {
+        const habitTitleLower = h.title.toLowerCase();
+        return suggestedHabits.some(sh => sh.toLowerCase() === habitTitleLower);
+      })
       .map(h => h.id);
   };
 
