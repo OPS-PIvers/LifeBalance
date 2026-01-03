@@ -3,22 +3,58 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
-  collection,
-  getDocs,
   doc,
-  setDoc,
-  updateDoc,
-  getFirestore,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
-import { Habit, HabitSubmission } from '@/types/schema';
+import { HabitSubmission } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 interface MigrationStats {
   habitsProcessed: number;
   submissionsCreated: number;
   habitsSkipped: number;
+}
+
+function sanitizeValue(value: any, habitTitle: string): any {
+  // Remove undefined values at any level
+  if (value === undefined) {
+    return undefined;
+  }
+  // Convert NaN numbers to 0 at any level
+  if (typeof value === 'number' && isNaN(value)) {
+    console.warn(
+      `[Migration] Found NaN value in submission for "${habitTitle}", defaulting to 0`
+    );
+    return 0;
+  }
+  // Recursively sanitize arrays (Firestore arrays can't contain undefined, convert to null)
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      const sanitizedItem = sanitizeValue(item, habitTitle);
+      return sanitizedItem === undefined ? null : sanitizedItem;
+    });
+  }
+  // Recursively sanitize plain objects
+  if (value && typeof value === 'object') {
+    const result: any = {};
+    Object.keys(value).forEach((key) => {
+      const sanitizedProp = sanitizeValue((value as any)[key], habitTitle);
+      // Match original behavior: delete properties that are undefined
+      if (sanitizedProp !== undefined) {
+        result[key] = sanitizedProp;
+      }
+    });
+    return result;
+  }
+  // Primitive non-number or already clean number
+  return value;
+}
+
+function sanitizeSubmission(sub: any): any {
+  const habitTitle = (sub && sub.habitTitle) || 'unknown habit';
+  return sanitizeValue(sub, habitTitle);
 }
 
 const MigrateSubmissions: React.FC = () => {
@@ -52,6 +88,7 @@ const MigrateSubmissions: React.FC = () => {
     setIsComplete(false);
 
     const householdId = householdSettings.id;
+    // Local mutable stats for calculation, state updated periodically
     const newStats: MigrationStats = {
       habitsProcessed: 0,
       submissionsCreated: 0,
@@ -59,25 +96,41 @@ const MigrateSubmissions: React.FC = () => {
     };
 
     try {
+      // Create a batch for operations
+      // Firestore allows max 500 operations per batch
+      let batch = writeBatch(db);
+      let operationCount = 0;
+      const MAX_BATCH_SIZE = 450; // Leave some buffer
+
+      const commitBatch = async () => {
+        if (operationCount > 0) {
+          console.log(`Committing batch of ${operationCount} operations...`);
+          await batch.commit();
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      };
+
       for (const habit of habits) {
-        setCurrentHabit(habit.title);
+        setCurrentHabit(habit.title || 'Untitled Habit');
 
         // Skip if already has submission tracking or no completed dates
+        const habitTitle = habit.title || 'Untitled Habit';
         if (habit.hasSubmissionTracking) {
-          console.log(`Skipping "${habit.title}" - already has submission tracking`);
+          console.log(`Skipping "${habitTitle}" - already has submission tracking`);
           newStats.habitsSkipped++;
           setStats({ ...newStats });
           continue;
         }
 
         if (!habit.completedDates || habit.completedDates.length === 0) {
-          console.log(`Skipping "${habit.title}" - no completed dates`);
+          console.log(`Skipping "${habitTitle}" - no completed dates`);
           newStats.habitsSkipped++;
           setStats({ ...newStats });
           continue;
         }
 
-        console.log(`Migrating "${habit.title}" (${habit.completedDates.length} dates)`);
+        console.log(`Migrating "${habitTitle}" (${habit.completedDates.length} dates)`);
         newStats.habitsProcessed++;
 
         // Sort dates chronologically (oldest first)
@@ -109,9 +162,9 @@ const MigrateSubmissions: React.FC = () => {
           const submissionId = `backfill_${date}`;
           const timestamp = `${date}T12:00:00.000Z`; // Noon UTC
 
-          const submission: Omit<HabitSubmission, 'id'> = {
+          const submissionRaw: Omit<HabitSubmission, 'id'> = {
             habitId: habit.id,
-            habitTitle: habit.title,
+            habitTitle,
             timestamp,
             date,
             count: 1, // Assume 1 completion
@@ -122,24 +175,40 @@ const MigrateSubmissions: React.FC = () => {
             createdAt: new Date().toISOString(),
           };
 
-          // Write to Firestore
-          await setDoc(
-            doc(db, `households/${householdId}/habits/${habit.id}/submissions`, submissionId),
-            submission
-          );
+          const submission = sanitizeSubmission(submissionRaw);
+
+          // Add to batch
+          const subRef = doc(db, `households/${householdId}/habits/${habit.id}/submissions`, submissionId);
+          batch.set(subRef, submission);
+          operationCount++;
 
           newStats.submissionsCreated++;
-          setStats({ ...newStats });
+
+          // Commit if batch is full
+          if (operationCount >= MAX_BATCH_SIZE) {
+            await commitBatch();
+          }
         }
 
         // Mark habit as having submission tracking
-        await updateDoc(
-          doc(db, `households/${householdId}/habits`, habit.id),
-          { hasSubmissionTracking: true }
-        );
+        const habitRef = doc(db, `households/${householdId}/habits`, habit.id);
+        // Use set with merge: true for safety in case document was deleted
+        batch.set(habitRef, { hasSubmissionTracking: true }, { merge: true });
+        operationCount++;
 
-        console.log(`Created ${sortedDates.length} submission(s) for "${habit.title}"`);
+        // Commit if batch is full
+        if (operationCount >= MAX_BATCH_SIZE) {
+          await commitBatch();
+        }
+
+        // Update stats state after each habit is fully processed to avoid excessive re-renders
+        setStats({ ...newStats });
+
+        console.log(`Created ${sortedDates.length} submission(s) for "${habitTitle}"`);
       }
+
+      // Commit any remaining operations
+      await commitBatch();
 
       setIsComplete(true);
       setCurrentHabit('');
@@ -151,7 +220,7 @@ const MigrateSubmissions: React.FC = () => {
 
       // Provide helpful error messages
       if (errorMessage.includes('permission-denied')) {
-        setError('Permission denied. Try logging out and back in to refresh your authentication, then try again.');
+        setError('Permission denied. Please ensure you are logged in and try refreshing the page. If the problem persists, try logging out and back in.');
         toast.error('Permission error - try logging out and back in');
       } else {
         setError(errorMessage);
