@@ -46,6 +46,12 @@ service cloud.firestore {
       match /{subcollection}/{document} {
         allow read: if isMemberOf(householdId);
         allow write: if isMemberOf(householdId);
+
+        // Nested subcollections (e.g., habit submissions)
+        match /{nestedCollection}/{nestedDocument} {
+          allow read: if isMemberOf(householdId);
+          allow write: if isMemberOf(householdId);
+        }
       }
     }
 
