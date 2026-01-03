@@ -1165,13 +1165,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const linkedHabits = habits.filter(h => challenge.relatedHabitIds.includes(h.id));
     const { currentValue, progress } = calculateChallengeProgress(challenge, linkedHabits);
 
-    const updatedChallenge = {
-      ...challenge,
-      currentValue,
-      // Support both old and new schema fields
-      targetValue: challenge.targetValue || challenge.targetTotalCount,
-      targetType: challenge.targetType || 'count',
-    };
+    // Build update object, filtering out undefined values (Firestore rejects undefined)
+    const updatedChallenge = Object.fromEntries(
+      Object.entries({
+        ...challenge,
+        currentValue,
+        // Support both old and new schema fields
+        targetValue: challenge.targetValue ?? challenge.targetTotalCount,
+        targetType: challenge.targetType ?? 'count',
+      }).filter(([, value]) => value !== undefined)
+    );
 
     if (activeChallenge?.id) {
       await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
