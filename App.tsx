@@ -14,6 +14,7 @@ import Budget from './pages/Budget';
 import Habits from './pages/Habits';
 import Settings from './pages/Settings';
 import PlaceholderPage from './pages/PlaceholderPage';
+import MigrateSubmissions from './pages/MigrateSubmissions';
 
 const App: React.FC = () => {
   return (
@@ -94,6 +95,14 @@ const App: React.FC = () => {
                       </main>
                       <BottomNav />
                     </>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/migrate-submissions"
+                element={
+                  <ProtectedRoute>
+                    <MigrateSubmissions />
                   </ProtectedRoute>
                 }
               />
