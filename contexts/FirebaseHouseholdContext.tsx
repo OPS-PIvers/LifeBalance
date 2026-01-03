@@ -326,7 +326,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     habitResetData.forEach(habit => {
       try {
-        if (isHabitStale(habit as Habit)) {
+        if (isHabitStale(habit)) {
           habitsToReset.push(habit.id);
         }
       } catch (error) {
@@ -1088,9 +1088,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const isStale = isHabitStale(habit);
     let effectiveHabit = habit;
 
-    // Define consistent timestamp for all writes in this operation
-    // Use serverTimestamp() for consistency with the rest of the codebase.
-    // isHabitStale handles Firestore Timestamp objects correctly.
+    // Use Firestore's serverTimestamp() in all writes here to ensure a consistent server-side
+    // notion of "now" across this operation and to stay aligned with the rest of the codebase.
+    // The isHabitStale helper handles Firestore Timestamp objects correctly.
 
     if (isStale) {
       // If toggling down on a stale habit, just perform a reset (0 points)
@@ -1106,29 +1106,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           lastUpdated: serverTimestamp(),
         });
 
-        // Optimistically update local state so the UI immediately reflects the reset.
-        setHabits((prevHabits) =>
-          prevHabits.map(h =>
-            h.id === id ? { ...h, count: 0, lastUpdated: new Date().toISOString() } : h
-          )
-        );
-
         // No points change for stale reset; this syncs the habit to today without undoing past points.
-        toast("Today's habit count has been reset to 0. No points have been removed — any points you've already earned for this period are still yours.", { icon: '📅' });
+        toast("Habit reset to 0 for today. Previous points preserved.", { icon: '📅' });
         return;
       }
 
-      // If toggling up a stale habit, we MUST write the reset to Firestore first.
-      // Otherwise, if two users toggle up simultaneously, they both start from 0 locally
-      // but write count=1, potentially missing increments or causing conflicts.
-      // This establishes a fresh "day 0" state in the DB.
-      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
-        count: 0,
-        lastUpdated: serverTimestamp(),
-        // We preserve streak/completedDates until the actual toggle logic decides to update them
-      });
-
-      // Proceed with local calculation as if count was 0
+      // If toggling up, proceed as if count was 0.
+      // We skip the explicit reset write here to avoid a double-write race condition.
+      // The final write below will handle the update atomically from the user's perspective.
       effectiveHabit = {
         ...habit,
         count: 0,
@@ -1193,8 +1178,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // If it's stale, we shouldn't subtract points because we didn't earn them today
     const pointsToRemove = isStale ? 0 : calculateResetPoints(habit);
-
-    const nowISO = format(new Date(), 'yyyy-MM-dd');
 
     // If it's stale and already 0, we just need to update the timestamp to prevent further "stale" checks today
     if (isStale && habit.count === 0) {
