@@ -147,8 +147,16 @@ const MigrateSubmissions: React.FC = () => {
 
     } catch (err) {
       console.error('Migration error:', err);
-      setError(String(err));
-      toast.error('Migration failed. Check console for details.');
+      const errorMessage = String(err);
+
+      // Provide helpful error messages
+      if (errorMessage.includes('permission-denied')) {
+        setError('Permission denied. Try logging out and back in to refresh your authentication, then try again.');
+        toast.error('Permission error - try logging out and back in');
+      } else {
+        setError(errorMessage);
+        toast.error('Migration failed. Check console for details.');
+      }
     } finally {
       setIsRunning(false);
     }
