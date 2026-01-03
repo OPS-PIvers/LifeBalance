@@ -80,7 +80,7 @@ export const analyzeReceipt = async (
       : '';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
@@ -147,7 +147,7 @@ export const parseBankStatement = async (
       : '';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
@@ -219,7 +219,7 @@ export const analyzePantryImage = async (
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
@@ -315,7 +315,7 @@ export const suggestMeal = async (
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [{ text: prompt }]
       },
@@ -371,7 +371,7 @@ export const parseGroceryReceipt = async (
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
             {
