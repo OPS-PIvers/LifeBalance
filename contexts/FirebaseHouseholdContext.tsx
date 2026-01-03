@@ -287,7 +287,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(householdDocRef, async (snapshot) => {
         const data = snapshot.data() as Household | undefined;
-        setHouseholdSettings(data || null);
+        // Include the document ID in householdSettings
+        setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
 
         // Extract and set freezeBank
         if (data?.freezeBank) {
