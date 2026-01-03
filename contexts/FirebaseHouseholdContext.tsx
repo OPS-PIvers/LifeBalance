@@ -325,20 +325,37 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const habitsToReset: string[] = [];
 
     habitResetData.forEach(habit => {
-      const lastUpdate = parseISO(habit.lastUpdated);
-      let shouldReset = false;
+      try {
+        // Handle potentially missing or invalid lastUpdated
+        if (!habit.lastUpdated) {
+          habitsToReset.push(habit.id);
+          return;
+        }
 
-      if (habit.period === 'daily') {
-        // Reset at midnight each night (user's local time)
-        shouldReset = !isSameDay(now, lastUpdate);
-      } else if (habit.period === 'weekly') {
-        // Reset Sunday night into Monday at midnight
-        // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
-        shouldReset = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
-      }
+        const lastUpdate = parseISO(habit.lastUpdated);
+        // Check if date is valid
+        if (isNaN(lastUpdate.getTime())) {
+          console.warn(`[checkHabitResets] Invalid date for habit ${habit.id}:`, habit.lastUpdated);
+          habitsToReset.push(habit.id); // Reset invalid dates to be safe
+          return;
+        }
 
-      if (shouldReset) {
-        habitsToReset.push(habit.id);
+        let shouldReset = false;
+
+        if (habit.period === 'daily') {
+          // Reset at midnight each night (user's local time)
+          shouldReset = !isSameDay(now, lastUpdate);
+        } else if (habit.period === 'weekly') {
+          // Reset Sunday night into Monday at midnight
+          // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+          shouldReset = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+        }
+
+        if (shouldReset) {
+          habitsToReset.push(habit.id);
+        }
+      } catch (error) {
+        console.error(`[checkHabitResets] Error checking habit ${habit.id}:`, error);
       }
     });
 
@@ -1087,8 +1104,51 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
 
+    // LAZY RESET CHECK
+    // If habit is stale (last updated yesterday/last week), reset it first in memory
+    // This prevents negative points if user toggles 'down' on a stale habit
+    // and ensures 'up' starts from 0 for the new day
+    const now = new Date();
+    let effectiveHabit = habit;
+    let isStale = false;
+
+    try {
+      if (habit.lastUpdated) {
+        const lastUpdate = parseISO(habit.lastUpdated);
+        if (habit.period === 'daily') {
+          isStale = !isSameDay(now, lastUpdate);
+        } else if (habit.period === 'weekly') {
+          isStale = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+        }
+      } else {
+        isStale = true;
+      }
+    } catch (e) {
+      isStale = true; // Assume stale on error
+    }
+
+    if (isStale) {
+      // If toggling down on a stale habit, just perform a reset (0 points)
+      if (direction === 'down') {
+        await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+          count: 0,
+          lastUpdated: serverTimestamp(),
+          // Don't modify completedDates/streak as we haven't done anything today
+        });
+        // No points change for stale reset
+        return;
+      }
+
+      // If toggling up, proceed as if count was 0
+      effectiveHabit = {
+        ...habit,
+        count: 0,
+        // Preserve other fields
+      };
+    }
+
     // Use extracted business logic
-    const result = processToggleHabit(habit, direction, currentUser);
+    const result = processToggleHabit(effectiveHabit, direction, currentUser);
     if (!result) return;
 
     // Update habit in Firestore
@@ -1135,7 +1195,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const habit = habits.find(h => h.id === id);
     if (!habit || habit.count === 0) return;
 
-    const pointsToRemove = calculateResetPoints(habit);
+    // Check if habit is stale (from yesterday)
+    // If it's stale, we shouldn't subtract points because we didn't earn them today
+    const now = new Date();
+    let isStale = false;
+    try {
+      if (habit.lastUpdated) {
+        const lastUpdate = parseISO(habit.lastUpdated);
+        if (habit.period === 'daily') {
+          isStale = !isSameDay(now, lastUpdate);
+        } else if (habit.period === 'weekly') {
+          isStale = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+        }
+      }
+    } catch (e) {
+      isStale = true;
+    }
+
+    const pointsToRemove = isStale ? 0 : calculateResetPoints(habit);
 
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
