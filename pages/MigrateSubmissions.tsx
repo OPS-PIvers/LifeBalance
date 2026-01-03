@@ -4,7 +4,8 @@ import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
   doc,
-  writeBatch
+  setDoc,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
@@ -96,21 +97,6 @@ const MigrateSubmissions: React.FC = () => {
     };
 
     try {
-      // Create a batch for operations
-      // Firestore allows max 500 operations per batch
-      let batch = writeBatch(db);
-      let operationCount = 0;
-      const MAX_BATCH_SIZE = 450; // Leave some buffer
-
-      const commitBatch = async () => {
-        if (operationCount > 0) {
-          console.log(`Committing batch of ${operationCount} operations...`);
-          await batch.commit();
-          batch = writeBatch(db);
-          operationCount = 0;
-        }
-      };
-
       for (const habit of habits) {
         setCurrentHabit(habit.title || 'Untitled Habit');
 
@@ -177,38 +163,22 @@ const MigrateSubmissions: React.FC = () => {
 
           const submission = sanitizeSubmission(submissionRaw);
 
-          // Add to batch
+          // Write submission document
           const subRef = doc(db, `households/${householdId}/habits/${habit.id}/submissions`, submissionId);
-          batch.set(subRef, submission);
-          operationCount++;
+          console.log(`Writing submission to: households/${householdId}/habits/${habit.id}/submissions/${submissionId}`);
+          await setDoc(subRef, submission);
 
           newStats.submissionsCreated++;
-
-          // Commit if batch is full
-          if (operationCount >= MAX_BATCH_SIZE) {
-            await commitBatch();
-          }
+          setStats({ ...newStats });
         }
 
         // Mark habit as having submission tracking
         const habitRef = doc(db, `households/${householdId}/habits`, habit.id);
-        // Use set with merge: true for safety in case document was deleted
-        batch.set(habitRef, { hasSubmissionTracking: true }, { merge: true });
-        operationCount++;
-
-        // Commit if batch is full
-        if (operationCount >= MAX_BATCH_SIZE) {
-          await commitBatch();
-        }
-
-        // Update stats state after each habit is fully processed to avoid excessive re-renders
-        setStats({ ...newStats });
+        console.log(`Updating habit: households/${householdId}/habits/${habit.id}`);
+        await updateDoc(habitRef, { hasSubmissionTracking: true });
 
         console.log(`Created ${sortedDates.length} submission(s) for "${habitTitle}"`);
       }
-
-      // Commit any remaining operations
-      await commitBatch();
 
       setIsComplete(true);
       setCurrentHabit('');
