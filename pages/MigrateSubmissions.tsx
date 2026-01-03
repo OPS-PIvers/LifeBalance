@@ -9,6 +9,8 @@ import {
   setDoc,
   updateDoc,
   getFirestore,
+  writeBatch,
+  WriteBatch
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
@@ -19,6 +21,21 @@ interface MigrationStats {
   habitsProcessed: number;
   submissionsCreated: number;
   habitsSkipped: number;
+}
+
+function sanitizeSubmission(sub: any): any {
+  const sanitized = { ...sub };
+  Object.keys(sanitized).forEach(key => {
+    // Remove undefined values
+    if (sanitized[key] === undefined) delete sanitized[key];
+
+    // Convert NaN numbers to 0
+    if (typeof sanitized[key] === 'number' && isNaN(sanitized[key])) {
+      console.warn(`[Migration] Found NaN for key ${key} in submission ${sub.habitTitle}, defaulting to 0`);
+      sanitized[key] = 0;
+    }
+  });
+  return sanitized;
 }
 
 const MigrateSubmissions: React.FC = () => {
@@ -59,6 +76,21 @@ const MigrateSubmissions: React.FC = () => {
     };
 
     try {
+      // Create a batch for operations
+      // Firestore allows max 500 operations per batch
+      let batch = writeBatch(db);
+      let operationCount = 0;
+      const MAX_BATCH_SIZE = 450; // Leave some buffer
+
+      const commitBatch = async () => {
+        if (operationCount > 0) {
+          console.log(`Committing batch of ${operationCount} operations...`);
+          await batch.commit();
+          batch = writeBatch(db);
+          operationCount = 0;
+        }
+      };
+
       for (const habit of habits) {
         setCurrentHabit(habit.title);
 
@@ -109,9 +141,9 @@ const MigrateSubmissions: React.FC = () => {
           const submissionId = `backfill_${date}`;
           const timestamp = `${date}T12:00:00.000Z`; // Noon UTC
 
-          const submission: Omit<HabitSubmission, 'id'> = {
+          const submissionRaw: Omit<HabitSubmission, 'id'> = {
             habitId: habit.id,
-            habitTitle: habit.title,
+            habitTitle: habit.title || 'Untitled Habit',
             timestamp,
             date,
             count: 1, // Assume 1 completion
@@ -122,24 +154,37 @@ const MigrateSubmissions: React.FC = () => {
             createdAt: new Date().toISOString(),
           };
 
-          // Write to Firestore
-          await setDoc(
-            doc(db, `households/${householdId}/habits/${habit.id}/submissions`, submissionId),
-            submission
-          );
+          const submission = sanitizeSubmission(submissionRaw);
+
+          // Add to batch
+          const subRef = doc(db, `households/${householdId}/habits/${habit.id}/submissions`, submissionId);
+          batch.set(subRef, submission);
+          operationCount++;
 
           newStats.submissionsCreated++;
           setStats({ ...newStats });
+
+          // Commit if batch is full
+          if (operationCount >= MAX_BATCH_SIZE) {
+            await commitBatch();
+          }
         }
 
         // Mark habit as having submission tracking
-        await updateDoc(
-          doc(db, `households/${householdId}/habits`, habit.id),
-          { hasSubmissionTracking: true }
-        );
+        const habitRef = doc(db, `households/${householdId}/habits`, habit.id);
+        batch.update(habitRef, { hasSubmissionTracking: true });
+        operationCount++;
+
+        // Commit if batch is full
+        if (operationCount >= MAX_BATCH_SIZE) {
+          await commitBatch();
+        }
 
         console.log(`Created ${sortedDates.length} submission(s) for "${habit.title}"`);
       }
+
+      // Commit any remaining operations
+      await commitBatch();
 
       setIsComplete(true);
       setCurrentHabit('');
@@ -151,7 +196,7 @@ const MigrateSubmissions: React.FC = () => {
 
       // Provide helpful error messages
       if (errorMessage.includes('permission-denied')) {
-        setError('Permission denied. Try logging out and back in to refresh your authentication, then try again.');
+        setError('Permission denied. Please ensure you are logged in and try refreshing the page. If the problem persists, try logging out and back in.');
         toast.error('Permission error - try logging out and back in');
       } else {
         setError(errorMessage);
