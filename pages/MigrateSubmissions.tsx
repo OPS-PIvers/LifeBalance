@@ -17,20 +17,48 @@ interface MigrationStats {
   habitsSkipped: number;
 }
 
-function sanitizeSubmission(sub: any): any {
-  const sanitized = { ...sub };
-  Object.keys(sanitized).forEach(key => {
-    // Remove undefined values
-    if (sanitized[key] === undefined) delete sanitized[key];
+function sanitizeValue(value: any, habitTitle: string): any {
+  // Remove undefined values at any level
+  if (value === undefined) {
+    return undefined;
+  }
+  // Convert NaN numbers to 0 at any level
+  if (typeof value === 'number' && isNaN(value)) {
+    console.warn(
+      `[Migration] Found NaN value in submission for "${habitTitle}", defaulting to 0`
+    );
+    return 0;
+  }
+  // Recursively sanitize arrays
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      const sanitizedItem = sanitizeValue(item, habitTitle);
+      // Preserve array length; replace undefined with null if needed,
+      // but for Firestore arrays, undefined is typically not allowed.
+      // We'll filter out undefineds to be safe or map to null?
+      // Firestore arrays can't contain undefined. They can contain null.
+      return sanitizedItem === undefined ? null : sanitizedItem;
+    });
+  }
+  // Recursively sanitize plain objects
+  if (value && typeof value === 'object') {
+    const result: any = {};
+    Object.keys(value).forEach((key) => {
+      const sanitizedProp = sanitizeValue((value as any)[key], habitTitle);
+      // Match original behavior: delete properties that are undefined
+      if (sanitizedProp !== undefined) {
+        result[key] = sanitizedProp;
+      }
+    });
+    return result;
+  }
+  // Primitive non-number or already clean number
+  return value;
+}
 
-    // Convert NaN numbers to 0
-    if (typeof sanitized[key] === 'number' && isNaN(sanitized[key])) {
-      const habitTitle = sub.habitTitle || 'unknown habit';
-      console.warn(`[Migration] Found NaN for key ${key} in submission for "${habitTitle}", defaulting to 0`);
-      sanitized[key] = 0;
-    }
-  });
-  return sanitized;
+function sanitizeSubmission(sub: any): any {
+  const habitTitle = (sub && sub.habitTitle) || 'unknown habit';
+  return sanitizeValue(sub, habitTitle);
 }
 
 const MigrateSubmissions: React.FC = () => {
@@ -167,7 +195,8 @@ const MigrateSubmissions: React.FC = () => {
 
         // Mark habit as having submission tracking
         const habitRef = doc(db, `households/${householdId}/habits`, habit.id);
-        batch.update(habitRef, { hasSubmissionTracking: true });
+        // Use set with merge: true for safety in case document was deleted
+        batch.set(habitRef, { hasSubmissionTracking: true }, { merge: true });
         operationCount++;
 
         // Commit if batch is full
