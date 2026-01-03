@@ -331,8 +331,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       } catch (error) {
         console.error(`[checkHabitResets] Error checking habit ${habit.id}:`, error);
-        // Safely add to reset list if check failed
-        habitsToReset.push(habit.id);
+        // Do NOT add to reset list if check failed with an exception.
+        // This prevents infinite reset loops for permanently corrupted habits.
       }
     });
 
@@ -1088,10 +1088,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const isStale = isHabitStale(habit);
     let effectiveHabit = habit;
 
-    if (isStale) {
-      // Use standard ISO string format for timestamp consistency with isHabitStale
-      const nowISO = format(new Date(), 'yyyy-MM-dd');
+    // Define consistent timestamp for all writes in this operation
+    const nowISO = format(new Date(), 'yyyy-MM-dd');
 
+    if (isStale) {
       // If toggling down on a stale habit, just perform a reset (0 points)
       if (direction === 'down') {
         // Intentionally only resetting `count` here:
@@ -1104,7 +1104,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           count: 0,
           lastUpdated: nowISO,
         });
-        // No points change for stale reset
+
+        // No points change for stale reset; this syncs the habit to today without undoing past points.
+        toast('Habit reset to today. Previously earned points remain unchanged.', { icon: '📅' });
         return;
       }
 
@@ -1138,7 +1140,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       totalCount: result.updatedHabit.totalCount,
       completedDates: result.updatedHabit.completedDates,
       streakDays: result.updatedHabit.streakDays,
-      lastUpdated: serverTimestamp(),
+      // Use nowISO instead of serverTimestamp() to match the lazy reset format
+      // and ensure consistency with checkHabitResets.
+      lastUpdated: nowISO,
     });
 
     // Update household points (shared across all members)
@@ -1197,8 +1201,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      completedDates: habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0]),
-      streakDays: calculateStreak(habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0])),
+      completedDates: habit.completedDates.filter(d => d !== nowISO),
+      streakDays: calculateStreak(habit.completedDates.filter(d => d !== nowISO)),
       lastUpdated: nowISO,
     });
 

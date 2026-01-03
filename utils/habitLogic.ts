@@ -1,5 +1,5 @@
 import { Habit, HouseholdMember } from '@/types/schema';
-import { format, subDays, parseISO, isSameDay, isSameWeek } from 'date-fns';
+import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from 'date-fns';
 
 /**
  * Check if a habit is stale (last updated in a previous period)
@@ -28,7 +28,7 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
     }
 
     // 3. Validate parsed date
-    if (!lastUpdate || isNaN(lastUpdate.getTime())) {
+    if (!lastUpdate || !isValid(lastUpdate)) {
       console.warn(`[isHabitStale] Invalid date format for habit ${habit.id}:`, habit.lastUpdated);
       return true;
     }
@@ -38,8 +38,8 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
     const now = new Date();
     const TEN_YEARS_MS = 10 * 365 * 24 * 60 * 60 * 1000;
     if (Math.abs(now.getTime() - lastUpdate.getTime()) > TEN_YEARS_MS) {
-       console.warn(`[isHabitStale] Unreasonable date range for habit ${habit.id}:`, lastUpdate);
-       return true;
+      console.warn(`[isHabitStale] Unreasonable date range for habit ${habit.id}:`, lastUpdate);
+      return true;
     }
 
     // 5. Check period logic
@@ -47,6 +47,7 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
       return !isSameDay(now, lastUpdate);
     } else if (habit.period === 'weekly') {
       // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+      // weekStartsOn is zero-based (0=Sunday, 1=Monday, ...); 1 makes weeks start on Monday
       return !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
     } else {
       console.warn(`[isHabitStale] Unhandled habit period type: ${habit.period} for habit ${habit.id}`);
