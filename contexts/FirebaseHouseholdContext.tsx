@@ -1089,10 +1089,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     let effectiveHabit = habit;
 
     // Define consistent timestamp for all writes in this operation
-    // Use client-local time YYYY-MM-DD for consistency with daily/weekly periods.
-    // Note: UTC might be safer for cross-timezone synchronization, but habits are typically local-day based.
-    // We stick to the existing pattern of local date formatting.
-    const nowISO = format(new Date(), 'yyyy-MM-dd');
+    // Use serverTimestamp() for consistency with the rest of the codebase.
+    // isHabitStale handles Firestore Timestamp objects correctly.
 
     if (isStale) {
       // If toggling down on a stale habit, just perform a reset (0 points)
@@ -1105,11 +1103,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // Full resets that affect streak history should continue to go through `resetHabit`.
         await updateDoc(doc(db, `households/${householdId}/habits`, id), {
           count: 0,
-          lastUpdated: nowISO,
+          lastUpdated: serverTimestamp(),
         });
 
+        // Optimistically update local state so the UI immediately reflects the reset.
+        setHabits((prevHabits) =>
+          prevHabits.map(h =>
+            h.id === id ? { ...h, count: 0, lastUpdated: new Date().toISOString() } : h
+          )
+        );
+
         // No points change for stale reset; this syncs the habit to today without undoing past points.
-        toast("Today's habit count has been reset to 0. Past progress and points remain unchanged.", { icon: '📅' });
+        toast("Today's habit count has been reset to 0. No points have been removed — any points you've already earned for this period are still yours.", { icon: '📅' });
         return;
       }
 
@@ -1119,7 +1124,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // This establishes a fresh "day 0" state in the DB.
       await updateDoc(doc(db, `households/${householdId}/habits`, id), {
         count: 0,
-        lastUpdated: nowISO,
+        lastUpdated: serverTimestamp(),
         // We preserve streak/completedDates until the actual toggle logic decides to update them
       });
 
@@ -1127,9 +1132,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       effectiveHabit = {
         ...habit,
         count: 0,
-        // Explicitly preserve lastUpdated format for processToggleHabit consistency,
-        // though it calculates new timestamps internally.
-        lastUpdated: nowISO,
+        // Use current time string for local logic consistency
+        lastUpdated: new Date().toISOString(),
       };
     }
 
@@ -1143,10 +1147,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       totalCount: result.updatedHabit.totalCount,
       completedDates: result.updatedHabit.completedDates,
       streakDays: result.updatedHabit.streakDays,
-      // Use nowISO instead of serverTimestamp() to match the lazy reset format
-      // and ensure consistency with checkHabitResets.
-      // This overwrites any timestamp returned by processToggleHabit to ensure format consistency.
-      lastUpdated: nowISO,
+      lastUpdated: serverTimestamp(),
     });
 
     // Update household points (shared across all members)
@@ -1198,16 +1199,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // If it's stale and already 0, we just need to update the timestamp to prevent further "stale" checks today
     if (isStale && habit.count === 0) {
       await updateDoc(doc(db, `households/${householdId}/habits`, id), {
-        lastUpdated: nowISO,
+        lastUpdated: serverTimestamp(),
       });
+      toast('Reset', { icon: '↺' });
       return; // No point deduction or streak recalculation needed for 0 -> 0 reset
     }
 
+    // Filter out today's date if present (handling both stale and non-stale cases)
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const newCompletedDates = habit.completedDates.filter(d => d !== today);
+
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      completedDates: habit.completedDates.filter(d => d !== nowISO),
-      streakDays: calculateStreak(habit.completedDates.filter(d => d !== nowISO)),
-      lastUpdated: nowISO,
+      completedDates: newCompletedDates,
+      streakDays: calculateStreak(newCompletedDates),
+      lastUpdated: serverTimestamp(),
     });
 
     // Use increment() with negative value for atomic server-side calculation

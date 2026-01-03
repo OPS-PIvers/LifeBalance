@@ -33,16 +33,7 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
       return true;
     }
 
-    // 4. Sanity check: Date shouldn't be in the far future or distant past (e.g., > 10 years)
-    // This helps catch corrupted data
-    const now = new Date();
-    const TEN_YEARS_MS = 10 * 365 * 24 * 60 * 60 * 1000;
-    if (Math.abs(now.getTime() - lastUpdate.getTime()) > TEN_YEARS_MS) {
-      console.warn(`[isHabitStale] Unreasonable date range for habit ${habit.id}:`, lastUpdate);
-      return true;
-    }
-
-    // 5. Check period logic
+    // 4. Check period logic
     if (habit.period === 'daily') {
       return !isSameDay(now, lastUpdate);
     } else if (habit.period === 'weekly') {
