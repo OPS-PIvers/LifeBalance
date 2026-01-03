@@ -34,12 +34,19 @@ const MigrateSubmissions: React.FC = () => {
   const [currentHabit, setCurrentHabit] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  const runMigration = async () => {
-    if (!householdSettings?.id || !currentUser) {
-      setError('No household found. Please ensure you are logged in.');
-      return;
-    }
+  // Show loading state while household data is loading
+  if (!householdSettings || !currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4" />
+          <p className="text-brand-400">Loading household data...</p>
+        </div>
+      </div>
+    );
+  }
 
+  const runMigration = async () => {
     setIsRunning(true);
     setError(null);
     setIsComplete(false);
