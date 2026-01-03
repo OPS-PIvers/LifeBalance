@@ -1,5 +1,37 @@
 import { Habit, HouseholdMember } from '@/types/schema';
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, parseISO, isSameDay, isSameWeek } from 'date-fns';
+
+/**
+ * Check if a habit is stale (last updated in a previous period)
+ * @param habit - The habit to check
+ * @returns true if the habit needs to be reset, false otherwise
+ */
+export const isHabitStale = (habit: Habit): boolean => {
+  try {
+    if (!habit.lastUpdated) return true;
+
+    const lastUpdate = parseISO(habit.lastUpdated);
+    const now = new Date();
+
+    if (isNaN(lastUpdate.getTime())) {
+      console.warn(`[isHabitStale] Invalid date for habit ${habit.id}:`, habit.lastUpdated);
+      return true;
+    }
+
+    if (habit.period === 'daily') {
+      return !isSameDay(now, lastUpdate);
+    } else if (habit.period === 'weekly') {
+      // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
+      return !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+    } else {
+      console.warn(`[isHabitStale] Unhandled habit period type: ${habit.period} for habit ${habit.id}`);
+      return true; // Treat unknown periods as stale for safety
+    }
+  } catch (error) {
+    console.error(`[isHabitStale] Error checking habit ${habit.id}:`, error);
+    return true; // Fail safe
+  }
+};
 
 /**
  * Calculate the current streak for a habit based on completion dates
