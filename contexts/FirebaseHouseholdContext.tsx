@@ -663,10 +663,59 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success('Event updated');
   };
 
+  const deleteRecurringInstance = async (syntheticId: string) => {
+    if (!householdId || !user) return;
+
+    // Parse synthetic ID to get template ID and date
+    const parts = syntheticId.split('-202');
+    const parentRecurringId = parts[0];
+    const specificDate = '202' + parts[1];
+
+    // Find the recurring template to get item details
+    const template = calendarItems.find(i => i.id === parentRecurringId);
+    if (!template) return;
+
+    // Check if this specific date has already been deleted or paid
+    const existingInstance = calendarItems.find(
+      i => i.parentRecurringId === parentRecurringId && i.date === specificDate
+    );
+    if (existingInstance) {
+      // If it's already a paid/deleted instance, just delete that record
+      await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
+      toast.success('Instance deleted');
+      return;
+    }
+
+    // Create a deleted instance marker
+    await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+      title: template.title,
+      amount: template.amount,
+      date: specificDate,
+      type: template.type,
+      isPaid: false,
+      isRecurring: false,
+      isDeleted: true,
+      parentRecurringId: parentRecurringId,
+      createdBy: user.uid,
+    });
+
+    toast.success('Instance deleted');
+  };
+
   const deleteCalendarItem = async (id: string) => {
     if (!householdId) return;
-    await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
-    toast.success('Event deleted');
+
+    // Check if this is a recurring instance (synthetic ID with date suffix)
+    const isRecurringInstance = id.includes('-202');
+
+    if (isRecurringInstance) {
+      // Delete only this instance, not the entire series
+      await deleteRecurringInstance(id);
+    } else {
+      // Direct deletion for non-recurring items or templates
+      await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
+      toast.success('Event deleted');
+    }
   };
 
   const payCalendarItem = async (itemId: string, accountId: string) => {

@@ -215,13 +215,7 @@ const BudgetCalendar: React.FC = () => {
                       </button>
                     )}
                     <button
-                      onClick={() => {
-                        // If this is a recurring instance, delete the original item
-                        const idToDelete = isRecurringInstance(item)
-                          ? item.id.split('-202')[0]
-                          : item.id;
-                        deleteCalendarItem(idToDelete);
-                      }}
+                      onClick={() => deleteCalendarItem(item.id)}
                       className="p-1 text-brand-300 hover:text-money-neg"
                     >
                       <Trash2 size={14} />

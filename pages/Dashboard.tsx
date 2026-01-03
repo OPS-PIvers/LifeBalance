@@ -186,10 +186,8 @@ const Dashboard: React.FC = () => {
                               </button>
                               <button
                                 onClick={async () => {
-                                  if (confirm('Delete this calendar item permanently?')) {
-                                    // If this is a recurring instance, delete the entire series
-                                    const idToDelete = item.id.includes('-202') ? item.id.split('-202')[0] : item.id;
-                                    await deleteCalendarItem(idToDelete);
+                                  if (confirm('Delete this calendar item?')) {
+                                    await deleteCalendarItem(item.id);
                                     setExpandedId(null);
                                   }
                                 }}

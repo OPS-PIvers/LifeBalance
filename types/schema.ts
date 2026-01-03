@@ -74,6 +74,7 @@ export interface CalendarItem {
   isRecurring?: boolean;
   frequency?: 'weekly' | 'bi-weekly' | 'monthly';
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
+  isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';

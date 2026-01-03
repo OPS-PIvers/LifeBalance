@@ -5,6 +5,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { startOfToday, endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
+import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
 
 interface SafeToSpendModalProps {
@@ -54,7 +55,10 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
       rangeLabel = `Until end of month (${format(rangeEndDate, 'MMM d')})`;
     }
 
-    unpaidBillsItems = calendarItems.filter(item => {
+    // Expand recurring items to show all instances
+    const expandedItems = expandCalendarItems(calendarItems, paycheckA, rangeEndDate);
+
+    unpaidBillsItems = expandedItems.filter(item => {
       const itemDate = parseISO(item.date);
       const isCoveredByBucket = buckets.some(b =>
         item.title.toLowerCase().includes(b.name.toLowerCase()) ||

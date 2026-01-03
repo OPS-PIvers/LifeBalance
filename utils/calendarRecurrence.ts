@@ -81,13 +81,16 @@ export function expandCalendarItems(
 ): CalendarItem[] {
   const allInstances: CalendarItem[] = [];
 
-  // Separate recurring templates from paid instances
+  // Separate recurring templates from paid/deleted instances
   const recurringTemplates = items.filter(item => item.isRecurring && !item.parentRecurringId);
   const paidInstances = items.filter(item => item.isPaid && item.parentRecurringId);
+  const deletedInstances = items.filter(item => item.isDeleted && item.parentRecurringId);
   const nonRecurringItems = items.filter(item => !item.isRecurring && !item.parentRecurringId);
 
-  // Build a set of paid dates for each recurring template
+  // Build sets of paid and deleted dates for each recurring template
   const paidDatesMap = new Map<string, Set<string>>();
+  const deletedDatesMap = new Map<string, Set<string>>();
+
   for (const paidInstance of paidInstances) {
     if (!paidDatesMap.has(paidInstance.parentRecurringId!)) {
       paidDatesMap.set(paidInstance.parentRecurringId!, new Set());
@@ -95,17 +98,27 @@ export function expandCalendarItems(
     paidDatesMap.get(paidInstance.parentRecurringId!)!.add(paidInstance.date);
   }
 
-  // Generate recurring instances, excluding paid dates
+  for (const deletedInstance of deletedInstances) {
+    if (!deletedDatesMap.has(deletedInstance.parentRecurringId!)) {
+      deletedDatesMap.set(deletedInstance.parentRecurringId!, new Set());
+    }
+    deletedDatesMap.get(deletedInstance.parentRecurringId!)!.add(deletedInstance.date);
+  }
+
+  // Generate recurring instances, excluding paid and deleted dates
   for (const template of recurringTemplates) {
     const instances = generateRecurringInstances(template, rangeStart, rangeEnd);
     const paidDates = paidDatesMap.get(template.id) || new Set();
+    const deletedDates = deletedDatesMap.get(template.id) || new Set();
 
-    // Filter out instances that have been paid
-    const unpaidInstances = instances.filter(instance => !paidDates.has(instance.date));
-    allInstances.push(...unpaidInstances);
+    // Filter out instances that have been paid or deleted
+    const activeInstances = instances.filter(
+      instance => !paidDates.has(instance.date) && !deletedDates.has(instance.date)
+    );
+    allInstances.push(...activeInstances);
   }
 
-  // Add non-recurring items and paid instances (they should show on calendar)
+  // Add non-recurring items and paid instances (deleted instances should not show)
   allInstances.push(...nonRecurringItems, ...paidInstances);
 
   return allInstances;
