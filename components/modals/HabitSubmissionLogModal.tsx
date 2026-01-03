@@ -193,7 +193,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     No submissions yet. Click "Add Submission" to get started.
                   </div>
                 ) : (
-                  Object.entries(groupedSubmissions).map(([date, subs]) => (
+                  (Object.entries(groupedSubmissions) as [string, HabitSubmission[]][]).map(([date, subs]) => (
                     <div key={date} className="border border-brand-100 rounded-xl overflow-hidden">
                       <div className="bg-brand-50 px-3 py-2 flex items-center gap-2">
                         <Calendar size={14} className="text-brand-400" />
