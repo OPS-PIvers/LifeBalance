@@ -81,7 +81,10 @@ export const calculateSafeToSpend = (
   }
 
   // 3. Calculate unpaid bills in the range (AFTER paycheck A, up to and including range end)
-  const unpaidBills = calendarItems
+  // Expand recurring items to ensure all instances in the period are counted
+  const expandedItems = expandCalendarItems(calendarItems, paycheckA, rangeEndDate);
+
+  const unpaidBills = expandedItems
     .filter(item => {
       const itemDate = parseISO(item.date);
 
