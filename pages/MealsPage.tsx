@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import PantryTab from '@/components/meals/PantryTab';
 import MealPlanTab from '@/components/meals/MealPlanTab';
 import ShoppingListTab from '@/components/meals/ShoppingListTab';

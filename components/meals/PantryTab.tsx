@@ -87,14 +87,10 @@ const PantryTab: React.FC = () => {
       const base64 = await fileToBase64(file);
       const items = await analyzePantryImage(base64);
 
-      // Add all found items
-      let addedCount = 0;
-      for (const item of items) {
-        await addPantryItem(item);
-        addedCount++;
-      }
+      // Add all found items concurrently
+      await Promise.all(items.map(item => addPantryItem(item)));
 
-      toast.success(`Identified and added ${addedCount} items!`);
+      toast.success(`Identified and added ${items.length} items!`);
       setIsAddModalOpen(false); // Close modal if open, though usually this is a separate action
     } catch (error) {
       toast.error("Failed to analyze image");

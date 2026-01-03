@@ -1958,8 +1958,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updatePantryItem = async (item: PantryItem) => {
     if (!householdId) return;
     try {
-      await updateDoc(doc(db, `households/${householdId}/pantry`, item.id), {
-        ...item,
+      const { id, ...itemData } = item;
+      await updateDoc(doc(db, `households/${householdId}/pantry`, id), {
+        ...itemData,
         updatedAt: serverTimestamp(),
       });
       toast.success('Pantry item updated');
@@ -2002,8 +2003,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateMeal = async (meal: Meal) => {
     if (!householdId) return;
     try {
-      await updateDoc(doc(db, `households/${householdId}/meals`, meal.id), {
-        ...meal,
+      const { id, ...mealData } = meal;
+      await updateDoc(doc(db, `households/${householdId}/meals`, id), {
+        ...mealData,
         updatedAt: serverTimestamp(),
       });
       toast.success('Meal updated');
@@ -2077,36 +2079,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isPurchased: true,
         });
 
-        // Add to pantry
-        // NOTE: We don't remove from shopping list immediately to allow undo,
-        // or we can let the user manually remove it.
-        // User requirement: "anything I mark as purchased should get added to the pantry list."
-        // AND "foods on this list should have a “purchased” or “remove from list” buttons"
-        // AND "purchased... moves the item to the Pantry list" -> implying removal from shopping list?
-        // Usually, shopping lists hide purchased items or cross them out.
-        // I will add to pantry but keep it in shopping list as "purchased" (checked) state.
-        // User can then "Clear Purchased" or manually delete.
-        // Or I can delete it immediately.
-        // Let's interpret "moves the item" as "Add to Pantry AND Remove from Shopping List" or "Mark Purchased".
-        // The user said: "anything I mark as purchased should get added to the pantry list."
-        // They also said: "foods on this list should have a “purchased” or “remove from list” buttons"
-        // I'll stick to: Mark as purchased -> Add to Pantry.
-        // I won't auto-delete from shopping list yet, just mark as purchased.
-        // Actually, if I add to pantry every time they toggle, it might duplicate if they toggle back and forth.
-        // Better to have a distinct "Finish Shopping" or "Move Purchased to Pantry" action, or handle it carefully.
-        // For now: Toggle purchased just updates state.
-        // BUT user said: "anything I mark as purchased should get added to the pantry list."
-        // I will implement a separate "Move to Pantry" logic or just add it when marked purchased.
-        // To avoid duplicates, I'll check if it was already added or just add it blindly (pantry can have duplicates).
-        // Let's add it to pantry when marked purchased.
+        // Add to pantry if not already exists (basic check by name/quantity)
+        // This prevents massive duplicates if user toggles aggressively
+        const alreadyInPantry = pantry.some(
+            p => p.name.toLowerCase() === item.name.toLowerCase() &&
+            p.category === item.category &&
+            // Simple logic: if added within last minute? No, difficult.
+            // Just check if an identical item exists. Pantry items usually unique by type.
+            p.quantity === (item.quantity || '1')
+        );
 
-        await addDoc(collection(db, `households/${householdId}/pantry`), {
-            name: item.name,
-            category: item.category,
-            quantity: item.quantity || '1',
-            createdAt: serverTimestamp(),
-        });
-        toast.success('Added to Pantry');
+        if (!alreadyInPantry) {
+            await addDoc(collection(db, `households/${householdId}/pantry`), {
+                name: item.name,
+                category: item.category,
+                quantity: item.quantity || '1',
+                createdAt: serverTimestamp(),
+            });
+            toast.success('Added to Pantry');
+        } else {
+            toast('Marked purchased (already in pantry)', { icon: '✅' });
+        }
 
       } else {
         // Unmark (undo)

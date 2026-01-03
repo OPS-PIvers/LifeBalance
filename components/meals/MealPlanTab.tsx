@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Meal, PantryItem } from '@/types/schema';
+import { Meal } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, Calendar as CalendarIcon, ChevronRight, ChevronLeft, Search, ShoppingCart, Loader2 } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
@@ -10,8 +10,6 @@ const MealPlanTab: React.FC = () => {
   const {
     meals,
     addMeal,
-    updateMeal,
-    deleteMeal,
     pantry,
     addShoppingItem,
     shoppingList
@@ -113,13 +111,6 @@ const MealPlanTab: React.FC = () => {
   // Let's assume I will add `mealPlan` and `addMealPlanItem`, `deleteMealPlanItem`.
 
   const { mealPlan, addMealPlanItem, deleteMealPlanItem } = useHousehold();
-
-  // Helper to find meal for a date
-  const getMealForDate = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    if (!mealPlan) return null;
-    return mealPlan.find((item) => item.date === dateStr);
-  };
 
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');

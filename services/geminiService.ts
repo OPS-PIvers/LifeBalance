@@ -295,8 +295,8 @@ export const suggestMeal = async (
   validateApiKey();
 
   try {
-    // Simplify pantry list for token efficiency
-    const pantryList = options.pantryItems.map(p => `${p.name} (${p.quantity})`).join(', ');
+    // Include IDs for pantry items so AI can match them
+    const pantryList = options.pantryItems.map(p => `ID:${p.id} - ${p.name} (${p.quantity})`).join(', ');
     const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
 
     let prompt = `Suggest a meal plan idea based on the following criteria:\n`;
@@ -305,12 +305,12 @@ export const suggestMeal = async (
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
 
-    prompt += `\nAvailable Pantry Items: ${pantryList || "None provided"}\n`;
+    prompt += `\nAvailable Pantry Items (with IDs): ${pantryList || "None provided"}\n`;
 
     prompt += `\nReturn a JSON object with:
     - name: Meal name
     - description: Short appetizing description
-    - ingredients: Array of objects { name, quantity, pantryItemId (if matches a provided pantry item ID, otherwise null) }
+    - ingredients: Array of objects { name, quantity, pantryItemId (if ingredient matches a provided pantry item ID exactly, otherwise null) }
     - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
