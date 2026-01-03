@@ -6,11 +6,8 @@ import {
   collection,
   getDocs,
   doc,
-  setDoc,
-  updateDoc,
   getFirestore,
-  writeBatch,
-  WriteBatch
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
@@ -69,6 +66,7 @@ const MigrateSubmissions: React.FC = () => {
     setIsComplete(false);
 
     const householdId = householdSettings.id;
+    // Local mutable stats for calculation, state updated periodically
     const newStats: MigrationStats = {
       habitsProcessed: 0,
       submissionsCreated: 0,
@@ -92,7 +90,7 @@ const MigrateSubmissions: React.FC = () => {
       };
 
       for (const habit of habits) {
-        setCurrentHabit(habit.title);
+        setCurrentHabit(habit.title || 'Untitled Habit');
 
         // Skip if already has submission tracking or no completed dates
         if (habit.hasSubmissionTracking) {
@@ -162,7 +160,6 @@ const MigrateSubmissions: React.FC = () => {
           operationCount++;
 
           newStats.submissionsCreated++;
-          setStats({ ...newStats });
 
           // Commit if batch is full
           if (operationCount >= MAX_BATCH_SIZE) {
@@ -179,6 +176,9 @@ const MigrateSubmissions: React.FC = () => {
         if (operationCount >= MAX_BATCH_SIZE) {
           await commitBatch();
         }
+
+        // Update stats state after each habit is fully processed to avoid excessive re-renders
+        setStats({ ...newStats });
 
         console.log(`Created ${sortedDates.length} submission(s) for "${habit.title}"`);
       }
