@@ -42,16 +42,22 @@ service cloud.firestore {
         allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
       }
 
+      // Habits subcollection
+      match /habits/{habitId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if isMemberOf(householdId);
+
+        // Habit submissions subcollection
+        match /submissions/{submissionId} {
+          allow read: if isMemberOf(householdId);
+          allow write: if isMemberOf(householdId);
+        }
+      }
+
       // All other subcollections (accounts, buckets, transactions, etc.)
       match /{subcollection}/{document} {
         allow read: if isMemberOf(householdId);
         allow write: if isMemberOf(householdId);
-
-        // Nested subcollections (e.g., habit submissions)
-        match /{nestedCollection}/{nestedDocument} {
-          allow read: if isMemberOf(householdId);
-          allow write: if isMemberOf(householdId);
-        }
       }
     }
 
