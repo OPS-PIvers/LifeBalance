@@ -51,6 +51,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
+  const [transactionDate, setTransactionDate] = useState('');
 
   // Camera Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -65,10 +66,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
   // Initialize Category default when modal opens or buckets change
   useEffect(() => {
-    if (isOpen && !category && dynamicCategories.length > 0) {
-      setCategory(dynamicCategories[0]);
+    if (isOpen) {
+      if (!category && dynamicCategories.length > 0) {
+        setCategory(dynamicCategories[0]);
+      }
+      if (!transactionDate) {
+        setTransactionDate(getLocalDateString());
+      }
     }
-  }, [isOpen, dynamicCategories, category]);
+  }, [isOpen, dynamicCategories, category, transactionDate]);
 
   // Reset state when closing
   const handleClose = () => {
@@ -78,6 +84,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setMerchant('');
     if (dynamicCategories.length > 0) setCategory(dynamicCategories[0]);
     setIsRecurring(false);
+    setTransactionDate('');
     setParsedTransactions([]);
     onClose();
   };
@@ -358,6 +365,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
+    // Validate date is selected and not in future
+    if (!transactionDate) {
+      toast.error("Please select a date");
+      return;
+    }
+
+    const selectedDate = new Date(transactionDate);
+    const today = new Date(getLocalDateString());
+    if (selectedDate > today) {
+      toast.error("Date cannot be in the future");
+      return;
+    }
+
     // Validate category is selected
     if (!category || !dynamicCategories.includes(category)) {
       toast.error("Please select a valid category");
@@ -369,7 +389,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       amount: parsedAmount,
       merchant,
       category,
-      date: getLocalDateString(),
+      date: transactionDate,
       status: 'verified', // Immediately reflected in budget
       isRecurring,
       source: 'manual',
@@ -676,6 +696,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   value={merchant}
                   onChange={(e) => setMerchant(e.target.value)}
                   placeholder="e.g. Starbucks"
+                  className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
+                />
+              </div>
+
+              {/* Date Input */}
+              <div>
+                <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Date</label>
+                <input
+                  type="date"
+                  value={transactionDate}
+                  onChange={(e) => setTransactionDate(e.target.value)}
+                  max={getLocalDateString()}
                   className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
                 />
               </div>

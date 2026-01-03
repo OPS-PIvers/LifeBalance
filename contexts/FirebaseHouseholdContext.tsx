@@ -11,6 +11,9 @@ import {
   Timestamp,
   writeBatch,
   getDoc,
+  getDocs,
+  where,
+  orderBy,
   increment,
   runTransaction,
   setDoc,
@@ -25,6 +28,7 @@ import {
   Transaction,
   CalendarItem,
   Habit,
+  HabitSubmission,
   Challenge,
   RewardItem,
   HouseholdMember,
@@ -35,7 +39,7 @@ import {
   FreezeBankHistoryEntry,
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale } from '@/utils/habitLogic';
+import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -107,6 +111,12 @@ interface HouseholdContextType {
   deleteHabit: (id: string) => Promise<void>;
   toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
+
+  // Habit Submission Actions
+  addHabitSubmission: (habitId: string, count: number, timestamp?: string) => Promise<void>;
+  updateHabitSubmission: (habitId: string, submissionId: string, updates: Partial<HabitSubmission>) => Promise<void>;
+  deleteHabitSubmission: (habitId: string, submissionId: string) => Promise<void>;
+  getHabitSubmissions: (habitId: string, startDate?: string, endDate?: string) => Promise<HabitSubmission[]>;
 
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
@@ -1259,6 +1269,266 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast('Reset', { icon: '↺' });
   };
 
+  // --- ACTIONS: HABIT SUBMISSIONS ---
+
+  const addHabitSubmission = async (habitId: string, count: number, timestamp?: string) => {
+    if (!householdId || !currentUser) return;
+
+    const habit = habits.find(h => h.id === habitId);
+    if (!habit) {
+      toast.error('Habit not found');
+      return;
+    }
+
+    // Use provided timestamp or current time
+    const submissionTimestamp = timestamp || new Date().toISOString();
+    const submissionDate = format(parseISO(submissionTimestamp), 'yyyy-MM-dd');
+
+    // Calculate points based on current state
+    const currentStreak = calculateStreak(habit.completedDates);
+    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+
+    let pointsEarned = 0;
+    if (habit.scoringType === 'incremental') {
+      pointsEarned = count * Math.floor(habit.basePoints * multiplier);
+    } else {
+      // Threshold: check if this submission hits target
+      const newCount = habit.count + count;
+      if (newCount >= habit.targetCount && habit.count < habit.targetCount) {
+        pointsEarned = Math.floor(habit.basePoints * multiplier);
+      }
+    }
+
+    try {
+      // Create submission document
+      const submission: Omit<HabitSubmission, 'id'> = {
+        habitId,
+        habitTitle: habit.title,
+        timestamp: submissionTimestamp,
+        date: submissionDate,
+        count,
+        pointsEarned,
+        streakDaysAtTime: currentStreak,
+        multiplierApplied: multiplier,
+        createdBy: currentUser.uid,
+        createdAt: new Date().toISOString(),
+      };
+
+      await addDoc(collection(db, `households/${householdId}/habits/${habitId}/submissions`), submission);
+
+      // Update habit's completedDates and count (maintain backwards compatibility)
+      const updatedCompletedDates = [...habit.completedDates];
+      if (!updatedCompletedDates.includes(submissionDate)) {
+        updatedCompletedDates.push(submissionDate);
+        updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+      }
+
+      await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+        count: habit.count + count,
+        totalCount: habit.totalCount + count,
+        completedDates: updatedCompletedDates,
+        streakDays: calculateStreak(updatedCompletedDates),
+        hasSubmissionTracking: true,
+        lastUpdated: serverTimestamp(),
+      });
+
+      // Update household points
+      if (pointsEarned !== 0) {
+        await updateDoc(doc(db, `households/${householdId}`), {
+          'points.daily': increment(pointsEarned),
+          'points.weekly': increment(pointsEarned),
+          'points.total': increment(pointsEarned),
+        });
+      }
+
+      toast.success(`Logged +${count} submission(s)`);
+    } catch (error) {
+      console.error('[addHabitSubmission] Failed:', error);
+      toast.error('Failed to add submission');
+    }
+  };
+
+  const getHabitSubmissions = async (
+    habitId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<HabitSubmission[]> => {
+    if (!householdId) return [];
+
+    try {
+      let submissionsQuery = query(
+        collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+        orderBy('timestamp', 'desc')
+      );
+
+      // Add date range filters if provided
+      if (startDate) {
+        submissionsQuery = query(submissionsQuery, where('date', '>=', startDate));
+      }
+      if (endDate) {
+        submissionsQuery = query(submissionsQuery, where('date', '<=', endDate));
+      }
+
+      const snapshot = await getDocs(submissionsQuery);
+      return snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+      } as HabitSubmission));
+    } catch (error) {
+      console.error('[getHabitSubmissions] Failed:', error);
+      return [];
+    }
+  };
+
+  const deleteHabitSubmission = async (habitId: string, submissionId: string) => {
+    if (!householdId) return;
+
+    try {
+      // Step 1: Get submission to calculate point reversal
+      const submissionRef = doc(db, `households/${householdId}/habits/${habitId}/submissions`, submissionId);
+      const submissionSnap = await getDoc(submissionRef);
+
+      if (!submissionSnap.exists()) {
+        toast.error('Submission not found');
+        return;
+      }
+
+      const submission = submissionSnap.data() as HabitSubmission;
+      const habit = habits.find(h => h.id === habitId);
+      if (!habit) return;
+
+      // Step 2: Check if this is the last submission for this date
+      const submissionsQuery = query(
+        collection(db, `households/${householdId}/habits/${habitId}/submissions`),
+        where('date', '==', submission.date)
+      );
+      const submissionsSnap = await getDocs(submissionsQuery);
+      const isLastForDate = submissionsSnap.size === 1;
+
+      // Step 3: Update habit's completedDates if removing last submission for date
+      const updates: any = {
+        count: Math.max(0, habit.count - submission.count),
+        totalCount: Math.max(0, habit.totalCount - submission.count),
+        lastUpdated: serverTimestamp(),
+      };
+
+      if (isLastForDate) {
+        const updatedCompletedDates = habit.completedDates.filter(d => d !== submission.date);
+        updates.completedDates = updatedCompletedDates;
+        updates.streakDays = calculateStreak(updatedCompletedDates);
+      }
+
+      await updateDoc(doc(db, `households/${householdId}/habits`, habitId), updates);
+
+      // Step 4: Delete submission document
+      await deleteDoc(submissionRef);
+
+      // Step 5: Reverse points
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+      const pointUpdates: any = {
+        'points.total': increment(-submission.pointsEarned),
+      };
+
+      if (submission.date === today) {
+        pointUpdates['points.daily'] = increment(-submission.pointsEarned);
+      }
+
+      if (submission.date >= weekStart && submission.date <= today) {
+        pointUpdates['points.weekly'] = increment(-submission.pointsEarned);
+      }
+
+      await updateDoc(doc(db, `households/${householdId}`), pointUpdates);
+
+      toast.success('Submission deleted');
+    } catch (error) {
+      console.error('[deleteHabitSubmission] Failed:', error);
+      toast.error('Failed to delete submission');
+    }
+  };
+
+  const updateHabitSubmission = async (
+    habitId: string,
+    submissionId: string,
+    updates: Partial<HabitSubmission>
+  ) => {
+    if (!householdId) return;
+
+    try {
+      // Step 1: Get original submission to calculate point difference
+      const submissionRef = doc(db, `households/${householdId}/habits/${habitId}/submissions`, submissionId);
+      const submissionSnap = await getDoc(submissionRef);
+
+      if (!submissionSnap.exists()) {
+        toast.error('Submission not found');
+        return;
+      }
+
+      const originalSubmission = submissionSnap.data() as HabitSubmission;
+      const habit = habits.find(h => h.id === habitId);
+      if (!habit) return;
+
+      // Step 2: Calculate new points if count changed
+      let pointsDelta = 0;
+      if (updates.count !== undefined && updates.count !== originalSubmission.count) {
+        const countDelta = updates.count - originalSubmission.count;
+
+        if (habit.scoringType === 'incremental') {
+          pointsDelta = countDelta * Math.floor(habit.basePoints * originalSubmission.multiplierApplied);
+        } else {
+          // For threshold, disallow count edits (too complex to recalculate)
+          toast.error('Cannot edit count for threshold habits. Delete and re-add instead.');
+          return;
+        }
+      }
+
+      // Step 3: Update submission document
+      await updateDoc(submissionRef, {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Step 4: Update habit aggregate counts
+      if (updates.count !== undefined) {
+        const countDelta = updates.count - originalSubmission.count;
+        await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+          count: habit.count + countDelta,
+          totalCount: habit.totalCount + countDelta,
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      // Step 5: Update household points
+      if (pointsDelta !== 0) {
+        const submissionDate = updates.date || originalSubmission.date;
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+        const pointUpdates: any = {
+          'points.total': increment(pointsDelta),
+        };
+
+        // Only update daily if edited submission is from today
+        if (submissionDate === today) {
+          pointUpdates['points.daily'] = increment(pointsDelta);
+        }
+
+        // Only update weekly if edited submission is from this week
+        if (submissionDate >= weekStart && submissionDate <= today) {
+          pointUpdates['points.weekly'] = increment(pointsDelta);
+        }
+
+        await updateDoc(doc(db, `households/${householdId}`), pointUpdates);
+      }
+
+      toast.success('Submission updated');
+    } catch (error) {
+      console.error('[updateHabitSubmission] Failed:', error);
+      toast.error('Failed to update submission');
+    }
+  };
+
   // --- ACTIONS: CHALLENGES & REWARDS ---
 
   const updateChallenge = async (challenge: Challenge) => {
@@ -1773,6 +2043,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         deleteHabit,
         toggleHabit,
         resetHabit,
+        addHabitSubmission,
+        updateHabitSubmission,
+        deleteHabitSubmission,
+        getHabitSubmissions,
         updateChallenge,
         markChallengeComplete,
         redeemReward,

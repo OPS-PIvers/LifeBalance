@@ -111,6 +111,24 @@ export interface Habit {
   // Legacy/Optional
   weatherSensitive: boolean;
   telegramAlias?: string;
+
+  // Submission Tracking
+  hasSubmissionTracking?: boolean; // true = uses submissions subcollection
+}
+
+export interface HabitSubmission {
+  id: string;
+  habitId: string;
+  habitTitle: string; // Denormalized for display
+  timestamp: string; // ISO 8601 datetime
+  date: string; // YYYY-MM-DD for grouping
+  count: number; // Number of completions in this submission
+  pointsEarned: number; // Points earned at time of submission
+  streakDaysAtTime: number; // Snapshot of streak when submitted
+  multiplierApplied: number; // 1.0, 1.5, or 2.0
+  createdBy: string; // uid of member who submitted
+  createdAt: string; // ISO timestamp
+  updatedAt?: string; // ISO timestamp if edited
 }
 
 export interface RewardItem {

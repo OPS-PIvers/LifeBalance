@@ -2,10 +2,11 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
+import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -19,6 +20,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
   const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
@@ -173,21 +175,31 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               }} 
             />
             <div className="absolute top-10 right-2 z-20 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsEditModalOpen(true); 
-                  setIsMenuOpen(false); 
+                  setIsEditModalOpen(true);
+                  setIsMenuOpen(false);
                 }}
                 className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
               >
                 <Edit2 size={14} /> Edit
               </button>
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteHabit(habit.id); 
-                  setIsMenuOpen(false); 
+                  setIsLogModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+              >
+                <Calendar size={14} /> View Log
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteHabit(habit.id);
+                  setIsMenuOpen(false);
                 }}
                 className="w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2"
               >
@@ -198,10 +210,15 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         )}
       </div>
 
-      <HabitFormModal 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)} 
-        editingHabit={habit} 
+      <HabitFormModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        editingHabit={habit}
+      />
+      <HabitSubmissionLogModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
+        habit={habit}
       />
     </>
   );
