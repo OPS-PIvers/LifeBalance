@@ -3,10 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
-  collection,
-  getDocs,
   doc,
-  getFirestore,
   writeBatch
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -28,7 +25,8 @@ function sanitizeSubmission(sub: any): any {
 
     // Convert NaN numbers to 0
     if (typeof sanitized[key] === 'number' && isNaN(sanitized[key])) {
-      console.warn(`[Migration] Found NaN for key ${key} in submission ${sub.habitTitle}, defaulting to 0`);
+      const habitTitle = sub.habitTitle || 'unknown habit';
+      console.warn(`[Migration] Found NaN for key ${key} in submission for "${habitTitle}", defaulting to 0`);
       sanitized[key] = 0;
     }
   });
