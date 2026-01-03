@@ -11,6 +11,9 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
     // 1. Handle missing date
     if (!habit.lastUpdated) return true;
 
+    // Get current time for comparison
+    const now = new Date();
+
     let lastUpdate: Date | null = null;
     const rawLastUpdated = habit.lastUpdated as any;
 

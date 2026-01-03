@@ -321,7 +321,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const checkHabitResets = useCallback(async () => {
     if (!householdId || habitResetData.length === 0) return;
 
-    const now = new Date();
     const habitsToReset: string[] = [];
 
     habitResetData.forEach(habit => {
@@ -339,10 +338,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Batch update all habits that need reset with error handling
     for (const habitId of habitsToReset) {
       try {
-        // Use local date string for consistency with points reset (yyyy-MM-dd format)
+        // Use serverTimestamp() for consistency with the rest of the codebase
         await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
           count: 0,
-          lastUpdated: format(new Date(), 'yyyy-MM-dd'),
+          lastUpdated: serverTimestamp(),
         });
       } catch (error) {
         console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
