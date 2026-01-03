@@ -35,7 +35,7 @@ import {
   FreezeBankHistoryEntry,
 } from '@/types/schema';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange } from '@/utils/habitLogic';
+import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -321,34 +321,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const checkHabitResets = useCallback(async () => {
     if (!householdId || habitResetData.length === 0) return;
 
-    const now = new Date();
     const habitsToReset: string[] = [];
 
     habitResetData.forEach(habit => {
-      const lastUpdate = parseISO(habit.lastUpdated);
-      let shouldReset = false;
-
-      if (habit.period === 'daily') {
-        // Reset at midnight each night (user's local time)
-        shouldReset = !isSameDay(now, lastUpdate);
-      } else if (habit.period === 'weekly') {
-        // Reset Sunday night into Monday at midnight
-        // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
-        shouldReset = !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
-      }
-
-      if (shouldReset) {
-        habitsToReset.push(habit.id);
+      try {
+        if (isHabitStale(habit)) {
+          habitsToReset.push(habit.id);
+        }
+      } catch (error) {
+        console.error(`[checkHabitResets] Error checking habit ${habit.id}:`, error);
+        // Do NOT add to reset list if check failed with an exception.
+        // This prevents infinite reset loops for permanently corrupted habits.
       }
     });
 
     // Batch update all habits that need reset with error handling
     for (const habitId of habitsToReset) {
       try {
-        // Use local date string for consistency with points reset (yyyy-MM-dd format)
+        // Use serverTimestamp() for consistency with the rest of the codebase
         await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
           count: 0,
-          lastUpdated: format(new Date(), 'yyyy-MM-dd'),
+          lastUpdated: serverTimestamp(),
         });
       } catch (error) {
         console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
@@ -1087,8 +1080,49 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const habit = habits.find(h => h.id === id);
     if (!habit) return;
 
+    // LAZY RESET CHECK
+    // If habit is stale (last updated yesterday/last week), reset it first in memory
+    // This prevents negative points if user toggles 'down' on a stale habit
+    // and ensures 'up' starts from 0 for the new day
+    const isStale = isHabitStale(habit);
+    let effectiveHabit = habit;
+
+    // Use Firestore's serverTimestamp() in all writes here to ensure a consistent server-side
+    // notion of "now" across this operation and to stay aligned with the rest of the codebase.
+    // The isHabitStale helper handles Firestore Timestamp objects correctly.
+
+    if (isStale) {
+      // If toggling down on a stale habit, just perform a reset (0 points)
+      if (direction === 'down') {
+        // Intentionally only resetting `count` here:
+        // - We want to prevent negative points when the previous period's progress is stale.
+        // - We do NOT call `resetHabit` or clear `completedDates` / `streakDays` because the user
+        //   has not taken a new action that should break their historical streak.
+        // - This mirrors `checkHabitResets`, which also only resets `count` on a new day/week.
+        // Full resets that affect streak history should continue to go through `resetHabit`.
+        await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+          count: 0,
+          lastUpdated: serverTimestamp(),
+        });
+
+        // No points change for stale reset; this syncs the habit to today without undoing past points.
+        toast("Habit reset to 0 for today. Previous points preserved.", { icon: '📅' });
+        return;
+      }
+
+      // If toggling up, proceed as if count was 0.
+      // We skip the explicit reset write here to avoid a double-write race condition.
+      // The final write below will handle the update atomically from the user's perspective.
+      effectiveHabit = {
+        ...habit,
+        count: 0,
+        // Use current time string for local logic consistency
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+
     // Use extracted business logic
-    const result = processToggleHabit(habit, direction, currentUser);
+    const result = processToggleHabit(effectiveHabit, direction, currentUser);
     if (!result) return;
 
     // Update habit in Firestore
@@ -1133,14 +1167,34 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || !householdSettings) return;
 
     const habit = habits.find(h => h.id === id);
-    if (!habit || habit.count === 0) return;
+    if (!habit) return;
 
-    const pointsToRemove = calculateResetPoints(habit);
+    // Check if habit is stale (from yesterday)
+    const isStale = isHabitStale(habit);
+
+    // Optimization: If habit count is 0 and it's not stale, there's nothing to reset.
+    if (habit.count === 0 && !isStale) return;
+
+    // If it's stale, we shouldn't subtract points because we didn't earn them today
+    const pointsToRemove = isStale ? 0 : calculateResetPoints(habit);
+
+    // If it's stale and already 0, we just need to update the timestamp to prevent further "stale" checks today
+    if (isStale && habit.count === 0) {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        lastUpdated: serverTimestamp(),
+      });
+      toast('Reset', { icon: '↺' });
+      return; // No point deduction or streak recalculation needed for 0 -> 0 reset
+    }
+
+    // Filter out today's date if present (handling both stale and non-stale cases)
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const newCompletedDates = habit.completedDates.filter(d => d !== today);
 
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
-      completedDates: habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0]),
-      streakDays: calculateStreak(habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0])),
+      completedDates: newCompletedDates,
+      streakDays: calculateStreak(newCompletedDates),
       lastUpdated: serverTimestamp(),
     });
 

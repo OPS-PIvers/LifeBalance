@@ -1,5 +1,57 @@
 import { Habit, HouseholdMember } from '@/types/schema';
-import { format, subDays, parseISO } from 'date-fns';
+import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from 'date-fns';
+
+/**
+ * Check if a habit is stale (last updated in a previous period)
+ * @param habit - The habit to check (must contain id, period, and lastUpdated)
+ * @returns true if the habit needs to be reset, false otherwise
+ */
+export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>): boolean => {
+  try {
+    // 1. Handle missing date
+    if (!habit.lastUpdated) return true;
+
+    // Get current time for comparison
+    const now = new Date();
+
+    let lastUpdate: Date | null = null;
+    const rawLastUpdated = habit.lastUpdated as any;
+
+    // 2. Normalize date from various possible inputs (string, Date, Firestore Timestamp)
+    if (rawLastUpdated instanceof Date) {
+      lastUpdate = rawLastUpdated;
+    } else if (typeof rawLastUpdated === 'string') {
+      lastUpdate = parseISO(rawLastUpdated);
+    } else if (rawLastUpdated && typeof rawLastUpdated.toDate === 'function') {
+      // Firestore Timestamp
+      lastUpdate = rawLastUpdated.toDate();
+    } else if (rawLastUpdated && typeof rawLastUpdated.seconds === 'number') {
+      // Plain object representation of Timestamp
+      lastUpdate = new Date(rawLastUpdated.seconds * 1000);
+    }
+
+    // 3. Validate parsed date
+    if (!lastUpdate || !isValid(lastUpdate)) {
+      console.warn(`[isHabitStale] Invalid date format for habit ${habit.id}:`, habit.lastUpdated);
+      return true;
+    }
+
+    // 4. Check period logic
+    if (habit.period === 'daily') {
+      return !isSameDay(now, lastUpdate);
+    } else if (habit.period === 'weekly') {
+      // weekStartsOn: 1 means Monday is day 0, Sunday is day 6
+      // In date-fns v2+, weekStartsOn: 1 makes Monday the first day of the week.
+      return !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
+    } else {
+      console.warn(`[isHabitStale] Unhandled habit period type: ${habit.period} for habit ${habit.id}`);
+      return true; // Treat unknown periods as stale for safety
+    }
+  } catch (error) {
+    console.error(`[isHabitStale] Error checking habit ${habit.id}:`, error);
+    return true; // Fail safe
+  }
+};
 
 /**
  * Calculate the current streak for a habit based on completion dates
