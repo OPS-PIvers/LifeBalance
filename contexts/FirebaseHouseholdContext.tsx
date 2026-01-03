@@ -1171,8 +1171,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         ...challenge,
         currentValue,
         // Support both old and new schema fields
-        targetValue: challenge.targetValue || challenge.targetTotalCount,
-        targetType: challenge.targetType || 'count',
+        targetValue: challenge.targetValue ?? challenge.targetTotalCount,
+        targetType: challenge.targetType ?? 'count',
       }).filter(([, value]) => value !== undefined)
     );
 
