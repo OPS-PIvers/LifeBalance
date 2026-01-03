@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
-import { Habit, HabitSubmission } from '@/types/schema';
+import { HabitSubmission } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 interface MigrationStats {
@@ -29,14 +29,10 @@ function sanitizeValue(value: any, habitTitle: string): any {
     );
     return 0;
   }
-  // Recursively sanitize arrays
+  // Recursively sanitize arrays (Firestore arrays can't contain undefined, convert to null)
   if (Array.isArray(value)) {
     return value.map((item) => {
       const sanitizedItem = sanitizeValue(item, habitTitle);
-      // Preserve array length; replace undefined with null if needed,
-      // but for Firestore arrays, undefined is typically not allowed.
-      // We'll filter out undefineds to be safe or map to null?
-      // Firestore arrays can't contain undefined. They can contain null.
       return sanitizedItem === undefined ? null : sanitizedItem;
     });
   }
@@ -119,21 +115,22 @@ const MigrateSubmissions: React.FC = () => {
         setCurrentHabit(habit.title || 'Untitled Habit');
 
         // Skip if already has submission tracking or no completed dates
+        const habitTitle = habit.title || 'Untitled Habit';
         if (habit.hasSubmissionTracking) {
-          console.log(`Skipping "${habit.title}" - already has submission tracking`);
+          console.log(`Skipping "${habitTitle}" - already has submission tracking`);
           newStats.habitsSkipped++;
           setStats({ ...newStats });
           continue;
         }
 
         if (!habit.completedDates || habit.completedDates.length === 0) {
-          console.log(`Skipping "${habit.title}" - no completed dates`);
+          console.log(`Skipping "${habitTitle}" - no completed dates`);
           newStats.habitsSkipped++;
           setStats({ ...newStats });
           continue;
         }
 
-        console.log(`Migrating "${habit.title}" (${habit.completedDates.length} dates)`);
+        console.log(`Migrating "${habitTitle}" (${habit.completedDates.length} dates)`);
         newStats.habitsProcessed++;
 
         // Sort dates chronologically (oldest first)
@@ -167,7 +164,7 @@ const MigrateSubmissions: React.FC = () => {
 
           const submissionRaw: Omit<HabitSubmission, 'id'> = {
             habitId: habit.id,
-            habitTitle: habit.title || 'Untitled Habit',
+            habitTitle,
             timestamp,
             date,
             count: 1, // Assume 1 completion
@@ -207,7 +204,7 @@ const MigrateSubmissions: React.FC = () => {
         // Update stats state after each habit is fully processed to avoid excessive re-renders
         setStats({ ...newStats });
 
-        console.log(`Created ${sortedDates.length} submission(s) for "${habit.title}"`);
+        console.log(`Created ${sortedDates.length} submission(s) for "${habitTitle}"`);
       }
 
       // Commit any remaining operations
