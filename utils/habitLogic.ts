@@ -46,8 +46,8 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
     if (habit.period === 'daily') {
       return !isSameDay(now, lastUpdate);
     } else if (habit.period === 'weekly') {
-      // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
-      // weekStartsOn is zero-based (0=Sunday, 1=Monday, ...); 1 makes weeks start on Monday
+      // weekStartsOn: 1 means Monday is day 0, Sunday is day 6
+      // In date-fns v2+, weekStartsOn: 1 makes Monday the first day of the week.
       return !isSameWeek(now, lastUpdate, { weekStartsOn: 1 });
     } else {
       console.warn(`[isHabitStale] Unhandled habit period type: ${habit.period} for habit ${habit.id}`);

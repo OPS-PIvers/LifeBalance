@@ -1089,6 +1089,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     let effectiveHabit = habit;
 
     // Define consistent timestamp for all writes in this operation
+    // Use client-local time YYYY-MM-DD for consistency with daily/weekly periods.
+    // Note: UTC might be safer for cross-timezone synchronization, but habits are typically local-day based.
+    // We stick to the existing pattern of local date formatting.
     const nowISO = format(new Date(), 'yyyy-MM-dd');
 
     if (isStale) {
@@ -1106,7 +1109,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
 
         // No points change for stale reset; this syncs the habit to today without undoing past points.
-        toast('Habit reset to today. Previously earned points remain unchanged.', { icon: '📅' });
+        toast("Today's habit count has been reset to 0. Past progress and points remain unchanged.", { icon: '📅' });
         return;
       }
 
@@ -1142,6 +1145,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       streakDays: result.updatedHabit.streakDays,
       // Use nowISO instead of serverTimestamp() to match the lazy reset format
       // and ensure consistency with checkHabitResets.
+      // This overwrites any timestamp returned by processToggleHabit to ensure format consistency.
       lastUpdated: nowISO,
     });
 
