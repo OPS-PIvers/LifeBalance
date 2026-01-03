@@ -198,6 +198,54 @@ export interface FreezeBank {
   history: FreezeBankHistoryEntry[]; // Audit trail
 }
 
+export interface PantryItem {
+  id: string;
+  name: string;
+  quantity: string; // "2 boxes", "500g"
+  category: string; // "Produce", "Pantry", etc.
+  purchaseDate?: string; // YYYY-MM-DD
+  expiryDate?: string; // YYYY-MM-DD
+  notes?: string;
+  location?: string; // "Fridge", "Freezer", "Pantry"
+}
+
+export interface MealIngredient {
+  pantryItemId?: string; // If linked to a pantry item
+  name: string; // Fallback or if not in pantry
+  quantity?: string; // Amount needed
+}
+
+export interface Meal {
+  id: string;
+  name: string;
+  description?: string;
+  ingredients: MealIngredient[];
+  tags: string[]; // "cheap", "quick", "favorite", "new"
+  rating?: number;
+  lastCooked?: string; // YYYY-MM-DD
+  createdBy?: string;
+  // This is the "Recipe" or "Meal Definition"
+}
+
+export interface MealPlanItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  mealId?: string; // Link to a saved meal
+  mealName: string; // For one-off meals or snapshot
+  type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  isCooked: boolean;
+}
+
+export interface ShoppingItem {
+  id: string;
+  name: string;
+  category: string; // "Produce", "Dairy", etc.
+  quantity?: string;
+  isPurchased: boolean;
+  notes?: string;
+  addedFromMealId?: string; // Traceability
+}
+
 export interface Household {
   id: string;
   name: string;
@@ -215,4 +263,9 @@ export interface Household {
   };
   location?: { lat: number; lon: number };
   lastPaycheckDate?: string; // YYYY-MM-DD of most recent approved paycheck
+
+  // Optional references for type awareness, though these are subcollections
+  pantry?: PantryItem[];
+  meals?: Meal[];
+  shoppingList?: ShoppingItem[];
 }

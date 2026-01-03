@@ -1,4 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { PantryItem, Meal } from "@/types/schema";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key
@@ -29,6 +30,12 @@ export interface BankTransactionData {
   category: string;
   date: string;
   suggestedHabits?: string[];
+}
+
+export interface GroceryItem {
+  name: string;
+  quantity?: string;
+  category: string;
 }
 
 /**
@@ -73,7 +80,7 @@ export const analyzeReceipt = async (
       : '';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash-exp',
       contents: {
         parts: [
             {
@@ -140,7 +147,7 @@ export const parseBankStatement = async (
       : '';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash-exp',
       contents: {
         parts: [
             {
@@ -195,5 +202,220 @@ Return a JSON array of transactions.`
   } catch (error) {
     console.error("Gemini Bank Statement Parse Error:", error);
     throw new Error("Failed to parse bank statement. Please try again or enter transactions manually.");
+  }
+};
+
+/**
+ * Analyzes a pantry image and extracts food items
+ * @param base64Image - Base64 encoded image data
+ */
+export const analyzePantryImage = async (
+  base64Image: string
+): Promise<Omit<PantryItem, 'id'>[]> => {
+  validateApiKey();
+
+  try {
+    const mimeType = extractMimeType(base64Image);
+    const cleanBase64 = stripDataUrlPrefix(base64Image);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp',
+      contents: {
+        parts: [
+            {
+                inlineData: {
+                    mimeType,
+                    data: cleanBase64
+                }
+            },
+            {
+                text: `Analyze this image of a pantry, fridge, or food items. Identify all distinct food items visible.
+                For each item, provide:
+                - name: A clear, concise name of the item
+                - quantity: estimated amount/quantity visible (e.g., "1 box", "approx 500g", "half full")
+                - category: Logical category (e.g., "Produce", "Dairy", "Grains", "Canned Goods", "Snacks", "Beverages", "Condiments")
+                - expiryDate: (Optional) If an expiry date is clearly visible, provide in YYYY-MM-DD. Otherwise null.
+
+                Return a JSON array of these items.`
+            }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              quantity: { type: Type.STRING },
+              category: { type: Type.STRING },
+              expiryDate: { type: Type.STRING, nullable: true },
+            },
+            required: ["name", "quantity", "category"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No data returned from Gemini");
+
+    return JSON.parse(text) as Omit<PantryItem, 'id'>[];
+
+  } catch (error) {
+    console.error("Gemini Pantry Analysis Error:", error);
+    throw new Error("Failed to analyze pantry image. Please try manual entry.");
+  }
+};
+
+export interface MealSuggestionRequest {
+  usePantry: boolean;
+  cheap: boolean;
+  quick: boolean;
+  new: boolean;
+  pantryItems: PantryItem[];
+  previousMeals: Meal[];
+}
+
+export interface MealSuggestionResponse {
+  name: string;
+  description: string;
+  ingredients: { name: string; quantity: string; pantryItemId?: string }[];
+  tags: string[];
+  reasoning: string;
+}
+
+/**
+ * Suggests a meal based on preferences and pantry
+ */
+export const suggestMeal = async (
+  options: MealSuggestionRequest
+): Promise<MealSuggestionResponse> => {
+  validateApiKey();
+
+  try {
+    // Simplify pantry list for token efficiency
+    const pantryList = options.pantryItems.map(p => `${p.name} (${p.quantity})`).join(', ');
+    const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
+
+    let prompt = `Suggest a meal plan idea based on the following criteria:\n`;
+    if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
+    if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
+    if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
+    if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
+
+    prompt += `\nAvailable Pantry Items: ${pantryList || "None provided"}\n`;
+
+    prompt += `\nReturn a JSON object with:
+    - name: Meal name
+    - description: Short appetizing description
+    - ingredients: Array of objects { name, quantity, pantryItemId (if matches a provided pantry item ID, otherwise null) }
+    - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
+    - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp',
+      contents: {
+        parts: [{ text: prompt }]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            description: { type: Type.STRING },
+            ingredients: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  quantity: { type: Type.STRING },
+                  pantryItemId: { type: Type.STRING, nullable: true }
+                },
+                required: ["name", "quantity"]
+              }
+            },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+            reasoning: { type: Type.STRING }
+          },
+          required: ["name", "description", "ingredients", "tags", "reasoning"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No data returned from Gemini");
+
+    return JSON.parse(text) as MealSuggestionResponse;
+
+  } catch (error) {
+    console.error("Gemini Meal Suggestion Error:", error);
+    throw new Error("Failed to suggest meal.");
+  }
+};
+
+/**
+ * Parses a grocery receipt to extract items
+ * @param base64Image - Base64 encoded image
+ */
+export const parseGroceryReceipt = async (
+  base64Image: string
+): Promise<GroceryItem[]> => {
+  validateApiKey();
+
+  try {
+    const mimeType = extractMimeType(base64Image);
+    const cleanBase64 = stripDataUrlPrefix(base64Image);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp',
+      contents: {
+        parts: [
+            {
+                inlineData: {
+                    mimeType,
+                    data: cleanBase64
+                }
+            },
+            {
+                text: `Analyze this grocery receipt. Extract all purchased food/grocery items.
+                For each item, provide:
+                - name: The item name
+                - quantity: quantity if specified (e.g., "2", "1 lb"), otherwise "1"
+                - category: Logical category (e.g., "Produce", "Dairy", "Meat", "Snacks", "Household", "Pantry")
+
+                Ignore taxes, subtotal, total, and non-product lines.
+                Return a JSON array of items.`
+            }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              quantity: { type: Type.STRING },
+              category: { type: Type.STRING }
+            },
+            required: ["name", "category"]
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No data returned from Gemini");
+
+    return JSON.parse(text) as GroceryItem[];
+
+  } catch (error) {
+    console.error("Gemini Grocery Receipt Parse Error:", error);
+    throw new Error("Failed to parse grocery receipt.");
   }
 };
