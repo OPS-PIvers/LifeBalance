@@ -3,21 +3,46 @@ import { format, subDays, parseISO, isSameDay, isSameWeek } from 'date-fns';
 
 /**
  * Check if a habit is stale (last updated in a previous period)
- * @param habit - The habit to check
+ * @param habit - The habit to check (must contain id, period, and lastUpdated)
  * @returns true if the habit needs to be reset, false otherwise
  */
-export const isHabitStale = (habit: Habit): boolean => {
+export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>): boolean => {
   try {
+    // 1. Handle missing date
     if (!habit.lastUpdated) return true;
 
-    const lastUpdate = parseISO(habit.lastUpdated);
-    const now = new Date();
+    let lastUpdate: Date | null = null;
+    const rawLastUpdated = habit.lastUpdated as any;
 
-    if (isNaN(lastUpdate.getTime())) {
-      console.warn(`[isHabitStale] Invalid date for habit ${habit.id}:`, habit.lastUpdated);
+    // 2. Normalize date from various possible inputs (string, Date, Firestore Timestamp)
+    if (rawLastUpdated instanceof Date) {
+      lastUpdate = rawLastUpdated;
+    } else if (typeof rawLastUpdated === 'string') {
+      lastUpdate = parseISO(rawLastUpdated);
+    } else if (rawLastUpdated && typeof rawLastUpdated.toDate === 'function') {
+      // Firestore Timestamp
+      lastUpdate = rawLastUpdated.toDate();
+    } else if (rawLastUpdated && typeof rawLastUpdated.seconds === 'number') {
+      // Plain object representation of Timestamp
+      lastUpdate = new Date(rawLastUpdated.seconds * 1000);
+    }
+
+    // 3. Validate parsed date
+    if (!lastUpdate || isNaN(lastUpdate.getTime())) {
+      console.warn(`[isHabitStale] Invalid date format for habit ${habit.id}:`, habit.lastUpdated);
       return true;
     }
 
+    // 4. Sanity check: Date shouldn't be in the far future or distant past (e.g., > 10 years)
+    // This helps catch corrupted data
+    const now = new Date();
+    const TEN_YEARS_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+    if (Math.abs(now.getTime() - lastUpdate.getTime()) > TEN_YEARS_MS) {
+       console.warn(`[isHabitStale] Unreasonable date range for habit ${habit.id}:`, lastUpdate);
+       return true;
+    }
+
+    // 5. Check period logic
     if (habit.period === 'daily') {
       return !isSameDay(now, lastUpdate);
     } else if (habit.period === 'weekly') {

@@ -1089,6 +1089,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     let effectiveHabit = habit;
 
     if (isStale) {
+      // Use standard ISO string format for timestamp consistency with isHabitStale
+      const nowISO = format(new Date(), 'yyyy-MM-dd');
+
       // If toggling down on a stale habit, just perform a reset (0 points)
       if (direction === 'down') {
         // Intentionally only resetting `count` here:
@@ -1099,7 +1102,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // Full resets that affect streak history should continue to go through `resetHabit`.
         await updateDoc(doc(db, `households/${householdId}/habits`, id), {
           count: 0,
-          lastUpdated: serverTimestamp(),
+          lastUpdated: nowISO,
         });
         // No points change for stale reset
         return;
@@ -1111,7 +1114,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // This establishes a fresh "day 0" state in the DB.
       await updateDoc(doc(db, `households/${householdId}/habits`, id), {
         count: 0,
-        lastUpdated: serverTimestamp(),
+        lastUpdated: nowISO,
         // We preserve streak/completedDates until the actual toggle logic decides to update them
       });
 
@@ -1119,7 +1122,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       effectiveHabit = {
         ...habit,
         count: 0,
-        // Preserve other fields
+        // Explicitly preserve lastUpdated format for processToggleHabit consistency,
+        // though it calculates new timestamps internally.
+        lastUpdated: nowISO,
       };
     }
 
@@ -1174,19 +1179,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Check if habit is stale (from yesterday)
     const isStale = isHabitStale(habit);
 
-    // If habit count is 0 and it's not stale, there's nothing to reset.
-    // If it IS stale, we proceed to ensure it gets updated to "fresh" status (timestamp update)
-    // even if count is already 0 (though visual impact is nil).
+    // Optimization: If habit count is 0 and it's not stale, there's nothing to reset.
     if (habit.count === 0 && !isStale) return;
 
     // If it's stale, we shouldn't subtract points because we didn't earn them today
     const pointsToRemove = isStale ? 0 : calculateResetPoints(habit);
 
+    const nowISO = format(new Date(), 'yyyy-MM-dd');
+
+    // If it's stale and already 0, we just need to update the timestamp to prevent further "stale" checks today
+    if (isStale && habit.count === 0) {
+      await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+        lastUpdated: nowISO,
+      });
+      return; // No point deduction or streak recalculation needed for 0 -> 0 reset
+    }
+
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
       completedDates: habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0]),
       streakDays: calculateStreak(habit.completedDates.filter(d => d !== new Date().toISOString().split('T')[0])),
-      lastUpdated: serverTimestamp(),
+      lastUpdated: nowISO,
     });
 
     // Use increment() with negative value for atomic server-side calculation
