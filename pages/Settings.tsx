@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { getHouseholdDetails } from '@/services/householdService';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/firebase.config';
 import { useNavigate } from 'react-router-dom';
@@ -18,41 +17,21 @@ import {
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
+import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import { HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
-  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints, addMember, updateMember, removeMember } = useHousehold();
+  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints, addMember, updateMember, removeMember, habits, householdSettings } = useHousehold();
   const navigate = useNavigate();
-
-  const [householdDetails, setHouseholdDetails] = useState<{
-    name: string;
-    inviteCode: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
 
-  useEffect(() => {
-    const fetchHouseholdDetails = async () => {
-      if (!householdId) return;
-
-      try {
-        const details = await getHouseholdDetails(householdId);
-        setHouseholdDetails(details);
-      } catch (error) {
-        console.error('Error fetching household details:', error);
-        toast.error('Failed to load household details');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHouseholdDetails();
-  }, [householdId]);
+  // Points Breakdown Modal
+  const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
 
   const handleSignOut = async () => {
     try {
@@ -65,7 +44,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (!householdSettings) {
     return (
       <div className="min-h-screen bg-brand-50 flex items-center justify-center pb-24">
         <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
@@ -152,45 +131,55 @@ const Settings: React.FC = () => {
         </div>
 
         {/* Household Info */}
-        {householdDetails && (
-          <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-brand-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-brand-800">
-                  {householdDetails.name}
-                </h3>
-                <p className="text-sm text-brand-500">
-                  {members.length} {members.length === 1 ? 'member' : 'members'}
-                </p>
-              </div>
+        <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
+              <Users className="w-6 h-6 text-brand-600" />
             </div>
+            <div>
+              <h3 className="text-lg font-bold text-brand-800">
+                {householdSettings.name}
+              </h3>
+              <p className="text-sm text-brand-500">
+                {members.length} {members.length === 1 ? 'member' : 'members'}
+              </p>
+            </div>
+          </div>
 
-            {/* Invite Code */}
-            <HouseholdInviteCard inviteCode={householdDetails.inviteCode} />
+          {/* Invite Code */}
+          <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
             {/* Shared Household Points */}
             <div className="mt-4 p-4 bg-gradient-to-r from-brand-50 to-habit-blue-50 rounded-xl border border-brand-200">
               <h4 className="text-sm font-bold text-brand-700 mb-3">Shared Household Points</h4>
               <div className="grid grid-cols-3 gap-3">
-                <div className="text-center">
+                <button
+                  onClick={() => setActivePointsView('daily')}
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View daily points breakdown"
+                >
                   <p className="text-xs text-brand-600 mb-1">Daily</p>
                   <p className="text-lg font-bold text-brand-800">{dailyPoints}</p>
-                </div>
-                <div className="text-center">
+                </button>
+                <button
+                  onClick={() => setActivePointsView('weekly')}
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View weekly points breakdown"
+                >
                   <p className="text-xs text-brand-600 mb-1">Weekly</p>
                   <p className="text-lg font-bold text-brand-800">{weeklyPoints}</p>
-                </div>
-                <div className="text-center">
+                </button>
+                <button
+                  onClick={() => setActivePointsView('total')}
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View total points breakdown"
+                >
                   <p className="text-xs text-brand-600 mb-1">Total</p>
                   <p className="text-lg font-bold text-brand-800">{totalPoints.toLocaleString()}</p>
-                </div>
+                </button>
               </div>
             </div>
           </div>
-        )}
 
         {/* Members List */}
         <div className="bg-white rounded-2xl shadow-sm p-6">
@@ -294,6 +283,15 @@ const Settings: React.FC = () => {
         initialMember={selectedMember}
         title={selectedMember ? 'Edit Member' : 'Add Member'}
       />
+
+      {activePointsView && (
+        <PointsBreakdownModal
+          isOpen={true}
+          onClose={() => setActivePointsView(null)}
+          view={activePointsView}
+          habits={habits}
+        />
+      )}
     </div>
   );
 };

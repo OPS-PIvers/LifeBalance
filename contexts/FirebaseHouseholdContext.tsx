@@ -140,7 +140,7 @@ interface HouseholdContextType {
   removeMember: (memberId: string) => Promise<void>;
 }
 
-const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
+export const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
 
 export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, householdId } = useAuth();
