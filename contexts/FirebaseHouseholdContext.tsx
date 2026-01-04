@@ -500,9 +500,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
       const correctWeeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
 
-      // Total should be at least as much as weekly (it's cumulative and never resets)
-      // If total < weekly, something is wrong - fix it
-      const correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
+      // Determine correct total points
+      // Check if all habit completions are within the current week
+      const allDatesThisWeek = habits.every(habit =>
+        habit.completedDates.every(date => date >= weekStartStr)
+      );
+
+      let correctTotalPoints;
+      if (allDatesThisWeek && habits.some(h => h.completedDates.length > 0)) {
+        // If all completions are this week, total should equal weekly
+        correctTotalPoints = correctWeeklyPoints;
+      } else {
+        // Otherwise, total should be at least as much as weekly (cumulative)
+        correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
+      }
 
       // Check if ANY value needs fixing
       const needsUpdate =
