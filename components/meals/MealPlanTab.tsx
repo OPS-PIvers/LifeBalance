@@ -388,7 +388,7 @@ const MealPlanTab: React.FC = () => {
       {/* Add Meal Modal */}
       {isAddModalOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 pb-20 sm:pb-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget) handleCancel();
             }}
@@ -396,7 +396,7 @@ const MealPlanTab: React.FC = () => {
             aria-modal="true"
             aria-labelledby="modal-title"
           >
-              <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+              <div className="bg-white rounded-xl w-full max-w-lg max-h-[calc(100vh-8rem)] sm:max-h-[80vh] flex flex-col overflow-hidden">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                       <h3 id="modal-title" className="text-lg font-bold">
                           {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan Meal for ${targetDate}` : 'Add Meal'}
