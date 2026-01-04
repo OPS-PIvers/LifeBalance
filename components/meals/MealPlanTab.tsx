@@ -57,13 +57,16 @@ const MealPlanTab: React.FC = () => {
     }
   }, [isAddModalOpen]);
 
+  // Optimize: Memoize sorted pantry items once
+  const sortedPantry = useMemo(() => {
+      return [...pantry].sort((a, b) => a.name.localeCompare(b.name));
+  }, [pantry]);
+
   // Memoize filtered pantry items
   const filteredPantryItems = useMemo(() => {
     const searchLower = pantrySearch.toLowerCase().trim();
-    return pantry
-      .filter(item => item.name.toLowerCase().includes(searchLower))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [pantry, pantrySearch]);
+    return sortedPantry.filter(item => item.name.toLowerCase().includes(searchLower));
+  }, [sortedPantry, pantrySearch]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !currentMeal.tags?.includes(tagInput.trim())) {
@@ -395,7 +398,7 @@ const MealPlanTab: React.FC = () => {
               <div className="bg-white rounded-xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                       <h3 id="modal-title" className="text-lg font-bold">
-                          {editingPlanItemId ? 'Edit Meal Plan' : `Plan Meal for ${targetDate}`}
+                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan Meal for ${targetDate}` : 'Add Meal'}
                       </h3>
                       <button
                           onClick={handleCancel}
@@ -443,6 +446,7 @@ const MealPlanTab: React.FC = () => {
                                       <button
                                           key={type}
                                           onClick={() => setMealType(type as any)}
+                                          aria-pressed={mealType === type}
                                           className={`flex-1 py-2 px-1 rounded-lg text-sm font-medium capitalize transition-all ${
                                               mealType === type
                                                   ? 'bg-white text-brand-700 shadow-sm'
@@ -473,13 +477,13 @@ const MealPlanTab: React.FC = () => {
                               {/* Common Tags */}
                               <div className="flex flex-wrap gap-2 mb-3">
                                   {COMMON_TAGS.map(tag => {
-                                      const isSelected = currentMeal.tags?.includes(tag);
+                                      const isSelected = currentMeal.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
                                       return (
                                           <button
                                               key={tag}
                                               onClick={() => {
                                                   const newTags = isSelected
-                                                      ? currentMeal.tags?.filter(t => t !== tag)
+                                                      ? currentMeal.tags?.filter(t => t.toLowerCase() !== tag.toLowerCase())
                                                       : [...(currentMeal.tags || []), tag];
                                                   setCurrentMeal({...currentMeal, tags: newTags});
                                               }}
@@ -498,7 +502,7 @@ const MealPlanTab: React.FC = () => {
 
                               {/* Selected Custom Tags & Input */}
                               <div className="flex flex-wrap gap-2">
-                                  {currentMeal.tags?.filter(t => !COMMON_TAGS.includes(t)).map(tag => (
+                                  {currentMeal.tags?.filter(t => !COMMON_TAGS.some(ct => ct.toLowerCase() === t.toLowerCase())).map(tag => (
                                       <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs flex items-center gap-1 border border-brand-100">
                                           {tag}
                                           <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900 p-0.5 rounded-full hover:bg-brand-100" aria-label={`Remove tag ${tag}`}>
@@ -541,9 +545,10 @@ const MealPlanTab: React.FC = () => {
                                            <span className="text-gray-400 text-xs">{ing.quantity}</span>
                                            <button
                                                onClick={() => {
-                                                   const newIngredients = [...(currentMeal.ingredients || [])];
-                                                   newIngredients.splice(idx, 1);
-                                                   setCurrentMeal({...currentMeal, ingredients: newIngredients});
+                                                   setCurrentMeal(prev => ({
+                                                       ...prev,
+                                                       ingredients: prev.ingredients?.filter((_, i) => i !== idx)
+                                                   }));
                                                }}
                                                className="text-gray-400 hover:text-red-500"
                                                aria-label={`Remove ${ing.name}`}
@@ -645,7 +650,7 @@ const MealPlanTab: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                        Items not in your pantry will be added to your shopping list when you save.
+                                        Items not in your pantry or shopping list will be added when you save a new meal plan.
                                     </p>
                                </div>
                            </div>
