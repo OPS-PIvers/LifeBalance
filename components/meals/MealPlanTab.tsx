@@ -129,7 +129,7 @@ const MealPlanTab: React.FC = () => {
                description: currentMeal.description,
                ingredients: currentMeal.ingredients || [],
                tags: currentMeal.tags || [],
-               ...(existingMeal ? { rating: existingMeal.rating } : {})
+               rating: existingMeal?.rating ?? 0
            } as Meal);
       } else {
           // Create new meal in library
@@ -204,7 +204,6 @@ const MealPlanTab: React.FC = () => {
         setIsAddModalOpen(true); // Ensure Add Meal modal is open
     } catch (e) {
         toast.error("Failed to generate meal");
-        setIsAIModalOpen(false);
     } finally {
         setIsGeneratingAI(false);
     }
@@ -224,7 +223,7 @@ const MealPlanTab: React.FC = () => {
       });
 
       if (ingredientsToAdd.length === 0) {
-          toast.success('All ingredients already available!');
+          toast.success('No new ingredients needed - check your pantry and list!');
           return;
       }
 
@@ -238,9 +237,15 @@ const MealPlanTab: React.FC = () => {
       ));
 
       const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failedResults = results.filter(r => r.status === 'rejected');
+
+      if (failedResults.length > 0) {
+          console.error('Failed to add ingredients:', failedResults);
+      }
+
       if (successCount > 0) {
           toast.success(`Added ${successCount} items to shopping list`);
-      } else {
+      } else if (failedResults.length > 0) {
           toast.error('Failed to add ingredients');
       }
   };
@@ -293,7 +298,7 @@ const MealPlanTab: React.FC = () => {
                         </div>
 
                         <div className="flex-1 space-y-3">
-                            {planItems.length > 0 ? planItems.map((planItem: MealPlanItem) => {
+                            {planItems.length > 0 ? planItems.map((planItem) => {
                                 const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
                                 const mealName = planItem.mealName || linkedMeal?.name;
 
