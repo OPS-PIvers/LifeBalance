@@ -165,6 +165,7 @@ interface HouseholdContextType {
 
   // Meal Plan Actions
   addMealPlanItem: (item: Omit<MealPlanItem, 'id'>) => Promise<void>;
+  updateMealPlanItem: (id: string, updates: Partial<MealPlanItem>) => Promise<void>;
   deleteMealPlanItem: (id: string) => Promise<void>;
 }
 
@@ -2109,6 +2110,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
           isPurchased: false,
         });
+        toast('Marked as not purchased. Pantry items are not changed automatically.', { icon: 'ℹ️' });
       }
 
     } catch (error) {
@@ -2130,6 +2132,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[addMealPlanItem] Failed:', error);
       toast.error('Failed to add to plan');
+    }
+  };
+
+  const updateMealPlanItem = async (id: string, updates: Partial<MealPlanItem>) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/mealPlan`, id), {
+        ...updates,
+      });
+      toast.success('Plan updated');
+    } catch (error) {
+      console.error('[updateMealPlanItem] Failed:', error);
+      toast.error('Failed to update plan');
     }
   };
 
@@ -2349,6 +2364,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         deleteShoppingItem,
         toggleShoppingItemPurchased,
         addMealPlanItem,
+        updateMealPlanItem,
         deleteMealPlanItem
       }}
     >

@@ -48,7 +48,7 @@ const PantryTab: React.FC = () => {
         await updatePantryItem({
           ...editingItem,
           name: newName,
-          quantity: newQuantity,
+          quantity: newQuantity || '1',
           category: newCategory,
           expiryDate: newExpiry || undefined,
           purchaseDate: newPurchaseDate || undefined,
@@ -172,9 +172,14 @@ const PantryTab: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+        >
           <div className="bg-white rounded-xl w-full max-w-md p-6">
-            <h3 className="text-lg font-bold mb-4">{editingItem ? 'Edit Item' : 'Add Pantry Item'}</h3>
+            <h3 id="modal-title" className="text-lg font-bold mb-4">{editingItem ? 'Edit Item' : 'Add Pantry Item'}</h3>
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>

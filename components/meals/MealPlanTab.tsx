@@ -243,19 +243,21 @@ const MealPlanTab: React.FC = () => {
 
   const addIngredientsToShoppingList = async (mealIngredients: any[]) => {
       let added = 0;
+      const normalize = (s: string) => s.trim().toLowerCase();
+
       for (const ing of mealIngredients) {
-          // Check if we have it in pantry
-          // Logic: exact name match? Partial?
-          // Prompt: "If it is on the pantry list, it should not get added"
-          const inPantry = pantry.some(p => p.name.toLowerCase().includes(ing.name.toLowerCase()));
+          const ingName = normalize(ing.name);
+
+          // Check if we have it in pantry (exact match normalized)
+          const inPantry = pantry.some(p => normalize(p.name) === ingName);
 
           // Check if already in shopping list
-          const inList = shoppingList.some(s => s.name.toLowerCase() === ing.name.toLowerCase() && !s.isPurchased);
+          const inList = shoppingList.some(s => normalize(s.name) === ingName && !s.isPurchased);
 
           if (!inPantry && !inList) {
               await addShoppingItem({
                   name: ing.name,
-                  category: 'Uncategorized', // AI might provide this if I updated the interface, otherwise default
+                  category: 'Uncategorized',
                   quantity: ing.quantity,
                   isPurchased: false
               });
@@ -269,7 +271,11 @@ const MealPlanTab: React.FC = () => {
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
       <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm">
-        <button onClick={() => setSelectedDate(d => addDays(d, -7))} className="p-2 hover:bg-gray-100 rounded-full">
+        <button
+            onClick={() => setSelectedDate(d => addDays(d, -7))}
+            className="p-2 hover:bg-gray-100 rounded-full"
+            aria-label="Previous week"
+        >
             <ChevronLeft />
         </button>
         <div className="text-center">
@@ -278,7 +284,11 @@ const MealPlanTab: React.FC = () => {
             </h2>
             <div className="text-sm text-gray-500">Weekly Plan</div>
         </div>
-        <button onClick={() => setSelectedDate(d => addDays(d, 7))} className="p-2 hover:bg-gray-100 rounded-full">
+        <button
+            onClick={() => setSelectedDate(d => addDays(d, 7))}
+            className="p-2 hover:bg-gray-100 rounded-full"
+            aria-label="Next week"
+        >
             <ChevronRight />
         </button>
       </div>

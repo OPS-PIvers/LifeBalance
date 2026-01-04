@@ -99,7 +99,11 @@ const ShoppingListTab: React.FC = () => {
                     <option value="Snacks">Snacks</option>
                     <option value="Household">Household</option>
                 </select>
-                <button type="submit" className="btn-primary p-2">
+                <button
+                    type="submit"
+                    className="btn-primary p-2"
+                    aria-label="Add item to shopping list"
+                >
                     <Plus className="w-6 h-6" />
                 </button>
             </form>
