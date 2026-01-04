@@ -7,8 +7,16 @@
  * @returns A new object with undefined values removed
  */
 export const sanitizeFirestoreData = (obj: any): any => {
-  if (obj === null || obj === undefined) {
-    return obj;
+  if (obj === undefined) {
+    return null;
+  }
+
+  if (obj === null) {
+    return null;
+  }
+
+  if (obj === "") {
+    return null;
   }
 
   if (Array.isArray(obj)) {
