@@ -99,5 +99,48 @@
   <body class="bg-brand-50 text-brand-800 antialiased selection:bg-brand-200">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Register service worker for PWA updates
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then((registration) => {
+            console.log('[App] SW registered:', registration.scope);
+
+            // Check for updates on page load
+            registration.update();
+
+            // Check for updates periodically (every 5 minutes)
+            setInterval(() => {
+              registration.update();
+            }, 5 * 60 * 1000);
+
+            // Handle updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              console.log('[App] New SW installing...');
+
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New content available, show refresh prompt
+                  console.log('[App] New version available!');
+                  if (confirm('A new version is available! Reload to update?')) {
+                    newWorker.postMessage('skipWaiting');
+                    window.location.reload();
+                  }
+                }
+              });
+            });
+          }).catch((error) => {
+            console.error('[App] SW registration failed:', error);
+          });
+
+          // Reload when new SW takes control
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('[App] New SW took control, reloading...');
+            window.location.reload();
+          });
+        });
+      }
+    </script>
   </body>
 </html>

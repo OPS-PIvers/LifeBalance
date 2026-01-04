@@ -28,6 +28,14 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Generate build version
+        run: |
+          BUILD_VERSION=$(date +%s)
+          echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
+          # Update service worker version
+          sed -i "s/Date.now()/'$BUILD_VERSION'/g" public/sw.js
+          echo "Build version: $BUILD_VERSION"
+
       - name: Build application
         run: npm run build
         env:
