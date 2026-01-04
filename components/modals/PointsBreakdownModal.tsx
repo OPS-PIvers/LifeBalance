@@ -67,6 +67,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           if (habit.scoringType === 'incremental') {
              // Approximation for legacy; use actual count for today when available,
              // and assume 1 unit for each prior active day in the week.
+             // This is used for display purposes.
              let totalUnits = 0;
              for (const dateStr of relevantDates) {
                 if (dateStr === today) {
@@ -89,8 +90,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
           // Rough estimation for total points if not stored
           // We don't store per-habit total points, only household total.
-          // So we display totalCount (lifetime completions/units).
-          points = habit.totalCount * Math.floor(habit.basePoints); // Ignore multiplier for total estimate as it varies
+          // So we display totalCount (lifetime completions/units) and calculate base points earned.
+          // Note: Actual points earned historically may differ due to streaks/multipliers.
+          points = habit.totalCount * Math.floor(habit.basePoints);
           details = `${habit.totalCount} total`;
         }
 
@@ -120,41 +122,57 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     setEditingHabitId(habitId === editingHabitId ? null : habitId);
   };
 
+  const handleUpdateTotalCount = async (item: Habit, newCount: number) => {
+    try {
+        await updateHabit({ ...item, totalCount: Math.max(0, newCount) } as Habit);
+    } catch (error) {
+        console.error('Failed to update total count:', error);
+        toast.error('Failed to update count');
+    }
+  };
+
   // Logic to toggle a specific date for a habit (Weekly View)
   const toggleDate = async (habit: Habit, dateStr: string) => {
     if (!householdId) return;
 
     const isCompleted = habit.completedDates.includes(dateStr);
     let newCompletedDates = [...habit.completedDates];
-    let pointsChange = 0;
-    const currentStreak = calculateStreak(habit.completedDates);
-    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
-    const pointsPerCompletion = Math.floor(habit.basePoints * multiplier);
 
     if (isCompleted) {
         // Remove date
         newCompletedDates = newCompletedDates.filter(d => d !== dateStr);
-        pointsChange = -pointsPerCompletion;
     } else {
         // Add date (restore)
         newCompletedDates.push(dateStr);
         newCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        pointsChange = pointsPerCompletion;
     }
 
-    // Handle threshold scoring logic
+    // Recalculate streak based on NEW dates to get correct multiplier
+    const newStreak = calculateStreak(newCompletedDates);
+    const multiplier = getMultiplier(newStreak, habit.type === 'positive');
+    const pointsPerCompletion = Math.floor(habit.basePoints * multiplier);
+
+    // Determine points change
+    let pointsChange = 0;
     if (habit.scoringType === 'threshold') {
         // For threshold-scoring habits, we cannot accurately know if points were earned/lost
         // by toggling a past date without knowing the count for that day.
         // To be safe and avoid "free points" exploits or negative dips, we skip points adjustment here.
         pointsChange = 0;
+
+        // Notify user if they are adding a date but points won't change
+        if (!isCompleted) {
+             toast('Date added, but points unchanged for threshold habit.', { icon: 'ℹ️' });
+        }
+    } else {
+        pointsChange = isCompleted ? -pointsPerCompletion : pointsPerCompletion;
     }
 
     try {
         // Update habit
         await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
             completedDates: newCompletedDates,
-            streakDays: calculateStreak(newCompletedDates),
+            streakDays: newStreak,
             lastUpdated: serverTimestamp()
         });
 
@@ -196,6 +214,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     <button
                         onClick={() => toggleHabit(item.id, 'down')}
                         className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
+                        aria-label="Decrease daily count"
                     >
                         <Minus size={16} />
                     </button>
@@ -203,6 +222,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     <button
                          onClick={() => toggleHabit(item.id, 'up')}
                          className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
+                         aria-label="Increase daily count"
                     >
                         <Plus size={16} />
                     </button>
@@ -250,20 +270,32 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                  <p className="text-sm text-gray-600 mb-2">Total Count Correction:</p>
                  <div className="flex items-center gap-3">
                     <button
-                        onClick={() => updateHabit({ ...item, totalCount: Math.max(0, item.totalCount - 1) } as Habit)}
+                        onClick={() => handleUpdateTotalCount(item, item.totalCount - 1)}
                         className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
+                        aria-label="Decrease total count"
                     >
                         <Minus size={16} />
                     </button>
                     <span className="font-bold min-w-[3rem] text-center">{item.totalCount}</span>
                     <button
-                         onClick={() => updateHabit({ ...item, totalCount: item.totalCount + 1 } as Habit)}
+                         onClick={() => handleUpdateTotalCount(item, item.totalCount + 1)}
                          className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
+                         aria-label="Increase total count"
                     >
                         <Plus size={16} />
                     </button>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Adjusting this only affects lifetime stats, not points.</p>
+
+                <p className="text-sm text-gray-600 mb-2 mt-4">Total Lifetime Completions:</p>
+                <div className="flex items-center gap-3">
+                   <span className="font-bold min-w-[3rem] text-center">
+                   {item.totalCount}
+                   </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                   This shows lifetime completion count. Points displayed above are estimates based on base value.
+                </p>
              </div>
         );
     }
@@ -327,6 +359,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                                     ? 'bg-brand-100 text-brand-600'
                                     : 'text-gray-400 hover:bg-gray-100'
                             }`}
+                            aria-label={`Edit ${item.title}`}
                         >
                             <Edit2 size={16} />
                         </button>
