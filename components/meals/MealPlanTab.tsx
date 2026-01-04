@@ -6,6 +6,8 @@ import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays } from 'date-fns';
 
+const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
+
 const MealPlanTab: React.FC = () => {
   const {
     meals,
@@ -372,7 +374,11 @@ const MealPlanTab: React.FC = () => {
                       <h3 id="modal-title" className="text-lg font-bold">
                           {editingPlanItemId ? 'Edit Meal Plan' : `Plan Meal for ${targetDate}`}
                       </h3>
-                      <button onClick={handleCancel} className="text-gray-400 hover:text-gray-600">
+                      <button
+                          onClick={handleCancel}
+                          className="text-gray-400 hover:text-gray-600"
+                          aria-label="Close modal"
+                      >
                           <Plus className="w-5 h-5 rotate-45" />
                       </button>
                   </div>
@@ -443,7 +449,7 @@ const MealPlanTab: React.FC = () => {
 
                               {/* Common Tags */}
                               <div className="flex flex-wrap gap-2 mb-3">
-                                  {['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'].map(tag => {
+                                  {COMMON_TAGS.map(tag => {
                                       const isSelected = currentMeal.tags?.includes(tag);
                                       return (
                                           <button
@@ -469,7 +475,7 @@ const MealPlanTab: React.FC = () => {
 
                               {/* Selected Custom Tags & Input */}
                               <div className="flex flex-wrap gap-2">
-                                  {currentMeal.tags?.filter(t => !['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'].includes(t)).map(tag => (
+                                  {currentMeal.tags?.filter(t => !COMMON_TAGS.includes(t)).map(tag => (
                                       <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs flex items-center gap-1 border border-brand-100">
                                           {tag}
                                           <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900 p-0.5 rounded-full hover:bg-brand-100" aria-label={`Remove tag ${tag}`}>
@@ -491,6 +497,7 @@ const MealPlanTab: React.FC = () => {
                                           onClick={handleAddTag}
                                           disabled={!tagInput.trim()}
                                           className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-gray-100 rounded-full text-gray-600 disabled:opacity-50 hover:bg-gray-200"
+                                          aria-label="Add custom tag"
                                       >
                                           <Plus className="w-3 h-3" />
                                       </button>
@@ -516,6 +523,7 @@ const MealPlanTab: React.FC = () => {
                                                    setCurrentMeal({...currentMeal, ingredients: newIngredients});
                                                }}
                                                className="text-gray-400 hover:text-red-500"
+                                               aria-label={`Remove ${ing.name}`}
                                            >
                                                <X className="w-3 h-3" />
                                            </button>
@@ -580,6 +588,9 @@ const MealPlanTab: React.FC = () => {
                                            })
                                        }
                                        {pantry.length === 0 && <div className="p-4 text-center text-xs text-gray-400">Pantry is empty</div>}
+                                       {pantry.length > 0 && pantry.filter(item => item.name.toLowerCase().includes(pantrySearch.toLowerCase())).length === 0 && (
+                                           <div className="p-4 text-center text-xs text-gray-400">No items match your search</div>
+                                       )}
                                    </div>
                                </div>
 
@@ -593,7 +604,7 @@ const MealPlanTab: React.FC = () => {
                                             className="flex-1 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
                                             value={ingredientName}
                                             onChange={(e) => setIngredientName(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleAddIngredient()}
+                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
                                         />
                                         <input
                                             type="text"
@@ -601,18 +612,19 @@ const MealPlanTab: React.FC = () => {
                                             className="w-20 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
                                             value={ingredientQty}
                                             onChange={(e) => setIngredientQty(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleAddIngredient()}
+                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
                                         />
                                         <button
                                             onClick={handleAddIngredient}
                                             disabled={!ingredientName.trim()}
                                             className="p-2 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600"
+                                            aria-label="Add ingredient"
                                         >
                                             <Plus className="w-5 h-5" />
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                        Items added here will be automatically added to your shopping list.
+                                        Items not in your pantry will be added to your shopping list when you save.
                                     </p>
                                </div>
                            </div>
