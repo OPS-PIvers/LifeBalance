@@ -26,7 +26,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white">
           <div>
             <h2 className="text-xl font-bold">Rewards Store</h2>
-            <p className="text-xs text-brand-300">Household Balance: {totalPoints} pts</p>
+            <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
           </div>
           <button 
             onClick={onClose}
