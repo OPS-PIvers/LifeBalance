@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
-import { Star, Settings } from 'lucide-react';
+import { Star, Settings, TrendingUp } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useNavigate } from 'react-router-dom';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
 
 const TopToolbar: React.FC = () => {
-  const { safeToSpend, dailyPoints, weeklyPoints, totalPoints } = useHousehold();
+  const { safeToSpend, dailyPoints, weeklyPoints } = useHousehold();
   const navigate = useNavigate();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
@@ -34,34 +34,34 @@ const TopToolbar: React.FC = () => {
 
         {/* Right Container: Points Cluster + Settings */}
         <div className="flex items-center gap-3">
+          {/* Points Container - Clickable to open Rewards Modal */}
           <div
-            className="flex items-center gap-3 cursor-pointer active:opacity-80 transition-opacity"
+            className="flex items-center gap-4 cursor-pointer active:opacity-80 transition-opacity"
             onClick={() => setIsRewardsOpen(true)}
           >
-            {/* Primary Stat (Daily) */}
+            {/* Daily Points (Gold Star) */}
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1">
                 <span className="text-2xl font-bold text-habit-gold tabular-nums">
                   +{dailyPoints}
                 </span>
-                <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
+                <Star className="w-5 h-5 fill-habit-gold text-habit-gold" />
               </div>
-              <span className="text-[10px] text-brand-400">Today</span>
+              <span className="text-[10px] text-brand-400 uppercase tracking-wider">Today</span>
             </div>
 
             {/* Vertical Divider */}
-            <div className="h-8 w-px bg-brand-600"></div>
+            <div className="h-10 w-px bg-brand-600"></div>
 
-            {/* Secondary Stats */}
-            <div className="flex flex-col items-end text-xs">
-              <div>
-                <span className="font-bold text-white tabular-nums">{weeklyPoints}</span>
-                <span className="text-brand-300 ml-1">Wk</span>
+            {/* Weekly Points (Blue TrendingUp) */}
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-1">
+                <span className="text-2xl font-bold text-habit-blue tabular-nums">
+                  +{weeklyPoints}
+                </span>
+                <TrendingUp className="w-5 h-5 text-habit-blue" />
               </div>
-              <div>
-                <span className="font-bold text-white tabular-nums">{totalPoints}</span>
-                <span className="text-brand-300 ml-1">Tot</span>
-              </div>
+              <span className="text-[10px] text-brand-400 uppercase tracking-wider">This Week</span>
             </div>
           </div>
 
