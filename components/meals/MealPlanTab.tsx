@@ -69,10 +69,11 @@ const MealPlanTab: React.FC = () => {
   }, [sortedPantry, pantrySearch]);
 
   const handleAddTag = () => {
-    if (tagInput.trim() && !currentMeal.tags?.includes(tagInput.trim())) {
+    const trimmedInput = tagInput.trim();
+    if (trimmedInput && !currentMeal.tags?.some(t => t.toLowerCase() === trimmedInput.toLowerCase())) {
       setCurrentMeal(prev => ({
         ...prev,
-        tags: [...(prev.tags || []), tagInput.trim()]
+        tags: [...(prev.tags || []), trimmedInput]
       }));
       setTagInput('');
     }
@@ -429,8 +430,9 @@ const MealPlanTab: React.FC = () => {
                       {/* Meal Details */}
                       <div className="space-y-4">
                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Name</label>
+                              <label htmlFor="meal-name" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Name</label>
                               <input
+                                  id="meal-name"
                                   type="text"
                                   value={currentMeal.name}
                                   onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
@@ -439,14 +441,15 @@ const MealPlanTab: React.FC = () => {
                               />
                           </div>
 
-                          <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Type</label>
+                          <div role="radiogroup" aria-labelledby="meal-type-label">
+                              <label id="meal-type-label" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Type</label>
                               <div className="flex p-1 bg-gray-100 rounded-xl">
                                   {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
                                       <button
                                           key={type}
+                                          role="radio"
+                                          aria-checked={mealType === type}
                                           onClick={() => setMealType(type as any)}
-                                          aria-pressed={mealType === type}
                                           className={`flex-1 py-2 px-1 rounded-lg text-sm font-medium capitalize transition-all ${
                                               mealType === type
                                                   ? 'bg-white text-brand-700 shadow-sm'
@@ -460,8 +463,9 @@ const MealPlanTab: React.FC = () => {
                           </div>
 
                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Description</label>
+                              <label htmlFor="meal-description" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Description</label>
                               <textarea
+                                  id="meal-description"
                                   value={currentMeal.description}
                                   onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
                                   className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
@@ -472,15 +476,16 @@ const MealPlanTab: React.FC = () => {
 
                           {/* Tags Section */}
                           <div>
-                              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Tags</label>
+                              <label id="tags-label" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Tags</label>
 
                               {/* Common Tags */}
-                              <div className="flex flex-wrap gap-2 mb-3">
+                              <div className="flex flex-wrap gap-2 mb-3" role="group" aria-labelledby="tags-label">
                                   {COMMON_TAGS.map(tag => {
                                       const isSelected = currentMeal.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
                                       return (
                                           <button
                                               key={tag}
+                                              aria-pressed={isSelected}
                                               onClick={() => {
                                                   const newTags = isSelected
                                                       ? currentMeal.tags?.filter(t => t.toLowerCase() !== tag.toLowerCase())
@@ -517,6 +522,7 @@ const MealPlanTab: React.FC = () => {
                                           value={tagInput}
                                           onChange={e => setTagInput(e.target.value)}
                                           placeholder="Add custom tag..."
+                                          aria-label="Add custom tag"
                                           className="w-full py-1.5 pl-3 pr-8 rounded-full border-gray-200 text-xs focus:border-brand-500 focus:ring-brand-500"
                                           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                                       />
@@ -572,6 +578,7 @@ const MealPlanTab: React.FC = () => {
                                         <input
                                            type="text"
                                            placeholder="Search pantry..."
+                                           aria-label="Search pantry items"
                                            value={pantrySearch}
                                            onChange={(e) => setPantrySearch(e.target.value)}
                                            className="w-full text-xs py-1.5 px-3 rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors"
@@ -622,9 +629,10 @@ const MealPlanTab: React.FC = () => {
 
                                {/* Section 2: Manual Entry */}
                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Add Missing Item</label>
+                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Add Missing Item</label>
                                     <div className="flex gap-2">
                                         <input
+                                            id="ingredient-name"
                                             type="text"
                                             placeholder="Item name"
                                             className="flex-1 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
@@ -633,6 +641,7 @@ const MealPlanTab: React.FC = () => {
                                             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
                                         />
                                         <input
+                                            aria-label="Ingredient quantity"
                                             type="text"
                                             placeholder="Qty"
                                             className="w-20 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
@@ -650,7 +659,7 @@ const MealPlanTab: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                        Items not in your pantry or shopping list will be added when you save a new meal plan.
+                                        Items not in your pantry will be added to the shopping list when creating a new meal plan.
                                     </p>
                                </div>
                            </div>
