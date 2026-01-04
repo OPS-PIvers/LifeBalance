@@ -42,6 +42,7 @@ import {
   ShoppingItem,
   MealPlanItem
 } from '@/types/schema';
+import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
@@ -1957,8 +1958,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addPantryItem = async (item: Omit<PantryItem, 'id'>) => {
     if (!householdId || !user) return;
     try {
+      const sanitizedItem = sanitizeFirestoreData(item);
       await addDoc(collection(db, `households/${householdId}/pantry`), {
-        ...item,
+        ...sanitizedItem,
         createdAt: serverTimestamp(),
       });
       toast.success('Added to pantry');
@@ -1972,8 +1974,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       const { id, ...itemData } = item;
+      const sanitizedData = sanitizeFirestoreData(itemData);
       await updateDoc(doc(db, `households/${householdId}/pantry`, id), {
-        ...itemData,
+        ...sanitizedData,
         updatedAt: serverTimestamp(),
       });
       toast.success('Pantry item updated');
@@ -1999,8 +2002,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addMeal = async (meal: Omit<Meal, 'id'>): Promise<string> => {
     if (!householdId || !user) throw new Error("Not authenticated");
     try {
+      const sanitizedMeal = sanitizeFirestoreData(meal);
       const docRef = await addDoc(collection(db, `households/${householdId}/meals`), {
-        ...meal,
+        ...sanitizedMeal,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -2017,8 +2021,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       const { id, ...mealData } = meal;
+      const sanitizedData = sanitizeFirestoreData(mealData);
       await updateDoc(doc(db, `households/${householdId}/meals`, id), {
-        ...mealData,
+        ...sanitizedData,
         updatedAt: serverTimestamp(),
       });
       toast.success('Meal updated');
@@ -2044,8 +2049,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>) => {
     if (!householdId) return;
     try {
+      const sanitizedItem = sanitizeFirestoreData(item);
       await addDoc(collection(db, `households/${householdId}/shoppingList`), {
-        ...item,
+        ...sanitizedItem,
         createdAt: serverTimestamp(),
       });
       toast.success('Added to shopping list');
@@ -2059,8 +2065,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       const { id, ...itemData } = item;
+      const sanitizedData = sanitizeFirestoreData(itemData);
       await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
-        ...itemData,
+        ...sanitizedData,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
