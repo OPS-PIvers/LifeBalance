@@ -624,7 +624,7 @@ const MealPlanTab: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                        Items not in your pantry will be added to your shopping list when you save.
+                                        Items not in your pantry or shopping list will be added to your shopping list when you save.
                                     </p>
                                </div>
                            </div>
