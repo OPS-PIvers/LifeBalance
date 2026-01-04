@@ -15,6 +15,7 @@ import Habits from './pages/Habits';
 import Settings from './pages/Settings';
 import PlaceholderPage from './pages/PlaceholderPage';
 import MigrateSubmissions from './pages/MigrateSubmissions';
+import MealsPage from './pages/MealsPage';
 
 const App: React.FC = () => {
   return (
@@ -77,7 +78,7 @@ const App: React.FC = () => {
                     <>
                       <TopToolbar />
                       <main>
-                        <PlaceholderPage />
+                        <MealsPage />
                       </main>
                       <BottomNav />
                     </>
