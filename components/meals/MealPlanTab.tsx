@@ -6,7 +6,7 @@ import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays } from 'date-fns';
 
-const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
+const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten Free', 'High Protein', 'Family Favorite'];
 
 const MealPlanTab: React.FC = () => {
   const {
