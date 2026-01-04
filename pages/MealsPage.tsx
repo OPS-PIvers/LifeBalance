@@ -24,7 +24,7 @@ const MealsPage: React.FC = () => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'pantry' | 'meal-plan' | 'shopping-list')}
               className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all
                 ${isActive
                   ? 'bg-brand-100 text-brand-700 shadow-sm'

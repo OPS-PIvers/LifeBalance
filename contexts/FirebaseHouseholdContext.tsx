@@ -2046,8 +2046,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateShoppingItem = async (item: ShoppingItem) => {
     if (!householdId) return;
     try {
-      await updateDoc(doc(db, `households/${householdId}/shoppingList`, item.id), {
-        ...item,
+      const { id, ...itemData } = item;
+      await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
+        ...itemData,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -2088,10 +2089,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const normalizedItemName = normalizeText(item.name);
         const normalizedItemCategory = normalizeText(item.category);
 
-        const alreadyInPantry = pantry.some(p =>
-            normalizeText(p.name) === normalizedItemName &&
-            normalizeText(p.category) === normalizedItemCategory
+        // Precompute a Set of normalized pantry keys for O(1) lookup
+        const pantryKeySet = new Set(
+            pantry.map(p => `${normalizeText(p.name)}||${normalizeText(p.category)}`)
         );
+
+        const itemKey = `${normalizedItemName}||${normalizedItemCategory}`;
+        const alreadyInPantry = pantryKeySet.has(itemKey);
 
         if (!alreadyInPantry) {
             await addDoc(collection(db, `households/${householdId}/pantry`), {

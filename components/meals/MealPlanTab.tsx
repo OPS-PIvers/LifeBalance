@@ -390,6 +390,20 @@ const MealPlanTab: React.FC = () => {
                       </div>
 
                       <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Meal Type</label>
+                          <select
+                              value={mealType}
+                              onChange={e => setMealType(e.target.value as any)}
+                              className="w-full rounded-lg border-gray-300"
+                          >
+                              <option value="breakfast">Breakfast</option>
+                              <option value="lunch">Lunch</option>
+                              <option value="dinner">Dinner</option>
+                              <option value="snack">Snack</option>
+                          </select>
+                      </div>
+
+                      <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                           <textarea
                               value={currentMeal.description}
