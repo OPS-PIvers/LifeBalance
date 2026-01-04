@@ -50,16 +50,16 @@ const PantryTab: React.FC = () => {
           name: newName,
           quantity: newQuantity || '1',
           category: newCategory,
-          expiryDate: newExpiry || undefined,
-          purchaseDate: newPurchaseDate || undefined,
+          expiryDate: newExpiry || null,
+          purchaseDate: newPurchaseDate || null,
         });
       } else {
         await addPantryItem({
             name: newName,
             quantity: newQuantity || '1',
             category: newCategory,
-            expiryDate: newExpiry || undefined,
-            purchaseDate: newPurchaseDate || undefined,
+            expiryDate: newExpiry || null,
+            purchaseDate: newPurchaseDate || null,
         });
       }
       setIsAddModalOpen(false);
