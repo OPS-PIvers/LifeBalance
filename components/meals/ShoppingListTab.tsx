@@ -33,42 +33,9 @@ const ShoppingListTab: React.FC = () => {
     setNewItemName('');
   };
 
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsProcessingReceipt(true);
-      const base64 = await fileToBase64(file);
-      const items = await parseGroceryReceipt(base64);
-
-      // Add all found items directly to pantry if user desires, but spec says "image upload... items are added to pantry"
-      // Wait, the prompt said: "there should be an image upload option where I could upload an itemized receipt... added to the pantry"
-      // AND "Mark as Purchased... moves to Pantry".
-      // Let's implement this as "Scan to Shopping List" OR "Scan to Pantry".
-      // The requirement under Shopping List says: "When returned, all of the food items from the receipt are added to the pantry"
-      // It seems the user wants receipt scanning to bypass the shopping list and go straight to pantry ("I bought something... indicate if I bought something").
-      // Actually, scanning a receipt implies you ALREADY bought it. So it should go to Pantry.
-      // But maybe we should verify them first?
-      // I'll stick to the strict request: "items from receipt are added to the pantry".
-      // However, it's in the Shopping List section of the prompt.
-      // I will put the button here, but the action adds to Pantry (and maybe clears matching shopping list items?).
-      // Let's stick to adding to Pantry as requested.
-
-      // BUT, I need access to `addPantryItem` here.
-      // I don't have it destructured from useHousehold yet. Let's get it.
-    } catch (error) {
-       console.error(error);
-       toast.error("Failed to parse receipt");
-    } finally {
-      setIsProcessingReceipt(false);
-    }
-  };
-
-  // Wrapper to access addPantryItem (since I need to refactor the destructuring above if I want to use it cleanly without re-render issues or just grab context)
   const { addPantryItem } = useHousehold();
 
-  const handleReceiptUploadReal = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -146,7 +113,7 @@ const ShoppingListTab: React.FC = () => {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={handleReceiptUploadReal}
+                  onChange={handleReceiptUpload}
                   disabled={isProcessingReceipt}
                 />
              </label>

@@ -2079,14 +2079,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isPurchased: true,
         });
 
-        // Add to pantry if not already exists (basic check by name/quantity)
-        // This prevents massive duplicates if user toggles aggressively
-        const alreadyInPantry = pantry.some(
-            p => p.name.toLowerCase() === item.name.toLowerCase() &&
-            p.category === item.category &&
-            // Simple logic: if added within last minute? No, difficult.
-            // Just check if an identical item exists. Pantry items usually unique by type.
-            p.quantity === (item.quantity || '1')
+        // Add to pantry if not already exists (robust check by normalized name/category)
+        // This prevents massive duplicates if user toggles aggressively while still
+        // tolerating minor differences in casing/spacing and quantity formatting.
+        const normalizeText = (value: string | null | undefined): string => (value ?? '').trim().toLowerCase();
+
+        const normalizedItemName = normalizeText(item.name);
+        const normalizedItemCategory = normalizeText(item.category);
+
+        const alreadyInPantry = pantry.some(p =>
+            normalizeText(p.name) === normalizedItemName &&
+            normalizeText(p.category) === normalizedItemCategory
         );
 
         if (!alreadyInPantry) {

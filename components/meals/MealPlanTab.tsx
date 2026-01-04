@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, Calendar as CalendarIcon, ChevronRight, ChevronLeft, Search, ShoppingCart, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2 } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
-import { format, startOfWeek, addDays, isSameDay, parseISO } from 'date-fns';
+import { format, startOfWeek, addDays } from 'date-fns';
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -35,6 +35,10 @@ const MealPlanTab: React.FC = () => {
   // Tag management
   const [tagInput, setTagInput] = useState('');
 
+  // Ingredient management
+  const [ingredientName, setIngredientName] = useState('');
+  const [ingredientQty, setIngredientQty] = useState('');
+
   const handleAddTag = () => {
     if (tagInput.trim() && !currentMeal.tags?.includes(tagInput.trim())) {
       setCurrentMeal(prev => ({
@@ -42,6 +46,18 @@ const MealPlanTab: React.FC = () => {
         tags: [...(prev.tags || []), tagInput.trim()]
       }));
       setTagInput('');
+    }
+  };
+
+  const handleAddIngredient = () => {
+    if (ingredientName.trim()) {
+        const newIng = { name: ingredientName.trim(), quantity: ingredientQty.trim() || '1' };
+        setCurrentMeal(prev => ({
+            ...prev,
+            ingredients: [...(prev.ingredients || []), newIng]
+        }));
+        setIngredientName('');
+        setIngredientQty('');
     }
   };
 
@@ -152,32 +168,26 @@ const MealPlanTab: React.FC = () => {
   const [targetDate, setTargetDate] = useState<string | null>(null);
 
   const saveMeal = async () => {
-      // 1. Create the Meal (Recipe) in the library (if it's new or edited copy)
-      // Actually, if we "Reuse" a meal, do we duplicate it?
-      // "Adding a previous meal should fill in all necessary fields." -> implies we are creating a NEW entry for this day, potentially based on an old one.
-      // So we always create a new `MealPlanItem`, and potentially a new `Meal` if it doesn't exist?
-      // Or does `MealPlanItem` link to `Meal`?
-      // `mealId` in `MealPlanItem` links to `Meal`.
-
-      // If we are creating a brand new meal from scratch:
-      // 1. Add `Meal` to `meals` collection.
-      // 2. Add `MealPlanItem` linking to it.
-
       if (!currentMeal.name) return;
 
-      let mealId = editingMealId; // If we selected a previous meal, we might have an ID
+      let mealId = editingMealId;
 
       // If it's a new custom meal (no ID) or we modified a previous one significantly?
       // For simplicity: Always create/update the Meal in the library first.
       if (!mealId) {
           // Create new meal in library
-          mealId = await addMeal({
-              name: currentMeal.name!,
-              description: currentMeal.description,
-              ingredients: currentMeal.ingredients || [],
-              tags: currentMeal.tags || [],
-              rating: 0
-          });
+          try {
+            mealId = await addMeal({
+                name: currentMeal.name!,
+                description: currentMeal.description,
+                ingredients: currentMeal.ingredients || [],
+                tags: currentMeal.tags || [],
+                rating: 0
+            });
+          } catch (error) {
+            // Toast handled in context
+            return;
+          }
       }
 
       // Save to Schedule
@@ -191,9 +201,17 @@ const MealPlanTab: React.FC = () => {
           });
       }
 
+      handleCancel();
+  };
+
+  const handleCancel = () => {
       setIsAddModalOpen(false);
       setTargetDate(null);
+      setEditingMealId(null);
       setCurrentMeal({ tags: [], ingredients: [] });
+      setIngredientName('');
+      setIngredientQty('');
+      setTagInput('');
   };
 
   const handleAIRequest = async () => {
@@ -215,7 +233,7 @@ const MealPlanTab: React.FC = () => {
             tags: suggestion.tags
         });
         setIsAIModalOpen(false); // Close AI options modal
-        // Keep the Add Meal modal open, but populated
+        setIsAddModalOpen(true); // Ensure Add Meal modal is open
     } catch (e) {
         toast.error("Failed to generate meal");
     } finally {
@@ -432,19 +450,12 @@ const MealPlanTab: React.FC = () => {
                                        type="text"
                                        placeholder="Add ingredient..."
                                        className="w-full rounded-lg border-gray-300 text-sm"
-                                       id="new-ingredient-name"
+                                       value={ingredientName}
+                                       onChange={(e) => setIngredientName(e.target.value)}
                                        onKeyDown={(e) => {
                                            if (e.key === 'Enter') {
                                                e.preventDefault();
-                                               const nameInput = document.getElementById('new-ingredient-name') as HTMLInputElement;
-                                               const qtyInput = document.getElementById('new-ingredient-qty') as HTMLInputElement;
-                                               if (nameInput.value) {
-                                                   const newIng = { name: nameInput.value, quantity: qtyInput.value || '1' };
-                                                   setCurrentMeal({...currentMeal, ingredients: [...(currentMeal.ingredients || []), newIng]});
-                                                   nameInput.value = '';
-                                                   qtyInput.value = '';
-                                                   nameInput.focus();
-                                               }
+                                               handleAddIngredient();
                                            }
                                        }}
                                    />
@@ -459,20 +470,18 @@ const MealPlanTab: React.FC = () => {
                                        type="text"
                                        placeholder="Qty"
                                        className="w-full rounded-lg border-gray-300 text-sm"
-                                       id="new-ingredient-qty"
+                                       value={ingredientQty}
+                                       onChange={(e) => setIngredientQty(e.target.value)}
+                                       onKeyDown={(e) => {
+                                           if (e.key === 'Enter') {
+                                               e.preventDefault();
+                                               handleAddIngredient();
+                                           }
+                                       }}
                                    />
                                </div>
                                <button
-                                   onClick={() => {
-                                       const nameInput = document.getElementById('new-ingredient-name') as HTMLInputElement;
-                                       const qtyInput = document.getElementById('new-ingredient-qty') as HTMLInputElement;
-                                       if (nameInput.value) {
-                                           const newIng = { name: nameInput.value, quantity: qtyInput.value || '1' };
-                                           setCurrentMeal({...currentMeal, ingredients: [...(currentMeal.ingredients || []), newIng]});
-                                           nameInput.value = '';
-                                           qtyInput.value = '';
-                                       }
-                                   }}
+                                   onClick={handleAddIngredient}
                                    className="p-2 bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200"
                                >
                                    <Plus className="w-5 h-5" />
@@ -482,7 +491,7 @@ const MealPlanTab: React.FC = () => {
 
                       <div className="flex gap-3 pt-4">
                           <button
-                              onClick={() => setIsAddModalOpen(false)}
+                              onClick={handleCancel}
                               className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg"
                           >
                               Cancel
