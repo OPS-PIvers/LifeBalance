@@ -1103,6 +1103,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           scoringType: habit.scoringType,
           period: habit.period,
           targetCount: habit.targetCount,
+          totalCount: habit.totalCount,
           weatherSensitive: habit.weatherSensitive ?? false,
           telegramAlias: habit.telegramAlias,
           isShared: habit.isShared,
