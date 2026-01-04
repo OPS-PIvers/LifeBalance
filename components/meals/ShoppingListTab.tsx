@@ -42,17 +42,26 @@ const ShoppingListTab: React.FC = () => {
         const base64 = await fileToBase64(file);
         const items = await parseGroceryReceipt(base64);
 
-        let addedCount = 0;
-        for (const item of items) {
-           await addPantryItem({
-               name: item.name,
-               quantity: item.quantity || '1',
-               category: item.category
-           });
-           addedCount++;
+        // Add all found items concurrently for better performance
+        const results = await Promise.allSettled(items.map(item =>
+          addPantryItem({
+            name: item.name,
+            quantity: item.quantity || '1',
+            category: item.category
+          })
+        ));
+
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const failureCount = results.length - successCount;
+
+        if (successCount > 0) {
+          toast.success(`Added ${successCount} items to Pantry from Receipt!`);
         }
 
-        toast.success(`Added ${addedCount} items to Pantry from Receipt!`);
+        if (failureCount > 0) {
+          console.error('Failed to add some items:', results.filter(r => r.status === 'rejected'));
+          toast.error(`Failed to add ${failureCount} items.`);
+        }
 
       } catch (error) {
          console.error(error);
