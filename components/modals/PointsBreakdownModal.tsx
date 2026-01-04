@@ -26,6 +26,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
   // Derived state for the list
   const contributions = useMemo(() => {
+    // Only calculate these once per render logic, but inside useMemo they are re-calculated on dep change.
+    // Copilot suggested moving them out, but they depend on "current time" effectively.
+    // For consistency, we keep them here.
     const today = format(new Date(), 'yyyy-MM-dd');
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -131,6 +134,15 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     }
   };
 
+  const handleToggleHabit = async (id: string, direction: 'up' | 'down') => {
+      try {
+          await toggleHabit(id, direction);
+      } catch (error) {
+          console.error('Failed to toggle habit:', error);
+          toast.error('Failed to update habit');
+      }
+  };
+
   // Logic to toggle a specific date for a habit (Weekly View)
   const toggleDate = async (habit: Habit, dateStr: string) => {
     if (!householdId) return;
@@ -144,7 +156,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     } else {
         // Add date (restore)
         newCompletedDates.push(dateStr);
-        newCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+        // Keep completedDates in ascending chronological order (oldest first)
+        newCompletedDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     }
 
     // Recalculate streak based on NEW dates to get correct multiplier
@@ -160,10 +173,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         // To be safe and avoid "free points" exploits or negative dips, we skip points adjustment here.
         pointsChange = 0;
 
-        // Notify user if they are adding a date but points won't change
-        if (!isCompleted) {
-             toast('Date added, but points unchanged for threshold habit.', { icon: 'ℹ️' });
-        }
+        // Notify user if they are adding/removing a date but points won't change
+        toast('Date updated. Points unchanged for threshold habit as daily count history is not tracked.', { icon: 'ℹ️' });
     } else {
         pointsChange = isCompleted ? -pointsPerCompletion : pointsPerCompletion;
     }
@@ -212,7 +223,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                 <span className="text-sm text-gray-600">Adjust Count:</span>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => toggleHabit(item.id, 'down')}
+                        onClick={() => handleToggleHabit(item.id, 'down')}
                         className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
                         aria-label="Decrease daily count"
                     >
@@ -220,7 +231,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     </button>
                     <span className="font-bold w-6 text-center">{item.count}</span>
                     <button
-                         onClick={() => toggleHabit(item.id, 'up')}
+                         onClick={() => handleToggleHabit(item.id, 'up')}
                          className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
                          aria-label="Increase daily count"
                     >
@@ -299,6 +310,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
              </div>
         );
     }
+
+    return null;
   };
 
   return (
