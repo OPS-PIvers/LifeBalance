@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { X, Calendar, Hash, Award, Edit2, Check, Minus, Plus, Trash2 } from 'lucide-react';
+import { X, Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
-import { format, startOfWeek, isSameDay, parseISO, eachDayOfInterval, endOfWeek, isAfter } from 'date-fns';
+import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -21,7 +21,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   view,
   habits,
 }) => {
-  const { householdSettings, currentUser, toggleHabit, updateHabit, householdId } = useHousehold();
+  const { toggleHabit, updateHabit, householdId } = useHousehold();
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
 
   // Derived state for the list
@@ -65,12 +65,19 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           if (relevantDates.length === 0) return null;
 
           if (habit.scoringType === 'incremental') {
-             // Approximation for legacy, exact if we had submissions but we use what we have
-             // For incremental, we assume completedDates means at least some activity.
-             // But 'count' resets daily. So we can't know exact points for past days without submissions.
-             // We will display the number of days active.
-             points = relevantDates.length * Math.floor(habit.basePoints * multiplier);
-             details = `${relevantDates.length} days active`;
+             // Approximation for legacy; use actual count for today when available,
+             // and assume 1 unit for each prior active day in the week.
+             let totalUnits = 0;
+             for (const dateStr of relevantDates) {
+                if (dateStr === today) {
+                    totalUnits += habit.count ?? 0;
+                } else {
+                    // We don't store historical per-day counts; assume at least 1 unit.
+                    totalUnits += 1;
+                }
+             }
+             points = totalUnits * Math.floor(habit.basePoints * multiplier);
+             details = `${totalUnits} units over ${relevantDates.length} days`;
           } else {
              points = relevantDates.length * Math.floor(habit.basePoints * multiplier);
              details = `${relevantDates.length} days completed`;
@@ -135,35 +142,48 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         pointsChange = pointsPerCompletion;
     }
 
-    // Update habit
-    await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
-        completedDates: newCompletedDates,
-        streakDays: calculateStreak(newCompletedDates),
-        lastUpdated: serverTimestamp()
-    });
-
-    // Update household points
-    if (pointsChange !== 0) {
-        const updates: any = {
-            'points.total': increment(pointsChange)
-        };
-
-        // If modified date is today
-        const today = format(new Date(), 'yyyy-MM-dd');
-        if (dateStr === today) {
-            updates['points.daily'] = increment(pointsChange);
-        }
-
-        // If modified date is this week
-        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-        if (dateStr >= weekStart && dateStr <= today) {
-            updates['points.weekly'] = increment(pointsChange);
-        }
-
-        await updateDoc(doc(db, `households/${householdId}`), updates);
+    // Handle threshold scoring logic
+    if (habit.scoringType === 'threshold') {
+        // For threshold-scoring habits, we cannot accurately know if points were earned/lost
+        // by toggling a past date without knowing the count for that day.
+        // To be safe and avoid "free points" exploits or negative dips, we skip points adjustment here.
+        pointsChange = 0;
     }
 
-    toast.success(isCompleted ? 'Removed date' : 'Restored date');
+    try {
+        // Update habit
+        await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+            completedDates: newCompletedDates,
+            streakDays: calculateStreak(newCompletedDates),
+            lastUpdated: serverTimestamp()
+        });
+
+        // Update household points
+        if (pointsChange !== 0) {
+            const updates: any = {
+                'points.total': increment(pointsChange)
+            };
+
+            // If modified date is today
+            const today = format(new Date(), 'yyyy-MM-dd');
+            if (dateStr === today) {
+                updates['points.daily'] = increment(pointsChange);
+            }
+
+            // If modified date is this week
+            const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+            if (dateStr >= weekStart && dateStr <= today) {
+                updates['points.weekly'] = increment(pointsChange);
+            }
+
+            await updateDoc(doc(db, `households/${householdId}`), updates);
+        }
+
+        toast.success(isCompleted ? 'Removed date' : 'Restored date');
+    } catch (error) {
+        console.error('Failed to update habit date or points:', error);
+        toast.error('Failed to update points. Please try again.');
+    }
   };
 
   // Render Edit Controls

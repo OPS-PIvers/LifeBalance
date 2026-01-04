@@ -155,21 +155,24 @@ const Settings: React.FC = () => {
               <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setActivePointsView('daily')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors cursor-pointer active:scale-95"
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View daily points breakdown"
                 >
                   <p className="text-xs text-brand-600 mb-1">Daily</p>
                   <p className="text-lg font-bold text-brand-800">{dailyPoints}</p>
                 </button>
                 <button
                   onClick={() => setActivePointsView('weekly')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors cursor-pointer active:scale-95"
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View weekly points breakdown"
                 >
                   <p className="text-xs text-brand-600 mb-1">Weekly</p>
                   <p className="text-lg font-bold text-brand-800">{weeklyPoints}</p>
                 </button>
                 <button
                   onClick={() => setActivePointsView('total')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors cursor-pointer active:scale-95"
+                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  aria-label="View total points breakdown"
                 >
                   <p className="text-xs text-brand-600 mb-1">Total</p>
                   <p className="text-lg font-bold text-brand-800">{totalPoints.toLocaleString()}</p>
