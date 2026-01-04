@@ -87,11 +87,20 @@ const PantryTab: React.FC = () => {
       const base64 = await fileToBase64(file);
       const items = await analyzePantryImage(base64);
 
-      // Add all found items concurrently
-      await Promise.all(items.map(item => addPantryItem(item)));
+      // Add all found items concurrently, handling partial failures
+      const results = await Promise.allSettled(items.map(item => addPantryItem(item)));
+      const successCount = results.filter(result => result.status === 'fulfilled').length;
+      const failureCount = results.length - successCount;
 
-      toast.success(`Identified and added ${items.length} items!`);
-      setIsAddModalOpen(false); // Close modal if open, though usually this is a separate action
+      if (successCount > 0) {
+        toast.success(`Identified and added ${successCount} items!`);
+        setIsAddModalOpen(false);
+      }
+
+      if (failureCount > 0) {
+        console.error('Failed to add some items:', results.filter(r => r.status === 'rejected'));
+        toast.error(`Failed to add ${failureCount} items.`);
+      }
     } catch (error) {
       toast.error("Failed to analyze image");
       console.error(error);
@@ -150,10 +159,10 @@ const PantryTab: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => handleEdit(item)} className="p-2 text-gray-400 hover:text-brand-600">
+                  <button onClick={() => handleEdit(item)} className="p-2 text-gray-400 hover:text-brand-600" aria-label={`Edit ${item.name}`}>
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => deletePantryItem(item.id)} className="p-2 text-gray-400 hover:text-red-600">
+                  <button onClick={() => deletePantryItem(item.id)} className="p-2 text-gray-400 hover:text-red-600" aria-label={`Delete ${item.name}`}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
