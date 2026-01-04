@@ -60,7 +60,9 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
  */
 export const calculateStreak = (dates: string[]): number => {
   if (dates.length === 0) return 0;
-  const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  // Deduplicate dates to handle multiple completions on the same day
+  const uniqueDates = Array.from(new Set(dates));
+  const sortedDates = uniqueDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
   const today = format(new Date(), 'yyyy-MM-dd');
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   let currentStreak = 0;
