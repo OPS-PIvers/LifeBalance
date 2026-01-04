@@ -97,6 +97,7 @@ const PantryTab: React.FC = () => {
       console.error(error);
     } finally {
       setIsProcessingImage(false);
+      e.target.value = ''; // Reset file input
     }
   };
 
@@ -178,7 +179,10 @@ const PantryTab: React.FC = () => {
             aria-modal="true"
             aria-labelledby="modal-title"
             onClick={(e) => {
-              if (e.target === e.currentTarget) setIsAddModalOpen(false);
+              if (e.target === e.currentTarget) {
+                resetForm();
+                setIsAddModalOpen(false);
+              }
             }}
         >
           <div className="bg-white rounded-xl w-full max-w-md p-6">
@@ -250,7 +254,7 @@ const PantryTab: React.FC = () => {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setIsAddModalOpen(false)}
+                  onClick={() => { resetForm(); setIsAddModalOpen(false); }}
                   className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
                 >
                   Cancel

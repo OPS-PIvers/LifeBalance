@@ -59,6 +59,7 @@ const ShoppingListTab: React.FC = () => {
          toast.error("Failed to parse receipt");
       } finally {
         setIsProcessingReceipt(false);
+        e.target.value = ''; // Reset file input
       }
     };
 

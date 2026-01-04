@@ -403,7 +403,7 @@ export const parseGroceryReceipt = async (
               quantity: { type: Type.STRING },
               category: { type: Type.STRING }
             },
-            required: ["name", "category"]
+            required: ["name", "quantity", "category"]
           }
         }
       }

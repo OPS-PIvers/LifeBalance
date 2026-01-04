@@ -122,13 +122,14 @@ const MealPlanTab: React.FC = () => {
       // 1. Handle Meal Library (Create or Update)
       if (mealId) {
           // Update existing meal definition
+           const existingMeal = meals.find(m => m.id === mealId);
            await updateMeal({
                id: mealId,
                name: currentMeal.name!,
                description: currentMeal.description,
                ingredients: currentMeal.ingredients || [],
                tags: currentMeal.tags || [],
-               rating: 0
+               rating: existingMeal?.rating || 0
            });
       } else {
           // Create new meal in library
@@ -141,7 +142,7 @@ const MealPlanTab: React.FC = () => {
                 rating: 0
             });
           } catch (error) {
-            handleCancel(); // Reset state on error
+            toast.error('Failed to save meal');
             return;
           }
       }
