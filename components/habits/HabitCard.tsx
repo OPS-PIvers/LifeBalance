@@ -144,8 +144,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               {pointsDisplay > 0 ? '+' : ''}{pointsDisplay} pts
             </span>
 
-            {/* Streak (Positive Only) */}
-            {isPositive && habit.streakDays > 0 && (
+            {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
+            {isPositive && habit.streakDays >= 2 && (
               <span className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors",
                 habit.streakDays >= 3 ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"
