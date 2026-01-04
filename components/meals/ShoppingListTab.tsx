@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2 } from 'lucide-react';
 import { parseGroceryReceipt } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 
@@ -16,7 +16,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const ShoppingListTab: React.FC = () => {
-  const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem } = useHousehold();
+  const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem, addPantryItem } = useHousehold();
   const [newItemName, setNewItemName] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('Produce');
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
@@ -32,8 +32,6 @@ const ShoppingListTab: React.FC = () => {
     });
     setNewItemName('');
   };
-
-  const { addPantryItem } = useHousehold();
 
   const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -148,6 +146,7 @@ const ShoppingListTab: React.FC = () => {
                                             ${item.isPurchased
                                                 ? 'bg-green-500 border-green-500 text-white'
                                                 : 'border-gray-300 hover:border-brand-500 text-transparent'}`}
+                                        aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
                                     >
                                         <Check className="w-4 h-4" />
                                     </button>
@@ -175,6 +174,7 @@ const ShoppingListTab: React.FC = () => {
                                     <button
                                         onClick={() => deleteShoppingItem(item.id)}
                                         className="text-gray-400 hover:text-red-500 p-2"
+                                        aria-label={`Delete ${item.name}`}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>

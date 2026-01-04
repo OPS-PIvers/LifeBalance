@@ -10,9 +10,14 @@ const MealPlanTab: React.FC = () => {
   const {
     meals,
     addMeal,
+    updateMeal,
     pantry,
     addShoppingItem,
-    shoppingList
+    shoppingList,
+    mealPlan,
+    addMealPlanItem,
+    updateMealPlanItem,
+    deleteMealPlanItem
   } = useHousehold();
 
   // Calendar State
@@ -31,6 +36,9 @@ const MealPlanTab: React.FC = () => {
     tags: []
   });
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [editingPlanItemId, setEditingPlanItemId] = useState<string | null>(null);
+  const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
+  const [targetDate, setTargetDate] = useState<string | null>(null);
 
   // Tag management
   const [tagInput, setTagInput] = useState('');
@@ -81,59 +89,12 @@ const MealPlanTab: React.FC = () => {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 }); // Sunday start
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
-  // Filter meals for the week?
-  // Wait, the Schema defined `Meal` as a recipe. `MealPlanItem` was the schedule.
-  // But looking at the prompt: "Meal Plan: user can create a meal plan organized by day of the week."
-  // And "Add Meal" adds a meal to that day.
-  // The current `Meal` schema I implemented is a Recipe.
-  // I did NOT implement a separate `MealPlanItem` collection or state in the Context yet.
-  // I only added `meals` (Recipes).
-  // User Requirement: "user can create a meal plan organized by day of the week."
-  // I need to store the *Schedule*.
-  // The prompt implies "Add Meal" might mean "Add a recipe to this day".
-  // Or "Add a Meal (Recipe) to the library" AND "Assign it to a day".
-  // Let's re-read schema. I added `Meal` (Recipe) and `MealPlanItem` (Schedule).
-  // I added `meals` to Context but I missed `mealPlan` (collection of `MealPlanItem`).
-  // CRITICAL OVERSIGHT: I need to add `mealPlan` to the Context to store the calendar entries.
-  // However, I can't easily modify the context again right now without a big diff.
-  // ALTERNATIVE: Store the "Date" on the `Meal` object itself?
-  // "Meal Plan: user can create a meal plan organized by day of the week. If a day does not have a meal yet, there should be some type of add meal."
-  // If I store `date` on the `Meal` object, then a Meal is a scheduled instance.
-  // But "Previous Meals" implies a library of re-usable recipes.
-  // So we need both: A Library (Meals) and a Schedule (MealPlanItems).
-  // OR, a `Meal` object has a `datesPlanned: string[]` field? No, that's messy.
-  // I should have added `mealPlan` to context.
-  // Can I assume `meals` ARE the plan items for now?
-  // If "Previous Meals" accesses a *history* of meals, that works.
-  // "When the user taps the “Previous Meals” button, they should see a modal with an alphabetized/sortable list of meals they have added previously with an option to reuse a meal."
-  // This implies `meals` is a history/library.
-  // So I need a way to store "This meal is planned for Date X".
-  // I will cheat slightly: I will use the `lastCooked` or `createdAt` field? No.
-  // I need to fix the Context to support `mealPlan`.
-  // OR, I can use the `calendarItems` collection? No, that's for bills.
-  // I will add `mealPlan` to the Context in a targeted `replace_with_git_merge_diff` step after this file creation.
-  // FOR NOW: I will implement the UI assuming `mealPlan` exists in props/context,
-  // but I will comment it out or mock it until I fix the context.
-  // actually, I can just fix the context now.
-  // Wait, I can't fix context while writing this file.
-  // I'll write this file to use a local state for the plan for now, or assume it comes from context.
-  // I will check `schema.ts` again.
-  // I defined `MealPlanItem`. I just didn't add it to Context.
-  // I will add `mealPlan` to Context in the next step.
-  // For this file, I will assume `mealPlan` is available via `useHousehold()`. I will cast it to `any` temporarily to bypass TS check until context is updated.
-
-  // TEMPORARY FIX: I will use `meals` as the Library.
-  // I will need to add `mealPlan` to context.
-  // Let's assume I will add `mealPlan` and `addMealPlanItem`, `deleteMealPlanItem`.
-
-  const { mealPlan, addMealPlanItem, deleteMealPlanItem } = useHousehold();
-
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
     setCurrentMeal({ tags: [], ingredients: [] });
-    // We need to store the target date in a temp state
     setTargetDate(dateStr);
+    setMealType('dinner'); // Default
     setIsAddModalOpen(true);
   };
 
@@ -145,36 +106,31 @@ const MealPlanTab: React.FC = () => {
           ingredients: linkedMeal?.ingredients || [],
           tags: linkedMeal?.tags || []
       });
-      // We don't have editing of the *Plan Item* link itself in this MVP easily without changing ID logic
-      // But we can allow re-saving to this date which effectively overwrites/adds?
-      // Actually, editing a plan item usually means changing the recipe or moving the date.
-      // For now, let's treat it as "Edit Recipe Details" or just delete and re-add.
-      // The user wants to "edit/delete each meal that has been added".
-      // I'll re-open the Add modal populated, but saving will add a NEW item unless we handle update logic.
-      // Since I don't have `updateMealPlanItem`, I will just rely on Delete -> Add for now,
-      // OR I can just populate for a new add on the same date.
-      // Let's populate and set target date.
-      // If the user saves, it adds a new one. They should delete the old one.
-      // A proper "Edit" would update the existing doc.
-      // I'll stick to Add/Delete for simplicity unless I add update action.
-      // The prompt asks for "edit/delete".
-      // I'll just open the modal.
 
       setTargetDate(planItem.date);
       setEditingMealId(planItem.mealId); // If it exists
+      setEditingPlanItemId(planItem.id); // Track the plan item being edited
+      setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
   };
-
-  const [targetDate, setTargetDate] = useState<string | null>(null);
 
   const saveMeal = async () => {
       if (!currentMeal.name) return;
 
       let mealId = editingMealId;
 
-      // If it's a new custom meal (no ID) or we modified a previous one significantly?
-      // For simplicity: Always create/update the Meal in the library first.
-      if (!mealId) {
+      // 1. Handle Meal Library (Create or Update)
+      if (mealId) {
+          // Update existing meal definition
+           await updateMeal({
+               id: mealId,
+               name: currentMeal.name!,
+               description: currentMeal.description,
+               ingredients: currentMeal.ingredients || [],
+               tags: currentMeal.tags || [],
+               rating: 0
+           });
+      } else {
           // Create new meal in library
           try {
             mealId = await addMeal({
@@ -185,20 +141,29 @@ const MealPlanTab: React.FC = () => {
                 rating: 0
             });
           } catch (error) {
-            // Toast handled in context
+            handleCancel(); // Reset state on error
             return;
           }
       }
 
-      // Save to Schedule
+      // 2. Handle Plan Item (Create or Update)
       if (targetDate && mealId) {
-          await addMealPlanItem({
-              date: targetDate,
-              mealName: currentMeal.name!,
-              mealId: mealId,
-              type: 'dinner', // Defaulting to dinner for MVP
-              isCooked: false
-          });
+          if (editingPlanItemId) {
+              await updateMealPlanItem(editingPlanItemId, {
+                  date: targetDate,
+                  mealName: currentMeal.name!,
+                  mealId: mealId,
+                  type: mealType
+              });
+          } else {
+              await addMealPlanItem({
+                  date: targetDate,
+                  mealName: currentMeal.name!,
+                  mealId: mealId,
+                  type: mealType,
+                  isCooked: false
+              });
+          }
       }
 
       handleCancel();
@@ -208,6 +173,8 @@ const MealPlanTab: React.FC = () => {
       setIsAddModalOpen(false);
       setTargetDate(null);
       setEditingMealId(null);
+      setEditingPlanItemId(null);
+      setMealType('dinner');
       setCurrentMeal({ tags: [], ingredients: [] });
       setIngredientName('');
       setIngredientQty('');
@@ -297,59 +264,69 @@ const MealPlanTab: React.FC = () => {
       <div className="space-y-4">
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const planItem = mealPlan ? mealPlan.find((i: any) => i.date === dateStr) : null;
-            // Find full meal details if linked?
-            const linkedMeal = planItem?.mealId ? meals.find(m => m.id === planItem.mealId) : null;
-            // Or use stored name
-            const mealName = planItem?.mealName || linkedMeal?.name;
+            // Filter all meals for this day
+            const planItems = mealPlan ? mealPlan.filter((i: any) => i.date === dateStr) : [];
 
             return (
                 <div key={dateStr} className="bg-white rounded-xl shadow-sm overflow-hidden border-l-4 border-brand-500">
-                    <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="min-w-[80px]">
+                    <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="min-w-[80px] shrink-0">
                             <div className="font-bold text-gray-900">{format(day, 'EEEE')}</div>
                             <div className="text-sm text-gray-500">{format(day, 'MMM d')}</div>
-                        </div>
-
-                        {planItem ? (
-                            <div className="flex-1 bg-brand-50 p-3 rounded-lg flex justify-between items-start">
-                                <div>
-                                    <div className="font-semibold text-brand-900">{mealName}</div>
-                                    {linkedMeal?.description && <div className="text-xs text-brand-700">{linkedMeal.description}</div>}
-                                    <div className="flex gap-2 mt-2">
-                                        {linkedMeal?.ingredients?.length > 0 && (
-                                            <button
-                                                onClick={() => addIngredientsToShoppingList(linkedMeal.ingredients)}
-                                                className="text-xs flex items-center gap-1 text-brand-600 bg-white px-2 py-1 rounded border border-brand-200 hover:bg-brand-50"
-                                            >
-                                                <ShoppingCart className="w-3 h-3" /> Shop Ingredients
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <button
-                                        onClick={() => handleEditMealPlanItem(planItem, linkedMeal)}
-                                        className="text-gray-400 hover:text-brand-500"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => deleteMealPlanItem(planItem.id)}
-                                        className="text-gray-400 hover:text-red-500"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
                             <button
                                 onClick={() => handleAddMealToDate(day)}
-                                className="flex-1 py-3 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-brand-300 hover:text-brand-500 flex items-center justify-center gap-2 transition-colors"
+                                className="mt-2 text-xs flex items-center gap-1 text-brand-600 hover:text-brand-700 font-medium"
                             >
-                                <Plus className="w-4 h-4" /> Plan a Meal
+                                <Plus className="w-3 h-3" /> Add Meal
                             </button>
-                        )}
+                        </div>
+
+                        <div className="flex-1 space-y-3">
+                            {planItems.length > 0 ? planItems.map((planItem: any) => {
+                                const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
+                                const mealName = planItem.mealName || linkedMeal?.name;
+
+                                return (
+                                    <div key={planItem.id} className="bg-brand-50 p-3 rounded-lg flex justify-between items-start">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold uppercase text-brand-400 bg-white px-1 rounded">{planItem.type || 'dinner'}</span>
+                                                <div className="font-semibold text-brand-900">{mealName}</div>
+                                            </div>
+                                            {linkedMeal?.description && <div className="text-xs text-brand-700 mt-1">{linkedMeal.description}</div>}
+                                            <div className="flex gap-2 mt-2">
+                                                {linkedMeal?.ingredients?.length > 0 && (
+                                                    <button
+                                                        onClick={() => addIngredientsToShoppingList(linkedMeal.ingredients)}
+                                                        className="text-xs flex items-center gap-1 text-brand-600 bg-white px-2 py-1 rounded border border-brand-200 hover:bg-brand-50"
+                                                    >
+                                                        <ShoppingCart className="w-3 h-3" /> Shop Ingredients
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                onClick={() => handleEditMealPlanItem(planItem, linkedMeal)}
+                                                className="text-gray-400 hover:text-brand-500"
+                                                aria-label={`Edit ${mealName}`}
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={() => deleteMealPlanItem(planItem.id)}
+                                                className="text-gray-400 hover:text-red-500"
+                                                aria-label={`Delete ${mealName}`}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            }) : (
+                                <div className="text-sm text-gray-400 italic py-2">No meals planned</div>
+                            )}
+                        </div>
                     </div>
                 </div>
             );
@@ -358,9 +335,19 @@ const MealPlanTab: React.FC = () => {
 
       {/* Add Meal Modal */}
       {isAddModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) handleCancel();
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+          >
               <div className="bg-white rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-lg font-bold mb-4">Plan Meal for {targetDate}</h3>
+                  <h3 id="modal-title" className="text-lg font-bold mb-4">
+                      {editingPlanItemId ? 'Edit Meal Plan' : `Plan Meal for ${targetDate}`}
+                  </h3>
 
                   <div className="grid grid-cols-2 gap-3 mb-6">
                       <button
@@ -420,7 +407,7 @@ const MealPlanTab: React.FC = () => {
                               {currentMeal.tags?.map(tag => (
                                   <span key={tag} className="bg-brand-100 text-brand-700 px-2 py-1 rounded-full text-xs flex items-center gap-1">
                                       {tag}
-                                      <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900">&times;</button>
+                                      <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900" aria-label={`Remove tag ${tag}`}>&times;</button>
                                   </span>
                               ))}
                           </div>
@@ -433,7 +420,7 @@ const MealPlanTab: React.FC = () => {
                                   className="flex-1 rounded-lg border-gray-300 text-sm"
                                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                               />
-                              <button onClick={handleAddTag} className="p-2 bg-gray-100 rounded-lg text-gray-600">
+                              <button onClick={handleAddTag} className="p-2 bg-gray-100 rounded-lg text-gray-600" aria-label="Add tag">
                                   <Plus className="w-4 h-4" />
                               </button>
                           </div>
@@ -459,6 +446,7 @@ const MealPlanTab: React.FC = () => {
                                                setCurrentMeal({...currentMeal, ingredients: newIngredients});
                                            }}
                                            className="text-red-400 hover:text-red-600"
+                                           aria-label={`Remove ingredient ${ing.name}`}
                                        >
                                            <Trash2 className="w-3 h-3" />
                                        </button>
@@ -507,6 +495,7 @@ const MealPlanTab: React.FC = () => {
                                <button
                                    onClick={handleAddIngredient}
                                    className="p-2 bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200"
+                                   aria-label="Add ingredient"
                                >
                                    <Plus className="w-5 h-5" />
                                </button>
@@ -534,9 +523,17 @@ const MealPlanTab: React.FC = () => {
 
       {/* Previous Meals Modal */}
       {isPreviousMealsModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="previous-meals-title"
+          >
                <div className="bg-white rounded-xl w-full max-w-md p-6 max-h-[80vh] flex flex-col">
-                   <h3 className="text-lg font-bold mb-4">Your Cookbook</h3>
+                   <h3 id="previous-meals-title" className="text-lg font-bold mb-4">Your Cookbook</h3>
                    <div className="flex-1 overflow-y-auto space-y-2">
                        {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
                            <button
@@ -566,9 +563,17 @@ const MealPlanTab: React.FC = () => {
 
       {/* AI Modal */}
       {isAIModalOpen && (
-          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            onClick={(e) => {
+                if (e.target === e.currentTarget) setIsAIModalOpen(false);
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-modal-title"
+          >
               <div className="bg-white rounded-xl w-full max-w-sm p-6">
-                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <h3 id="ai-modal-title" className="text-lg font-bold mb-4 flex items-center gap-2">
                       <Sparkles className="text-purple-600" /> Chef AI
                   </h3>
 
