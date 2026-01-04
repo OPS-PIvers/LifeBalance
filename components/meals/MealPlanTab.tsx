@@ -209,29 +209,30 @@ const MealPlanTab: React.FC = () => {
   };
 
   const addIngredientsToShoppingList = async (mealIngredients: any[]) => {
-      let added = 0;
       const normalize = (s: string) => s.trim().toLowerCase();
 
-      for (const ing of mealIngredients) {
+      const ingredientsToAdd = mealIngredients.filter(ing => {
           const ingName = normalize(ing.name);
-
           // Check if we have it in pantry (exact match normalized)
           const inPantry = pantry.some(p => normalize(p.name) === ingName);
-
           // Check if already in shopping list
           const inList = shoppingList.some(s => normalize(s.name) === ingName && !s.isPurchased);
 
-          if (!inPantry && !inList) {
-              await addShoppingItem({
+          return !inPantry && !inList;
+      });
+
+      if (ingredientsToAdd.length > 0) {
+          await Promise.all(ingredientsToAdd.map(ing =>
+              addShoppingItem({
                   name: ing.name,
                   category: 'Uncategorized',
                   quantity: ing.quantity,
                   isPurchased: false
-              });
-              added++;
-          }
+              })
+          ));
       }
-      toast.success(`Added ${added} items to shopping list`);
+
+      toast.success(`Added ${ingredientsToAdd.length} items to shopping list`);
   };
 
   return (

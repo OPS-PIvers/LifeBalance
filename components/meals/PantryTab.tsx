@@ -177,6 +177,9 @@ const PantryTab: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setIsAddModalOpen(false);
+            }}
         >
           <div className="bg-white rounded-xl w-full max-w-md p-6">
             <h3 id="modal-title" className="text-lg font-bold mb-4">{editingItem ? 'Edit Item' : 'Add Pantry Item'}</h3>
