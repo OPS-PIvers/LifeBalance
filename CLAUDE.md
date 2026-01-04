@@ -36,14 +36,14 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
 VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
-# Gemini API (for receipt scanning)
+# Gemini API (for AI features)
 VITE_GEMINI_API_KEY=your_gemini_api_key
 ```
 
 **Required for:**
 - Firebase Authentication (Google Sign-In)
-- Firestore database persistence
-- Receipt scanning feature (Gemini API)
+- Firestore database persistence and real-time sync
+- AI features (Gemini API): receipt scanning, pantry image analysis, meal suggestions, grocery receipt parsing
 
 **Note:** `.env.local` is git-ignored to protect your credentials.
 
@@ -51,14 +51,15 @@ VITE_GEMINI_API_KEY=your_gemini_api_key
 
 ### State Management
 
-The entire application state is managed through a single **React Context**: `HouseholdContext` ([contexts/HouseholdContext.tsx](contexts/HouseholdContext.tsx)).
+The entire application state is managed through a single **React Context**: `FirebaseHouseholdContext` ([contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx)).
 
 This context provides:
-- **Finance**: Accounts, budget buckets, transactions, calendar items
+- **Finance**: Accounts, budget buckets, transactions, calendar items, pay periods
 - **Gamification**: Habits, points (daily/weekly/total), challenges, rewards
+- **Meals**: Pantry inventory, meal recipes, weekly meal planning, shopping lists
 - **Safe-to-Spend Calculation**: Real-time financial health metric
 
-All state is currently in-memory (no persistence). State resets on page refresh.
+All data is persisted in **Firestore** with real-time synchronization across devices using Firebase's `onSnapshot` listeners.
 
 ### Safe-to-Spend Logic
 
@@ -95,9 +96,16 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 ### External Services
 
 **Gemini API** ([services/geminiService.ts](services/geminiService.ts)):
-- Model: `gemini-3-flash-preview`
-- Function: `analyzeReceipt()` - OCR for receipt scanning
-- Returns structured JSON: merchant, amount, category, date
+- **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts (model: `gemini-3-flash-preview`)
+  - Returns: merchant, amount, category, date
+- **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
+  - Returns: array of transactions with dates, descriptions, amounts
+- **Pantry Image Analysis**: `analyzePantryImage()` - Identifies food items from photos (model: `gemini-2.0-flash-exp`)
+  - Returns: array of items with name, quantity, category, expiry date
+- **Meal Suggestions**: `suggestMeal()` - AI-powered meal planning based on pantry, budget, time constraints
+  - Returns: meal name, description, ingredients, tags, reasoning
+- **Grocery Receipt Parsing**: `parseGroceryReceipt()` - Extracts grocery items from receipt photos
+  - Returns: array of items with name, category, quantity
 
 ### Styling
 
@@ -111,20 +119,27 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 
 ```
 components/
+  ├── auth/         # Authentication components (ProtectedRoute, HouseholdInviteCard)
   ├── budget/       # Budget-specific UI components
   ├── habits/       # Habit tracking UI components
   ├── layout/       # TopToolbar, BottomNav
+  ├── meals/        # Meal planning components (PantryTab, MealPlanTab, ShoppingListTab)
   └── modals/       # Modal dialogs for forms
 
 pages/              # Route-level page components
-  ├── Dashboard.tsx # Main overview with AI insights
-  ├── Budget.tsx    # Finance management
-  ├── Habits.tsx    # Habit tracker
+  ├── Dashboard.tsx      # Main overview with AI insights
+  ├── Budget.tsx         # Finance management
+  ├── Habits.tsx         # Habit tracker
+  ├── MealsPage.tsx      # Meal planning, pantry, and shopping
+  ├── Settings.tsx       # App settings and preferences
+  ├── Login.tsx          # Authentication
+  ├── HouseholdSetup.tsx # Household creation/joining
   └── PlaceholderPage.tsx
 
-contexts/           # React Context providers
-services/           # External API integrations
+contexts/           # React Context providers (AuthContext, FirebaseHouseholdContext)
+services/           # External API integrations (authService, geminiService, householdService)
 types/              # TypeScript type definitions
+utils/              # Business logic utilities (safeToSpendCalculator, habitLogic, etc.)
 ```
 
 ### Path Aliases
@@ -141,17 +156,71 @@ Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.conf
 
 All TypeScript interfaces defined in [types/schema.ts](types/schema.ts):
 
-- **Habit**: Tracks user behaviors with points, streaks, and completion history
+### Finance
 - **Account**: Financial accounts (checking, savings, credit)
-- **BudgetBucket**: Spending categories with limits
-- **Transaction**: Expense records with categorization status
+- **BudgetBucket**: Spending categories with limits and period tracking
+- **Transaction**: Expense records with categorization and pay period tracking
 - **CalendarItem**: Recurring/one-time income and expenses
+
+### Gamification
+- **Habit**: Tracks user behaviors with points, streaks, and completion history
 - **Challenge**: Monthly goals tied to specific habits
 - **RewardItem**: Redeemable rewards using accumulated points
+- **FreezeBank**: Allows users to patch missed habit days with earned tokens
+
+### Meals & Nutrition
+- **PantryItem**: Food inventory with quantity, category, and expiry tracking
+- **Meal**: Recipes with ingredients, tags, and ratings
+- **MealPlanItem**: Weekly meal calendar entries linking to meals
+- **ShoppingItem**: Grocery list items with category and purchase status
+
+### Core
+- **Household**: Main entity containing all household data, members, and settings
+- **HouseholdMember**: User membership info with roles and permissions
+
+## Meals Feature
+
+The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensive meal planning and grocery management:
+
+### Pantry Management
+- Manual item entry with category, quantity, and expiry dates
+- **AI-powered image analysis**: Upload photos of your pantry/fridge to automatically identify and add items
+- Track food inventory across categories (Produce, Dairy, Meat, Grains, etc.)
+- Visual organization with category grouping
+
+### Meal Planning
+- Weekly calendar view for meal planning
+- Create new meals or reuse previous recipes from your cookbook
+- **AI meal suggestions**: Get personalized meal ideas based on:
+  - Available pantry items
+  - Budget constraints (cheap option)
+  - Time constraints (quick 30-min meals)
+  - Novelty (new meals vs. favorites)
+- Link meals to dates with meal type (breakfast, lunch, dinner, snack)
+- Ingredient management with pantry autocomplete
+- One-click shopping list generation from meal ingredients
+
+### Shopping List
+- Manual item entry with category grouping
+- **AI receipt scanning**: Upload grocery receipt photos to auto-populate pantry
+- Mark items as purchased → automatically adds to pantry
+- Duplicate prevention when marking items purchased
+- Smart filtering: only adds ingredients to shopping list if not in pantry or list
+
+**Implementation:**
+- Components: [PantryTab.tsx](components/meals/PantryTab.tsx), [MealPlanTab.tsx](components/meals/MealPlanTab.tsx), [ShoppingListTab.tsx](components/meals/ShoppingListTab.tsx)
+- AI Services: `analyzePantryImage()`, `suggestMeal()`, `parseGroceryReceipt()` in [geminiService.ts](services/geminiService.ts)
+- Data stored in Firestore subcollections: `pantry`, `meals`, `mealPlan`, `shoppingList`
 
 ## Important Notes
 
-- **No persistence layer**: All data is mock/in-memory
+- **Persistence**: All data is stored in **Firebase Firestore** with real-time sync across devices
+- **Multi-household support**: Users can create or join households using 6-character invite codes
+- **Authentication**: Google Sign-In required via Firebase Auth
 - **Toast notifications**: Provided by `react-hot-toast` for user feedback
-- **Mobile-optimized**: Designed for mobile-first with bottom navigation
-- **AI-powered insights**: Dashboard shows randomized insights (placeholder for future AI integration)
+- **Mobile-optimized**: Designed for mobile-first with bottom navigation and touch-friendly UI
+- **AI-powered features**:
+  - Receipt/statement scanning for quick transaction entry
+  - Pantry image analysis for instant inventory updates
+  - AI meal suggestions based on available ingredients, budget, and time
+  - Dashboard insights (currently randomized, expandable for future AI integration)

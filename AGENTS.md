@@ -14,7 +14,7 @@
 - **Routing**: `HashRouter` (Required for Firebase Hosting compatibility without rewrites)
 - **Icons**: Lucide React
 - **Date Handling**: `date-fns`
-- **AI Integration**: Google Gemini (via `@google/genai`) for receipt/statement parsing
+- **AI Integration**: Google Gemini (via `@google/genai`) for receipt/statement parsing, pantry analysis, and meal planning
 
 ---
 
@@ -59,6 +59,7 @@
 │   ├── budget/           # Budget specific (Buckets, Accounts, Calendar)
 │   ├── habits/           # Habit tracking (Cards, Lists, Forms)
 │   ├── layout/           # Global layout (TopToolbar, BottomNav)
+│   ├── meals/            # Meal planning (PantryTab, MealPlanTab, ShoppingListTab)
 │   └── modals/           # ALL forms/interactions open in modals
 ├── contexts/
 │   ├── AuthContext.tsx             # Firebase Auth state
@@ -70,11 +71,14 @@
 │   ├── Dashboard.tsx     # Home view (Summary, Insights)
 │   ├── Budget.tsx        # Finance view
 │   ├── Habits.tsx        # Habit view
+│   ├── MealsPage.tsx     # Meal planning, pantry, shopping
+│   ├── Settings.tsx      # App settings
 │   ├── Login.tsx         # Auth entry
+│   ├── HouseholdSetup.tsx # Household creation/joining
 │   └── ...
 ├── services/             # External API integrations
 │   ├── authService.ts    # Auth logic
-│   ├── geminiService.ts  # AI Receipt/Statement Scanning
+│   ├── geminiService.ts  # AI: Receipt/Statement/Pantry scanning, Meal suggestions
 │   └── householdService.ts # Household creation/joining
 ├── types/
 │   └── schema.ts         # TypeScript Interfaces (Source of Truth for Data Models)
@@ -95,8 +99,8 @@
 
 ### 4.1. The "Brain": `FirebaseHouseholdContext`
 This context syncs all Firestore collections in real-time. It exposes:
-- **Data**: `accounts`, `buckets`, `transactions`, `habits`, `safeToSpend`, etc.
-- **Actions**: `addTransaction`, `toggleHabit`, `payCalendarItem`, etc.
+- **Data**: `accounts`, `buckets`, `transactions`, `habits`, `pantry`, `meals`, `mealPlan`, `shoppingList`, `safeToSpend`, etc.
+- **Actions**: `addTransaction`, `toggleHabit`, `payCalendarItem`, `addPantryItem`, `addMeal`, `addMealPlanItem`, `addShoppingItem`, etc.
 
 **Key Responsibilities:**
 - **Real-time Sync**: Uses `onSnapshot` for instant updates across devices.
@@ -139,9 +143,54 @@ Safe-to-Spend = (Checking Account Balance)
 
 ### 4.4. AI Integration (Gemini)
 - Located in `services/geminiService.ts`.
-- **Receipt Scanning**: Extracts merchant, amount, category.
+- **Receipt Scanning**: Extracts merchant, amount, category from expense receipts (model: `gemini-3-flash-preview`).
 - **Statement Parsing**: Parses full bank statement screenshots into transaction lists.
+- **Pantry Image Analysis**: Identifies food items from photos with quantity, category, expiry (model: `gemini-2.0-flash-exp`).
+- **Meal Suggestions**: AI-generated meal ideas based on pantry inventory, budget, time, and novelty preferences.
+- **Grocery Receipt Parsing**: Extracts grocery items from receipt photos to populate pantry.
 - **API Key**: `VITE_GEMINI_API_KEY`.
+
+**Performance Note**: All AI image processing functions use `Promise.allSettled()` for concurrent item creation to handle partial failures gracefully.
+
+### 4.5. Meals & Nutrition System
+**Location**: `pages/MealsPage.tsx` with tabs for Pantry, Meal Plan, and Shopping List.
+
+**Data Models** (in `types/schema.ts`):
+- `PantryItem`: Food inventory (name, quantity, category, expiryDate, purchaseDate)
+- `Meal`: Recipes (name, description, ingredients[], tags[], rating, createdBy)
+- `MealPlanItem`: Calendar entries (date, mealName, mealId, type, isCooked)
+- `ShoppingItem`: Grocery list (name, category, quantity, isPurchased, addedFromMealId)
+
+**Key Features**:
+1. **Pantry Management** (`components/meals/PantryTab.tsx`):
+   - Manual item entry with category grouping
+   - AI image upload for bulk item detection
+   - Expiry date tracking
+
+2. **Meal Planning** (`components/meals/MealPlanTab.tsx`):
+   - Weekly calendar view (Sunday-Saturday)
+   - Meal library/cookbook for reusing recipes
+   - AI meal suggestions with customizable constraints
+   - Ingredient autocomplete from pantry
+   - "Shop Ingredients" button → auto-adds missing items to shopping list
+
+3. **Shopping List** (`components/meals/ShoppingListTab.tsx`):
+   - Categorized grocery list
+   - Receipt scanning for quick pantry population
+   - **Critical Logic**: When marking item as "purchased":
+     - Checks if item already exists in pantry (normalized name/category)
+     - Only adds if NOT already present (prevents duplicates)
+     - Displays appropriate toast feedback
+   - **Note**: Unmarking does NOT remove from pantry (intentional design)
+
+**Firestore Structure**:
+```
+households/{householdId}/
+  ├── pantry/{itemId}
+  ├── meals/{mealId}
+  ├── mealPlan/{planItemId}
+  └── shoppingList/{itemId}
+```
 
 ---
 
@@ -173,3 +222,6 @@ Before submitting ANY change, you must verify:
 - **❌ Modifying `tailwind.config.js`**: It doesn't exist. Edit `index.html`.
 - **❌ Modifying `safeToSpend`**: Unless explicitly told to change the formula, TOUCH NOTHING.
 - **❌ "Fixing" `HashRouter`**: Do not change it to `BrowserRouter`. It is intentional.
+- **❌ Sequential `await` in loops**: Use `Promise.all()` or `Promise.allSettled()` for concurrent operations, especially when adding multiple items from AI analysis.
+- **❌ Writing `id` field to Firestore**: Use object destructuring `const { id, ...data } = item` before spreading in `updateDoc()` calls.
+- **❌ Forgetting duplicate prevention**: When adding items to pantry/shopping list, check for existing items using normalized name/category matching.
