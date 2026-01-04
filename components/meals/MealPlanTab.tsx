@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X } from 'lucide-react';
@@ -6,7 +6,7 @@ import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays } from 'date-fns';
 
-const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten Free', 'High Protein', 'Family Favorite'];
+const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -50,6 +50,21 @@ const MealPlanTab: React.FC = () => {
   const [ingredientQty, setIngredientQty] = useState('');
   const [pantrySearch, setPantrySearch] = useState('');
 
+  // Reset pantry search when modal closes
+  useEffect(() => {
+    if (!isAddModalOpen) {
+      setPantrySearch('');
+    }
+  }, [isAddModalOpen]);
+
+  // Memoize filtered pantry items
+  const filteredPantryItems = useMemo(() => {
+    const searchLower = pantrySearch.toLowerCase().trim();
+    return pantry
+      .filter(item => item.name.toLowerCase().includes(searchLower))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [pantry, pantrySearch]);
+
   const handleAddTag = () => {
     if (tagInput.trim() && !currentMeal.tags?.includes(tagInput.trim())) {
       setCurrentMeal(prev => ({
@@ -61,8 +76,16 @@ const MealPlanTab: React.FC = () => {
   };
 
   const handleAddIngredient = () => {
-    if (ingredientName.trim()) {
-        const newIng = { name: ingredientName.trim(), quantity: ingredientQty.trim() || '1' };
+    const nameTrimmed = ingredientName.trim();
+    if (nameTrimmed) {
+        // Check for duplicates case-insensitive
+        const exists = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === nameTrimmed.toLowerCase());
+        if (exists) {
+            toast.error('Ingredient already added');
+            return;
+        }
+
+        const newIng = { name: nameTrimmed, quantity: ingredientQty.trim() || '1' };
         setCurrentMeal(prev => ({
             ...prev,
             ingredients: [...(prev.ingredients || []), newIng]
@@ -170,9 +193,9 @@ const MealPlanTab: React.FC = () => {
           }
       }
 
-      // 3. Auto-add ingredients to shopping list if needed
-      // This will check ingredients against pantry and shopping list
-      if (currentMeal.ingredients && currentMeal.ingredients.length > 0) {
+      // 3. Auto-add ingredients to shopping list
+      // Only when creating a NEW plan item, and we have a target date
+      if (!editingPlanItemId && targetDate && currentMeal.ingredients && currentMeal.ingredients.length > 0) {
           await addIngredientsToShoppingList(currentMeal.ingredients);
       }
 
@@ -379,7 +402,7 @@ const MealPlanTab: React.FC = () => {
                           className="text-gray-400 hover:text-gray-600"
                           aria-label="Close modal"
                       >
-                          <Plus className="w-5 h-5 rotate-45" />
+                          <X className="w-5 h-5" />
                       </button>
                   </div>
 
@@ -551,10 +574,7 @@ const MealPlanTab: React.FC = () => {
                                    </div>
 
                                    <div className="max-h-[150px] overflow-y-auto p-2 space-y-1">
-                                       {pantry
-                                           .filter(item => item.name.toLowerCase().includes(pantrySearch.toLowerCase()))
-                                           .sort((a,b) => a.name.localeCompare(b.name))
-                                           .map(item => {
+                                       {filteredPantryItems.map(item => {
                                                const isSelected = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === item.name.toLowerCase());
                                                return (
                                                    <label key={item.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
@@ -566,7 +586,7 @@ const MealPlanTab: React.FC = () => {
                                                                    // Add to ingredients
                                                                    setCurrentMeal(prev => ({
                                                                        ...prev,
-                                                                       ingredients: [...(prev.ingredients || []), { name: item.name, quantity: '1' }]
+                                                                       ingredients: [...(prev.ingredients || []), { name: item.name, quantity: item.quantity || '1' }]
                                                                    }));
                                                                } else {
                                                                    // Remove from ingredients
@@ -577,6 +597,7 @@ const MealPlanTab: React.FC = () => {
                                                                }
                                                            }}
                                                            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                                           aria-label={`Select ${item.name}`}
                                                        />
                                                        <div className="flex-1">
                                                            <div className="text-sm font-medium text-gray-700">{item.name}</div>
@@ -588,7 +609,7 @@ const MealPlanTab: React.FC = () => {
                                            })
                                        }
                                        {pantry.length === 0 && <div className="p-4 text-center text-xs text-gray-400">Pantry is empty</div>}
-                                       {pantry.length > 0 && pantry.filter(item => item.name.toLowerCase().includes(pantrySearch.toLowerCase())).length === 0 && (
+                                       {pantry.length > 0 && filteredPantryItems.length === 0 && (
                                            <div className="p-4 text-center text-xs text-gray-400">No items match your search</div>
                                        )}
                                    </div>
@@ -624,7 +645,7 @@ const MealPlanTab: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-gray-400 mt-1 pl-1">
-                                        Items not in your pantry or shopping list will be added to your shopping list when you save.
+                                        Items not in your pantry will be added to your shopping list when you save.
                                     </p>
                                </div>
                            </div>
