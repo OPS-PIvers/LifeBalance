@@ -294,7 +294,7 @@ const BudgetBuckets: React.FC = () => {
               <div className="mt-3 bg-money-bgNeg p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center gap-2 text-money-neg text-xs font-bold">
                   <AlertTriangle size={14} />
-                  <span>Over by ${totalCommitted - bucket.limit}</span>
+                  <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
                 </div>
                 <button
                   onClick={(e) => { e.stopPropagation(); setReallocateModal({ sourceId: null, targetId: bucket.id }); }}
