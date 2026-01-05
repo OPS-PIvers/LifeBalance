@@ -177,7 +177,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                              </span>
                            )}
                          </div>
-                         <span className="font-mono">${b.remaining}</span>
+                         <span className="font-mono">${b.remaining.toFixed(2)}</span>
                        </div>
 
                        {/* Meter */}
