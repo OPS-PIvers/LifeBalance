@@ -104,11 +104,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    >
+      <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] overflow-hidden flex flex-col">
 
         {/* Header */}
-        <div className="p-4 border-b border-brand-100 flex justify-between items-center">
+        <div className="p-4 border-b border-brand-100 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-lg font-bold text-brand-800">Submission Log</h2>
             <p className="text-sm text-brand-400">{habit.title}</p>

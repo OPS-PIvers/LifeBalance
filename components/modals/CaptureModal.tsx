@@ -408,7 +408,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm transition-opacity"
@@ -416,7 +419,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       />
 
       {/* Modal Content */}
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">

@@ -316,14 +316,15 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[80vh] flex flex-col"
+        className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
           <h2 className="text-lg font-bold text-gray-800">{getTitle()}</h2>
           <button
             onClick={onClose}

@@ -64,11 +64,14 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100">
+      <div className="relative w-full max-w-sm max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">
           <h2 className="text-lg font-bold text-brand-800">
             {editingBucket ? 'Edit Bucket' : 'New Bucket'}
           </h2>
@@ -77,7 +80,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           <input 
              type="text" 
              placeholder="Name (e.g. Coffee)" 

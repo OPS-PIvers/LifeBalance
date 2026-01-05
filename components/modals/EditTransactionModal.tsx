@@ -83,10 +83,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   if (!isOpen || !transaction) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    >
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center">
+        <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
           <h2 className="text-lg font-bold text-brand-800">Edit Transaction</h2>
           <button onClick={onClose} className="text-brand-400 hover:text-brand-600">
             <X size={20} />
@@ -94,7 +97,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         </div>
 
         {/* Form */}
-        <div className="p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Amount */}
           <div>
             <label className="text-xs font-bold text-brand-400 uppercase block mb-1">

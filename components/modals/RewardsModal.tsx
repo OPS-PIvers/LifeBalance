@@ -13,7 +13,10 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
@@ -21,9 +24,9 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg bg-brand-50 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-lg bg-brand-50 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white">
+        <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white shrink-0">
           <div>
             <h2 className="text-xl font-bold">Rewards Store</h2>
             <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
