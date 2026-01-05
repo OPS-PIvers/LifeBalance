@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { AlertTriangle, ArrowRightLeft, Plus, X, Pencil, Check, MoreVertical, ChevronDown, ChevronUp, Edit } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, ChevronUp, Edit, Trash2 } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -19,6 +19,7 @@ const BudgetBuckets: React.FC = () => {
     bucketSpentMap,
     transactions,
     currentPeriodId,
+    deleteTransaction,
   } = useHousehold();
 
   const [reallocateModal, setReallocateModal] = useState<{ sourceId: string | null, targetId: string | null } | null>(null);
@@ -51,6 +52,12 @@ const BudgetBuckets: React.FC = () => {
   const handleEditTransaction = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setIsEditTransactionModalOpen(true);
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      await deleteTransaction(id);
+    }
   };
 
   const startEditingLimit = (id: string, limit: number) => {
@@ -145,9 +152,25 @@ const BudgetBuckets: React.FC = () => {
         const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
 
         return (
-          <div key={bucket.id} className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative group">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-3">
+          <div
+            key={bucket.id}
+            className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative group"
+          >
+            {/* Header - Clickable for toggle */}
+            <div
+              className="flex items-center justify-between mb-3 cursor-pointer"
+              onClick={() => setExpandedBucketId(isExpanded ? null : bucket.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setExpandedBucketId(isExpanded ? null : bucket.id);
+                }
+              }}
+              aria-expanded={isExpanded}
+              aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
+            >
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
                 <span className="font-bold text-brand-800">{bucket.name}</span>
@@ -165,7 +188,7 @@ const BudgetBuckets: React.FC = () => {
                     <span className="text-brand-300">/</span>
 
                     {isEditingLimit ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="number"
                           value={editLimitValue}
@@ -191,19 +214,16 @@ const BudgetBuckets: React.FC = () => {
                   )}
                 </div>
 
-                {/* Expand/Collapse button */}
+                {/* Expand Indicator */}
                 {bucketTransactions.length > 0 && (
-                  <button
-                    onClick={() => setExpandedBucketId(isExpanded ? null : bucket.id)}
-                    className="text-brand-400 hover:text-brand-600 p-1"
-                  >
+                  <div className="text-brand-400 p-1" aria-hidden="true">
                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
+                  </div>
                 )}
 
                 {/* Edit Button */}
                 <button
-                  onClick={() => handleEditBucket(bucket)}
+                  onClick={(e) => { e.stopPropagation(); handleEditBucket(bucket); }}
                   className="text-brand-300 hover:text-brand-600 p-1"
                 >
                   <Pencil size={14} />
@@ -246,13 +266,22 @@ const BudgetBuckets: React.FC = () => {
                         }`}>
                           ${tx.amount}
                         </span>
-                        <button
-                          onClick={() => handleEditTransaction(tx)}
-                          className="opacity-0 group-hover:opacity-100 text-brand-400 hover:text-brand-600 p-1 transition-opacity"
-                          title="Edit transaction"
-                        >
-                          <Edit size={14} />
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleEditTransaction(tx)}
+                            className="text-brand-400 hover:text-brand-600 p-1"
+                            title="Edit transaction"
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            className="text-brand-400 hover:text-money-neg p-1"
+                            title="Delete transaction"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -265,10 +294,10 @@ const BudgetBuckets: React.FC = () => {
               <div className="mt-3 bg-money-bgNeg p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
                 <div className="flex items-center gap-2 text-money-neg text-xs font-bold">
                   <AlertTriangle size={14} />
-                  <span>Over by ${totalCommitted - bucket.limit}</span>
+                  <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
                 </div>
                 <button
-                  onClick={() => setReallocateModal({ sourceId: null, targetId: bucket.id })}
+                  onClick={(e) => { e.stopPropagation(); setReallocateModal({ sourceId: null, targetId: bucket.id }); }}
                   className="bg-white text-money-neg text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-200 shadow-sm active:scale-95 transition-transform"
                 >
                   Fix

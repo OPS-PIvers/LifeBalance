@@ -24,8 +24,6 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
     currentPeriodId,
   } = useHousehold();
 
-  const [expandedBucketId, setExpandedBucketId] = useState<string | null>(null);
-
   if (!isOpen) return null;
 
   // Re-calculate the breakdown for display (logic mirrors safeToSpendCalculator)
@@ -162,15 +160,15 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              </div>
 
              {bucketBreakdown.length > 0 ? (
-               <div className="pl-6 space-y-2 max-h-64 overflow-y-auto pr-2">
+               <div className="pl-6 space-y-3 max-h-64 overflow-y-auto pr-2">
                  {bucketBreakdown.map(b => {
-                   const isExpanded = expandedBucketId === b.id;
+                   const spent = b.spent.verified + b.spent.pending;
+                   const percent = b.limit > 0 ? Math.min(100, (spent / b.limit) * 100) : 0;
+                   const isOverspent = spent > b.limit;
+
                    return (
                      <div key={b.id} className="space-y-1">
-                       <div
-                         className="flex justify-between items-center text-xs text-brand-400 cursor-pointer hover:text-brand-600"
-                         onClick={() => setExpandedBucketId(isExpanded ? null : b.id)}
-                       >
+                       <div className="flex justify-between items-center text-xs text-brand-400">
                          <div className="flex items-center gap-2">
                            <span>{b.name}</span>
                            {b.spent.pending > 0 && (
@@ -179,27 +177,23 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                              </span>
                            )}
                          </div>
-                         <div className="flex items-center gap-2">
-                           <span>${b.remaining}</span>
-                           {b.transactions.length > 0 && (
-                             isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-                           )}
-                         </div>
+                         <span className="font-mono">${b.remaining.toFixed(2)}</span>
                        </div>
 
-                       {/* Transaction list for bucket */}
-                       {isExpanded && b.transactions.length > 0 && (
-                         <div className="pl-4 space-y-1 py-2 animate-in fade-in slide-in-from-top-1">
-                           {b.transactions.map(tx => (
-                             <div key={tx.id} className="flex justify-between text-[10px] text-brand-300">
-                               <span>{tx.merchant} • {format(parseISO(tx.date), 'MMM d')}</span>
-                               <span className={tx.status === 'pending_review' ? 'text-amber-500' : ''}>
-                                 ${tx.amount}
-                               </span>
-                             </div>
-                           ))}
-                         </div>
-                       )}
+                       {/* Meter */}
+                       <div
+                         className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden"
+                         role="progressbar"
+                         aria-valuemin={0}
+                         aria-valuemax={100}
+                         aria-valuenow={Math.round(percent)}
+                         aria-label={`Spending for ${b.name}: ${Math.round(percent)}% used`}
+                       >
+                         <div
+                           className={`h-full rounded-full ${isOverspent ? 'bg-money-neg' : b.color}`}
+                           style={{ width: `${percent}%` }}
+                         />
+                       </div>
                      </div>
                    );
                  })}
