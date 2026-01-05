@@ -189,10 +189,10 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                          aria-valuenow={Math.round(percent)}
                          aria-label={`Spending for ${b.name}: ${Math.round(percent)}% used`}
                        >
-                          <div
-                            className={`h-full rounded-full ${isOverspent ? 'bg-money-neg' : b.color}`}
-                            style={{ width: `${percent}%` }}
-                          />
+                         <div
+                           className={`h-full rounded-full ${isOverspent ? 'bg-money-neg' : b.color}`}
+                           style={{ width: `${percent}%` }}
+                         />
                        </div>
                      </div>
                    );

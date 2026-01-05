@@ -169,7 +169,7 @@ const BudgetBuckets: React.FC = () => {
                 }
               }}
               aria-expanded={isExpanded}
-              aria-label={`Toggle ${bucket.name} transactions`}
+              aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
@@ -188,7 +188,7 @@ const BudgetBuckets: React.FC = () => {
                     <span className="text-brand-300">/</span>
 
                     {isEditingLimit ? (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="number"
                           value={editLimitValue}
