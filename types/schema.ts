@@ -268,4 +268,16 @@ export interface Household {
   pantry?: PantryItem[];
   meals?: Meal[];
   shoppingList?: ShoppingItem[];
+  todos?: ToDo[];
+}
+
+export interface ToDo {
+  id: string;
+  text: string;
+  completeByDate: string; // YYYY-MM-DD
+  assignedTo: string; // uid of household member
+  isCompleted: boolean;
+  completedAt?: string; // ISO timestamp
+  createdBy: string; // uid
+  createdAt: string; // ISO timestamp
 }

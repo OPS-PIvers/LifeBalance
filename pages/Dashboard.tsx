@@ -1,10 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus } from 'lucide-react';
+import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays } from 'date-fns';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
@@ -24,7 +24,12 @@ const Dashboard: React.FC = () => {
     deferCalendarItem,
     deleteCalendarItem,
     accounts,
-    primaryYearlyGoal
+    primaryYearlyGoal,
+    todos,
+    completeToDo,
+    deleteToDo,
+    updateToDo,
+    members
   } = useHousehold();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -51,8 +56,15 @@ const Dashboard: React.FC = () => {
     t.status === 'pending_review'
   ).map(t => ({ ...t, queueType: 'transaction' as const }));
 
-  // 3. Combined & Sorted (Reverse Chronological: Newest First)
-  const actionQueue = [...dueCalendarItems, ...pendingTx].sort((a, b) => {
+  // 3. Immediate To-Dos (Today or Tomorrow)
+  const immediateToDos = todos.filter(t => {
+    if (t.isCompleted) return false;
+    const date = parseISO(t.completeByDate);
+    return isBefore(date, endToday) || isSameDay(date, today) || isSameDay(date, addDays(today, 1));
+  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
+
+  // 4. Combined & Sorted (Reverse Chronological: Newest First)
+  const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
     // Determine date property
     const dateA = a.queueType === 'calendar' ? (a as any).date : (a as any).date;
     const dateB = b.queueType === 'calendar' ? (b as any).date : (b as any).date;
@@ -105,35 +117,60 @@ const Dashboard: React.FC = () => {
               {actionQueue.map(item => {
                 const isExpanded = expandedId === item.id;
                 const isCalendar = item.queueType === 'calendar';
+                const isTodo = item.queueType === 'todo';
                 
                 return (
                   <div key={item.id} className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
                     <div className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {/* Icon */}
-                        <div className={`p-2 rounded-lg ${isCalendar ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                           {isCalendar ? <CalendarClock size={16} /> : <Receipt size={16} />}
+                        <div className={`p-2 rounded-lg ${
+                            isCalendar ? 'bg-orange-100 text-orange-600' :
+                            isTodo ? 'bg-rose-100 text-rose-600' :
+                            'bg-blue-100 text-blue-600'
+                          }`}>
+                           {isCalendar ? <CalendarClock size={16} /> :
+                            isTodo ? <ListTodo size={16} /> :
+                            <Receipt size={16} />}
                         </div>
                         <div>
                           <p className="font-bold text-brand-700 text-sm">
-                            {isCalendar ? (item as any).title : (item as any).merchant}
+                            {isCalendar ? (item as any).title :
+                             isTodo ? (item as any).text :
+                             (item as any).merchant}
                           </p>
                           <p className="text-xs text-brand-400">
-                             {isCalendar ? 'Due: ' : 'Tx: '}
+                             {isCalendar ? 'Due: ' : isTodo ? 'Due: ' : 'Tx: '}
                              {(item as any).date}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+                        {!isTodo && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
+                        {isTodo && (item as any).assignedTo && (
+                          <div className="flex items-center">
+                            {(() => {
+                              const assignee = members.find(m => m.uid === (item as any).assignedTo);
+                              return assignee ? (
+                                assignee.photoURL ? (
+                                  <img src={assignee.photoURL} className="w-6 h-6 rounded-full border border-white" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
+                                    {assignee.displayName.charAt(0)}
+                                  </div>
+                                )
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
                         {!isExpanded && (
                           <button
                             onClick={() => {
                               setExpandedId(item.id);
                               // Initialize selected habits from transaction if any, or empty
                               // Cast is necessary because actionQueue combines CalendarItem (no relatedHabitIds) and Transaction
-                              if (!isCalendar && (item as any).relatedHabitIds) {
+                              if (!isCalendar && !isTodo && (item as any).relatedHabitIds) {
                                 setSelectedHabitIds((item as any).relatedHabitIds);
                               } else {
                                 setSelectedHabitIds([]);
@@ -197,6 +234,50 @@ const Dashboard: React.FC = () => {
                                 Delete
                               </button>
                             </div>
+                          </div>
+                        ) : isTodo ? (
+                          /* To-Do Item Actions */
+                          <div className="space-y-2">
+                             <p className="text-xs text-brand-500 mb-3">
+                               Mark this task as complete or delay it:
+                             </p>
+                             <div className="flex gap-2">
+                               <button
+                                 onClick={async () => {
+                                   await completeToDo(item.id);
+                                   setExpandedId(null);
+                                 }}
+                                 className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Check size={16} />
+                                 Complete
+                               </button>
+                               <button
+                                 onClick={async () => {
+                                   const currentDate = parseISO((item as any).completeByDate);
+                                   const nextDay = format(addDays(currentDate, 1), 'yyyy-MM-dd');
+                                   await updateToDo(item.id, { completeByDate: nextDay });
+                                   toast.success('Deferred to next day');
+                                   setExpandedId(null);
+                                 }}
+                                 className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Clock size={16} />
+                                 Defer
+                               </button>
+                               <button
+                                 onClick={async () => {
+                                   if (confirm('Delete this task?')) {
+                                     await deleteToDo(item.id);
+                                     setExpandedId(null);
+                                   }
+                                 }}
+                                 className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Trash2 size={16} />
+                                 Delete
+                               </button>
+                             </div>
                           </div>
                         ) : (
                           /* Transaction Category Selector */

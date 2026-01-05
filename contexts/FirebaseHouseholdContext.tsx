@@ -40,7 +40,8 @@ import {
   PantryItem,
   Meal,
   ShoppingItem,
-  MealPlanItem
+  MealPlanItem,
+  ToDo
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
@@ -80,6 +81,7 @@ interface HouseholdContextType {
   meals: Meal[];
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
+  todos: ToDo[];
 
   // Pay Period Tracking State
   currentPeriodId: string;
@@ -168,6 +170,12 @@ interface HouseholdContextType {
   addMealPlanItem: (item: Omit<MealPlanItem, 'id'>) => Promise<void>;
   updateMealPlanItem: (id: string, updates: Partial<MealPlanItem>) => Promise<void>;
   deleteMealPlanItem: (id: string) => Promise<void>;
+
+  // To-Do Actions
+  addToDo: (todo: Omit<ToDo, 'id'>) => Promise<void>;
+  updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
+  deleteToDo: (id: string) => Promise<void>;
+  completeToDo: (id: string) => Promise<void>;
 }
 
 export const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -192,6 +200,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
+  const [todos, setTodos] = useState<ToDo[]>([]);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -382,6 +391,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(mealPlanQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
         setMealPlan(data);
+      })
+    );
+
+    // To-Do listener
+    const todosQuery = query(collection(db, `households/${householdId}/todos`));
+    unsubscribers.push(
+      onSnapshot(todosQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ToDo));
+        setTodos(data);
       })
     );
 
@@ -2182,6 +2200,61 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
+  // --- ACTIONS: TO-DOS ---
+
+  const addToDo = async (todo: Omit<ToDo, 'id'>) => {
+    if (!householdId || !user) return;
+    try {
+      const sanitizedToDo = sanitizeFirestoreData(todo);
+      await addDoc(collection(db, `households/${householdId}/todos`), {
+        ...sanitizedToDo,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid
+      });
+      toast.success('To-Do added');
+    } catch (error) {
+      console.error('[addToDo] Failed:', error);
+      toast.error('Failed to add to-do');
+    }
+  };
+
+  const updateToDo = async (id: string, updates: Partial<ToDo>) => {
+    if (!householdId) return;
+    try {
+      const sanitizedUpdates = sanitizeFirestoreData(updates);
+      await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
+      toast.success('To-Do updated');
+    } catch (error) {
+      console.error('[updateToDo] Failed:', error);
+      toast.error('Failed to update to-do');
+    }
+  };
+
+  const deleteToDo = async (id: string) => {
+    if (!householdId) return;
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/todos`, id));
+      toast.success('To-Do deleted');
+    } catch (error) {
+      console.error('[deleteToDo] Failed:', error);
+      toast.error('Failed to delete to-do');
+    }
+  };
+
+  const completeToDo = async (id: string) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/todos`, id), {
+        isCompleted: true,
+        completedAt: serverTimestamp()
+      });
+      toast.success('To-Do completed! 🎉');
+    } catch (error) {
+      console.error('[completeToDo] Failed:', error);
+      toast.error('Failed to complete to-do');
+    }
+  };
+
   // --- ACTIONS: PAY PERIOD MANAGEMENT ---
 
   const resetBucketsForNewPeriod = async (newPeriodId: string) => {
@@ -2334,6 +2407,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         meals,
         shoppingList,
         mealPlan,
+        todos,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
@@ -2388,7 +2462,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toggleShoppingItemPurchased,
         addMealPlanItem,
         updateMealPlanItem,
-        deleteMealPlanItem
+        deleteMealPlanItem,
+        addToDo,
+        updateToDo,
+        deleteToDo,
+        completeToDo
       }}
     >
       {children}
