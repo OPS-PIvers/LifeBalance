@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { AlertTriangle, ArrowRightLeft, Plus, X, Pencil, Check, MoreVertical, ChevronDown, ChevronUp, Edit, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, ChevronUp, Edit, Trash2 } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -160,6 +160,16 @@ const BudgetBuckets: React.FC = () => {
             <div
               className="flex items-center justify-between mb-3 cursor-pointer"
               onClick={() => setExpandedBucketId(isExpanded ? null : bucket.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setExpandedBucketId(isExpanded ? null : bucket.id);
+                }
+              }}
+              aria-expanded={isExpanded}
+              aria-label={`Toggle ${bucket.name} transactions`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
@@ -206,7 +216,7 @@ const BudgetBuckets: React.FC = () => {
 
                 {/* Expand Indicator */}
                 {bucketTransactions.length > 0 && (
-                  <div className="text-brand-400 p-1">
+                  <div className="text-brand-400 p-1" aria-hidden="true">
                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                   </div>
                 )}

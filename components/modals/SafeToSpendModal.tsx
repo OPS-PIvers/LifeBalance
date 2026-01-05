@@ -163,7 +163,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                <div className="pl-6 space-y-3 max-h-64 overflow-y-auto pr-2">
                  {bucketBreakdown.map(b => {
                    const spent = b.spent.verified + b.spent.pending;
-                   const percent = Math.min(100, (spent / b.limit) * 100);
+                   const percent = b.limit > 0 ? Math.min(100, (spent / b.limit) * 100) : 0;
                    const isOverspent = spent > b.limit;
 
                    return (
@@ -181,7 +181,14 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                        </div>
 
                        {/* Meter */}
-                       <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
+                       <div
+                         className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden"
+                         role="progressbar"
+                         aria-valuemin={0}
+                         aria-valuemax={100}
+                         aria-valuenow={Math.round(percent)}
+                         aria-label={`Spending for ${b.name}: ${Math.round(percent)}% used`}
+                       >
                           <div
                             className={`h-full rounded-full ${isOverspent ? 'bg-money-neg' : b.color}`}
                             style={{ width: `${percent}%` }}
