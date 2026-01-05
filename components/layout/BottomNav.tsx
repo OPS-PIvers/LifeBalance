@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, Plus, Activity, Utensils } from 'lucide-react';
+import { LayoutDashboard, Wallet, Plus, Activity, Utensils, CheckSquare, Settings } from 'lucide-react';
 import CaptureModal from '../modals/CaptureModal';
 
 const BottomNav: React.FC = () => {
@@ -37,13 +37,6 @@ const BottomNav: React.FC = () => {
                 </>
               )}
             </NavLink>
-          </div>
-
-          {/* Center FAB Placeholder to maintain spacing */}
-          <div className="w-16 flex justify-center" />
-
-          {/* Right Group */}
-          <div className="flex items-center flex-1 justify-around">
             <NavLink to="/habits" className={navLinkClass}>
               {({ isActive }) => (
                 <>
@@ -52,11 +45,34 @@ const BottomNav: React.FC = () => {
                 </>
               )}
             </NavLink>
+          </div>
+
+          {/* Center FAB Placeholder to maintain spacing */}
+          <div className="w-16 flex justify-center" />
+
+          {/* Right Group */}
+          <div className="flex items-center flex-1 justify-around">
+            <NavLink to="/todos" className={navLinkClass}>
+              {({ isActive }) => (
+                <>
+                  <CheckSquare className={iconClass(isActive)} />
+                  <span className="text-[10px] font-medium">To-Dos</span>
+                </>
+              )}
+            </NavLink>
             <NavLink to="/meals" className={navLinkClass}>
               {({ isActive }) => (
                 <>
                   <Utensils className={iconClass(isActive)} />
                   <span className="text-[10px] font-medium">Meals</span>
+                </>
+              )}
+            </NavLink>
+            <NavLink to="/settings" className={navLinkClass}>
+              {({ isActive }) => (
+                <>
+                  <Settings className={iconClass(isActive)} />
+                  <span className="text-[10px] font-medium">Settings</span>
                 </>
               )}
             </NavLink>

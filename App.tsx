@@ -86,6 +86,20 @@ const App: React.FC = () => {
                 }
               />
               <Route
+                path="/todos"
+                element={
+                  <ProtectedRoute>
+                    <>
+                      <TopToolbar />
+                      <main>
+                        <PlaceholderPage />
+                      </main>
+                      <BottomNav />
+                    </>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/settings"
                 element={
                   <ProtectedRoute>
