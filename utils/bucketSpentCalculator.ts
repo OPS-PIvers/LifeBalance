@@ -50,6 +50,12 @@ export function calculateBucketSpent(
     }
   });
 
+  // Round all values to 2 decimal places to prevent floating point errors
+  spentMap.forEach(spent => {
+    spent.verified = Math.round(spent.verified * 100) / 100;
+    spent.pending = Math.round(spent.pending * 100) / 100;
+  });
+
   return spentMap;
 }
 

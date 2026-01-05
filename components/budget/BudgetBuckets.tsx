@@ -179,10 +179,10 @@ const BudgetBuckets: React.FC = () => {
               <div className="flex items-center gap-2">
                 <div className="text-sm font-mono flex flex-col items-end">
                   <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-brand-600'}`}>
-                    <span>${spent.verified}</span>
+                    <span>${spent.verified.toFixed(2)}</span>
                     {spent.pending > 0 && (
                       <span className="text-brand-400">
-                        +${spent.pending}*
+                        +${spent.pending.toFixed(2)}*
                       </span>
                     )}
                     <span className="text-brand-300">/</span>
@@ -373,7 +373,7 @@ const BudgetBuckets: React.FC = () => {
                         const bSpent = bucketSpentMap.get(b.id)?.verified || 0;
                         const avail = b.limit - bSpent;
                         return (
-                          <option key={b.id} value={b.id}>{b.name} (${avail} avail)</option>
+                          <option key={b.id} value={b.id}>{b.name} (${avail.toFixed(2)} avail)</option>
                         );
                       })}
                     </optgroup>
