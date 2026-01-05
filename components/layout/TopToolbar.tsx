@@ -1,14 +1,12 @@
 
 import React, { useState } from 'react';
-import { Star, Settings, TrendingUp } from 'lucide-react';
+import { Star, TrendingUp } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { useNavigate } from 'react-router-dom';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
 
 const TopToolbar: React.FC = () => {
   const { safeToSpend, dailyPoints, weeklyPoints } = useHousehold();
-  const navigate = useNavigate();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
 
@@ -22,17 +20,17 @@ const TopToolbar: React.FC = () => {
           className="flex flex-col cursor-pointer active:opacity-80 transition-opacity"
           onClick={() => setIsSafeSpendOpen(true)}
         >
-          <span className="text-[10px] text-brand-400 uppercase tracking-wider font-bold leading-tight">
-            Safe to Spend
-          </span>
           <span
             className={`text-2xl font-mono font-bold tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
           >
             ${Math.abs(safeToSpend).toFixed(2)}
           </span>
+          <span className="text-[10px] text-brand-400 uppercase tracking-wider font-bold leading-tight">
+            Safe to Spend
+          </span>
         </div>
 
-        {/* Right Container: Points Cluster + Settings */}
+        {/* Right Container: Points Cluster */}
         <div className="flex items-center gap-3">
           {/* Points Container - Clickable to open Rewards Modal */}
           <div
@@ -64,15 +62,6 @@ const TopToolbar: React.FC = () => {
               <span className="text-[10px] text-brand-400 uppercase tracking-wider">This Week</span>
             </div>
           </div>
-
-          {/* Settings Button */}
-          <button
-            onClick={() => navigate('/settings')}
-            className="p-2 hover:bg-brand-700 rounded-lg active:scale-95 transition-all duration-200"
-            aria-label="Settings"
-          >
-            <Settings className="w-5 h-5 text-brand-300" />
-          </button>
         </div>
       </header>
 
