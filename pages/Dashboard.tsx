@@ -5,6 +5,7 @@ import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Chec
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
 import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday } from 'date-fns';
+import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
