@@ -267,8 +267,8 @@ const Dashboard: React.FC = () => {
                                    const currentDate = parseISO(item.completeByDate);
                                    const nextDay = format(addDays(currentDate, 1), 'yyyy-MM-dd');
                                    await updateToDo(item.id, { completeByDate: nextDay });
-                                   setExpandedId(null);
                                    toast.success('Deferred to next day');
+                                   setExpandedId(null);
                                  }}
                                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >
