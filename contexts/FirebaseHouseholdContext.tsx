@@ -172,7 +172,7 @@ interface HouseholdContextType {
   deleteMealPlanItem: (id: string) => Promise<void>;
 
   // To-Do Actions
-  addToDo: (todo: Omit<ToDo, 'id'>) => Promise<void>;
+  addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
   updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
   deleteToDo: (id: string) => Promise<void>;
   completeToDo: (id: string) => Promise<void>;
@@ -2202,7 +2202,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: TO-DOS ---
 
-  const addToDo = async (todo: Omit<ToDo, 'id'>) => {
+  const addToDo = async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
     if (!householdId || !user) return;
     try {
       const sanitizedToDo = sanitizeFirestoreData(todo);

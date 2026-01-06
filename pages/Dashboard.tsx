@@ -63,11 +63,12 @@ const Dashboard: React.FC = () => {
     t.status === 'pending_review'
   ).map(t => ({ ...t, queueType: 'transaction' as const }));
 
-  // 3. Immediate To-Dos (Today or Tomorrow)
+  // 3. Immediate To-Dos (Overdue, Today or Tomorrow)
   const immediateToDos: ActionQueueItem[] = todos.filter(t => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
-    return isBefore(date, endToday) || isSameDay(date, today) || isSameDay(date, addDays(today, 1));
+    // Align with ToDosPage logic: Overdue (before today), Today, or Tomorrow
+    return isBefore(date, startOfToday()) || isSameDay(date, today) || isSameDay(date, addDays(today, 1));
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
 
   // 4. Combined & Sorted (Reverse Chronological: Newest First)
@@ -162,10 +163,10 @@ const Dashboard: React.FC = () => {
                               const assignee = members.find(m => m.uid === item.assignedTo);
                               return assignee ? (
                                 assignee.photoURL ? (
-                                  <img src={assignee.photoURL} className="w-6 h-6 rounded-full border border-white" />
+                                  <img src={assignee.photoURL} alt={assignee.displayName} className="w-6 h-6 rounded-full border border-white" />
                                 ) : (
                                   <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
-                                    {assignee.displayName.charAt(0)}
+                                    {assignee.displayName?.charAt(0) || '?'}
                                   </div>
                                 )
                               ) : null;

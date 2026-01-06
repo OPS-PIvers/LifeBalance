@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, ChevronRight, User } from 'lucide-react';
-import { format, isToday, isTomorrow, isThisWeek, parseISO, isAfter, isBefore, addDays, startOfToday, endOfWeek } from 'date-fns';
-import { ToDo } from '../types/schema';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User } from 'lucide-react';
+import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek } from 'date-fns';
+import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 
 const ToDosPage: React.FC = () => {
@@ -39,7 +39,7 @@ const ToDosPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !completeByDate) {
+    if (!text.trim() || !completeByDate || !assignedTo) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -56,9 +56,7 @@ const ToDosPage: React.FC = () => {
           text,
           completeByDate,
           assignedTo,
-          isCompleted: false,
-          createdBy: safeUser.uid,
-          createdAt: new Date().toISOString()
+          isCompleted: false
         });
       }
       setIsAddModalOpen(false);
@@ -206,34 +204,46 @@ const ToDosPage: React.FC = () => {
                 <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
                   Assign To
                 </label>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {members.map(member => (
-                    <button
-                      key={member.uid}
-                      type="button"
-                      onClick={() => setAssignedTo(member.uid)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
-                        assignedTo === member.uid
-                          ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                          : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
-                      }`}
-                    >
-                      {member.photoURL ? (
-                        <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
-                          {member.displayName.charAt(0)}
-                        </div>
-                      )}
-                      <span className="text-sm font-medium">{member.displayName.split(' ')[0]}</span>
-                    </button>
-                  ))}
-                </div>
+                {members.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
+                    <AlertCircle size={16} className="flex-shrink-0" />
+                    <span>No household members available to assign this task.</span>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 overflow-x-auto pb-2">
+                    {members.map(member => (
+                      <button
+                        key={member.uid}
+                        type="button"
+                        onClick={() => setAssignedTo(member.uid)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
+                          assignedTo === member.uid
+                            ? 'bg-brand-800 text-white border-brand-800 shadow-md'
+                            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
+                        }`}
+                      >
+                        {member.photoURL ? (
+                          <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
+                            {member.displayName?.charAt(0) ?? 'U'}
+                          </div>
+                        )}
+                        <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 active:scale-[0.98] transition-all mt-4"
+                disabled={members.length === 0}
+                className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
+                  members.length === 0
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-brand-900 active:scale-[0.98]'
+                }`}
               >
                 {editingId ? 'Save Changes' : 'Create Task'}
               </button>
@@ -323,11 +333,11 @@ const Section: React.FC<{
                      {assignee && (
                        <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md">
                          {assignee.photoURL ? (
-                           <img src={assignee.photoURL} className="w-3 h-3 rounded-full" />
+                           <img src={assignee.photoURL} className="w-3 h-3 rounded-full" alt="" />
                          ) : (
                            <User size={10} />
                          )}
-                         <span>{assignee.displayName.split(' ')[0]}</span>
+                         <span>{assignee.displayName?.split(' ')[0] ?? 'Member'}</span>
                        </div>
                      )}
                    </div>
@@ -343,7 +353,11 @@ const Section: React.FC<{
                       <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={() => onDelete(item.id)}
+                      onClick={() => {
+                        if (confirm('Delete this task?')) {
+                          onDelete(item.id);
+                        }
+                      }}
                       className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                       aria-label="Delete task"
                     >
