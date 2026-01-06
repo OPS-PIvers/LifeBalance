@@ -2226,12 +2226,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
-  const updateToDo = async (id: string, updates: Partial<ToDo>) => {
+  const updateToDo = async (
+    id: string,
+    updates: Partial<ToDo>,
+    options?: { suppressToast?: boolean }
+  ) => {
     if (!householdId) return;
     try {
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
-      toast.success('To-Do updated');
+      if (!options?.suppressToast) {
+        toast.success('To-Do updated');
+      }
     } catch (error) {
       console.error('[updateToDo] Failed:', error);
       toast.error('Failed to update to-do');
