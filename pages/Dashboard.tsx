@@ -4,7 +4,7 @@ import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
@@ -68,7 +68,7 @@ const Dashboard: React.FC = () => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
     // Align with ToDosPage logic: Overdue (before today), Today, or Tomorrow
-    return isBefore(date, startOfToday()) || isSameDay(date, today) || isSameDay(date, addDays(today, 1));
+    return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
 
   // 4. Combined & Sorted (Reverse Chronological: Newest First)
