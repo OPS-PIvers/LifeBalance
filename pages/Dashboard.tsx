@@ -10,6 +10,7 @@ import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
 import { Transaction, CalendarItem, ToDo } from '../types/schema';
+import { showDeleteConfirmation } from '../utils/toastHelpers';
 
 type ActionQueueItem =
   | (Transaction & { queueType: 'transaction' })
@@ -67,7 +68,7 @@ const Dashboard: React.FC = () => {
   const immediateToDos: ActionQueueItem[] = todos.filter(t => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
-    // Align with ToDosPage logic: Overdue (before today), Today, or Tomorrow
+    // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
     return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
 
@@ -276,44 +277,11 @@ const Dashboard: React.FC = () => {
                                </button>
                                <button
                                  onClick={() => {
-                                   toast.custom((t) => (
-                                     <div className="bg-white shadow-lg rounded-lg p-4 border border-rose-100 max-w-sm">
-                                       <div className="flex items-start gap-3">
-                                         <div className="mt-0.5 text-rose-500">
-                                           <Trash2 size={18} />
-                                         </div>
-                                         <div className="flex-1">
-                                           <p className="text-sm font-semibold text-gray-900">
-                                             Delete this task?
-                                           </p>
-                                           <p className="mt-1 text-xs text-gray-500">
-                                             This action cannot be undone.
-                                           </p>
-                                           <div className="mt-3 flex justify-end gap-2">
-                                             <button
-                                               type="button"
-                                               className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                                               onClick={() => toast.dismiss(t.id)}
-                                             >
-                                               Cancel
-                                             </button>
-                                             <button
-                                               type="button"
-                                               className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
-                                               onClick={async () => {
-                                                 await deleteToDo(item.id);
-                                                 setExpandedId(null);
-                                                 toast.dismiss(t.id);
-                                                 toast.success('Task deleted');
-                                               }}
-                                             >
-                                               Delete
-                                             </button>
-                                           </div>
-                                         </div>
-                                       </div>
-                                     </div>
-                                   ));
+                                   showDeleteConfirmation(async () => {
+                                     await deleteToDo(item.id);
+                                     setExpandedId(null);
+                                     toast.success('Task deleted');
+                                   });
                                  }}
                                  className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >
