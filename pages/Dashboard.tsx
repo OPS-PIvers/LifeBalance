@@ -9,6 +9,12 @@ import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
+import { Transaction, CalendarItem, ToDo } from '../types/schema';
+
+type ActionQueueItem =
+  | (Transaction & { queueType: 'transaction' })
+  | (CalendarItem & { queueType: 'calendar' })
+  | (ToDo & { queueType: 'todo'; amount: number; date: string });
 
 const Dashboard: React.FC = () => {
   const {
@@ -48,17 +54,17 @@ const Dashboard: React.FC = () => {
   );
 
   // 1. Due Calendar Items (Past or Today, Unpaid)
-  const dueCalendarItems = expandedCalendarItems.filter(item =>
+  const dueCalendarItems: ActionQueueItem[] = expandedCalendarItems.filter(item =>
     !item.isPaid && (isBefore(parseISO(item.date), endToday) || isSameDay(parseISO(item.date), today))
   ).map(i => ({ ...i, queueType: 'calendar' as const }));
 
   // 2. Pending Transactions
-  const pendingTx = transactions.filter(t => 
+  const pendingTx: ActionQueueItem[] = transactions.filter(t =>
     t.status === 'pending_review'
   ).map(t => ({ ...t, queueType: 'transaction' as const }));
 
   // 3. Immediate To-Dos (Today or Tomorrow)
-  const immediateToDos = todos.filter(t => {
+  const immediateToDos: ActionQueueItem[] = todos.filter(t => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
     return isBefore(date, endToday) || isSameDay(date, today) || isSameDay(date, addDays(today, 1));
@@ -66,10 +72,7 @@ const Dashboard: React.FC = () => {
 
   // 4. Combined & Sorted (Reverse Chronological: Newest First)
   const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
-    // Determine date property
-    const dateA = a.queueType === 'calendar' ? (a as any).date : (a as any).date;
-    const dateB = b.queueType === 'calendar' ? (b as any).date : (b as any).date;
-    return new Date(dateB).getTime() - new Date(dateA).getTime();
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   // State for expansions/modals
@@ -117,8 +120,6 @@ const Dashboard: React.FC = () => {
             <div className="space-y-3">
               {actionQueue.map(item => {
                 const isExpanded = expandedId === item.id;
-                const isCalendar = item.queueType === 'calendar';
-                const isTodo = item.queueType === 'todo';
                 
                 return (
                   <div key={item.id} className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
@@ -126,24 +127,24 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-3">
                         {/* Icon */}
                         <div className={`p-2 rounded-lg ${
-                            isCalendar ? 'bg-orange-100 text-orange-600' :
-                            isTodo ? 'bg-rose-100 text-rose-600' :
+                            item.queueType === 'calendar' ? 'bg-orange-100 text-orange-600' :
+                            item.queueType === 'todo' ? 'bg-rose-100 text-rose-600' :
                             'bg-blue-100 text-blue-600'
                           }`}>
-                           {isCalendar ? <CalendarClock size={16} /> :
-                            isTodo ? <ListTodo size={16} /> :
+                           {item.queueType === 'calendar' ? <CalendarClock size={16} /> :
+                            item.queueType === 'todo' ? <ListTodo size={16} /> :
                             <Receipt size={16} />}
                         </div>
                         <div>
                           <p className="font-bold text-brand-700 text-sm">
-                            {isCalendar ? (item as any).title :
-                             isTodo ? (item as any).text :
-                             (item as any).merchant}
+                            {item.queueType === 'calendar' ? item.title :
+                             item.queueType === 'todo' ? item.text :
+                             item.merchant}
                           </p>
                           <p className="text-xs text-brand-400 flex items-center gap-1">
-                             {isCalendar ? 'Due: ' : isTodo ? 'Due: ' : 'Tx: '}
-                             {(item as any).date}
-                             {isTodo && isBefore(parseISO((item as any).date), startOfToday()) && (
+                             {item.queueType === 'calendar' ? 'Due: ' : item.queueType === 'todo' ? 'Due: ' : 'Tx: '}
+                             {item.date}
+                             {item.queueType === 'todo' && isBefore(parseISO(item.date), startOfToday()) && (
                                <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
                                  <AlertCircle size={10} />
                                  Overdue
@@ -154,11 +155,11 @@ const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {!isTodo && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
-                        {isTodo && (item as any).assignedTo && (
+                        {item.queueType !== 'todo' && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
+                        {item.queueType === 'todo' && item.assignedTo && (
                           <div className="flex items-center">
                             {(() => {
-                              const assignee = members.find(m => m.uid === (item as any).assignedTo);
+                              const assignee = members.find(m => m.uid === item.assignedTo);
                               return assignee ? (
                                 assignee.photoURL ? (
                                   <img src={assignee.photoURL} className="w-6 h-6 rounded-full border border-white" />
@@ -176,9 +177,8 @@ const Dashboard: React.FC = () => {
                             onClick={() => {
                               setExpandedId(item.id);
                               // Initialize selected habits from transaction if any, or empty
-                              // Cast is necessary because actionQueue combines CalendarItem (no relatedHabitIds) and Transaction
-                              if (!isCalendar && !isTodo && (item as any).relatedHabitIds) {
-                                setSelectedHabitIds((item as any).relatedHabitIds);
+                              if (item.queueType === 'transaction' && item.relatedHabitIds) {
+                                setSelectedHabitIds(item.relatedHabitIds);
                               } else {
                                 setSelectedHabitIds([]);
                               }
@@ -196,16 +196,16 @@ const Dashboard: React.FC = () => {
                       <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
                         <div className="flex justify-between items-center mb-2">
                            <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                             {isCalendar ? 'Actions' : 'Select Category'}
+                             {item.queueType === 'calendar' ? 'Actions' : 'Select Category'}
                            </p>
                            <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
                         </div>
 
-                        {isCalendar ? (
+                        {item.queueType === 'calendar' ? (
                           /* Calendar Item Actions */
                           <div className="space-y-2">
                             <p className="text-xs text-brand-500 mb-3">
-                              {(item as any).type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
+                              {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
                             </p>
                             <div className="flex gap-2">
                               <button
@@ -242,7 +242,7 @@ const Dashboard: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                        ) : isTodo ? (
+                        ) : item.queueType === 'todo' ? (
                           /* To-Do Item Actions */
                           <div className="space-y-2">
                              <p className="text-xs text-brand-500 mb-3">
@@ -261,7 +261,7 @@ const Dashboard: React.FC = () => {
                                </button>
                                <button
                                  onClick={async () => {
-                                   const currentDate = parseISO((item as any).completeByDate);
+                                   const currentDate = parseISO(item.completeByDate);
                                    const nextDay = format(addDays(currentDate, 1), 'yyyy-MM-dd');
                                    await updateToDo(item.id, { completeByDate: nextDay });
                                    toast.success('Deferred to next day');
