@@ -288,7 +288,7 @@ const Section: React.FC<{
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
-  members: any[];
+  members: HouseholdMember[];
 }> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
 
   if (items.length === 0) return null;
