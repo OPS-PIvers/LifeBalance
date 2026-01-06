@@ -398,7 +398,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const todosQuery = query(collection(db, `households/${householdId}/todos`));
     unsubscribers.push(
       onSnapshot(todosQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ToDo));
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          return {
+            ...d,
+            id: doc.id,
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
+            completedAt: d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt,
+          } as ToDo;
+        });
         setTodos(data);
       })
     );

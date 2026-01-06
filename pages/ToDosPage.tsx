@@ -23,7 +23,9 @@ const ToDosPage: React.FC = () => {
   const openAddModal = () => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
-    setAssignedTo(safeUser.uid);
+    // If current user has no UID (safeUser fallback), try first member or empty
+    const defaultAssignee = safeUser.uid || (members.length > 0 ? members[0].uid : '');
+    setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
   };
@@ -39,8 +41,12 @@ const ToDosPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim() || !completeByDate || !assignedTo) {
-      toast.error('Please fill in all required fields');
+
+    // Validate assignee against members list
+    const isValidAssignee = members.some((member: HouseholdMember) => member.uid === assignedTo);
+
+    if (!text.trim() || !completeByDate || !assignedTo || !isValidAssignee) {
+      toast.error('Please fill in all required fields with a valid assignee');
       return;
     }
 
@@ -62,6 +68,7 @@ const ToDosPage: React.FC = () => {
       setIsAddModalOpen(false);
     } catch (error) {
       console.error('Error saving to-do:', error);
+      toast.error('Failed to save to-do. Please try again.');
     }
   };
 
@@ -216,6 +223,8 @@ const ToDosPage: React.FC = () => {
                         key={member.uid}
                         type="button"
                         onClick={() => setAssignedTo(member.uid)}
+                        aria-label={`Assign to ${member.displayName || 'User'}`}
+                        aria-pressed={assignedTo === member.uid}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
                           assignedTo === member.uid
                             ? 'bg-brand-800 text-white border-brand-800 shadow-md'
@@ -354,9 +363,43 @@ const Section: React.FC<{
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm('Delete this task?')) {
-                          onDelete(item.id);
-                        }
+                        toast.custom((t) => (
+                          <div className="bg-white shadow-lg rounded-lg p-4 border border-rose-100 max-w-sm">
+                            <div className="flex items-start gap-3">
+                              <div className="mt-0.5 text-rose-500">
+                                <Trash2 size={18} />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-gray-900">
+                                  Delete this task?
+                                </p>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  This action cannot be undone.
+                                </p>
+                                <div className="mt-3 flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                                    onClick={() => toast.dismiss(t.id)}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
+                                    onClick={() => {
+                                      onDelete(item.id);
+                                      toast.dismiss(t.id);
+                                      toast.success('Task deleted');
+                                    }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ));
                       }}
                       className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                       aria-label="Delete task"
