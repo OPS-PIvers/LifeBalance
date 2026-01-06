@@ -1,10 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo } from 'lucide-react';
+import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday } from 'date-fns';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
@@ -139,9 +139,15 @@ const Dashboard: React.FC = () => {
                              isTodo ? (item as any).text :
                              (item as any).merchant}
                           </p>
-                          <p className="text-xs text-brand-400">
+                          <p className="text-xs text-brand-400 flex items-center gap-1">
                              {isCalendar ? 'Due: ' : isTodo ? 'Due: ' : 'Tx: '}
                              {(item as any).date}
+                             {isTodo && isBefore(parseISO((item as any).date), startOfToday()) && (
+                               <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
+                                 <AlertCircle size={10} />
+                                 Overdue
+                               </span>
+                             )}
                           </p>
                         </div>
                       </div>

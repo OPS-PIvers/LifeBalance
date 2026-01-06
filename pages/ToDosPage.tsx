@@ -123,7 +123,7 @@ const ToDosPage: React.FC = () => {
       {/* Immediate Section */}
       <Section
         title="Immediate"
-        subtitle="Today & Tomorrow"
+        subtitle="Overdue, Today & Tomorrow"
         items={immediate}
         color="rose"
         onComplete={completeToDo}
@@ -286,45 +286,46 @@ const Section: React.FC<{
            return (
              <div
                 key={item.id}
-                className="group relative bg-white rounded-2xl p-4 shadow-sm border border-brand-100 overflow-hidden transition-all hover:shadow-md"
+                className="bg-white rounded-2xl p-4 shadow-sm border border-brand-100 transition-all active:scale-[0.99]"
              >
-               {/* Swipe Action Background (Simulated) */}
-               <div className="absolute inset-y-0 right-0 w-20 bg-emerald-500 flex items-center justify-center translate-x-full group-hover:translate-x-0 transition-transform duration-300 cursor-pointer"
-                    onClick={() => onComplete(item.id)}
-               >
-                 <Check className="text-white" />
-               </div>
-
                <div className="flex items-start gap-3">
-                 {/* Checkbox (Alternative to swipe for desktop/easy access) */}
+                 {/* Complete Checkbox */}
                  <button
                    onClick={() => onComplete(item.id)}
-                   className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                     color === 'rose' ? 'border-rose-200 hover:border-rose-500' :
-                     color === 'amber' ? 'border-amber-200 hover:border-amber-500' :
-                     'border-blue-200 hover:border-blue-500'
+                   className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                     color === 'rose' ? 'border-rose-200 active:bg-rose-100' :
+                     color === 'amber' ? 'border-amber-200 active:bg-amber-100' :
+                     'border-blue-200 active:bg-blue-100'
                    }`}
+                   aria-label="Complete task"
                  >
-                   <Check size={12} className="text-transparent hover:text-current transition-colors" />
+                   <Check size={14} className="text-transparent active:text-current transition-colors" />
                  </button>
 
                  <div className="flex-1 min-w-0">
                    <p className="font-medium text-brand-800 leading-snug">{item.text}</p>
 
-                   <div className="flex items-center gap-3 mt-2">
-                     <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-md font-medium ${badgeStyles[color]}`}>
-                        <Clock size={10} />
-                        {isToday(parseISO(item.completeByDate)) ? 'Today' :
-                         isTomorrow(parseISO(item.completeByDate)) ? 'Tomorrow' :
-                         format(parseISO(item.completeByDate), 'MMM d')}
-                     </div>
+                   <div className="flex flex-wrap items-center gap-2 mt-2">
+                     {isBefore(parseISO(item.completeByDate), startOfToday()) ? (
+                       <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700">
+                          <AlertCircle size={10} />
+                          Overdue ({format(parseISO(item.completeByDate), 'MMM d')})
+                       </div>
+                     ) : (
+                       <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium ${badgeStyles[color]}`}>
+                          <Clock size={10} />
+                          {isToday(parseISO(item.completeByDate)) ? 'Today' :
+                           isTomorrow(parseISO(item.completeByDate)) ? 'Tomorrow' :
+                           format(parseISO(item.completeByDate), 'MMM d')}
+                       </div>
+                     )}
 
                      {assignee && (
-                       <div className="flex items-center gap-1 text-xs text-brand-400">
+                       <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md">
                          {assignee.photoURL ? (
-                           <img src={assignee.photoURL} className="w-4 h-4 rounded-full" />
+                           <img src={assignee.photoURL} className="w-3 h-3 rounded-full" />
                          ) : (
-                           <User size={12} />
+                           <User size={10} />
                          )}
                          <span>{assignee.displayName.split(' ')[0]}</span>
                        </div>
@@ -332,19 +333,21 @@ const Section: React.FC<{
                    </div>
                  </div>
 
-                 {/* Edit/Delete Actions */}
-                 <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                 {/* Edit/Delete Actions (Always Visible) */}
+                 <div className="flex items-center gap-1 pl-2">
                     <button
                       onClick={() => onEdit(item)}
-                      className="p-1.5 text-brand-400 hover:bg-brand-50 hover:text-brand-600 rounded-lg"
+                      className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                      aria-label="Edit task"
                     >
-                      <Edit2 size={14} />
+                      <Edit2 size={16} />
                     </button>
                     <button
                       onClick={() => onDelete(item.id)}
-                      className="p-1.5 text-brand-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg"
+                      className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
+                      aria-label="Delete task"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={16} />
                     </button>
                  </div>
                </div>
