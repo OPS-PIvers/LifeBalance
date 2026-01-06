@@ -45,25 +45,11 @@ const ToDosPage: React.FC = () => {
     // Validate assignee against members list
     const isValidAssignee = members.some((member: HouseholdMember) => member.uid === assignedTo);
 
-    if (!text.trim()) {
-      toast.error('Please enter a task description.');
+    if (!text.trim() || !completeByDate || !assignedTo || !isValidAssignee) {
+      toast.error('Please fill in all required fields with a valid assignee');
       return;
     }
 
-    if (!completeByDate) {
-      toast.error('Please select a due date.');
-      return;
-    }
-
-    if (!assignedTo) {
-      toast.error('Please select an assignee.');
-      return;
-    }
-
-    if (!isValidAssignee) {
-      toast.error('The selected assignee is not valid.');
-      return;
-    }
     try {
       if (editingId) {
         await updateToDo(editingId, {
@@ -193,10 +179,11 @@ const ToDosPage: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+                <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
                   Task
                 </label>
                 <input
+                  id="task-input"
                   type="text"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
@@ -207,11 +194,12 @@ const ToDosPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+                <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
                   Due Date
                 </label>
                 <div className="relative">
                   <input
+                    id="due-date-input"
                     type="date"
                     value={completeByDate}
                     onChange={(e) => setCompleteByDate(e.target.value)}
@@ -288,7 +276,7 @@ const Section: React.FC<{
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
-  members: HouseholdMember[];
+  members: any[];
 }> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
 
   if (items.length === 0) return null;
