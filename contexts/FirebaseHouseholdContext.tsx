@@ -2231,7 +2231,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     try {
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
-      toast.success('To-Do updated');
+      // Note: Toast removed to allow UI-specific messaging
     } catch (error) {
       console.error('[updateToDo] Failed:', error);
       toast.error('Failed to update to-do');
@@ -2242,7 +2242,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/todos`, id));
-      toast.success('To-Do deleted');
+      // Note: Toast removed to allow UI-specific messaging
     } catch (error) {
       console.error('[deleteToDo] Failed:', error);
       toast.error('Failed to delete to-do');

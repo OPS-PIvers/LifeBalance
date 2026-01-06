@@ -1,12 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
+import { showDeleteConfirmation } from '../utils/toastHelpers';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
+
+  // Track current date to trigger re-categorization at midnight
+  const [currentDate, setCurrentDate] = useState(() => startOfToday());
+
+  // Update date at midnight
+  useEffect(() => {
+    const checkMidnight = () => {
+      const now = startOfToday();
+      if (now.getTime() !== currentDate.getTime()) {
+        setCurrentDate(now);
+      }
+    };
+
+    // Check every minute if date has changed
+    const interval = setInterval(checkMidnight, 60000);
+    return () => clearInterval(interval);
+  }, [currentDate]);
 
   // Create a safe user object to avoid undefined access
   const safeUser = currentUser || { uid: '', displayName: 'User', photoURL: null };
@@ -75,7 +93,7 @@ const ToDosPage: React.FC = () => {
   // Categorize To-Dos
   const { immediate, upcoming, radar } = useMemo(() => {
     const active = todos.filter(t => !t.isCompleted);
-    const today = startOfToday();
+    const today = currentDate;
     const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
 
     const immediate: ToDo[] = [];
@@ -102,7 +120,7 @@ const ToDosPage: React.FC = () => {
       upcoming: upcoming.sort(sorter),
       radar: radar.sort(sorter)
     };
-  }, [todos]);
+  }, [todos, currentDate]);
 
   // Swipe Action Implementation (Simplified with buttons for now as pure Swipe in React needs libraries or complex touch handling)
   // User requested "Swipe Right", but for MVP in web view/PWA without external libs like react-swipeable-list,
@@ -219,7 +237,7 @@ const ToDosPage: React.FC = () => {
                     <span>No household members available to assign this task.</span>
                   </div>
                 ) : (
-                  <div className="flex gap-2 overflow-x-auto pb-2">
+                  <fieldset className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
                     {members.map(member => (
                       <button
                         key={member.uid}
@@ -243,7 +261,7 @@ const ToDosPage: React.FC = () => {
                         <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
                       </button>
                     ))}
-                  </div>
+                  </fieldset>
                 )}
               </div>
 
@@ -276,7 +294,7 @@ const Section: React.FC<{
   onComplete: (id: string) => void;
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
-  members: any[];
+  members: HouseholdMember[];
 }> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
 
   if (items.length === 0) return null;
@@ -314,13 +332,13 @@ const Section: React.FC<{
                  <button
                    onClick={() => onComplete(item.id)}
                    className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                     color === 'rose' ? 'border-rose-200 active:bg-rose-100' :
-                     color === 'amber' ? 'border-amber-200 active:bg-amber-100' :
-                     'border-blue-200 active:bg-blue-100'
+                     color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
+                     color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
+                     'border-blue-200 hover:bg-blue-50 active:bg-blue-100'
                    }`}
                    aria-label="Complete task"
                  >
-                   <Check size={14} className="text-transparent active:text-current transition-colors" />
+                   <Check size={14} className="text-transparent hover:text-current active:text-current transition-colors" />
                  </button>
 
                  <div className="flex-1 min-w-0">
@@ -365,43 +383,10 @@ const Section: React.FC<{
                     </button>
                     <button
                       onClick={() => {
-                        toast.custom((t) => (
-                          <div className="bg-white shadow-lg rounded-lg p-4 border border-rose-100 max-w-sm">
-                            <div className="flex items-start gap-3">
-                              <div className="mt-0.5 text-rose-500">
-                                <Trash2 size={18} />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-sm font-semibold text-gray-900">
-                                  Delete this task?
-                                </p>
-                                <p className="mt-1 text-xs text-gray-500">
-                                  This action cannot be undone.
-                                </p>
-                                <div className="mt-3 flex justify-end gap-2">
-                                  <button
-                                    type="button"
-                                    className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-                                    onClick={() => toast.dismiss(t.id)}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
-                                    onClick={() => {
-                                      onDelete(item.id);
-                                      toast.dismiss(t.id);
-                                      toast.success('Task deleted');
-                                    }}
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ));
+                        showDeleteConfirmation(async () => {
+                          await onDelete(item.id);
+                          toast.success('Task deleted');
+                        });
                       }}
                       className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                       aria-label="Delete task"
