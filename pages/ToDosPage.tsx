@@ -45,11 +45,25 @@ const ToDosPage: React.FC = () => {
     // Validate assignee against members list
     const isValidAssignee = members.some((member: HouseholdMember) => member.uid === assignedTo);
 
-    if (!text.trim() || !completeByDate || !assignedTo || !isValidAssignee) {
-      toast.error('Please fill in all required fields with a valid assignee');
+    if (!text.trim()) {
+      toast.error('Please enter a task description.');
       return;
     }
 
+    if (!completeByDate) {
+      toast.error('Please select a due date.');
+      return;
+    }
+
+    if (!assignedTo) {
+      toast.error('Please select an assignee.');
+      return;
+    }
+
+    if (!isValidAssignee) {
+      toast.error('The selected assignee is not valid.');
+      return;
+    }
     try {
       if (editingId) {
         await updateToDo(editingId, {
