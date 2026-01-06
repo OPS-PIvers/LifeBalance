@@ -2242,7 +2242,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/todos`, id));
-      toast.success('To-Do deleted');
     } catch (error) {
       console.error('[deleteToDo] Failed:', error);
       toast.error('Failed to delete to-do');
