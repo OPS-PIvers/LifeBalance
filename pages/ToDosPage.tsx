@@ -12,6 +12,10 @@ const ToDosPage: React.FC = () => {
   // Track current date to trigger re-categorization at midnight
   const [currentDate, setCurrentDate] = useState(() => startOfToday());
 
+  // Modal and form state - declared before useEffect that references them
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   // Update date at midnight
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
@@ -52,9 +56,6 @@ const ToDosPage: React.FC = () => {
 
   // Create a safe user object to avoid undefined access
   const safeUser = currentUser || { uid: '', displayName: 'User', photoURL: null };
-
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form State
   const [text, setText] = useState('');
