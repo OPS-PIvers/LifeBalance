@@ -4,22 +4,22 @@ import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow, isAfter, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
-import { Transaction, CalendarItem, ToDo } from '../types/schema';
+import { Transaction, CalendarItem, ToDo, HouseholdMember } from '../types/schema';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 
 // TodoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
-// The 'amount' field is required to fit the ActionQueueItem union structure used
-// throughout the action queue rendering logic, but is set to 0 for todos since
-// they don't have a monetary value.
+// The 'amount' field below is a structural placeholder required to fit the
+// ActionQueueItem union shape used throughout the action queue rendering logic.
+// For todos it is always 0 and does NOT represent a monetary value.
 type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
-  amount: number; // Always 0 for todos; required for ActionQueueItem union compatibility
+  amount: number; // Placeholder numeric field; always 0 for todos and not a monetary amount, kept for ActionQueueItem union compatibility
   date: string; // Maps to completeByDate from ToDo
 };
 
@@ -54,13 +54,20 @@ const Dashboard: React.FC = () => {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
 
+  // Memoize member lookup Map for O(1) access instead of O(n) for each todo
+  const memberMap = useMemo(() => {
+    const map = new Map<string, HouseholdMember>();
+    members.forEach(member => map.set(member.uid, member));
+    return map;
+  }, [members]);
+
   // Helper function to render assignee avatar
   const renderAssigneeAvatar = (assignedTo: string) => {
-    const assignee = members.find(m => m.uid === assignedTo);
+    const assignee = memberMap.get(assignedTo);
     if (!assignee) return null;
     
     return assignee.photoURL ? (
-      <img src={assignee.photoURL} alt={assignee.displayName} className="w-6 h-6 rounded-full border border-white" />
+      <img src={assignee.photoURL} alt={assignee.displayName ?? 'Assigned member'} className="w-6 h-6 rounded-full border border-white" />
     ) : (
       <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
         {assignee.displayName?.charAt(0) || '?'}
@@ -278,15 +285,35 @@ const Dashboard: React.FC = () => {
                                </button>
                                <button
                                  onClick={async () => {
-                                   // Defer to tomorrow (relative to today), not +1 day from due date
+                                   // Defer using the later of (current due date + 1 day) or tomorrow (relative to today)
                                    const today = startOfToday();
-                                   const tomorrow = format(addDays(today, 1), 'yyyy-MM-dd');
-                                   const originalDueDate = item.date ? parseISO(item.date) : null;
-                                   await updateToDo(item.id, { completeByDate: tomorrow });
-                                   if (originalDueDate && isBefore(originalDueDate, today)) {
-                                     toast.success(`Deferred overdue task (was due ${format(originalDueDate, 'MMM d')}) to tomorrow`);
+                                   const tomorrowDate = addDays(today, 1);
+                                   const originalDueDate = parseISO(item.date);
+                                   
+                                   // Validate parsed date
+                                   if (!isValid(originalDueDate)) {
+                                     toast.error('Invalid due date');
+                                     return;
+                                   }
+                                   
+                                   // Choose the later date: either (original + 1 day) or tomorrow
+                                   const oneDayAfterOriginal = addDays(originalDueDate, 1);
+                                   const newDueDate = isAfter(oneDayAfterOriginal, tomorrowDate)
+                                     ? oneDayAfterOriginal
+                                     : tomorrowDate;
+
+                                   const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
+                                   await updateToDo(item.id, { completeByDate: newDueDateString });
+
+                                   if (isBefore(originalDueDate, today)) {
+                                     toast.success(
+                                       `Deferred overdue task (was due ${format(
+                                         originalDueDate,
+                                         'MMM d'
+                                       )}) to ${format(newDueDate, 'MMM d')}`
+                                     );
                                    } else {
-                                     toast.success('Deferred to tomorrow');
+                                     toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
                                    }
                                    setExpandedId(null);
                                  }}
