@@ -2226,26 +2226,40 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
+  /**
+   * Updates an existing to-do item.
+   * 
+   * Toast Behavior: All toast notifications (success and error) are intentionally omitted
+   * to allow UI-specific messaging. Errors are re-thrown so callers can handle them appropriately.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
   const updateToDo = async (id: string, updates: Partial<ToDo>) => {
     if (!householdId) return;
     try {
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
-      // Note: Toast removed to allow UI-specific messaging
     } catch (error) {
       console.error('[updateToDo] Failed:', error);
-      toast.error('Failed to update to-do');
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
+  /**
+   * Deletes a to-do item.
+   * 
+   * Toast Behavior: All toast notifications (success and error) are intentionally omitted 
+   * to allow UI-specific messaging. Errors are re-thrown so callers can handle them appropriately.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
   const deleteToDo = async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/todos`, id));
-      // Note: Toast removed to allow UI-specific messaging
     } catch (error) {
       console.error('[deleteToDo] Failed:', error);
-      toast.error('Failed to delete to-do');
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
