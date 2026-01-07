@@ -2229,8 +2229,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   /**
    * Updates an existing to-do item.
    * 
-   * Toast Behavior: All toast notifications (success and error) are intentionally omitted
-   * to allow UI-specific messaging. Errors are re-thrown so callers can handle them appropriately.
+   * Toast Behavior: Toast notifications are intentionally omitted to allow UI-specific messaging.
+   * Success toasts were never shown; error toasts have been removed. Errors are re-thrown so 
+   * callers can provide contextual feedback appropriate to their UI context.
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
@@ -2248,8 +2249,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   /**
    * Deletes a to-do item.
    * 
-   * Toast Behavior: All toast notifications (success and error) are intentionally omitted 
-   * to allow UI-specific messaging. Errors are re-thrown so callers can handle them appropriately.
+   * Toast Behavior: Toast notifications are intentionally omitted to allow UI-specific messaging.
+   * Success toasts were never shown; error toasts have been removed. Errors are re-thrown so
+   * callers can provide contextual feedback appropriate to their UI context.
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */

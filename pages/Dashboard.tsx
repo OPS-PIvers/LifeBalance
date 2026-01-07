@@ -18,7 +18,7 @@ import { showDeleteConfirmation } from '../utils/toastHelpers';
 // the queueType and ignore items where queueType === 'todo'.
 type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
-  date: string; // Maps to completeByDate from ToDo
+  date: string; // Maps from ToDo.completeByDate for consistent ActionQueueItem interface
 };
 
 type TransactionQueueItem = Transaction & { 
