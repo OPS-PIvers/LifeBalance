@@ -14,19 +14,22 @@ import { showDeleteConfirmation } from '../utils/toastHelpers';
 
 // TodoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
-// The 'amount' field below is a structural placeholder required to fit the
-// ActionQueueItem union shape used throughout the action queue rendering logic.
-// For todos it is always 0 and does NOT represent a monetary value.
+// Todos do not have a monetary amount; any amount-related logic should check
+// the queueType and ignore items where queueType === 'todo'.
 type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
-  amount: number; // Placeholder numeric field; always 0 for todos and not a monetary amount, kept for ActionQueueItem union compatibility
-  date: string; // Maps to completeByDate from ToDo
+  date: string; // Maps from ToDo.completeByDate for consistent ActionQueueItem interface
 };
 
-type ActionQueueItem =
-  | (Transaction & { queueType: 'transaction' })
-  | (CalendarItem & { queueType: 'calendar' })
-  | TodoActionQueueItem;
+type TransactionQueueItem = Transaction & { 
+  queueType: 'transaction';
+};
+
+type CalendarQueueItem = CalendarItem & { 
+  queueType: 'calendar';
+};
+
+type ActionQueueItem = TransactionQueueItem | CalendarQueueItem | TodoActionQueueItem;
 
 const Dashboard: React.FC = () => {
   const {
@@ -102,9 +105,14 @@ const Dashboard: React.FC = () => {
     const date = parseISO(t.completeByDate);
     // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
     return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
-  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
+  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate }));
 
   // 4. Combined & Sorted (Chronological: Oldest First)
+  // NOTE: Previously, the action queue (without todos) was sorted newest-first.
+  // Now that we combine calendar items, pending transactions, and todos into a
+  // single queue, we sort oldest-first so the longest-waiting and overdue items
+  // are surfaced first. This keeps the queue behaving like a "work off the oldest
+  // items" list rather than a feed of most recent activity.
   const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
@@ -189,7 +197,9 @@ const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {item.queueType !== 'todo' && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
+                        {(item.queueType === 'transaction' || item.queueType === 'calendar') && (
+                          <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+                        )}
                         {item.queueType === 'todo' && item.assignedTo && (
                           <div className="flex items-center">
                             {renderAssigneeAvatar(item.assignedTo)}
@@ -207,7 +217,7 @@ const Dashboard: React.FC = () => {
                               }
                             }}
                             className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
-                            aria-label={`Review ${item.queueType === 'todo' ? item.text : item.queueType === 'calendar' ? item.title : item.merchant}`}
+                            aria-label={`Review ${item.queueType === 'todo' ? item.text : item.queueType === 'calendar' ? item.title : item.merchant || 'item'}`}
                           >
                             Review
                           </button>
@@ -297,9 +307,9 @@ const Dashboard: React.FC = () => {
                                    }
                                    
                                    // Choose the later date: either (original + 1 day) or tomorrow
-                                   const oneDayAfterOriginal = addDays(originalDueDate, 1);
-                                   const newDueDate = isAfter(oneDayAfterOriginal, tomorrowDate)
-                                     ? oneDayAfterOriginal
+                                   const deferredFromOriginal = addDays(originalDueDate, 1);
+                                   const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
+                                     ? deferredFromOriginal
                                      : tomorrowDate;
 
                                    const newDueDateString = format(newDueDate, 'yyyy-MM-dd');

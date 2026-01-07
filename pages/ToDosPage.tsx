@@ -40,7 +40,7 @@ const ToDosPage: React.FC = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, []); // Empty dependency array - only run once on mount
+  }, []); // Run once on mount to initiate recurring midnight checks
 
   // Handle Escape key to close modal
   useEffect(() => {
