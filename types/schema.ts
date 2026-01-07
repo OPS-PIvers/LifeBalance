@@ -274,10 +274,14 @@ export interface Household {
 export interface ToDo {
   id: string;
   text: string;
-  completeByDate: string; // YYYY-MM-DD
+  completeByDate: string; // Due date for task completion (YYYY-MM-DD format)
   assignedTo: string; // uid of household member
   isCompleted: boolean;
-  completedAt?: string; // ISO timestamp
+  completedAt?: string; // ISO timestamp - Full timestamp for when task was completed
   createdBy: string; // uid
   createdAt: string; // ISO timestamp
+  // Note: completeByDate uses YYYY-MM-DD (date-only) for scheduling, while completedAt
+  // uses ISO timestamp (with time) to record the exact moment of completion. This
+  // distinction allows date-based grouping for due dates while preserving precise
+  // completion history.
 }

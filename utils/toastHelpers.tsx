@@ -36,8 +36,13 @@ export const showDeleteConfirmation = (
               type="button"
               className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-500 rounded-md hover:bg-rose-600 transition-colors"
               onClick={async () => {
-                await onConfirm();
-                toast.dismiss(t.id);
+                try {
+                  await onConfirm();
+                  toast.dismiss(t.id);
+                } catch (error) {
+                  console.error('Failed to delete item:', error);
+                  toast.error(`Failed to delete ${itemName}. Please try again.`);
+                }
               }}
             >
               Delete

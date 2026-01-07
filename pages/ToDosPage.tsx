@@ -14,17 +14,41 @@ const ToDosPage: React.FC = () => {
 
   // Update date at midnight
   useEffect(() => {
-    const checkMidnight = () => {
-      const now = startOfToday();
-      if (now.getTime() !== currentDate.getTime()) {
-        setCurrentDate(now);
+    let timeoutId: NodeJS.Timeout;
+    
+    const scheduleNextMidnight = () => {
+      const now = new Date();
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      const msUntilMidnight = tomorrow.getTime() - now.getTime();
+      
+      timeoutId = setTimeout(() => {
+        setCurrentDate(startOfToday());
+        // Schedule the next midnight check
+        scheduleNextMidnight();
+      }, msUntilMidnight);
+    };
+
+    scheduleNextMidnight();
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []); // Empty dependency array - only run once on mount
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAddModalOpen) {
+        setIsAddModalOpen(false);
       }
     };
 
-    // Check every minute if date has changed
-    const interval = setInterval(checkMidnight, 60000);
-    return () => clearInterval(interval);
-  }, [currentDate]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isAddModalOpen]);
 
   // Create a safe user object to avoid undefined access
   const safeUser = currentUser || { uid: '', displayName: 'User', photoURL: null };
@@ -61,10 +85,17 @@ const ToDosPage: React.FC = () => {
     e.preventDefault();
 
     // Validate assignee against members list
-    const isValidAssignee = members.some((member: HouseholdMember) => member.uid === assignedTo);
+    const isValidAssignee = members.some(member => member.uid === assignedTo);
 
-    if (!text.trim() || !completeByDate || !assignedTo || !isValidAssignee) {
-      toast.error('Please fill in all required fields with a valid assignee');
+    // First, ensure all required fields are filled
+    if (!text.trim() || !completeByDate || !assignedTo) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    // Then, ensure the selected assignee is a valid household member
+    if (!isValidAssignee) {
+      toast.error('Please select a valid household member to assign this task to');
       return;
     }
 
@@ -76,6 +107,7 @@ const ToDosPage: React.FC = () => {
           completeByDate,
           assignedTo
         });
+        toast.success('Task updated');
       } else {
         await addToDo({
           text: trimmedText,
@@ -101,8 +133,12 @@ const ToDosPage: React.FC = () => {
     const upcoming: ToDo[] = [];
     const radar: ToDo[] = [];
 
+    // Create a map of parsed dates for efficient sorting
+    const dateMap = new Map<string, number>();
+    
     active.forEach(todo => {
       const date = parseISO(todo.completeByDate);
+      dateMap.set(todo.id, date.getTime());
 
       if (isBefore(date, today) || isToday(date) || isTomorrow(date)) {
         immediate.push(todo);
@@ -113,20 +149,23 @@ const ToDosPage: React.FC = () => {
       }
     });
 
-    // Sort by date
-    const sorter = (a: ToDo, b: ToDo) => new Date(a.completeByDate).getTime() - new Date(b.completeByDate).getTime();
+    // Sort by date using pre-parsed timestamps
+    const sortByCompleteByDate = (a: ToDo, b: ToDo) => 
+      (dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0);
 
     return {
-      immediate: immediate.sort(sorter),
-      upcoming: upcoming.sort(sorter),
-      radar: radar.sort(sorter)
+      immediate: immediate.sort(sortByCompleteByDate),
+      upcoming: upcoming.sort(sortByCompleteByDate),
+      radar: radar.sort(sortByCompleteByDate)
     };
   }, [todos, currentDate]);
 
-  // Swipe Action Implementation (Simplified with buttons for now as pure Swipe in React needs libraries or complex touch handling)
-  // User requested "Swipe Right", but for MVP in web view/PWA without external libs like react-swipeable-list,
-  // I will implement a slide-out action or a prominent button.
-  // Given the constraints, I'll use a clean UI with action buttons that are mobile friendly.
+  // Swipe Action Implementation
+  // Swiping is not implemented in this MVP web/PWA version to avoid adding external
+  // dependencies or complex touch handling logic. Instead, equivalent actions are
+  // exposed via clearly labeled, mobile-friendly buttons.
+  // TODO: If a swipe interaction library is added in the future, replace button-based
+  // actions with real swipe gestures where appropriate.
 
   return (
     <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
@@ -191,12 +230,6 @@ const ToDosPage: React.FC = () => {
               setIsAddModalOpen(false);
             }
           }}
-          onKeyDown={(e) => {
-            // Close modal on Escape key
-            if (e.key === 'Escape') {
-              setIsAddModalOpen(false);
-            }
-          }}
           tabIndex={-1}
           role="dialog"
           aria-modal="true"
@@ -225,7 +258,7 @@ const ToDosPage: React.FC = () => {
                   type="text"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="What needs doing?"
+                  placeholder="Enter task description"
                   className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
                   autoFocus
                 />
@@ -319,6 +352,13 @@ const Section: React.FC<{
 
   if (items.length === 0) return null;
 
+  // Create member lookup Map for O(1) access instead of O(n) for each item
+  const memberMap = useMemo(() => {
+    const map = new Map<string, HouseholdMember>();
+    members.forEach(member => map.set(member.uid, member));
+    return map;
+  }, [members]);
+
   const colorStyles = {
     rose: 'text-rose-600 bg-rose-50 border-rose-100',
     amber: 'text-amber-600 bg-amber-50 border-amber-100',
@@ -340,7 +380,7 @@ const Section: React.FC<{
 
       <div className="space-y-3">
         {items.map(item => {
-           const assignee = members.find(m => m.uid === item.assignedTo);
+           const assignee = memberMap.get(item.assignedTo);
 
            return (
              <div
