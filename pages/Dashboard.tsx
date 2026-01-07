@@ -313,19 +313,24 @@ const Dashboard: React.FC = () => {
                                      : tomorrowDate;
 
                                    const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
-                                   await updateToDo(item.id, { completeByDate: newDueDateString });
+                                   try {
+                                     await updateToDo(item.id, { completeByDate: newDueDateString });
 
-                                   if (isBefore(originalDueDate, today)) {
-                                     toast.success(
-                                       `Deferred overdue task (was due ${format(
-                                         originalDueDate,
-                                         'MMM d'
-                                       )}) to ${format(newDueDate, 'MMM d')}`
-                                     );
-                                   } else {
-                                     toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
+                                     if (isBefore(originalDueDate, today)) {
+                                       toast.success(
+                                         `Deferred overdue task (was due ${format(
+                                           originalDueDate,
+                                           'MMM d'
+                                         )}) to ${format(newDueDate, 'MMM d')}`
+                                       );
+                                     } else {
+                                       toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
+                                     }
+                                     setExpandedId(null);
+                                   } catch (error) {
+                                     console.error('Failed to defer task:', error);
+                                     toast.error('Failed to defer task. Please try again.');
                                    }
-                                   setExpandedId(null);
                                  }}
                                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >

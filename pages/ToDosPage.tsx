@@ -94,16 +94,24 @@ const ToDosPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // First, ensure all required fields are filled
-    if (!text.trim() || !completeByDate || !assignedTo) {
+    // Validate in order: members exist, required fields filled, valid assignee
+    if (members.length === 0) {
+      toast.error('No household members available. Please add members first.');
+      return;
+    }
+
+    if (!text.trim() || !completeByDate) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    // Validate assignee against members list
-    const isValidAssignee = members.some(member => member.uid === assignedTo);
+    if (!assignedTo) {
+      toast.error('Please select a household member to assign this task to');
+      return;
+    }
 
-    // Then, ensure the selected assignee is a valid household member
+    // Validate assignee is in members list
+    const isValidAssignee = members.some(member => member.uid === assignedTo);
     if (!isValidAssignee) {
       toast.error('Please select a valid household member to assign this task to');
       return;
@@ -125,6 +133,7 @@ const ToDosPage: React.FC = () => {
           assignedTo,
           isCompleted: false
         });
+        toast.success('Task added');
       }
       setIsAddModalOpen(false);
     } catch (error) {
@@ -294,17 +303,17 @@ const ToDosPage: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+              <fieldset>
+                <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
                   Assign To
-                </label>
+                </legend>
                 {members.length === 0 ? (
                   <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
                     <AlertCircle size={16} className="flex-shrink-0" />
                     <span>No household members available to assign this task.</span>
                   </div>
                 ) : (
-                  <fieldset className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
+                  <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
                     {members.map(member => (
                       <button
                         key={member.uid}
@@ -328,9 +337,9 @@ const ToDosPage: React.FC = () => {
                         <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
                       </button>
                     ))}
-                  </fieldset>
+                  </div>
                 )}
-              </div>
+              </fieldset>
 
               <button
                 type="submit"
