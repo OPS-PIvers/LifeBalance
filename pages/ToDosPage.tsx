@@ -54,8 +54,17 @@ const ToDosPage: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isAddModalOpen]);
 
-  // Create a safe user object to avoid undefined access
-  const safeUser = currentUser || { uid: '', displayName: 'User', photoURL: null };
+  // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
+  if (!currentUser) {
+    return (
+      <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
+          <p className="font-semibold">Authentication Required</p>
+          <p className="text-sm">Please log in to manage your to-do list.</p>
+        </div>
+      </div>
+    );
+  }
 
   // Form State
   const [text, setText] = useState('');
@@ -66,8 +75,8 @@ const ToDosPage: React.FC = () => {
   const openAddModal = () => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
-    // If current user has no UID (safeUser fallback), try first member or empty
-    const defaultAssignee = safeUser.uid || (members.length > 0 ? members[0].uid : '');
+    // Default to current user, or first member if available
+    const defaultAssignee = currentUser.uid || (members.length > 0 ? members[0].uid : '');
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -85,14 +94,14 @@ const ToDosPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate assignee against members list
-    const isValidAssignee = members.some(member => member.uid === assignedTo);
-
     // First, ensure all required fields are filled
     if (!text.trim() || !completeByDate || !assignedTo) {
       toast.error('Please fill in all required fields');
       return;
     }
+
+    // Validate assignee against members list
+    const isValidAssignee = members.some(member => member.uid === assignedTo);
 
     // Then, ensure the selected assignee is a valid household member
     if (!isValidAssignee) {
@@ -141,7 +150,11 @@ const ToDosPage: React.FC = () => {
       const date = parseISO(todo.completeByDate);
       dateMap.set(todo.id, date.getTime());
 
-      if (isBefore(date, today) || isToday(date) || isTomorrow(date)) {
+      // Overdue items: strictly before the start of today
+      if (isBefore(date, today)) {
+        immediate.push(todo);
+      // Immediate items: due today or tomorrow
+      } else if (isToday(date) || isTomorrow(date)) {
         immediate.push(todo);
       } else if (isBefore(date, addDays(endOfCurrentWeek, 1))) { // Within this week
         upcoming.push(todo);
@@ -161,7 +174,7 @@ const ToDosPage: React.FC = () => {
     };
   }, [todos, currentDate]);
 
-  // Swipe Action Implementation
+  // Action Implementation
   // Swiping is not implemented in this MVP web/PWA version to avoid adding external
   // dependencies or complex touch handling logic. Instead, equivalent actions are
   // exposed via clearly labeled, mobile-friendly buttons.
@@ -231,7 +244,7 @@ const ToDosPage: React.FC = () => {
               setIsAddModalOpen(false);
             }
           }}
-          tabIndex={-1}
+          tabIndex={0}
           role="dialog"
           aria-modal="true"
         >
@@ -423,11 +436,15 @@ const Section: React.FC<{
                      {assignee && (
                        <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md">
                          {assignee.photoURL ? (
-                           <img src={assignee.photoURL} className="w-3 h-3 rounded-full" alt="" />
+                           <img
+                             src={assignee.photoURL}
+                             className="w-3 h-3 rounded-full"
+                             alt={assignee.displayName ?? 'Task assignee'}
+                           />
                          ) : (
                            <User size={10} />
                          )}
-                         <span>{assignee.displayName?.split(' ')[0] ?? 'Member'}</span>
+                         <span>{assignee.displayName?.split(' ')[0] ?? 'User'}</span>
                        </div>
                      )}
                    </div>
