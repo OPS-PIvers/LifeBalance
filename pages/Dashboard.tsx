@@ -197,7 +197,9 @@ const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {item.queueType !== 'todo' && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
+                        {(item.queueType === 'transaction' || item.queueType === 'calendar') && (
+                          <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+                        )}
                         {item.queueType === 'todo' && item.assignedTo && (
                           <div className="flex items-center">
                             {renderAssigneeAvatar(item.assignedTo)}
