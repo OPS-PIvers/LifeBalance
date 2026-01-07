@@ -12,10 +12,16 @@ import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration'
 import { Transaction, CalendarItem, ToDo } from '../types/schema';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 
+type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
+  queueType: 'todo';
+  amount: number;
+  date: string;
+};
+
 type ActionQueueItem =
   | (Transaction & { queueType: 'transaction' })
   | (CalendarItem & { queueType: 'calendar' })
-  | (ToDo & { queueType: 'todo'; amount: number; date: string });
+  | TodoActionQueueItem;
 
 const Dashboard: React.FC = () => {
   const {
@@ -72,9 +78,9 @@ const Dashboard: React.FC = () => {
     return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate, amount: 0 }));
 
-  // 4. Combined & Sorted (Reverse Chronological: Newest First)
+  // 4. Combined & Sorted (Chronological: Oldest First)
   const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   // State for expansions/modals
@@ -264,10 +270,10 @@ const Dashboard: React.FC = () => {
                                </button>
                                <button
                                  onClick={async () => {
-                                   const currentDate = parseISO(item.completeByDate);
-                                   const nextDay = format(addDays(currentDate, 1), 'yyyy-MM-dd');
-                                   await updateToDo(item.id, { completeByDate: nextDay });
-                                   toast.success('Deferred to next day');
+                                   // Defer to tomorrow (relative to today), not +1 day from due date
+                                   const tomorrow = format(addDays(startOfToday(), 1), 'yyyy-MM-dd');
+                                   await updateToDo(item.id, { completeByDate: tomorrow });
+                                   toast.success('Deferred to tomorrow');
                                    setExpandedId(null);
                                  }}
                                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
