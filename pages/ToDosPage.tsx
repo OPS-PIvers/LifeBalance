@@ -14,6 +14,8 @@ const ToDosPage: React.FC = () => {
 
   // Update date at midnight
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     const scheduleNextMidnight = () => {
       const now = new Date();
       const tomorrow = new Date(now);
@@ -21,16 +23,20 @@ const ToDosPage: React.FC = () => {
       tomorrow.setHours(0, 0, 0, 0);
       const msUntilMidnight = tomorrow.getTime() - now.getTime();
       
-      return setTimeout(() => {
+      timeoutId = setTimeout(() => {
         setCurrentDate(startOfToday());
         // Schedule the next midnight check
         scheduleNextMidnight();
       }, msUntilMidnight);
     };
 
-    const timeoutId = scheduleNextMidnight();
-    return () => clearTimeout(timeoutId);
-  }, [currentDate]);
+    scheduleNextMidnight();
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []); // Empty dependency array - only run once on mount
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -127,8 +133,12 @@ const ToDosPage: React.FC = () => {
     const upcoming: ToDo[] = [];
     const radar: ToDo[] = [];
 
+    // Create a map of parsed dates for efficient sorting
+    const dateMap = new Map<string, number>();
+    
     active.forEach(todo => {
       const date = parseISO(todo.completeByDate);
+      dateMap.set(todo.id, date.getTime());
 
       if (isBefore(date, today) || isToday(date) || isTomorrow(date)) {
         immediate.push(todo);
@@ -139,9 +149,9 @@ const ToDosPage: React.FC = () => {
       }
     });
 
-    // Sort by date
-    const sortByCompleteByDate = (a: ToDo, b: ToDo) =>
-      new Date(a.completeByDate).getTime() - new Date(b.completeByDate).getTime();
+    // Sort by date using pre-parsed timestamps
+    const sortByCompleteByDate = (a: ToDo, b: ToDo) => 
+      (dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0);
 
     return {
       immediate: immediate.sort(sortByCompleteByDate),
