@@ -13,10 +13,13 @@ import { Transaction, CalendarItem, ToDo } from '../types/schema';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 
 // TodoActionQueueItem normalizes the ToDo interface for the action queue
-// by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem
+// by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
+// The 'amount' field is required to fit the ActionQueueItem union structure used
+// throughout the action queue rendering logic, but is set to 0 for todos since
+// they don't have a monetary value.
 type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
-  amount: number;
+  amount: number; // Always 0 for todos; required for ActionQueueItem union compatibility
   date: string; // Maps to completeByDate from ToDo
 };
 
@@ -50,6 +53,20 @@ const Dashboard: React.FC = () => {
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+
+  // Helper function to render assignee avatar
+  const renderAssigneeAvatar = (assignedTo: string) => {
+    const assignee = members.find(m => m.uid === assignedTo);
+    if (!assignee) return null;
+    
+    return assignee.photoURL ? (
+      <img src={assignee.photoURL} alt={assignee.displayName} className="w-6 h-6 rounded-full border border-white" />
+    ) : (
+      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
+        {assignee.displayName?.charAt(0) || '?'}
+      </div>
+    );
+  };
 
   // --- ACTION QUEUE LOGIC ---
   const today = new Date();
@@ -153,7 +170,7 @@ const Dashboard: React.FC = () => {
                           </p>
                           <p className="text-xs text-brand-400 flex items-center gap-1">
                              {item.queueType === 'calendar' ? 'Due: ' : item.queueType === 'todo' ? 'Due: ' : 'Tx: '}
-                             {item.date}
+                             {format(parseISO(item.date), 'MMM d, yyyy')}
                              {item.queueType === 'todo' && isBefore(parseISO(item.date), startOfToday()) && (
                                <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
                                  <AlertCircle size={10} />
@@ -168,18 +185,7 @@ const Dashboard: React.FC = () => {
                         {item.queueType !== 'todo' && <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>}
                         {item.queueType === 'todo' && item.assignedTo && (
                           <div className="flex items-center">
-                            {(() => {
-                              const assignee = members.find(m => m.uid === item.assignedTo);
-                              return assignee ? (
-                                assignee.photoURL ? (
-                                  <img src={assignee.photoURL} alt={assignee.displayName} className="w-6 h-6 rounded-full border border-white" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
-                                    {assignee.displayName?.charAt(0) || '?'}
-                                  </div>
-                                )
-                              ) : null;
-                            })()}
+                            {renderAssigneeAvatar(item.assignedTo)}
                           </div>
                         )}
                         {!isExpanded && (
@@ -273,9 +279,15 @@ const Dashboard: React.FC = () => {
                                <button
                                  onClick={async () => {
                                    // Defer to tomorrow (relative to today), not +1 day from due date
-                                   const tomorrow = format(addDays(startOfToday(), 1), 'yyyy-MM-dd');
+                                   const today = startOfToday();
+                                   const tomorrow = format(addDays(today, 1), 'yyyy-MM-dd');
+                                   const originalDueDate = item.date ? parseISO(item.date) : null;
                                    await updateToDo(item.id, { completeByDate: tomorrow });
-                                   toast.success('Deferred to tomorrow');
+                                   if (originalDueDate && isBefore(originalDueDate, today)) {
+                                     toast.success(`Deferred overdue task (was due ${format(originalDueDate, 'MMM d')}) to tomorrow`);
+                                   } else {
+                                     toast.success('Deferred to tomorrow');
+                                   }
                                    setExpandedId(null);
                                  }}
                                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
