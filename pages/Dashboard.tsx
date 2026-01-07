@@ -4,7 +4,7 @@ import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow, isAfter, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
@@ -289,19 +289,23 @@ const Dashboard: React.FC = () => {
                                    const today = startOfToday();
                                    const tomorrowDate = addDays(today, 1);
                                    const originalDueDate = parseISO(item.date);
-                                   let newDueDate = tomorrowDate;
-
-                                   if (originalDueDate) {
-                                     const oneDayAfterOriginal = addDays(originalDueDate, 1);
-                                     newDueDate = isBefore(oneDayAfterOriginal, tomorrowDate)
-                                       ? tomorrowDate
-                                       : oneDayAfterOriginal;
+                                   
+                                   // Validate parsed date
+                                   if (!isValid(originalDueDate)) {
+                                     toast.error('Invalid due date');
+                                     return;
                                    }
+                                   
+                                   // Choose the later date: either (original + 1 day) or tomorrow
+                                   const oneDayAfterOriginal = addDays(originalDueDate, 1);
+                                   const newDueDate = isAfter(oneDayAfterOriginal, tomorrowDate)
+                                     ? oneDayAfterOriginal
+                                     : tomorrowDate;
 
                                    const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
                                    await updateToDo(item.id, { completeByDate: newDueDateString });
 
-                                   if (originalDueDate && isBefore(originalDueDate, today)) {
+                                   if (isBefore(originalDueDate, today)) {
                                      toast.success(
                                        `Deferred overdue task (was due ${format(
                                          originalDueDate,
