@@ -37,7 +37,19 @@ service cloud.firestore {
       match /members/{memberId} {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
         allow read: if isMemberOf(householdId) || request.auth.uid == memberId;
-        allow create: if isAuthenticated(); // Allow joining
+
+        // Secure creation: Must be creator OR provide valid invite code
+        allow create: if isAuthenticated() && request.auth.uid == memberId && (
+          // Case 1: Household creator (admin) - createdBy check
+          get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
+          // Case 2: Joining via Invite Code
+          (
+            request.resource.data.inviteCode != null &&
+            exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)) &&
+            get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.householdId == householdId
+          )
+        );
+
         allow update: if isMemberOf(householdId);
         allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
       }
@@ -63,7 +75,8 @@ service cloud.firestore {
 
     // Invite codes collection
     match /inviteCodes/{code} {
-      allow read: if isAuthenticated();
+      allow get: if isAuthenticated(); // Prevent listing (Information Disclosure)
+      allow list: if false;
       allow create: if isAuthenticated();
       allow update, delete: if false; // Invite codes shouldn't be modified or deleted
     }
