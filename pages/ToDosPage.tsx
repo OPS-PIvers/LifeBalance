@@ -69,15 +69,16 @@ const ToDosPage: React.FC = () => {
     }
 
     try {
+      const trimmedText = text.trim();
       if (editingId) {
         await updateToDo(editingId, {
-          text,
+          text: trimmedText,
           completeByDate,
           assignedTo
         });
       } else {
         await addToDo({
-          text,
+          text: trimmedText,
           completeByDate,
           assignedTo,
           isCompleted: false
@@ -138,6 +139,7 @@ const ToDosPage: React.FC = () => {
         <button
           onClick={openAddModal}
           className="p-3 bg-brand-800 text-white rounded-full shadow-lg hover:bg-brand-700 active:scale-95 transition-all"
+          aria-label="Add new task"
         >
           <Plus size={24} />
         </button>
@@ -181,7 +183,24 @@ const ToDosPage: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) {
+              setIsAddModalOpen(false);
+            }
+          }}
+          onKeyDown={(e) => {
+            // Close modal on Escape key
+            if (e.key === 'Escape') {
+              setIsAddModalOpen(false);
+            }
+          }}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+        >
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl scale-100 animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-brand-800">
@@ -190,6 +209,7 @@ const ToDosPage: React.FC = () => {
               <button
                 onClick={() => setIsAddModalOpen(false)}
                 className="p-2 hover:bg-brand-50 rounded-full transition-colors"
+                aria-label="Close dialog"
               >
                 <X size={20} className="text-brand-400" />
               </button>
