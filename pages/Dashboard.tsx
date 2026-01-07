@@ -12,10 +12,12 @@ import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration'
 import { Transaction, CalendarItem, ToDo } from '../types/schema';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 
+// TodoActionQueueItem normalizes the ToDo interface for the action queue
+// by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem
 type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
   amount: number;
-  date: string;
+  date: string; // Maps to completeByDate from ToDo
 };
 
 type ActionQueueItem =

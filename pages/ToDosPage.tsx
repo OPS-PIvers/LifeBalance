@@ -197,6 +197,7 @@ const ToDosPage: React.FC = () => {
               setIsAddModalOpen(false);
             }
           }}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
         >
