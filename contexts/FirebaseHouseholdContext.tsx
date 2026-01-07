@@ -404,7 +404,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             ...d,
             id: doc.id,
             createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
-            completedAt: d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt,
+            completedAt: d.completedAt
+              ? (d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt)
+              : undefined,
           } as ToDo;
         });
         setTodos(data);
@@ -2210,6 +2212,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: TO-DOS ---
 
+  /**
+   * Adds a new to-do item.
+   * 
+   * Toast Behavior: Toast notifications are intentionally omitted to allow UI-specific messaging.
+   * Success toasts were previously shown; they have been removed for consistency with updateToDo/deleteToDo.
+   * Errors are re-thrown so callers can provide contextual feedback appropriate to their UI context.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
   const addToDo = async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
     if (!householdId || !user) return;
     try {
@@ -2219,10 +2230,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdAt: serverTimestamp(),
         createdBy: user.uid
       });
-      toast.success('To-Do added');
+      // Note: Toast removed to allow UI-specific messaging (consistent with updateToDo/deleteToDo)
     } catch (error) {
       console.error('[addToDo] Failed:', error);
-      toast.error('Failed to add to-do');
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 
