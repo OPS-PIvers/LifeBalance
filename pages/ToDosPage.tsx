@@ -76,7 +76,7 @@ const ToDosPage: React.FC = () => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
     // Default to current user, or first member if available
-    const defaultAssignee = currentUser.uid || (members.length > 0 ? members[0].uid : '');
+    const defaultAssignee = currentUser.uid ?? (members.length > 0 ? members[0].uid : '');
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -105,12 +105,7 @@ const ToDosPage: React.FC = () => {
       return;
     }
 
-    if (!assignedTo) {
-      toast.error('Please select a household member to assign this task to');
-      return;
-    }
-
-    // Validate assignee is in members list
+    // Validate assignee is in members list (also covers unselected assignee case)
     const isValidAssignee = members.some(member => member.uid === assignedTo);
     if (!isValidAssignee) {
       toast.error('Please select a valid household member to assign this task to');
@@ -253,7 +248,12 @@ const ToDosPage: React.FC = () => {
               setIsAddModalOpen(false);
             }
           }}
-          tabIndex={0}
+          onKeyDown={(e) => {
+            // Close modal when pressing Enter or Space on backdrop
+            if (e.key === 'Enter' || e.key === ' ') {
+              setIsAddModalOpen(false);
+            }
+          }}
           role="dialog"
           aria-modal="true"
         >
@@ -413,7 +413,15 @@ const Section: React.FC<{
                <div className="flex items-start gap-3">
                  {/* Complete Checkbox */}
                  <button
-                   onClick={() => onComplete(item.id)}
+                   onClick={async () => {
+                     try {
+                       await onComplete(item.id);
+                       toast.success('To-Do completed! 🎉');
+                     } catch (error) {
+                       console.error('Failed to complete task:', error);
+                       toast.error('Failed to complete to-do');
+                     }
+                   }}
                    className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
                      color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
                      color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
@@ -469,11 +477,16 @@ const Section: React.FC<{
                       <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={() => {
-                        showDeleteConfirmation(async () => {
-                          await onDelete(item.id);
-                          toast.success('Task deleted');
-                        });
+                      onClick={async () => {
+                        try {
+                          await showDeleteConfirmation(async () => {
+                            await onDelete(item.id);
+                            toast.success('Task deleted');
+                          });
+                        } catch (error) {
+                          console.error('Failed to delete task:', error);
+                          // Error toast is already shown by showDeleteConfirmation
+                        }
                       }}
                       className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                       aria-label="Delete task"

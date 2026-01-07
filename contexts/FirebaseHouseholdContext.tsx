@@ -2274,6 +2274,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
+  /**
+   * Marks a to-do item as completed.
+   * 
+   * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
+   * Callers should display appropriate success/error toasts based on their context, maintaining
+   * consistency with addToDo, updateToDo, and deleteToDo.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
   const completeToDo = async (id: string) => {
     if (!householdId) return;
     try {
@@ -2281,10 +2290,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         isCompleted: true,
         completedAt: serverTimestamp()
       });
-      toast.success('To-Do completed! 🎉');
+      // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
     } catch (error) {
       console.error('[completeToDo] Failed:', error);
-      toast.error('Failed to complete to-do');
+      throw error; // Re-throw so callers can handle the error with contextual messaging
     }
   };
 

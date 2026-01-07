@@ -43,7 +43,7 @@ export const showDeleteConfirmation = (
                   console.error('Failed to delete item:', error);
                   toast.dismiss(t.id);
                   toast.error(`Failed to delete ${itemName}. Please try again.`);
-                  throw error; // Re-throw so callers can detect failure if needed
+                  // Note: Do not re-throw to avoid duplicate error messages in calling code
                 }
               }}
             >

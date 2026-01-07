@@ -31,6 +31,19 @@ type CalendarQueueItem = CalendarItem & {
 
 type ActionQueueItem = TransactionQueueItem | CalendarQueueItem | TodoActionQueueItem;
 
+// Type guard functions for ActionQueueItem
+const isTransactionQueueItem = (item: ActionQueueItem): item is TransactionQueueItem => {
+  return item.queueType === 'transaction';
+};
+
+const isCalendarQueueItem = (item: ActionQueueItem): item is CalendarQueueItem => {
+  return item.queueType === 'calendar';
+};
+
+const isTodoQueueItem = (item: ActionQueueItem): item is TodoActionQueueItem => {
+  return item.queueType === 'todo';
+};
+
 const Dashboard: React.FC = () => {
   const {
     transactions,
@@ -100,9 +113,15 @@ const Dashboard: React.FC = () => {
   ).map(t => ({ ...t, queueType: 'transaction' as const }));
 
   // 3. Immediate To-Dos (Overdue, Today or Tomorrow)
+  // Filter out todos with invalid dates early to prevent issues downstream
   const immediateToDos: ActionQueueItem[] = todos.filter(t => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
+    // Validate the parsed date before using it
+    if (!isValid(date)) {
+      console.warn(`Invalid todo date detected: ${t.completeByDate} for todo ${t.id}`);
+      return false;
+    }
     // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
     return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
   }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate }));
@@ -169,24 +188,24 @@ const Dashboard: React.FC = () => {
                       <div className="flex items-center gap-3">
                         {/* Icon */}
                         <div className={`p-2 rounded-lg ${
-                            item.queueType === 'calendar' ? 'bg-orange-100 text-orange-600' :
-                            item.queueType === 'todo' ? 'bg-rose-100 text-rose-600' :
+                            isCalendarQueueItem(item) ? 'bg-orange-100 text-orange-600' :
+                            isTodoQueueItem(item) ? 'bg-rose-100 text-rose-600' :
                             'bg-blue-100 text-blue-600'
                           }`}>
-                           {item.queueType === 'calendar' ? <CalendarClock size={16} /> :
-                            item.queueType === 'todo' ? <ListTodo size={16} /> :
+                           {isCalendarQueueItem(item) ? <CalendarClock size={16} /> :
+                            isTodoQueueItem(item) ? <ListTodo size={16} /> :
                             <Receipt size={16} />}
                         </div>
                         <div>
                           <p className="font-bold text-brand-700 text-sm">
-                            {item.queueType === 'calendar' ? item.title :
-                             item.queueType === 'todo' ? item.text :
-                             item.merchant}
+                            {isCalendarQueueItem(item) ? item.title :
+                             isTodoQueueItem(item) ? item.text :
+                             isTransactionQueueItem(item) ? item.merchant : ''}
                           </p>
                           <p className="text-xs text-brand-400 flex items-center gap-1">
-                             {item.queueType === 'calendar' ? 'Due: ' : item.queueType === 'todo' ? 'Due: ' : 'Tx: '}
+                             {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
                              {format(parseISO(item.date), 'MMM d, yyyy')}
-                             {item.queueType === 'todo' && isBefore(parseISO(item.date), startOfToday()) && (
+                             {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
                                <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
                                  <AlertCircle size={10} />
                                  Overdue
@@ -197,10 +216,10 @@ const Dashboard: React.FC = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {(item.queueType === 'transaction' || item.queueType === 'calendar') && (
+                        {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
                           <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
                         )}
-                        {item.queueType === 'todo' && item.assignedTo && (
+                        {isTodoQueueItem(item) && item.assignedTo && (
                           <div className="flex items-center">
                             {renderAssigneeAvatar(item.assignedTo)}
                           </div>
@@ -210,14 +229,14 @@ const Dashboard: React.FC = () => {
                             onClick={() => {
                               setExpandedId(item.id);
                               // Initialize selected habits from transaction if any, or empty
-                              if (item.queueType === 'transaction' && item.relatedHabitIds) {
+                              if (isTransactionQueueItem(item) && item.relatedHabitIds) {
                                 setSelectedHabitIds(item.relatedHabitIds);
                               } else {
                                 setSelectedHabitIds([]);
                               }
                             }}
                             className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
-                            aria-label={`Review ${item.queueType === 'todo' ? item.text : item.queueType === 'calendar' ? item.title : item.merchant || 'item'}`}
+                            aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
                           >
                             Review
                           </button>
@@ -230,12 +249,12 @@ const Dashboard: React.FC = () => {
                       <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
                         <div className="flex justify-between items-center mb-2">
                            <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                             {item.queueType === 'calendar' ? 'Actions' : 'Select Category'}
+                             {isCalendarQueueItem(item) ? 'Actions' : 'Select Category'}
                            </p>
                            <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
                         </div>
 
-                        {item.queueType === 'calendar' ? (
+                        {isCalendarQueueItem(item) ? (
                           /* Calendar Item Actions */
                           <div className="space-y-2">
                             <p className="text-xs text-brand-500 mb-3">
@@ -276,7 +295,7 @@ const Dashboard: React.FC = () => {
                               </button>
                             </div>
                           </div>
-                        ) : item.queueType === 'todo' ? (
+                        ) : isTodoQueueItem(item) ? (
                           /* To-Do Item Actions */
                           <div className="space-y-2">
                              <p className="text-xs text-brand-500 mb-3">
@@ -285,8 +304,14 @@ const Dashboard: React.FC = () => {
                              <div className="flex gap-2">
                                <button
                                  onClick={async () => {
-                                   await completeToDo(item.id);
-                                   setExpandedId(null);
+                                   try {
+                                     await completeToDo(item.id);
+                                     toast.success('To-Do completed! 🎉');
+                                     setExpandedId(null);
+                                   } catch (error) {
+                                     console.error('Failed to complete task:', error);
+                                     toast.error('Failed to complete to-do');
+                                   }
                                  }}
                                  className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >
@@ -338,12 +363,17 @@ const Dashboard: React.FC = () => {
                                  Defer
                                </button>
                                <button
-                                 onClick={() => {
-                                   showDeleteConfirmation(async () => {
-                                     await deleteToDo(item.id);
-                                     setExpandedId(null);
-                                     toast.success('Task deleted');
-                                   });
+                                 onClick={async () => {
+                                   try {
+                                     await showDeleteConfirmation(async () => {
+                                       await deleteToDo(item.id);
+                                       setExpandedId(null);
+                                       toast.success('Task deleted');
+                                     });
+                                   } catch (error) {
+                                     console.error('Failed to delete task:', error);
+                                     // Error toast is already shown by showDeleteConfirmation
+                                   }
                                  }}
                                  className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >
