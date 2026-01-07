@@ -16,8 +16,10 @@ const TopToolbar: React.FC = () => {
     <>
       <header className="sticky top-0 z-40 w-full bg-brand-800 shadow-md px-4 py-3 flex items-center justify-between text-white">
         {/* Left Container: Safe-to-Spend */}
-        <div
-          className="flex flex-col cursor-pointer active:opacity-80 transition-opacity"
+        <button
+          type="button"
+          aria-label="View Safe to Spend details"
+          className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
           onClick={() => setIsSafeSpendOpen(true)}
         >
           <span
@@ -28,13 +30,15 @@ const TopToolbar: React.FC = () => {
           <span className="text-[10px] text-brand-400 uppercase tracking-wider font-bold leading-tight">
             Safe to Spend
           </span>
-        </div>
+        </button>
 
         {/* Right Container: Points Cluster */}
         <div className="flex items-center gap-3">
           {/* Points Container - Clickable to open Rewards Modal */}
-          <div
-            className="flex items-center gap-4 cursor-pointer active:opacity-80 transition-opacity"
+          <button
+            type="button"
+            aria-label="View Rewards and Points breakdown"
+            className="flex items-center gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
             onClick={() => setIsRewardsOpen(true)}
           >
             {/* Daily Points (Gold Star) */}
@@ -61,7 +65,7 @@ const TopToolbar: React.FC = () => {
               </div>
               <span className="text-[10px] text-brand-400 uppercase tracking-wider">This Week</span>
             </div>
-          </div>
+          </button>
         </div>
       </header>
 
