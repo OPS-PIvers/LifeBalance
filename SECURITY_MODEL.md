@@ -90,19 +90,19 @@ User (authenticated)
 
 ### ❌ Attack 1: Fake Invite Code Creation (MITIGATED)
 **Scenario**: Attacker creates invite code for any household.
-**Mitigation**: Line 97-98 requires `createdBy` check.
+**Mitigation**: Lines 97-98 in `firestore.rules` require `createdBy` check.
 
 ### ❌ Attack 2: Privilege Escalation via createdBy Modification (MITIGATED)
 **Scenario**: Member changes `createdBy` to their UID, then creates invite codes.
-**Mitigation**: Line 31 blocks modification of `createdBy`, `createdAt`, `inviteCode`.
+**Mitigation**: Line 31 in `firestore.rules` blocks modification of `createdBy`, `createdAt`, `inviteCode`.
 
 ### ❌ Attack 3: Self-Service Admin Role (MITIGATED)
 **Scenario**: User joins via invite and sets role to 'admin'.
-**Mitigation**: Lines 55-58 block admin role assignment for invite-based joins.
+**Mitigation**: Lines 54-58 in `firestore.rules` block admin role assignment for invite-based joins.
 
 ### ❌ Attack 4: Role Escalation via Update (MITIGATED)
 **Scenario**: Member updates their member document to change role to 'admin'.
-**Mitigation**: Lines 63-69 require admin privileges to modify `role` field.
+**Mitigation**: Lines 63-69 in `firestore.rules` require admin privileges to modify `role` field.
 
 ## Security Testing Checklist
 
