@@ -1,5 +1,5 @@
 import { CalendarItem } from '@/types/schema';
-import { addDays, addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay } from 'date-fns';
+import { addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, differenceInCalendarWeeks, differenceInCalendarMonths, addDays, startOfDay } from 'date-fns';
 
 /**
  * Generates recurring instances of a calendar item within a date range.
@@ -25,20 +25,56 @@ export function generateRecurringInstances(
   }
 
   const instances: CalendarItem[] = [];
-  const originalDate = parseISO(item.date);
+  const originalDate = startOfDay(parseISO(item.date));
+  const start = startOfDay(rangeStart);
+  const end = startOfDay(rangeEnd);
+
+  // Optimization: Skip directly to the start of the range
+  // Instead of iterating from originalDate (which could be years ago),
+  // calculate the first occurrence on or after rangeStart.
+
   let currentDate = originalDate;
 
+  // If the original date is before the range start, jump forward
+  if (isBefore(originalDate, start)) {
+    if (item.frequency === 'weekly') {
+      const weeksDiff = Math.floor(differenceInCalendarWeeks(start, originalDate, { weekStartsOn: 1 }));
+      // Jump to roughly the right week, then adjust
+      // We use floor to ensure we don't overshoot
+      if (weeksDiff > 0) {
+        currentDate = addWeeks(originalDate, weeksDiff);
+      }
+    } else if (item.frequency === 'bi-weekly') {
+      const weeksDiff = Math.floor(differenceInCalendarWeeks(start, originalDate, { weekStartsOn: 1 }));
+      // Ensure we jump by even number of weeks
+      const jumps = Math.floor(weeksDiff / 2);
+      if (jumps > 0) {
+        currentDate = addWeeks(originalDate, jumps * 2);
+      }
+    } else if (item.frequency === 'monthly') {
+      const monthsDiff = differenceInCalendarMonths(start, originalDate);
+      if (monthsDiff > 0) {
+        currentDate = addMonths(originalDate, monthsDiff);
+      }
+    }
+
+    // The jump might have landed us slightly before start, or on it.
+    // Loop will handle moving to the exact next valid occurrence if needed.
+    // If we overshot (unlikely with floor/diff logic but possible with day alignment),
+    // the loop condition won't execute or will exit early.
+  }
+
   // Generate instances within the range
-  // Limit to 100 instances to prevent infinite loops
+  // Limit to 1000 instances to prevent infinite loops (increased from 100 due to better starting point)
   let iterationCount = 0;
-  const maxIterations = 100;
+  const maxIterations = 1000;
 
   while (
-    (isSameDay(currentDate, rangeEnd) || isBefore(currentDate, rangeEnd)) &&
+    (isSameDay(currentDate, end) || isBefore(currentDate, end)) &&
     iterationCount < maxIterations
   ) {
-    // Only add if within range
-    if (isSameDay(currentDate, rangeStart) || isAfter(currentDate, rangeStart)) {
+    // Only add if within range (inclusive)
+    if (isSameDay(currentDate, start) || isAfter(currentDate, start)) {
       instances.push({
         ...item,
         id: `${item.id}-${format(currentDate, 'yyyy-MM-dd')}`, // Unique ID for each instance
@@ -56,6 +92,10 @@ export function generateRecurringInstances(
         break;
       case 'monthly':
         currentDate = addMonths(currentDate, 1);
+        break;
+      default:
+        // Safety break for unknown frequency
+        iterationCount = maxIterations;
         break;
     }
 
