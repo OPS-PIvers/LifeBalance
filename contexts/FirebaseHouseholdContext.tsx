@@ -2222,7 +2222,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const addToDo = async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
-    if (!householdId || !user) return;
+    if (!householdId || !user) {
+      throw new Error('User not authenticated or household not selected');
+    }
     try {
       const sanitizedToDo = sanitizeFirestoreData(todo);
       await addDoc(collection(db, `households/${householdId}/todos`), {
@@ -2246,7 +2248,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const updateToDo = async (id: string, updates: Partial<ToDo>) => {
-    if (!householdId) return;
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
     try {
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
@@ -2265,7 +2269,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const deleteToDo = async (id: string) => {
-    if (!householdId) return;
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
     try {
       await deleteDoc(doc(db, `households/${householdId}/todos`, id));
     } catch (error) {
@@ -2284,7 +2290,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
   const completeToDo = async (id: string) => {
-    if (!householdId) return;
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
     try {
       await updateDoc(doc(db, `households/${householdId}/todos`, id), {
         isCompleted: true,

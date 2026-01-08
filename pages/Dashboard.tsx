@@ -12,11 +12,11 @@ import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration'
 import { Transaction, CalendarItem, ToDo, HouseholdMember } from '../types/schema';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 
-// TodoActionQueueItem normalizes the ToDo interface for the action queue
+// ToDoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
 // Todos do not have a monetary amount; any amount-related logic should check
 // the queueType and ignore items where queueType === 'todo'.
-type TodoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
+type ToDoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
   queueType: 'todo';
   date: string; // Maps from ToDo.completeByDate for consistent ActionQueueItem interface
 };
@@ -29,7 +29,7 @@ type CalendarQueueItem = CalendarItem & {
   queueType: 'calendar';
 };
 
-type ActionQueueItem = TransactionQueueItem | CalendarQueueItem | TodoActionQueueItem;
+type ActionQueueItem = TransactionQueueItem | CalendarQueueItem | ToDoActionQueueItem;
 
 // Type guard functions for ActionQueueItem
 const isTransactionQueueItem = (item: ActionQueueItem): item is TransactionQueueItem => {
@@ -40,7 +40,7 @@ const isCalendarQueueItem = (item: ActionQueueItem): item is CalendarQueueItem =
   return item.queueType === 'calendar';
 };
 
-const isTodoQueueItem = (item: ActionQueueItem): item is TodoActionQueueItem => {
+const isTodoQueueItem = (item: ActionQueueItem): item is ToDoActionQueueItem => {
   return item.queueType === 'todo';
 };
 
@@ -119,7 +119,9 @@ const Dashboard: React.FC = () => {
     const date = parseISO(t.completeByDate);
     // Validate the parsed date before using it
     if (!isValid(date)) {
-      console.warn(`Invalid todo date detected: ${t.completeByDate} for todo ${t.id}`);
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Invalid todo date detected; skipping todo item from action queue.');
+      }
       return false;
     }
     // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
@@ -363,17 +365,12 @@ const Dashboard: React.FC = () => {
                                  Defer
                                </button>
                                <button
-                                 onClick={async () => {
-                                   try {
-                                     await showDeleteConfirmation(async () => {
-                                       await deleteToDo(item.id);
-                                       setExpandedId(null);
-                                       toast.success('Task deleted');
-                                     });
-                                   } catch (error) {
-                                     console.error('Failed to delete task:', error);
-                                     // Error toast is already shown by showDeleteConfirmation
-                                   }
+                                 onClick={() => {
+                                   showDeleteConfirmation(async () => {
+                                     await deleteToDo(item.id);
+                                     setExpandedId(null);
+                                     toast.success('Task deleted');
+                                   });
                                  }}
                                  className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                >
