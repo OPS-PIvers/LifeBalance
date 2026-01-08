@@ -429,7 +429,7 @@ const Section: React.FC<{
                    }`}
                    aria-label="Complete task"
                  >
-                   <Check size={14} className="text-transparent hover:text-current active:text-current transition-colors" />
+                   <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
                  </button>
 
                  <div className="flex-1 min-w-0">
