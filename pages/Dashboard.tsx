@@ -134,6 +134,11 @@ const Dashboard: React.FC = () => {
   // single queue, we sort oldest-first so the longest-waiting and overdue items
   // are surfaced first. This keeps the queue behaving like a "work off the oldest
   // items" list rather than a feed of most recent activity.
+  //
+  // IMPACT: This sorting change affects all action queue items (calendar items,
+  // pending transactions, and todos). Users will now see oldest items first,
+  // which may be a different experience from before. This ensures overdue and
+  // long-pending items get attention before newer ones.
   const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
@@ -322,7 +327,9 @@ const Dashboard: React.FC = () => {
                                </button>
                                <button
                                  onClick={async () => {
-                                   // Defer using the later of (current due date + 1 day) or tomorrow (relative to today)
+                                   // Defer logic: For overdue tasks, always defer to at least tomorrow.
+                                   // For future tasks, defer to original + 1 day (maintaining the offset).
+                                   // This ensures overdue tasks get adequate time to complete.
                                    const today = startOfToday();
                                    const tomorrowDate = addDays(today, 1);
                                    const originalDueDate = parseISO(item.date);
@@ -334,6 +341,7 @@ const Dashboard: React.FC = () => {
                                    }
                                    
                                    // Choose the later date: either (original + 1 day) or tomorrow
+                                   // This guarantees overdue tasks defer to at least tomorrow
                                    const deferredFromOriginal = addDays(originalDueDate, 1);
                                    const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
                                      ? deferredFromOriginal

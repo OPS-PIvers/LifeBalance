@@ -16,7 +16,13 @@ const ToDosPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Update date at midnight
+  // Update date at midnight using recursive setTimeout pattern
+  // Note: This pattern is preferred over setInterval because:
+  // 1. We need to trigger exactly at midnight (00:00:00), not at regular intervals
+  // 2. Each timeout reschedules itself to the next midnight after firing
+  // 3. The cleanup function properly clears the timeout on unmount/dependency change
+  // 4. No accumulation of callbacks occurs because the recursive call only happens
+  //    inside the timeout callback itself, and cleanup clears the active timeout
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     
