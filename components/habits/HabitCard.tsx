@@ -59,9 +59,23 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleCardClick();
+    }
+  };
+
   return (
     <>
-      <div className={containerClasses} onClick={handleCardClick}>
+      <div
+        className={containerClasses}
+        onClick={handleCardClick}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
+      >
         
         {/* ACTION INDICATOR */}
         <div className="flex-shrink-0 mr-4 relative group">
@@ -106,7 +120,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm z-20 active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors"
+              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm z-20 active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-200"
+              aria-label="Reset habit progress"
             >
               <X size={12} strokeWidth={3} />
             </button>
@@ -128,7 +143,10 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                 e.stopPropagation();
                 setIsMenuOpen(!isMenuOpen);
               }}
-              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5"
+              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              aria-label="More options"
+              aria-haspopup="true"
+              aria-expanded={isMenuOpen}
             >
               <MoreVertical size={16} />
             </button>
@@ -173,15 +191,22 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
               }} 
+              aria-hidden="true"
             />
-            <div className="absolute top-10 right-2 z-20 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">
+            <div
+              className="absolute top-10 right-2 z-20 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
+              role="menu"
+              aria-orientation="vertical"
+              aria-labelledby="menu-button"
+            >
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsEditModalOpen(true);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:bg-brand-50 focus:outline-none"
+                role="menuitem"
               >
                 <Edit2 size={14} /> Edit
               </button>
@@ -191,7 +216,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                   setIsLogModalOpen(true);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:bg-brand-50 focus:outline-none"
+                role="menuitem"
               >
                 <Calendar size={14} /> View Log
               </button>
@@ -201,7 +227,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                   deleteHabit(habit.id);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2"
+                className="w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:bg-rose-50 focus:outline-none"
+                role="menuitem"
               >
                 <Trash2 size={14} /> Delete
               </button>
