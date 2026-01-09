@@ -264,7 +264,7 @@ const ToDosPage: React.FC = () => {
           }}
           onKeyDown={(e) => {
             // Close modal when pressing Enter or Space on backdrop
-            if (e.key === 'Enter' || e.key === ' ') {
+            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
               setIsAddModalOpen(false);
             }
           }}
