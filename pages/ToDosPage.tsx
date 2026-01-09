@@ -254,7 +254,8 @@ const ToDosPage: React.FC = () => {
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
         <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+          style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -272,8 +273,7 @@ const ToDosPage: React.FC = () => {
           tabIndex={0}
         >
           <div
-            className="bg-white w-full sm:max-w-sm rounded-t-3xl rounded-b-none sm:rounded-3xl p-6 pb-8 sm:pb-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200"
-            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+            className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200"
           >
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-brand-800">
