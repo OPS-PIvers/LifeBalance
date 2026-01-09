@@ -1,12 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, ChevronUp, Edit, Trash2 } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { format, parseISO } from 'date-fns';
-import { useMemo } from 'react';
 
 const BudgetBuckets: React.FC = () => {
   const {
@@ -35,15 +34,21 @@ const BudgetBuckets: React.FC = () => {
       currentPeriodId ? tx.payPeriodId === currentPeriodId : true
     );
 
-    // 2. Sort them once
-    relevantTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // 2. Sort them once (using toSorted to avoid mutation)
+    const sortedTransactions = relevantTransactions.toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     // 3. Create a normalized map for Bucket Name -> Bucket ID
     const nameToIdMap = new Map<string, string>();
-    buckets.forEach(b => nameToIdMap.set(b.name.toLowerCase(), b.id));
+    buckets.forEach(b => {
+      const key = b.name.toLowerCase();
+      if (!nameToIdMap.has(key)) {
+        // Preserve first-match behavior for duplicate bucket names
+        nameToIdMap.set(key, b.id);
+      }
+    });
 
     // 4. Group transactions by bucket
-    relevantTransactions.forEach(tx => {
+    sortedTransactions.forEach(tx => {
       if (!tx.category) return;
       const bucketId = nameToIdMap.get(tx.category.toLowerCase());
       if (bucketId) {
