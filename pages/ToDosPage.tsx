@@ -254,7 +254,7 @@ const ToDosPage: React.FC = () => {
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
           onClick={(e) => {
             // Close modal when clicking backdrop
             if (e.target === e.currentTarget) {
@@ -271,7 +271,7 @@ const ToDosPage: React.FC = () => {
           aria-modal="true"
           tabIndex={0}
         >
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl scale-100 animate-in zoom-in-95">
+          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl rounded-b-none sm:rounded-3xl p-6 pb-8 sm:pb-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-brand-800">
                 {editingId ? 'Edit Task' : 'New Task'}
@@ -305,15 +305,16 @@ const ToDosPage: React.FC = () => {
                 <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
                   Due Date
                 </label>
-                <div className="relative">
+                <div className="relative w-full">
                   <input
                     id="due-date-input"
                     type="date"
                     value={completeByDate}
                     onChange={(e) => setCompleteByDate(e.target.value)}
-                    className="w-full p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                    className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
+                    style={{ WebkitAppearance: 'none' }}
                   />
-                  <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400" />
+                  <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
                 </div>
               </div>
 
