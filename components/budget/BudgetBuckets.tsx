@@ -31,7 +31,8 @@ const BudgetBuckets: React.FC = () => {
 
     // 1. Filter relevant transactions once
     const relevantTransactions = transactions.filter(tx =>
-      (!currentPeriodId || tx.payPeriodId === currentPeriodId) && tx.category
+      // If currentPeriodId is set, match exact period. If not set, allow all periods.
+      currentPeriodId ? tx.payPeriodId === currentPeriodId : true
     );
 
     // 2. Sort them once
