@@ -5,8 +5,8 @@ import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, Chevro
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
-import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { format, parseISO } from 'date-fns';
+import { useMemo } from 'react';
 
 const BudgetBuckets: React.FC = () => {
   const {
@@ -21,6 +21,39 @@ const BudgetBuckets: React.FC = () => {
     currentPeriodId,
     deleteTransaction,
   } = useHousehold();
+
+  // ⚡ Bolt Optimization: Pre-calculate transactions grouped by bucket
+  // Instead of filtering the entire transaction list for every bucket (O(Buckets * Transactions)),
+  // we do a single pass to group them (O(Transactions)).
+  // This reduces complexity from quadratic to linear relative to data size.
+  const transactionsByBucket = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+
+    // 1. Filter relevant transactions once
+    const relevantTransactions = transactions.filter(tx =>
+      (!currentPeriodId || tx.payPeriodId === currentPeriodId) && tx.category
+    );
+
+    // 2. Sort them once
+    relevantTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // 3. Create a normalized map for Bucket Name -> Bucket ID
+    const nameToIdMap = new Map<string, string>();
+    buckets.forEach(b => nameToIdMap.set(b.name.toLowerCase(), b.id));
+
+    // 4. Group transactions by bucket
+    relevantTransactions.forEach(tx => {
+      if (!tx.category) return;
+      const bucketId = nameToIdMap.get(tx.category.toLowerCase());
+      if (bucketId) {
+        const list = map.get(bucketId) || [];
+        list.push(tx);
+        map.set(bucketId, list);
+      }
+    });
+
+    return map;
+  }, [transactions, currentPeriodId, buckets]);
 
   const [reallocateModal, setReallocateModal] = useState<{ sourceId: string | null, targetId: string | null } | null>(null);
 
@@ -148,8 +181,8 @@ const BudgetBuckets: React.FC = () => {
         const isEditingLimit = editingLimitId === bucket.id;
         const isExpanded = expandedBucketId === bucket.id;
 
-        // Get transactions for this bucket in current period
-        const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
+        // Get transactions for this bucket from memoized map
+        const bucketTransactions = transactionsByBucket.get(bucket.id) || [];
 
         return (
           <div
