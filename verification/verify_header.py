@@ -14,7 +14,7 @@ async def run():
         # Memory says port 3000
         try:
             await page.goto("http://localhost:3000")
-        except:
+        except Exception:
             # Fallback if port differs
             await page.goto("http://localhost:5173")
 
