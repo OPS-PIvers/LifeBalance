@@ -21,6 +21,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
@@ -40,8 +41,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
 
   const containerClasses = cn(
-    "relative flex items-center justify-between p-4 rounded-card border shadow-soft transition-all duration-300 select-none cursor-pointer group/card",
-    !isActive && "bg-white border-brand-100 hover:border-brand-300",
+    "relative flex items-center justify-between p-4 rounded-card border shadow-soft transition-all duration-300 select-none group/card",
+    !isActive && "bg-white border-brand-100",
     isActive && isPositive && "bg-emerald-50 border-emerald-200",
     isActive && !isPositive && "bg-rose-50 border-rose-200"
   );
@@ -59,12 +60,55 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    const menuItems = 3; // Edit, View Log, Delete
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setFocusedMenuIndex((prev) => (prev + 1) % menuItems);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setFocusedMenuIndex((prev) => (prev - 1 + menuItems) % menuItems);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setIsMenuOpen(false);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        // Trigger the focused menu item
+        if (focusedMenuIndex === 0) {
+          setIsEditModalOpen(true);
+          setIsMenuOpen(false);
+        } else if (focusedMenuIndex === 1) {
+          setIsLogModalOpen(true);
+          setIsMenuOpen(false);
+        } else if (focusedMenuIndex === 2) {
+          deleteHabit(habit.id);
+          setIsMenuOpen(false);
+        }
+        break;
+    }
+  };
+
   return (
     <>
-      <div className={containerClasses} onClick={handleCardClick}>
+      <div className={containerClasses}>
+        
+        {/* Invisible clickable overlay for main card interaction */}
+        <button
+          onClick={handleCardClick}
+          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card"
+          aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
+          tabIndex={0}
+          style={{ zIndex: 1 }}
+        />
         
         {/* ACTION INDICATOR */}
-        <div className="flex-shrink-0 mr-4 relative group">
+        <div className="flex-shrink-0 mr-4 relative group" style={{ zIndex: 2 }}>
           <div className={buttonClasses}>
             {isThreshold && !isCompleted ? (
               <span className="text-lg font-bold font-mono">{habit.count}</span>
@@ -106,7 +150,9 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm z-20 active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors"
+              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400"
+              aria-label="Reset habit progress"
+              style={{ zIndex: 3 }}
             >
               <X size={12} strokeWidth={3} />
             </button>
@@ -114,7 +160,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0" style={{ zIndex: 2 }}>
           <div className="flex justify-between items-start">
             <div>
               <h3 className={cn("font-bold text-sm truncate", isActive ? "text-brand-800" : "text-brand-700")}>
@@ -127,8 +173,13 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(!isMenuOpen);
+                setFocusedMenuIndex(0); // Reset focus to first item
               }}
-              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5"
+              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+              aria-label="Habit options menu"
+              aria-haspopup="true"
+              aria-expanded={isMenuOpen}
+              style={{ zIndex: 3, position: 'relative' }}
             >
               <MoreVertical size={16} />
             </button>
@@ -168,20 +219,34 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         {isMenuOpen && (
           <>
             <div 
-              className="fixed inset-0 z-10" 
+              className="fixed inset-0" 
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
               }} 
+              aria-hidden="true"
+              style={{ zIndex: 10 }}
             />
-            <div className="absolute top-10 right-2 z-20 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100">
+            <div
+              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
+              role="menu"
+              aria-orientation="vertical"
+              aria-label="Habit actions menu"
+              onKeyDown={handleMenuKeyDown}
+              style={{ zIndex: 20 }}
+            >
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsEditModalOpen(true);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 0 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
               >
                 <Edit2 size={14} /> Edit
               </button>
@@ -191,7 +256,12 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                   setIsLogModalOpen(true);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 1 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
               >
                 <Calendar size={14} /> View Log
               </button>
@@ -201,7 +271,12 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                   deleteHabit(habit.id);
                   setIsMenuOpen(false);
                 }}
-                className="w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2"
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 2 && "bg-rose-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
               >
                 <Trash2 size={14} /> Delete
               </button>
