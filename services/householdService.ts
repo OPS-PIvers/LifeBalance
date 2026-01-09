@@ -131,6 +131,7 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
     // Add member document
     await setDoc(doc(db, 'households', householdId, 'members', userId), {
       uid: userId,
+      inviteCode: inviteCode.toUpperCase(),
       displayName: user.displayName || 'User',
       email: user.email || '',
       photoURL: user.photoURL || '',

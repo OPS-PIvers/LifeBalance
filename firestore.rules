@@ -27,8 +27,10 @@ service cloud.firestore {
       allow list: if request.auth.uid in resource.data.memberUids;
 
       allow create: if isAuthenticated();
-      // Allow update if member, OR if only adding self to memberUids (for joining via invite)
-      allow update: if isMemberOf(householdId) ||
+      // Allow update if member (but cannot modify immutable fields), OR if only adding self to memberUids (for joining via invite)
+      allow update: if (isMemberOf(householdId) &&
+                        // Prevent modification of immutable fields
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode'])) ||
                        (isAuthenticated() &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids']) &&
                         request.auth.uid in request.resource.data.memberUids &&
@@ -39,8 +41,34 @@ service cloud.firestore {
       match /members/{memberId} {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
         allow read: if isMemberOf(householdId) || request.auth.uid == memberId;
-        allow create: if isAuthenticated(); // Allow joining
-        allow update: if isMemberOf(householdId);
+
+        // Secure creation: Must be creator OR provide valid invite code
+        // - Household creator can create their member doc with any role.
+        // - Invite-based joins must not assign themselves an admin role.
+        allow create: if isAuthenticated() && request.auth.uid == memberId && (
+          // Case 1: Household creator (admin) - createdBy check
+          get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
+          // Case 2: Joining via Invite Code (non-creator)
+          (
+            request.resource.data.inviteCode != null &&
+            exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)) &&
+            get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.householdId == householdId &&
+            (
+              // Non-creators joining via invite cannot assign themselves admin role
+              !request.resource.data.keys().hasAny(['role']) ||
+              request.resource.data.role != 'admin'
+            )
+          )
+        );
+
+        // Only admins can change the role field; regular members may update other fields.
+        allow update: if isMemberOf(householdId) &&
+          (
+            // No role change
+            !request.resource.data.diff(resource.data).changedKeys().hasAny(['role']) ||
+            // Role change allowed only for admins
+            isAdminOf(householdId)
+          );
         allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
       }
 
@@ -65,10 +93,11 @@ service cloud.firestore {
 
     // Invite codes collection
     match /inviteCodes/{code} {
-      // Allow looking up a specific code (get), but not listing all codes
-      allow get: if isAuthenticated();
+      allow get: if isAuthenticated(); // Prevent listing (Information Disclosure)
       allow list: if false;
-      allow create: if isAuthenticated();
+      // Only household creators can create invite codes
+      allow create: if isAuthenticated() &&
+                    get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.createdBy == request.auth.uid;
       allow update, delete: if false; // Invite codes shouldn't be modified or deleted
     }
   }
