@@ -82,11 +82,19 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   };
 
   const handleDelete = async () => {
-    if (!transaction) return;
+    if (!transaction || isSaving) return;
 
-    await deleteTransaction(transaction.id);
-    setShowDeleteConfirm(false);
-    onClose();
+    setIsSaving(true);
+    try {
+      await deleteTransaction(transaction.id);
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      toast.error('Failed to delete transaction');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen || !transaction) return null;
@@ -105,7 +113,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
           <button
             onClick={onClose}
-            className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1"
+            disabled={isSaving}
+            className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Close modal"
           >
             <X size={20} />
@@ -125,9 +134,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
                 id="edit-amount"
                 type="number"
                 step="0.01"
+                disabled={isSaving}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+                className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
                 placeholder="0.00"
               />
             </div>
@@ -141,9 +151,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <input
               id="edit-merchant"
               type="text"
+              disabled={isSaving}
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
               placeholder="Store name"
             />
           </div>
@@ -155,9 +166,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             </label>
             <select
               id="edit-category"
+              disabled={isSaving}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             >
               {dynamicCategories.map((cat) => (
                 <option key={cat} value={cat}>
@@ -175,9 +187,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <input
               id="edit-date"
               type="date"
+              disabled={isSaving}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             />
           </div>
 
@@ -188,9 +201,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             </label>
             <select
               id="edit-status"
+              disabled={isSaving}
               value={status}
               onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             >
               <option value="verified">Verified</option>
               <option value="pending_review">Pending Review</option>
@@ -211,7 +225,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className={`flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 ${isSaving ? 'opacity-70 cursor-wait' : ''}`}
+              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait"
             >
               {isSaving ? (
                 <>
@@ -242,15 +256,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200"
+                  disabled={isSaving}
+                  className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg"
+                  disabled={isSaving}
+                  className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  Confirm Delete
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
                 </button>
               </div>
             </div>
