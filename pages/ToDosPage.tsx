@@ -16,7 +16,13 @@ const ToDosPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Update date at midnight
+  // Update date at midnight using recursive setTimeout pattern
+  // Note: This pattern is preferred over setInterval because:
+  // 1. We need to trigger exactly at midnight (00:00:00), not at regular intervals
+  // 2. Each timeout reschedules itself to the next midnight after firing
+  // 3. The cleanup function properly clears the timeout on unmount/dependency change
+  // 4. No accumulation of callbacks occurs because the recursive call only happens
+  //    inside the timeout callback itself, and cleanup clears the active timeout
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     
@@ -42,10 +48,12 @@ const ToDosPage: React.FC = () => {
     };
   }, []); // Run once on mount to initiate recurring midnight checks
 
-  // Handle Escape key to close modal
+  // Handle Escape key to close modal (only when open)
   useEffect(() => {
+    if (!isAddModalOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isAddModalOpen) {
+      if (e.key === 'Escape') {
         setIsAddModalOpen(false);
       }
     };
@@ -108,7 +116,12 @@ const ToDosPage: React.FC = () => {
     // Validate assignee is in members list (also covers unselected assignee case)
     const isValidAssignee = members.some(member => member.uid === assignedTo);
     if (!isValidAssignee) {
-      toast.error('Please select a valid household member to assign this task to');
+      if (assignedTo) {
+        // The previously selected member may have been removed or is no longer available
+        toast.error('The selected household member is no longer available. Please choose another member.');
+      } else {
+        toast.error('Please select a valid household member to assign this task to');
+      }
       return;
     }
 
@@ -256,6 +269,7 @@ const ToDosPage: React.FC = () => {
           }}
           role="dialog"
           aria-modal="true"
+          tabIndex={0}
         >
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl scale-100 animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-6">
@@ -477,16 +491,11 @@ const Section: React.FC<{
                       <Edit2 size={16} />
                     </button>
                     <button
-                      onClick={async () => {
-                        try {
-                          await showDeleteConfirmation(async () => {
-                            await onDelete(item.id);
-                            toast.success('Task deleted');
-                          });
-                        } catch (error) {
-                          console.error('Failed to delete task:', error);
-                          // Error toast is already shown by showDeleteConfirmation
-                        }
+                      onClick={() => {
+                        showDeleteConfirmation(async () => {
+                          await onDelete(item.id);
+                          toast.success('Task deleted');
+                        });
                       }}
                       className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                       aria-label="Delete task"
