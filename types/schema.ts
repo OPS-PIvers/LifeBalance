@@ -268,4 +268,24 @@ export interface Household {
   pantry?: PantryItem[];
   meals?: Meal[];
   shoppingList?: ShoppingItem[];
+  todos?: ToDo[];
+}
+
+/**
+ * ToDo Interface
+ * 
+ * Date Field Conventions:
+ * - completeByDate: Uses YYYY-MM-DD (date-only) format for scheduling and due date grouping
+ * - completedAt: Uses ISO timestamp (with time) to record the exact moment of completion
+ * This distinction allows date-based categorization while preserving precise completion history.
+ */
+export interface ToDo {
+  id: string;
+  text: string;
+  completeByDate: string; // Due date for task completion (YYYY-MM-DD format)
+  assignedTo: string; // uid of household member
+  isCompleted: boolean;
+  completedAt?: string; // ISO timestamp
+  createdBy: string; // uid
+  createdAt: string; // ISO timestamp
 }

@@ -1,13 +1,48 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus } from 'lucide-react';
+import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths } from 'date-fns';
+import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow, isAfter, isValid } from 'date-fns';
+import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { calculateChallengeProgress } from '../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../utils/migrations/challengeMigration';
+import { Transaction, CalendarItem, ToDo, HouseholdMember } from '../types/schema';
+import { showDeleteConfirmation } from '../utils/toastHelpers';
+
+// ToDoActionQueueItem normalizes the ToDo interface for the action queue
+// by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
+// Todos do not have a monetary amount; any amount-related logic should check
+// the queueType and ignore items where queueType === 'todo'.
+type ToDoActionQueueItem = Omit<ToDo, 'completeByDate'> & {
+  queueType: 'todo';
+  date: string; // Maps from ToDo.completeByDate for consistent ActionQueueItem interface
+};
+
+type TransactionQueueItem = Transaction & { 
+  queueType: 'transaction';
+};
+
+type CalendarQueueItem = CalendarItem & { 
+  queueType: 'calendar';
+};
+
+type ActionQueueItem = TransactionQueueItem | CalendarQueueItem | ToDoActionQueueItem;
+
+// Type guard functions for ActionQueueItem
+const isTransactionQueueItem = (item: ActionQueueItem): item is TransactionQueueItem => {
+  return item.queueType === 'transaction';
+};
+
+const isCalendarQueueItem = (item: ActionQueueItem): item is CalendarQueueItem => {
+  return item.queueType === 'calendar';
+};
+
+const isTodoQueueItem = (item: ActionQueueItem): item is ToDoActionQueueItem => {
+  return item.queueType === 'todo';
+};
 
 const Dashboard: React.FC = () => {
   const {
@@ -24,11 +59,37 @@ const Dashboard: React.FC = () => {
     deferCalendarItem,
     deleteCalendarItem,
     accounts,
-    primaryYearlyGoal
+    primaryYearlyGoal,
+    todos,
+    completeToDo,
+    deleteToDo,
+    updateToDo,
+    members
   } = useHousehold();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+
+  // Memoize member lookup Map for O(1) access instead of O(n) for each todo
+  const memberMap = useMemo(() => {
+    const map = new Map<string, HouseholdMember>();
+    members.forEach(member => map.set(member.uid, member));
+    return map;
+  }, [members]);
+
+  // Helper function to render assignee avatar
+  const renderAssigneeAvatar = (assignedTo: string) => {
+    const assignee = memberMap.get(assignedTo);
+    if (!assignee) return null;
+    
+    return assignee.photoURL ? (
+      <img src={assignee.photoURL} alt={assignee.displayName ?? 'Assigned member'} className="w-6 h-6 rounded-full border border-white" />
+    ) : (
+      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
+        {assignee.displayName?.charAt(0) || '?'}
+      </div>
+    );
+  };
 
   // --- ACTION QUEUE LOGIC ---
   const today = new Date();
@@ -42,21 +103,44 @@ const Dashboard: React.FC = () => {
   );
 
   // 1. Due Calendar Items (Past or Today, Unpaid)
-  const dueCalendarItems = expandedCalendarItems.filter(item =>
+  const dueCalendarItems: ActionQueueItem[] = expandedCalendarItems.filter(item =>
     !item.isPaid && (isBefore(parseISO(item.date), endToday) || isSameDay(parseISO(item.date), today))
   ).map(i => ({ ...i, queueType: 'calendar' as const }));
 
   // 2. Pending Transactions
-  const pendingTx = transactions.filter(t => 
+  const pendingTx: ActionQueueItem[] = transactions.filter(t =>
     t.status === 'pending_review'
   ).map(t => ({ ...t, queueType: 'transaction' as const }));
 
-  // 3. Combined & Sorted (Reverse Chronological: Newest First)
-  const actionQueue = [...dueCalendarItems, ...pendingTx].sort((a, b) => {
-    // Determine date property
-    const dateA = a.queueType === 'calendar' ? (a as any).date : (a as any).date;
-    const dateB = b.queueType === 'calendar' ? (b as any).date : (b as any).date;
-    return new Date(dateB).getTime() - new Date(dateA).getTime();
+  // 3. Immediate To-Dos (Overdue, Today or Tomorrow)
+  // Filter out todos with invalid dates early to prevent issues downstream
+  const immediateToDos: ActionQueueItem[] = todos.filter(t => {
+    if (t.isCompleted) return false;
+    const date = parseISO(t.completeByDate);
+    // Validate the parsed date before using it
+    if (!isValid(date)) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Invalid todo date detected; skipping todo item from action queue.');
+      }
+      return false;
+    }
+    // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
+    return isBefore(date, startOfToday()) || isToday(date) || isTomorrow(date);
+  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate }));
+
+  // 4. Combined & Sorted (Chronological: Oldest First)
+  // NOTE: Previously, the action queue (without todos) was sorted newest-first.
+  // Now that we combine calendar items, pending transactions, and todos into a
+  // single queue, we sort oldest-first so the longest-waiting and overdue items
+  // are surfaced first. This keeps the queue behaving like a "work off the oldest
+  // items" list rather than a feed of most recent activity.
+  //
+  // IMPACT: This sorting change affects all action queue items (calendar items,
+  // pending transactions, and todos). Users will now see oldest items first,
+  // which may be a different experience from before. This ensures overdue and
+  // long-pending items get attention before newer ones.
+  const actionQueue = [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   // State for expansions/modals
@@ -104,42 +188,62 @@ const Dashboard: React.FC = () => {
             <div className="space-y-3">
               {actionQueue.map(item => {
                 const isExpanded = expandedId === item.id;
-                const isCalendar = item.queueType === 'calendar';
                 
                 return (
                   <div key={item.id} className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
                     <div className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {/* Icon */}
-                        <div className={`p-2 rounded-lg ${isCalendar ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                           {isCalendar ? <CalendarClock size={16} /> : <Receipt size={16} />}
+                        <div className={`p-2 rounded-lg ${
+                            isCalendarQueueItem(item) ? 'bg-orange-100 text-orange-600' :
+                            isTodoQueueItem(item) ? 'bg-rose-100 text-rose-600' :
+                            'bg-blue-100 text-blue-600'
+                          }`}>
+                           {isCalendarQueueItem(item) ? <CalendarClock size={16} /> :
+                            isTodoQueueItem(item) ? <ListTodo size={16} /> :
+                            <Receipt size={16} />}
                         </div>
                         <div>
                           <p className="font-bold text-brand-700 text-sm">
-                            {isCalendar ? (item as any).title : (item as any).merchant}
+                            {isCalendarQueueItem(item) ? item.title :
+                             isTodoQueueItem(item) ? item.text :
+                             isTransactionQueueItem(item) ? item.merchant : ''}
                           </p>
-                          <p className="text-xs text-brand-400">
-                             {isCalendar ? 'Due: ' : 'Tx: '}
-                             {(item as any).date}
+                          <p className="text-xs text-brand-400 flex items-center gap-1">
+                             {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
+                             {format(parseISO(item.date), 'MMM d, yyyy')}
+                             {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
+                               <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
+                                 <AlertCircle size={10} />
+                                 Overdue
+                               </span>
+                             )}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+                        {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
+                          <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+                        )}
+                        {isTodoQueueItem(item) && item.assignedTo && (
+                          <div className="flex items-center">
+                            {renderAssigneeAvatar(item.assignedTo)}
+                          </div>
+                        )}
                         {!isExpanded && (
                           <button
                             onClick={() => {
                               setExpandedId(item.id);
                               // Initialize selected habits from transaction if any, or empty
-                              // Cast is necessary because actionQueue combines CalendarItem (no relatedHabitIds) and Transaction
-                              if (!isCalendar && (item as any).relatedHabitIds) {
-                                setSelectedHabitIds((item as any).relatedHabitIds);
+                              if (isTransactionQueueItem(item) && item.relatedHabitIds) {
+                                setSelectedHabitIds(item.relatedHabitIds);
                               } else {
                                 setSelectedHabitIds([]);
                               }
                             }}
                             className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
+                            aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
                           >
                             Review
                           </button>
@@ -152,16 +256,16 @@ const Dashboard: React.FC = () => {
                       <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
                         <div className="flex justify-between items-center mb-2">
                            <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
-                             {isCalendar ? 'Actions' : 'Select Category'}
+                             {isCalendarQueueItem(item) ? 'Actions' : 'Select Category'}
                            </p>
                            <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
                         </div>
 
-                        {isCalendar ? (
+                        {isCalendarQueueItem(item) ? (
                           /* Calendar Item Actions */
                           <div className="space-y-2">
                             <p className="text-xs text-brand-500 mb-3">
-                              {(item as any).type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
+                              {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
                             </p>
                             <div className="flex gap-2">
                               <button
@@ -197,6 +301,91 @@ const Dashboard: React.FC = () => {
                                 Delete
                               </button>
                             </div>
+                          </div>
+                        ) : isTodoQueueItem(item) ? (
+                          /* To-Do Item Actions */
+                          <div className="space-y-2">
+                             <p className="text-xs text-brand-500 mb-3">
+                               Mark this task as complete or delay it:
+                             </p>
+                             <div className="flex gap-2">
+                               <button
+                                 onClick={async () => {
+                                   try {
+                                     await completeToDo(item.id);
+                                     toast.success('To-Do completed! 🎉');
+                                     setExpandedId(null);
+                                   } catch (error) {
+                                     console.error('Failed to complete task:', error);
+                                     toast.error('Failed to complete to-do');
+                                   }
+                                 }}
+                                 className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Check size={16} />
+                                 Complete
+                               </button>
+                               <button
+                                 onClick={async () => {
+                                   // Defer logic: For overdue tasks, always defer to at least tomorrow.
+                                   // For future tasks, defer to original + 1 day (maintaining the offset).
+                                   // This ensures overdue tasks get adequate time to complete.
+                                   const today = startOfToday();
+                                   const tomorrowDate = addDays(today, 1);
+                                   const originalDueDate = parseISO(item.date);
+                                   
+                                   // Validate parsed date
+                                   if (!isValid(originalDueDate)) {
+                                     toast.error('Invalid due date');
+                                     return;
+                                   }
+                                   
+                                   // Choose the later date: either (original + 1 day) or tomorrow
+                                   // This guarantees overdue tasks defer to at least tomorrow
+                                   const deferredFromOriginal = addDays(originalDueDate, 1);
+                                   const newDueDate = isAfter(deferredFromOriginal, tomorrowDate)
+                                     ? deferredFromOriginal
+                                     : tomorrowDate;
+
+                                   const newDueDateString = format(newDueDate, 'yyyy-MM-dd');
+                                   try {
+                                     await updateToDo(item.id, { completeByDate: newDueDateString });
+
+                                     if (isBefore(originalDueDate, today)) {
+                                       toast.success(
+                                         `Deferred overdue task (was due ${format(
+                                           originalDueDate,
+                                           'MMM d'
+                                         )}) to ${format(newDueDate, 'MMM d')}`
+                                       );
+                                     } else {
+                                       toast.success(`Deferred to ${format(newDueDate, 'MMM d')}`);
+                                     }
+                                     setExpandedId(null);
+                                   } catch (error) {
+                                     console.error('Failed to defer task:', error);
+                                     toast.error('Failed to defer task. Please try again.');
+                                   }
+                                 }}
+                                 className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Clock size={16} />
+                                 Defer
+                               </button>
+                               <button
+                                 onClick={() => {
+                                   showDeleteConfirmation(async () => {
+                                     await deleteToDo(item.id);
+                                     setExpandedId(null);
+                                     toast.success('Task deleted');
+                                   });
+                                 }}
+                                 className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                               >
+                                 <Trash2 size={16} />
+                                 Delete
+                               </button>
+                             </div>
                           </div>
                         ) : (
                           /* Transaction Category Selector */

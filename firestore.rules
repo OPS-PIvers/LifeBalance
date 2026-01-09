@@ -21,9 +21,11 @@ service cloud.firestore {
 
     // Households collection
     match /households/{householdId} {
-      // Allow any authenticated user to read (needed for joining via invite code)
-      allow read: if isAuthenticated();
-      allow list: if isAuthenticated(); // Allow querying for households user belongs to
+      // Allow any authenticated user to read specific doc (needed for joining via invite code)
+      allow get: if isAuthenticated();
+      // Allow listing only if user is a member (prevents enumeration of all households)
+      allow list: if request.auth.uid in resource.data.memberUids;
+
       allow create: if isAuthenticated();
       // Allow update if member (but cannot modify immutable fields), OR if only adding self to memberUids (for joining via invite)
       allow update: if (isMemberOf(householdId) &&
