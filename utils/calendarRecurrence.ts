@@ -1,5 +1,5 @@
 import { CalendarItem } from '@/types/schema';
-import { addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, differenceInCalendarWeeks, differenceInCalendarMonths, addDays, startOfDay } from 'date-fns';
+import { addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, differenceInCalendarWeeks, differenceInCalendarMonths, startOfDay } from 'date-fns';
 
 /**
  * Generates recurring instances of a calendar item within a date range.
