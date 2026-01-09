@@ -270,7 +270,6 @@ const ToDosPage: React.FC = () => {
           role="dialog"
           aria-modal="true"
           tabIndex={0}
-          tabIndex={0}
         >
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl scale-100 animate-in zoom-in-95">
             <div className="flex justify-between items-center mb-6">
