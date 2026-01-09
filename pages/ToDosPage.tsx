@@ -271,7 +271,10 @@ const ToDosPage: React.FC = () => {
           aria-modal="true"
           tabIndex={0}
         >
-          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl rounded-b-none sm:rounded-3xl p-6 pb-8 sm:pb-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200">
+          <div
+            className="bg-white w-full sm:max-w-sm rounded-t-3xl rounded-b-none sm:rounded-3xl p-6 pb-8 sm:pb-6 shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-200"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+          >
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-brand-800">
                 {editingId ? 'Edit Task' : 'New Task'}
