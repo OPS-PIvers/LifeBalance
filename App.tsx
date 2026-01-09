@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import PlaceholderPage from './pages/PlaceholderPage';
 import MigrateSubmissions from './pages/MigrateSubmissions';
 import MealsPage from './pages/MealsPage';
+import ToDosPage from './pages/ToDosPage';
 
 const App: React.FC = () => {
   return (
@@ -92,7 +93,7 @@ const App: React.FC = () => {
                     <>
                       <TopToolbar />
                       <main>
-                        <PlaceholderPage />
+                        <ToDosPage />
                       </main>
                       <BottomNav />
                     </>

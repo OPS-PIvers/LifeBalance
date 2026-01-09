@@ -40,7 +40,8 @@ import {
   PantryItem,
   Meal,
   ShoppingItem,
-  MealPlanItem
+  MealPlanItem,
+  ToDo
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
@@ -80,6 +81,7 @@ interface HouseholdContextType {
   meals: Meal[];
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
+  todos: ToDo[];
 
   // Pay Period Tracking State
   currentPeriodId: string;
@@ -168,6 +170,12 @@ interface HouseholdContextType {
   addMealPlanItem: (item: Omit<MealPlanItem, 'id'>) => Promise<void>;
   updateMealPlanItem: (id: string, updates: Partial<MealPlanItem>) => Promise<void>;
   deleteMealPlanItem: (id: string) => Promise<void>;
+
+  // To-Do Actions
+  addToDo: (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => Promise<void>;
+  updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
+  deleteToDo: (id: string) => Promise<void>;
+  completeToDo: (id: string) => Promise<void>;
 }
 
 export const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -192,6 +200,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
+  const [todos, setTodos] = useState<ToDo[]>([]);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -382,6 +391,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(mealPlanQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
         setMealPlan(data);
+      })
+    );
+
+    // To-Do listener
+    const todosQuery = query(collection(db, `households/${householdId}/todos`));
+    unsubscribers.push(
+      onSnapshot(todosQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          return {
+            ...d,
+            id: doc.id,
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
+            completedAt: d.completedAt
+              ? (d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt)
+              : undefined,
+          } as ToDo;
+        });
+        setTodos(data);
       })
     );
 
@@ -2182,6 +2210,101 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
+  // --- ACTIONS: TO-DOS ---
+
+  /**
+   * Adds a new to-do item.
+   * 
+   * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
+   * Callers (e.g., ToDosPage, Dashboard) should display appropriate success/error toasts based on their context.
+   * This maintains consistency with updateToDo and deleteToDo, which also delegate toast messaging to their callers.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const addToDo = async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
+    if (!householdId || !user) {
+      throw new Error('User not authenticated or household not selected');
+    }
+    try {
+      const sanitizedToDo = sanitizeFirestoreData(todo);
+      await addDoc(collection(db, `households/${householdId}/todos`), {
+        ...sanitizedToDo,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid
+      });
+      // Note: Toast removed to allow UI-specific messaging (consistent with updateToDo/deleteToDo)
+    } catch (error) {
+      console.error('[addToDo] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  /**
+   * Updates an existing to-do item.
+   * 
+   * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
+   * Callers should display appropriate success/error toasts based on their context.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const updateToDo = async (id: string, updates: Partial<ToDo>) => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    try {
+      const sanitizedUpdates = sanitizeFirestoreData(updates);
+      await updateDoc(doc(db, `households/${householdId}/todos`, id), sanitizedUpdates);
+    } catch (error) {
+      console.error('[updateToDo] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  /**
+   * Deletes a to-do item.
+   * 
+   * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
+   * Callers should display appropriate success/error toasts based on their context.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const deleteToDo = async (id: string) => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/todos`, id));
+    } catch (error) {
+      console.error('[deleteToDo] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
+  /**
+   * Marks a to-do item as completed.
+   * 
+   * Toast Behavior: Toast notifications are omitted from this function to allow UI-specific messaging.
+   * Callers should display appropriate success/error toasts based on their context, maintaining
+   * consistency with addToDo, updateToDo, and deleteToDo.
+   * 
+   * @throws Re-throws any caught errors so callers can provide contextual error messages
+   */
+  const completeToDo = async (id: string) => {
+    if (!householdId) {
+      throw new Error('Household not selected');
+    }
+    try {
+      await updateDoc(doc(db, `households/${householdId}/todos`, id), {
+        isCompleted: true,
+        completedAt: serverTimestamp()
+      });
+      // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
+    } catch (error) {
+      console.error('[completeToDo] Failed:', error);
+      throw error; // Re-throw so callers can handle the error with contextual messaging
+    }
+  };
+
   // --- ACTIONS: PAY PERIOD MANAGEMENT ---
 
   const resetBucketsForNewPeriod = async (newPeriodId: string) => {
@@ -2334,6 +2457,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         meals,
         shoppingList,
         mealPlan,
+        todos,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
@@ -2388,7 +2512,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toggleShoppingItemPurchased,
         addMealPlanItem,
         updateMealPlanItem,
-        deleteMealPlanItem
+        deleteMealPlanItem,
+        addToDo,
+        updateToDo,
+        deleteToDo,
+        completeToDo
       }}
     >
       {children}
