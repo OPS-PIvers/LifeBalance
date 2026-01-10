@@ -41,8 +41,24 @@ export const requestNotificationPermission = async (
       // The service worker was registered on app load in index.html
       let token;
       try {
+        // Ensure service workers are supported and retrieve the existing registration
+        if (!('serviceWorker' in navigator)) {
+          console.error('Service workers are not supported in this browser.');
+          toast.error('Push notifications are not supported in this browser.');
+          return false;
+        }
+
+        const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+
+        if (!registration) {
+          console.error('Service worker at /sw.js is not registered.');
+          toast.error('Notifications are not available because the service worker is not ready.');
+          return false;
+        }
+
         token = await getToken(messaging, {
-          vapidKey
+          vapidKey,
+          serviceWorkerRegistration: registration
         });
       } catch (tokenError: any) {
         console.error('Error fetching FCM token:', tokenError);
