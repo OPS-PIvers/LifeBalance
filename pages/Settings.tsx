@@ -19,9 +19,12 @@ import {
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
+import NotificationSettings from '@/components/settings/NotificationSettings';
 import { requestNotificationPermission } from '@/services/notificationService';
-import { HouseholdMember } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/firebase.config';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
@@ -112,6 +115,34 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleSaveNotificationPreferences = async (preferences: NotificationPreferences) => {
+    if (!householdId || !user) {
+      throw new Error('Missing household or user information');
+    }
+
+    try {
+      const householdRef = doc(db, 'households', householdId);
+
+      // Update the specific member's notification preferences
+      const updatedMembers = members.map(member => {
+        if (member.uid === user.uid) {
+          return {
+            ...member,
+            notificationPreferences: preferences
+          };
+        }
+        return member;
+      });
+
+      await updateDoc(householdRef, {
+        members: updatedMembers
+      });
+    } catch (error) {
+      console.error('Error saving notification preferences:', error);
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -198,6 +229,16 @@ const Settings: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Notification Settings - Only show if notifications are granted */}
+        {notificationStatus === 'granted' && householdId && user && (
+          <NotificationSettings
+            userId={user.uid}
+            householdId={householdId}
+            currentPreferences={currentUser?.notificationPreferences}
+            onSave={handleSaveNotificationPreferences}
+          />
+        )}
 
         {/* Household Info */}
         <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">

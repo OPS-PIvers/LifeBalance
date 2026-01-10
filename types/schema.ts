@@ -1,6 +1,42 @@
 
 export type Role = 'admin' | 'member';
 
+export interface NotificationPreferences {
+  // Habit reminders
+  habitReminders: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
+  // Action queue (todos) morning reminder
+  actionQueueReminders: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour)
+  };
+
+  // Budget alerts when safe-to-spend is low
+  budgetAlerts: {
+    enabled: boolean;
+    threshold?: number; // Alert when safe-to-spend drops below this amount
+  };
+
+  // Streak warnings (habit streak about to break)
+  streakWarnings: {
+    enabled: boolean;
+    time: string; // HH:MM format (24-hour) - when to check and warn
+  };
+
+  // Bill payment reminders
+  billReminders: {
+    enabled: boolean;
+    daysBeforeDue: number; // How many days before due date to remind
+    time: string; // HH:MM format (24-hour)
+  };
+
+  // General notification settings
+  timezone?: string; // IANA timezone (e.g., 'America/New_York')
+}
+
 export interface HouseholdMember {
   uid: string;
   displayName: string;
@@ -13,6 +49,7 @@ export interface HouseholdMember {
   lastDailyPointsReset?: string;
   lastWeeklyPointsReset?: string;
   fcmTokens?: string[]; // Array of FCM tokens for push notifications
+  notificationPreferences?: NotificationPreferences; // User's notification settings
 }
 
 export interface Account {

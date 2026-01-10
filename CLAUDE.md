@@ -38,12 +38,16 @@ VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
 # Gemini API (for AI features)
 VITE_GEMINI_API_KEY=your_gemini_api_key
+
+# Firebase Cloud Messaging (for push notifications)
+VITE_FIREBASE_VAPID_KEY=your_vapid_key_here
 ```
 
 **Required for:**
 - Firebase Authentication (Google Sign-In)
 - Firestore database persistence and real-time sync
 - AI features (Gemini API): receipt scanning, pantry image analysis, meal suggestions, grocery receipt parsing
+- Push notifications (FCM): habit reminders, budget alerts, streak warnings, bill reminders
 
 **Note:** `.env.local` is git-ignored to protect your credentials.
 

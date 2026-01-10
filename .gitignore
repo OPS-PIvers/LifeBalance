@@ -18,6 +18,8 @@ dist-ssr
 
 # Firebase
 .firebase/
+functions/lib/
+functions/node_modules/
 
 # Editor directories and files
 .vscode/*
