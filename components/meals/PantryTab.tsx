@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
-import { Plus, Trash2, Edit2, Camera, Loader2 } from 'lucide-react';
-import { analyzePantryImage } from '@/services/geminiService';
+import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles } from 'lucide-react';
+import { analyzePantryImage, optimizeGroceryList } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -29,6 +29,7 @@ const PantryTab: React.FC = () => {
 
   // Image Upload State
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   const resetForm = () => {
     setNewName('');
@@ -110,6 +111,63 @@ const PantryTab: React.FC = () => {
     }
   };
 
+  const handleOptimize = async () => {
+    if (pantry.length === 0) {
+      toast.error("Pantry is empty");
+      return;
+    }
+
+    try {
+      setIsOptimizing(true);
+
+      // Collect unique existing categories from pantry to guide the AI
+      const existingCategories = Array.from(new Set(pantry.map(p => p.category).filter(Boolean)));
+      const defaultCategories = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Beverages', 'Frozen', 'Household'];
+      const availableCategories = Array.from(new Set([...defaultCategories, ...existingCategories]));
+
+      const optimizedItems = await optimizeGroceryList(
+        pantry.map(p => ({
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          quantity: p.quantity,
+          // Pantry items don't have store, but interface expects it optionally
+        })),
+        availableCategories
+      );
+
+      // Update items concurrently
+      let updatedCount = 0;
+      await Promise.all(optimizedItems.map(async (optItem) => {
+        const original = pantry.find(p => p.id === optItem.id);
+        if (!original) return;
+
+        // Only update if changed
+        if (original.name !== optItem.name || original.category !== optItem.category || original.quantity !== optItem.quantity) {
+          await updatePantryItem({
+            ...original,
+            name: optItem.name,
+            category: optItem.category || original.category,
+            quantity: optItem.quantity || original.quantity,
+          });
+          updatedCount++;
+        }
+      }));
+
+      if (updatedCount > 0) {
+        toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
+      } else {
+        toast.success('Everything looks good!', { icon: '✨' });
+      }
+
+    } catch (error) {
+      console.error("Optimization failed:", error);
+      toast.error("Failed to optimize list");
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
   // Group items by category
   const groupedItems = pantry.reduce((acc, item) => {
     const cat = item.category || 'Uncategorized';
@@ -123,6 +181,15 @@ const PantryTab: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-brand-900">My Pantry</h2>
         <div className="flex gap-2">
+           <button
+             onClick={handleOptimize}
+             disabled={isOptimizing || pantry.length === 0}
+             className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+             title="AI Optimize List"
+             aria-label="AI Optimize List"
+           >
+             {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+           </button>
            <label className="btn-secondary flex items-center gap-2 cursor-pointer">
               {isProcessingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
               <span className="hidden sm:inline">Scan Pantry</span>

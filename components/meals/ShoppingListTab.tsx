@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store } from 'lucide-react';
-import { parseGroceryReceipt } from '@/services/geminiService';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
+import { parseGroceryReceipt, optimizeGroceryList } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -28,6 +28,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +82,63 @@ const ShoppingListTab: React.FC = () => {
         e.target.value = ''; // Reset file input
       }
     };
+
+  const handleOptimize = async () => {
+    if (shoppingList.length === 0) {
+      toast.error("List is empty");
+      return;
+    }
+
+    try {
+      setIsOptimizing(true);
+
+      const optimizedItems = await optimizeGroceryList(
+        shoppingList.map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          store: item.store
+        })),
+        CATEGORIES // Pass the defined categories
+      );
+
+      // Update items concurrently
+      let updatedCount = 0;
+      await Promise.all(optimizedItems.map(async (optItem) => {
+        const original = shoppingList.find(i => i.id === optItem.id);
+        if (!original) return;
+
+        // Only update if changed
+        if (original.name !== optItem.name ||
+            original.category !== optItem.category ||
+            original.quantity !== optItem.quantity ||
+            original.store !== optItem.store) {
+
+          await updateShoppingItem({
+            ...original,
+            name: optItem.name,
+            category: optItem.category || original.category,
+            quantity: optItem.quantity || original.quantity,
+            store: optItem.store || original.store
+          });
+          updatedCount++;
+        }
+      }));
+
+      if (updatedCount > 0) {
+        toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
+      } else {
+        toast.success('Everything looks good!', { icon: '✨' });
+      }
+
+    } catch (error) {
+      console.error("Optimization failed:", error);
+      toast.error("Failed to optimize list");
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
 
   const handleSaveEdit = useCallback(async () => {
       if (!editingItem) return;
@@ -164,7 +222,16 @@ const ShoppingListTab: React.FC = () => {
             </form>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+             <button
+                onClick={handleOptimize}
+                disabled={isOptimizing || shoppingList.length === 0}
+                className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+                title="AI Optimize List"
+                aria-label="AI Optimize List"
+             >
+                {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+             </button>
              <label className="btn-secondary flex items-center gap-2 cursor-pointer text-sm">
                 {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                 <span>Scan Receipt to Pantry</span>
