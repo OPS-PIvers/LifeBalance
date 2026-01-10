@@ -75,7 +75,7 @@ const ShoppingListTab: React.FC = () => {
       try {
         setIsProcessingReceipt(true);
         const base64 = await fileToBase64(file);
-        const items = await parseGroceryReceipt(base64);
+        const items = await parseGroceryReceipt(base64, CATEGORIES);
 
         // Add all found items concurrently for better performance
         const results = await Promise.allSettled(items.map(item =>

@@ -55,6 +55,7 @@ export interface GroceryItem {
   name: string;
   quantity?: string;
   category: string;
+  store?: string;
 }
 
 /**
@@ -241,15 +242,19 @@ Return a JSON array of transactions.`
 /**
  * Analyzes a pantry image and extracts food items
  * @param base64Image - Base64 encoded image data
+ * @param availableCategories - List of available categories for smart matching
  */
 export const analyzePantryImage = async (
-  base64Image: string
+  base64Image: string,
+  availableCategories: string[] = [...GROCERY_CATEGORIES]
 ): Promise<Omit<PantryItem, 'id'>[]> => {
   validateApiKey();
 
   try {
     const mimeType = extractMimeType(base64Image);
     const cleanBase64 = stripDataUrlPrefix(base64Image);
+
+    const categoriesStr = availableCategories.join(', ');
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -263,11 +268,11 @@ export const analyzePantryImage = async (
             },
             {
                 text: `Analyze this image of a pantry, fridge, or food items. Identify all distinct food items visible.
-                For each item, provide:
-                - name: A clear, concise name of the item
-                - quantity: estimated amount/quantity visible (e.g., "1 box", "approx 500g", "half full")
-                - category: Logical category (e.g., "Produce", "Dairy", "Grains", "Canned Goods", "Snacks", "Beverages", "Condiments")
-                - expiryDate: (Optional) If an expiry date is clearly visible, provide in YYYY-MM-DD. Otherwise null.
+                For each item:
+                1. Provide a clear, concise 'name' (normalized, user-friendly, fix typos).
+                2. Estimate 'quantity' visible (e.g., "1 box", "approx 500g", "half full").
+                3. Assign the most appropriate 'category' from this list: ${categoriesStr}.
+                4. 'expiryDate': (Optional) If an expiry date is clearly visible, provide in YYYY-MM-DD. Otherwise null.
 
                 Return a JSON array of these items.`
             }
@@ -399,15 +404,19 @@ export const suggestMeal = async (
 /**
  * Parses a grocery receipt to extract items
  * @param base64Image - Base64 encoded image
+ * @param availableCategories - List of available categories for smart matching
  */
 export const parseGroceryReceipt = async (
-  base64Image: string
+  base64Image: string,
+  availableCategories: string[] = [...GROCERY_CATEGORIES]
 ): Promise<GroceryItem[]> => {
   validateApiKey();
 
   try {
     const mimeType = extractMimeType(base64Image);
     const cleanBase64 = stripDataUrlPrefix(base64Image);
+
+    const categoriesStr = availableCategories.join(', ');
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -421,10 +430,11 @@ export const parseGroceryReceipt = async (
             },
             {
                 text: `Analyze this grocery receipt. Extract all purchased food/grocery items.
-                For each item, provide:
-                - name: The item name
-                - quantity: quantity if specified (e.g., "2", "1 lb"), otherwise "1"
-                - category: Logical category (e.g., "Produce", "Dairy", "Meat", "Snacks", "Household", "Pantry")
+                For each item:
+                1. Extract the 'name' and Normalize it (fix typos, expand abbreviations, remove unnecessary capitalization, make it user-friendly).
+                2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
+                3. Extract and Standardize 'quantity' if specified (e.g., "2" -> "2 ct", "1 lb" -> "1 lb"), otherwise "1".
+                4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
 
                 Ignore taxes, subtotal, total, and non-product lines.
                 Return a JSON array of items.`
@@ -440,7 +450,8 @@ export const parseGroceryReceipt = async (
             properties: {
               name: { type: Type.STRING },
               quantity: { type: Type.STRING },
-              category: { type: Type.STRING }
+              category: { type: Type.STRING },
+              store: { type: Type.STRING }
             },
             required: ["name", "quantity", "category"]
           }

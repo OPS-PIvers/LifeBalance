@@ -113,7 +113,7 @@ const PantryTab: React.FC = () => {
     try {
       setIsProcessingImage(true);
       const base64 = await fileToBase64(file);
-      const items = await analyzePantryImage(base64);
+      const items = await analyzePantryImage(base64, availableCategories);
 
       // Add all found items concurrently, handling partial failures
       const results = await Promise.allSettled(items.map(item => addPantryItem(item)));
