@@ -1,8 +1,8 @@
 // Give the service worker access to Firebase Messaging.
 // Note: We use the compat libraries here because service workers don't natively support ES modules in all contexts
 // and we want a standalone file in public/.
-importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-messaging-compat.js');
 
 // Initialize the Firebase app in the service worker
 // Note: For background messages to work reliably, you must provide the messagingSenderId.
