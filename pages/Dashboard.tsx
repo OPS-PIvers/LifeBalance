@@ -54,6 +54,7 @@ const Dashboard: React.FC = () => {
     habits,
     insight,
     refreshInsight,
+    isGeneratingInsight,
     currentUser,
     calendarItems,
     payCalendarItem,
@@ -607,10 +608,11 @@ const Dashboard: React.FC = () => {
                   </button>
                   <button
                     onClick={refreshInsight}
-                    className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-600"
+                    disabled={isGeneratingInsight}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                   >
                     <Wand2 size={12} />
-                    Get Insight
+                    {isGeneratingInsight ? 'Generating...' : 'Get Insight'}
                   </button>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 
 interface InsightsArchiveModalProps {
   isOpen: boolean;
@@ -47,18 +47,31 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
               <p className="text-slate-400 text-sm">Generate your first insight from the dashboard!</p>
             </div>
           ) : (
-            insightsHistory.map((insight) => (
-              <div key={insight.id} className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100/50">
-                <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-white px-2 py-1 rounded-lg border border-indigo-50">
-                        {format(parseISO(insight.generatedAt), 'MMM d, yyyy • h:mm a')}
-                    </span>
+            insightsHistory.map((insight) => {
+              // Parse date with error handling to prevent crashes
+              let formattedDate = 'Invalid date';
+              try {
+                const parsedDate = parseISO(insight.generatedAt);
+                if (isValid(parsedDate)) {
+                  formattedDate = format(parsedDate, 'MMM d, yyyy • h:mm a');
+                }
+              } catch (error) {
+                console.error('Error parsing insight date:', error);
+              }
+
+              return (
+                <div key={insight.id} className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100/50">
+                  <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-white px-2 py-1 rounded-lg border border-indigo-50">
+                          {formattedDate}
+                      </span>
+                  </div>
+                  <p className="text-indigo-900 font-medium leading-relaxed">
+                    "{insight.text}"
+                  </p>
                 </div>
-                <p className="text-indigo-900 font-medium leading-relaxed">
-                  "{insight.text}"
-                </p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
