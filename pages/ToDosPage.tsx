@@ -84,7 +84,7 @@ const ToDosPage: React.FC = () => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
     // Default to current user, or first member if available
-    const defaultAssignee = currentUser.uid ?? (members.length > 0 ? members[0].uid : '');
+    const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0].uid : '');
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -208,10 +208,10 @@ const ToDosPage: React.FC = () => {
         </div>
         <button
           onClick={openAddModal}
-          className="p-3 bg-brand-800 text-white rounded-full shadow-lg hover:bg-brand-700 active:scale-95 transition-all"
+          className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
           aria-label="Add new task"
         >
-          <Plus size={24} />
+          <Plus size={16} /> New Task
         </button>
       </div>
 
