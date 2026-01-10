@@ -240,6 +240,7 @@ export interface ShoppingItem {
   id: string;
   name: string;
   category: string; // "Produce", "Dairy", etc.
+  store?: string;
   quantity?: string;
   isPurchased: boolean;
   notes?: string;
