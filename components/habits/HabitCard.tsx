@@ -108,7 +108,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         />
         
         {/* ACTION INDICATOR */}
-        <div className="flex-shrink-0 mr-4 relative group" style={{ zIndex: 2 }}>
+        <div className="flex-shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
           <div className={buttonClasses}>
             {isThreshold && !isCompleted ? (
               <span className="text-lg font-bold font-mono">{habit.count}</span>
@@ -150,7 +150,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400"
+              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 3 }}
             >
@@ -160,7 +160,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 min-w-0" style={{ zIndex: 2 }}>
+        <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
           <div className="flex justify-between items-start">
             <div>
               <h3 className={cn("font-bold text-sm truncate", isActive ? "text-brand-800" : "text-brand-700")}>
@@ -175,7 +175,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                 setIsMenuOpen(!isMenuOpen);
                 setFocusedMenuIndex(0); // Reset focus to first item
               }}
-              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400 pointer-events-auto"
               aria-label="Habit options menu"
               aria-haspopup="true"
               aria-expanded={isMenuOpen}
