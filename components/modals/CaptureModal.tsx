@@ -2,12 +2,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown
+  Wallet, CheckSquare, ShoppingBag, Calendar, Store, ChevronDown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { analyzeReceipt, parseBankStatement, ReceiptData } from '../../services/geminiService';
-import { Transaction, HouseholdMember } from '../../types/schema';
+import { Transaction } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 
 interface CaptureModalProps {
@@ -98,7 +98,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
          setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
       }
     }
-  }, [isOpen, dynamicCategories, category, transactionDate, todoDate, todoAssignee, currentUser, members]);
+  }, [isOpen, dynamicCategories, currentUser, members]);
 
   // Reset state when closing
   const handleClose = () => {
@@ -116,8 +116,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
     // Reset To-Do State
     setTodoText('');
-    setTodoDate(getLocalDateString());
-    setTodoAssignee(currentUser?.uid ?? '');
+    setTodoDate('');
+    setTodoAssignee('');
 
     // Reset Shopping State
     setShoppingName('');
@@ -315,9 +315,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       })
     );
     const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
-    else toast.error('Failed to add transactions');
-    handleClose();
+    if (succeeded > 0) {
+      toast.success(`${succeeded} transaction(s) added to Action Queue!`);
+      handleClose();
+    } else {
+      toast.error('Failed to add transactions');
+      // Return to review view so the user can retry instead of closing the modal
+      setView('review');
+    }
   };
 
   const handleManualSave = async () => {
@@ -377,19 +382,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    // Default to unassigned if current selection is invalid? Or block?
-    // User logic: Block if invalid.
-    const isValidAssignee = members.some(m => m.uid === todoAssignee);
-    if (!isValidAssignee && todoAssignee) {
-      toast.error('Invalid assignee selected');
+    // Validate assignee: require a selected member and ensure it exists.
+    const hasAssignee = Boolean(todoAssignee);
+    const isValidAssignee = hasAssignee && members.some(m => m.uid === todoAssignee);
+    if (!hasAssignee || !isValidAssignee) {
+      toast.error(!hasAssignee ? 'Please select an assignee' : 'Invalid assignee selected');
       return;
-    }
-    if (!todoAssignee && members.length > 0) {
-       // Should force selection? Or default to first?
-       // Currently state init defaults to currentUser or first member.
-       // If empty here, something is wrong.
-       toast.error('Please select an assignee');
-       return;
     }
 
     try {
@@ -420,10 +418,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         store: shoppingStore.trim() || undefined,
         isPurchased: false
       });
-      toast.success('Added to list');
       handleClose();
     } catch (error) {
-      toast.error('Failed to add item');
+      // addShoppingItem already handles user notifications; avoid duplicate toasts here
+      console.error('Failed to add shopping item', error);
     }
   };
 
@@ -465,46 +463,53 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                 </button>
             </div>
 
-            {/* Tab Switcher - Only show if not in deep transaction flow */}
-            {view === 'menu' && (
-                <div className="px-6 pb-4">
-                    <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
-                        <button
-                            onClick={() => setActiveTab('transaction')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'transaction'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <Wallet size={16} />
-                            <span>Expense</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('todo')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'todo'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <CheckSquare size={16} />
-                            <span>To-Do</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('shopping')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'shopping'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <ShoppingBag size={16} />
-                            <span>Shop</span>
-                        </button>
-                    </div>
+            {/* Tab Switcher - Visible regardless of transaction view state */}
+            <div className="px-6 pb-4">
+                <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
+                    <button
+                        onClick={() => {
+                            setActiveTab('transaction');
+                            setView('menu');
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                            activeTab === 'transaction'
+                            ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                            : 'text-brand-400 hover:text-brand-600'
+                        }`}
+                    >
+                        <Wallet size={16} />
+                        <span>Expense</span>
+                    </button>
+                    <button
+                        onClick={() => {
+                            setActiveTab('todo');
+                            setView('menu');
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                            activeTab === 'todo'
+                            ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                            : 'text-brand-400 hover:text-brand-600'
+                        }`}
+                    >
+                        <CheckSquare size={16} />
+                        <span>To-Do</span>
+                    </button>
+                    <button
+                        onClick={() => {
+                            setActiveTab('shopping');
+                            setView('menu');
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                            activeTab === 'shopping'
+                            ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                            : 'text-brand-400 hover:text-brand-600'
+                        }`}
+                    >
+                        <ShoppingBag size={16} />
+                        <span>Shop</span>
+                    </button>
                 </div>
-            )}
+            </div>
         </div>
 
         {/* Body Content */}
@@ -863,7 +868,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                                     }`}
                                 >
                                     {member.photoURL ? (
-                                        <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                                        <img src={member.photoURL} alt={member.displayName ?? 'Household member avatar'} className="w-5 h-5 rounded-full" />
                                     ) : (
                                         <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
                                             {member.displayName?.charAt(0) ?? 'U'}
@@ -892,22 +897,22 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           {activeTab === 'shopping' && (
              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div>
-                    <label htmlFor="item-name" className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
+                    <label htmlFor="item-name" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Item Name</label>
                     <input
                         id="item-name"
                         type="text"
                         value={shoppingName}
                         onChange={(e) => setShoppingName(e.target.value)}
                         placeholder="e.g. Milk, Eggs"
-                        className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                         autoFocus
                     />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                      <div>
-                        <label htmlFor="item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
-                        <div className="relative mt-1">
+                        <label htmlFor="item-category" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Category</label>
+                        <div className="relative">
                              <select
                                 id="item-category"
                                 value={shoppingCategory}
@@ -922,21 +927,21 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <label htmlFor="item-quantity" className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
+                        <label htmlFor="item-quantity" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Quantity</label>
                         <input
                             id="item-quantity"
                             type="text"
                             value={shoppingQuantity}
                             onChange={(e) => setShoppingQuantity(e.target.value)}
                             placeholder="e.g. 2, 500g"
-                            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                         />
                     </div>
                 </div>
 
                 <div>
-                    <label htmlFor="item-store" className="text-xs font-bold text-brand-400 uppercase">Store (Optional)</label>
-                    <div className="relative mt-1">
+                    <label htmlFor="item-store" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Store (Optional)</label>
+                    <div className="relative">
                         <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
                         <input
                             id="item-store"
