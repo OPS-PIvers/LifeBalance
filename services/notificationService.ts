@@ -1,5 +1,5 @@
 import { getToken } from 'firebase/messaging';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { messaging, db, auth } from '@/firebase.config';
 import toast from 'react-hot-toast';
 
@@ -24,6 +24,16 @@ export const requestNotificationPermission = async (
     if (!currentUser || currentUser.uid !== userId) {
       console.error('Security violation: Attempted to update tokens for another user.');
       toast.error('Unauthorized access.');
+      return false;
+    }
+
+    // Validate that the user is actually a member of the specified household
+    const memberRef = doc(db, `households/${householdId}/members/${userId}`);
+    const memberDoc = await getDoc(memberRef);
+    
+    if (!memberDoc.exists()) {
+      console.error('Security violation: User is not a member of the specified household.');
+      toast.error('You are not a member of this household.');
       return false;
     }
 
@@ -83,13 +93,20 @@ export const requestNotificationPermission = async (
         const memberRef = doc(db, `households/${householdId}/members/${userId}`);
         
         try {
-          // Note: We use arrayUnion which automatically prevents exact duplicate tokens.
-          // Token refresh is handled by Firebase - when a token is refreshed, the old token
-          // becomes invalid automatically on Firebase's side. The client will get a new token
-          // on the next requestNotificationPermission (or other getToken) call.
-          // For more advanced scenarios (multiple devices, token cleanup), consider periodically
-          // re-calling getToken and storing tokens with metadata (device ID, timestamp) in a map
-          // structure instead of an array, and removing tokens that are no longer valid.
+          // IMPORTANT: arrayUnion prevents exact duplicates but DOES NOT remove stale tokens.
+          // Over time, this array will accumulate invalid tokens from:
+          // - Tokens refreshed by Firebase (old tokens become invalid)
+          // - Multiple devices accessing the same account
+          // - Users clearing browser data or reinstalling
+          //
+          // RECOMMENDED SOLUTION for production:
+          // 1. Store tokens as a map: { [tokenId]: { token, deviceId, timestamp, lastVerified } }
+          // 2. Implement a backend Cloud Function to periodically validate tokens via FCM API
+          // 3. Remove tokens that return "NotRegistered" or "InvalidRegistration" errors
+          // 4. On each new token registration, check if limit exceeded (e.g., >10 tokens) and clean old ones
+          //
+          // For MVP/small-scale use, arrayUnion is acceptable but expect delivery failures
+          // to stale tokens (Firebase handles this gracefully with no user impact).
           await updateDoc(memberRef, {
             fcmTokens: arrayUnion(token)
           });

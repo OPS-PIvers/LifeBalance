@@ -158,6 +158,14 @@ const Settings: React.FC = () => {
               onClick={handleEnableNotifications}
               disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
               className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed"
+              aria-label={
+                notificationStatus === 'granted' 
+                  ? 'Push notifications enabled' 
+                  : notificationStatus === 'denied'
+                  ? 'Push notifications denied by browser'
+                  : 'Enable push notifications'
+              }
+              aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
@@ -183,6 +191,11 @@ const Settings: React.FC = () => {
                  notificationStatus === 'denied' ? 'Denied' : 'Enable'}
               </span>
             </button>
+            {notificationStatus === 'denied' && (
+              <p id="notification-denied-help" className="sr-only">
+                Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
+              </p>
+            )}
           </div>
         </div>
 
