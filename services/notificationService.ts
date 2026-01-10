@@ -86,10 +86,10 @@ export const requestNotificationPermission = async (
           // Note: We use arrayUnion which automatically prevents exact duplicate tokens.
           // Token refresh is handled by Firebase - when a token is refreshed, the old token
           // becomes invalid automatically on Firebase's side. The client will get a new token
-          // on the next requestNotificationPermission call.
-          // For more advanced scenarios (multiple devices, token cleanup), consider implementing
-          // a token refresh listener using onTokenRefresh and storing tokens with metadata
-          // (device ID, timestamp) in a map structure instead of an array.
+          // on the next requestNotificationPermission (or other getToken) call.
+          // For more advanced scenarios (multiple devices, token cleanup), consider periodically
+          // re-calling getToken and storing tokens with metadata (device ID, timestamp) in a map
+          // structure instead of an array, and removing tokens that are no longer valid.
           await updateDoc(memberRef, {
             fcmTokens: arrayUnion(token)
           });
