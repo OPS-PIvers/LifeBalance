@@ -121,7 +121,7 @@ const PantryTab: React.FC = () => {
       setIsOptimizing(true);
 
       // Collect unique existing categories from pantry to guide the AI
-      const existingCategories = Array.from(new Set(pantry.map(p => p.category).filter(Boolean)));
+      const existingCategories = Array.from(new Set(pantry.map(p => p.category).filter((c): c is string => !!c)));
       const defaultCategories = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Beverages', 'Frozen', 'Household'];
       const availableCategories = Array.from(new Set([...defaultCategories, ...existingCategories]));
 
