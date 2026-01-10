@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { PantryItem, Meal } from "@/types/schema";
+import { PantryItem, Meal, Transaction, Habit } from "@/types/schema";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key
@@ -417,5 +417,61 @@ export const parseGroceryReceipt = async (
   } catch (error) {
     console.error("Gemini Grocery Receipt Parse Error:", error);
     throw new Error("Failed to parse grocery receipt.");
+  }
+};
+
+/**
+ * Generates a concise, helpful insight based on habits and spending data.
+ * @param transactions - List of recent transactions
+ * @param habits - List of habits with completion data
+ */
+export const generateInsight = async (
+  transactions: Transaction[],
+  habits: Habit[]
+): Promise<string> => {
+  validateApiKey();
+
+  try {
+    // Anonymize and simplify data
+    const simplifiedTransactions = transactions.slice(0, 50).map(t => ({
+      amount: t.amount,
+      category: t.category,
+      date: t.date,
+      merchant: t.merchant // potentially sensitive but often needed for context
+    }));
+
+    const simplifiedHabits = habits.map(h => ({
+      title: h.title,
+      type: h.type,
+      count: h.count,
+      streak: h.streakDays,
+      completedDates: h.completedDates.slice(0, 10) // last 10 dates
+    }));
+
+    const prompt = `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+    The insight should be deep and actionable, not just a basic observation.
+    Focus on patterns between spending and habits if possible, or interesting trends in either.
+    Keep it under 30 words.
+
+    Transactions (last 50): ${JSON.stringify(simplifiedTransactions)}
+    Habits: ${JSON.stringify(simplifiedHabits)}
+
+    Return ONLY the insight text, no JSON.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [{ text: prompt }]
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No data returned from Gemini");
+
+    return text.trim().replace(/^"|"$/g, ''); // Remove quotes if present
+
+  } catch (error) {
+    console.error("Gemini Insight Generation Error:", error);
+    throw new Error("Failed to generate insight.");
   }
 };

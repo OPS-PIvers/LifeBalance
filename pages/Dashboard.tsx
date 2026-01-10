@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Sparkles, RefreshCw, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle } from 'lucide-react';
+import { Sparkles, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle, Wand2, History } from 'lucide-react';
 import AnalyticsModal from '../components/modals/AnalyticsModal';
 import ChallengeHubModal from '../components/modals/ChallengeHubModal';
+import InsightsArchiveModal from '../components/modals/InsightsArchiveModal';
 import { endOfDay, isBefore, parseISO, isSameDay, format, subMonths, addMonths, addDays, startOfToday, isToday, isTomorrow, isAfter, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
 import { expandCalendarItems } from '../utils/calendarRecurrence';
@@ -69,6 +70,7 @@ const Dashboard: React.FC = () => {
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
 
   // Memoize member lookup Map for O(1) access instead of O(n) for each todo
   const memberMap = useMemo(() => {
@@ -593,11 +595,24 @@ const Dashboard: React.FC = () => {
               <Sparkles size={20} />
             </div>
             <div className="flex-1">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">AI Insight</h3>
-                <button onClick={refreshInsight} className="text-indigo-300 hover:text-indigo-500 transition-colors">
-                  <RefreshCw size={14} />
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsArchiveOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-white text-indigo-600 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-50"
+                  >
+                    <History size={12} />
+                    History
+                  </button>
+                  <button
+                    onClick={refreshInsight}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-600"
+                  >
+                    <Wand2 size={12} />
+                    Get Insight
+                  </button>
+                </div>
               </div>
               <p className="text-indigo-900 font-medium leading-relaxed">
                 "{insight}"
@@ -610,6 +625,7 @@ const Dashboard: React.FC = () => {
 
       <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
       <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />
+      <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
