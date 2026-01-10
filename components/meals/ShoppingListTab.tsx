@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
-import { parseGroceryReceipt, optimizeGroceryList } from '@/services/geminiService';
+import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { normalizeValue } from '@/utils/stringNormalizer';
+import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -30,7 +30,29 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
+
+  // Use the shared grocery optimizer hook
+  const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    items: shoppingList,
+    updateItem: updateShoppingItem,
+    mapToOptimizable: (item: ShoppingItem): OptimizableItem => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      store: item.store
+    }),
+    mapFromOptimizable: (original: ShoppingItem, optimized: OptimizableItem): ShoppingItem => ({
+      ...original,
+      name: optimized.name,
+      category: optimized.category || original.category || 'Uncategorized',
+      quantity: optimized.quantity || original.quantity,
+      store: optimized.store || original.store
+    }),
+    availableCategories: CATEGORIES,
+    emptyMessage: "List is empty",
+    errorMessage: "Failed to optimize your shopping list"
+  });
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,90 +106,6 @@ const ShoppingListTab: React.FC = () => {
         e.target.value = ''; // Reset file input
       }
     };
-
-  const handleOptimize = async () => {
-    if (shoppingList.length === 0) {
-      toast.error("List is empty");
-      return;
-    }
-
-    try {
-      setIsOptimizing(true);
-
-      const optimizedItems = await optimizeGroceryList(
-        shoppingList.map(item => ({
-          id: item.id,
-          name: item.name,
-          category: item.category,
-          quantity: item.quantity,
-          store: item.store
-        })),
-        CATEGORIES // Pass the defined categories
-      );
-
-      // Update items concurrently with partial failure handling
-      let updatedCount = 0;
-      const results = await Promise.allSettled(
-        optimizedItems.map(async (optItem) => {
-          const original = shoppingList.find(i => i.id === optItem.id);
-          if (!original) return;
-
-          const origName = normalizeValue(original.name);
-          const origCategory = normalizeValue(original.category);
-          const origQuantity = normalizeValue(original.quantity);
-          const origStore = normalizeValue(original.store);
-
-          const newName = normalizeValue(optItem.name);
-          const newCategory = normalizeValue(optItem.category) || origCategory;
-          const newQuantity = normalizeValue(optItem.quantity) || origQuantity;
-          const newStore = normalizeValue(optItem.store) || origStore;
-
-          // Only update if changed
-          if (origName !== newName || origCategory !== newCategory || origQuantity !== newQuantity || origStore !== newStore) {
-            await updateShoppingItem({
-              ...original,
-              name: newName,
-              category: newCategory,
-              quantity: newQuantity,
-              store: newStore
-            });
-            updatedCount++;
-          }
-        })
-      );
-
-      let failedCount = 0;
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          failedCount++;
-          console.error(
-            'Failed to update optimized shopping item:',
-            optimizedItems[index],
-            result.reason
-          );
-        }
-      });
-
-      if (updatedCount > 0 && failedCount === 0) {
-        toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
-      } else if (updatedCount > 0 && failedCount > 0) {
-        toast.success(
-          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
-          { icon: '⚠️' }
-        );
-      } else if (updatedCount === 0 && failedCount > 0) {
-        toast.error('Failed to optimize your shopping list. Please try again.');
-      } else {
-        toast.success('Everything looks good!', { icon: '✨' });
-      }
-
-    } catch (error) {
-      console.error("Optimization failed:", error);
-      toast.error("Failed to optimize list");
-    } finally {
-      setIsOptimizing(false);
-    }
-  };
 
   const handleSaveEdit = useCallback(async () => {
       if (!editingItem) return;
