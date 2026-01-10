@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store } from 'lucide-react';
@@ -82,7 +82,7 @@ const ShoppingListTab: React.FC = () => {
       }
     };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = useCallback(async () => {
       if (!editingItem) return;
       const trimmedName = editingItem.name?.trim();
       if (!trimmedName) return;
@@ -102,7 +102,7 @@ const ShoppingListTab: React.FC = () => {
       });
       setEditingItem(null);
       toast.success('Item updated');
-  };
+  }, [editingItem, updateShoppingItem]);
 
   // Keyboard support for edit modal
   useEffect(() => {
@@ -119,7 +119,7 @@ const ShoppingListTab: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingItem]);
+  }, [editingItem, handleSaveEdit]);
 
   // Group by category
   const groupedItems = shoppingList.reduce((acc, item) => {
