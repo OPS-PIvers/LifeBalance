@@ -420,9 +420,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     );
 
     // Insights listener
-    // NOTE: This query orders by `generatedAt` in descending order and may require a Firestore index.
+    // NOTE: This query requires a Firestore composite index:
+    //   Collection: households/{householdId}/insights
+    //   Field: generatedAt (Descending)
     // If the index is missing, Firestore will throw an error with a URL to create it.
-    // Consider pre-creating the index via firebase.json or the Firebase console to avoid runtime errors.
+    // You can pre-create the index via the Firebase console or add to firestore.indexes.json:
+    // {
+    //   "collectionGroup": "insights",
+    //   "queryScope": "COLLECTION",
+    //   "fields": [{"fieldPath": "generatedAt", "order": "DESCENDING"}]
+    // }
     const insightsQuery = query(collection(db, `households/${householdId}/insights`), orderBy('generatedAt', 'desc'));
     unsubscribers.push(
       onSnapshot(

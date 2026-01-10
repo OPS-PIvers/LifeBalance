@@ -436,6 +436,14 @@ export const parseGroceryReceipt = async (
 
 /**
  * Generates a concise, helpful insight based on habits and spending data.
+ * 
+ * **Privacy Note**: This function sends data to Google's Gemini AI service:
+ * - Transaction data: amount, category, date, and optionally merchant names
+ * - Habit data: title, type, count, streak, and recent completion dates
+ * 
+ * Habit titles are always included in the analysis. Users should avoid using
+ * sensitive or identifying information in habit titles if privacy is a concern.
+ * 
  * @param transactions - List of recent transactions
  * @param habits - List of habits with completion data
  * @param options - Optional configuration for insight generation
