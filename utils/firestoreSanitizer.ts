@@ -1,10 +1,11 @@
 
 /**
- * Recursively sanitizes an object for Firestore by removing undefined values.
+ * Recursively sanitizes an object for Firestore by removing undefined values
+ * and trimming strings to prevent whitespace issues.
  * Firestore does not accept undefined values in documents.
  *
  * @param obj The object to sanitize
- * @returns A new object with undefined values removed
+ * @returns A new object with undefined values removed and strings trimmed
  */
 export const sanitizeFirestoreData = (obj: any): any => {
   if (obj === undefined) {
@@ -15,8 +16,9 @@ export const sanitizeFirestoreData = (obj: any): any => {
     return null;
   }
 
-  if (obj === "") {
-    return null;
+  if (typeof obj === 'string') {
+    const trimmed = obj.trim();
+    return trimmed === "" ? null : trimmed;
   }
 
   if (Array.isArray(obj)) {
