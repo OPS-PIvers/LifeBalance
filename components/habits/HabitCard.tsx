@@ -152,7 +152,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               }}
               className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
-              style={{ zIndex: 3 }}
+              style={{ zIndex: 20 }}
             >
               <X size={12} strokeWidth={3} />
             </button>
