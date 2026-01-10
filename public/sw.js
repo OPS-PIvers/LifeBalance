@@ -1,7 +1,41 @@
-// Service Worker for LifeBalance PWA
+// Service Worker for LifeBalance PWA with Firebase Cloud Messaging
 // Version is updated on each deploy to trigger cache invalidation
 const CACHE_VERSION = 'v1-' + Date.now();
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
+
+// Firebase Cloud Messaging integration
+// Import Firebase scripts for background message handling
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-messaging-compat.js');
+
+// Initialize Firebase for FCM
+// Note: messagingSenderId is the minimal config needed for background messages
+// This value must match your Firebase project's messaging sender ID
+const MESSAGING_SENDER_ID = '611571061016';
+
+try {
+  firebase.initializeApp({
+    messagingSenderId: MESSAGING_SENDER_ID
+  });
+
+  const messaging = firebase.messaging();
+
+  // Handle background messages (when app is not in focus)
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[SW] Received background message:', payload);
+
+    const notificationTitle = payload.notification?.title || 'New Notification';
+    const notificationOptions = {
+      body: payload.notification?.body || '',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png'
+    };
+
+    self.registration.showNotification(notificationTitle, notificationOptions);
+  });
+} catch (error) {
+  console.error('[SW] Firebase Messaging initialization failed:', error);
+}
 
 // Assets to cache on install (shell)
 const SHELL_ASSETS = [

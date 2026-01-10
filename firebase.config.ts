@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getMessaging, isSupported } from 'firebase/messaging';
+import { getMessaging, type Messaging } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,10 +20,9 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Initialize Messaging only in browser environments and wrap in try-catch
-// to avoid runtime errors in unsupported contexts (e.g., SSR, tests, or bundlers without top-level await).
-
-let messagingInstance: any = null;
+// Initialize Messaging with conditional check for browser environment
+// to prevent errors in SSR, tests, or unsupported contexts.
+let messagingInstance: Messaging | null = null;
 if (typeof window !== 'undefined') {
   try {
     messagingInstance = getMessaging(app);

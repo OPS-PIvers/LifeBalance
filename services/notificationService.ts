@@ -37,6 +37,8 @@ export const requestNotificationPermission = async (
         return false;
       }
 
+      // Get FCM token using the existing service worker at /sw.js
+      // The service worker was registered on app load in index.html
       let token;
       try {
         token = await getToken(messaging, {
