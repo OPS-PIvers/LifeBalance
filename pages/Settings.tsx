@@ -121,21 +121,10 @@ const Settings: React.FC = () => {
     }
 
     try {
-      const householdRef = doc(db, 'households', householdId);
+      const memberRef = doc(db, 'households', householdId, 'members', user.uid);
 
-      // Update the specific member's notification preferences
-      const updatedMembers = members.map(member => {
-        if (member.uid === user.uid) {
-          return {
-            ...member,
-            notificationPreferences: preferences
-          };
-        }
-        return member;
-      });
-
-      await updateDoc(householdRef, {
-        members: updatedMembers
+      await updateDoc(memberRef, {
+        notificationPreferences: preferences
       });
     } catch (error) {
       console.error('Error saving notification preferences:', error);
