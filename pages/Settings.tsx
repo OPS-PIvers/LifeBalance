@@ -106,8 +106,9 @@ const Settings: React.FC = () => {
     const success = await requestNotificationPermission(householdId, user.uid);
     if (success) {
       setNotificationStatus('granted');
-    } else if (Notification.permission === 'denied') {
-      setNotificationStatus('denied');
+    } else if ('Notification' in window) {
+      // Always reflect the actual browser permission state on failure
+      setNotificationStatus(Notification.permission);
     }
   };
 
