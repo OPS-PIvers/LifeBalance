@@ -80,6 +80,7 @@ interface HouseholdContextType {
   freezeBank: FreezeBank | null;
   insight: string;
   insightsHistory: Insight[];
+  isGeneratingInsight: boolean;
   pantry: PantryItem[];
   meals: Meal[];
   shoppingList: ShoppingItem[];
@@ -198,6 +199,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
   const [insight, setInsight] = useState("Tap 'Get Insight' to analyze your habits and spending.");
   const [insightsHistory, setInsightsHistory] = useState<Insight[]>([]);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
   const [pantry, setPantry] = useState<PantryItem[]>([]);
@@ -418,15 +420,32 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     );
 
     // Insights listener
+    // NOTE: This query requires a Firestore composite index:
+    //   Collection: households/{householdId}/insights
+    //   Field: generatedAt (Descending)
+    // If the index is missing, Firestore will throw an error with a URL to create it.
+    // You can pre-create the index via the Firebase console or add to firestore.indexes.json:
+    // {
+    //   "collectionGroup": "insights",
+    //   "queryScope": "COLLECTION",
+    //   "fields": [{"fieldPath": "generatedAt", "order": "DESCENDING"}]
+    // }
     const insightsQuery = query(collection(db, `households/${householdId}/insights`), orderBy('generatedAt', 'desc'));
     unsubscribers.push(
-      onSnapshot(insightsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
-        setInsightsHistory(data);
-        if (data.length > 0) {
-          setInsight(data[0].text);
+      onSnapshot(
+        insightsQuery,
+        (snapshot) => {
+          const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
+          setInsightsHistory(data);
+          if (data.length > 0) {
+            setInsight(data[0].text);
+          }
+        },
+        (error) => {
+          console.error('Error listening to insights collection:', error);
+          // Don't show error toast to user as this is non-critical data
         }
-      })
+      )
     );
 
     return () => {
@@ -2420,7 +2439,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const refreshInsight = async () => {
     if (!householdId) return;
 
+    // Prevent rapid clicking and multiple API calls
+    if (isGeneratingInsight) {
+      toast.error('An insight is already being generated. Please wait.');
+      return;
+    }
+
+    // Validate that there's sufficient data to analyze
+    const hasTransactions = Array.isArray(transactions) && transactions.length > 0;
+    const hasHabits = Array.isArray(habits) && habits.length > 0;
+    if (!hasTransactions && !hasHabits) {
+      toast.error('Not enough data to generate insights yet. Add some transactions or habit activity first.');
+      return;
+    }
+
     try {
+      setIsGeneratingInsight(true);
       toast.loading('Generating insight...', { id: 'insight-loading' });
       const newInsightText = await generateInsight(transactions, habits);
 
@@ -2436,6 +2470,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error("Failed to generate insight:", error);
       toast.error('Failed to generate insight', { id: 'insight-loading' });
+    } finally {
+      setIsGeneratingInsight(false);
     }
   };
 
@@ -2477,6 +2513,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         freezeBank,
         insight,
         insightsHistory,
+        isGeneratingInsight,
         currentPeriodId,
         bucketSpentMap,
         householdSettings,

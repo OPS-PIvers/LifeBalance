@@ -16,6 +16,20 @@ const validateApiKey = () => {
   }
 };
 
+/**
+ * AI Prompt template for generating household insights.
+ * This can be easily modified or A/B tested without changing function logic.
+ */
+const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+The insight should be deep and actionable, not just a basic observation.
+Focus on patterns between spending and habits if possible, or interesting trends in either.
+Keep it under 30 words.
+
+Transactions (last 50): ${transactions}
+Habits: ${habits}
+
+Return ONLY the insight text, no JSON.`;
+
 export interface ReceiptData {
   merchant: string;
   amount: number;
@@ -422,14 +436,27 @@ export const parseGroceryReceipt = async (
 
 /**
  * Generates a concise, helpful insight based on habits and spending data.
+ * 
+ * **Privacy Note**: This function sends data to Google's Gemini AI service:
+ * - Transaction data: amount, category, date, and optionally merchant names
+ * - Habit data: title, type, count, streak, and recent completion dates
+ * 
+ * Habit titles are always included in the analysis. Users should avoid using
+ * sensitive or identifying information in habit titles if privacy is a concern.
+ * 
  * @param transactions - List of recent transactions
  * @param habits - List of habits with completion data
+ * @param options - Optional configuration for insight generation
+ * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
  */
 export const generateInsight = async (
   transactions: Transaction[],
-  habits: Habit[]
+  habits: Habit[],
+  options?: { includeMerchantNames?: boolean }
 ): Promise<string> => {
   validateApiKey();
+
+  const includeMerchantNames = options?.includeMerchantNames !== false; // Default to true for backward compatibility
 
   try {
     // Anonymize and simplify data
@@ -437,7 +464,7 @@ export const generateInsight = async (
       amount: t.amount,
       category: t.category,
       date: t.date,
-      merchant: t.merchant // potentially sensitive but often needed for context
+      ...(includeMerchantNames ? { merchant: t.merchant } : {})
     }));
 
     const simplifiedHabits = habits.map(h => ({
@@ -448,15 +475,10 @@ export const generateInsight = async (
       completedDates: h.completedDates.slice(0, 10) // last 10 dates
     }));
 
-    const prompt = `Analyze this household data to provide ONE concise, helpful, and digestible insight.
-    The insight should be deep and actionable, not just a basic observation.
-    Focus on patterns between spending and habits if possible, or interesting trends in either.
-    Keep it under 30 words.
-
-    Transactions (last 50): ${JSON.stringify(simplifiedTransactions)}
-    Habits: ${JSON.stringify(simplifiedHabits)}
-
-    Return ONLY the insight text, no JSON.`;
+    const prompt = INSIGHT_GENERATION_PROMPT(
+      JSON.stringify(simplifiedTransactions),
+      JSON.stringify(simplifiedHabits)
+    );
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
