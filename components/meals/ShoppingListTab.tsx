@@ -15,6 +15,8 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+const CATEGORIES = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Household', 'Uncategorized'];
+
 const ShoppingListTab: React.FC = () => {
   const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem, addPantryItem } = useHousehold();
 
@@ -82,7 +84,7 @@ const ShoppingListTab: React.FC = () => {
 
   const handleSaveEdit = async () => {
       if (!editingItem) return;
-      const trimmedName = editingItem.name.trim();
+      const trimmedName = editingItem.name?.trim();
       if (!trimmedName) return;
 
       await updateShoppingItem({ ...editingItem, name: trimmedName });
@@ -100,8 +102,6 @@ const ShoppingListTab: React.FC = () => {
 
   // Sort categories alphabetically or custom order
   const sortedCategories = Object.keys(groupedItems).sort();
-
-  const categories = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Household', 'Uncategorized'];
 
   return (
     <div className="space-y-6 pb-20">
@@ -121,7 +121,7 @@ const ShoppingListTab: React.FC = () => {
                     className="w-32 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm"
                     aria-label="Category"
                 >
-                    {categories.map(c => (
+                    {CATEGORIES.map(c => (
                         <option key={c} value={c}>{c}</option>
                     ))}
                 </select>
@@ -243,8 +243,9 @@ const ShoppingListTab: React.FC = () => {
 
                     <div className="p-4 space-y-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
+                            <label htmlFor="edit-item-name" className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
                             <input
+                                id="edit-item-name"
                                 type="text"
                                 value={editingItem.name}
                                 onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
@@ -254,20 +255,22 @@ const ShoppingListTab: React.FC = () => {
 
                         <div className="grid grid-cols-2 gap-3">
                              <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
+                                <label htmlFor="edit-item-category" className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
                                 <select
+                                    id="edit-item-category"
                                     value={editingItem.category || 'Uncategorized'}
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
                                     className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm"
                                 >
-                                    {categories.map(c => (
+                                    {CATEGORIES.map(c => (
                                         <option key={c} value={c}>{c}</option>
                                     ))}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantity</label>
+                                <label htmlFor="edit-item-quantity" className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantity</label>
                                 <input
+                                    id="edit-item-quantity"
                                     type="text"
                                     value={editingItem.quantity || ''}
                                     onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
@@ -278,10 +281,11 @@ const ShoppingListTab: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Store (Optional)</label>
+                            <label htmlFor="edit-item-store" className="block text-xs font-bold text-gray-500 uppercase mb-1">Store (Optional)</label>
                             <div className="relative">
                                 <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
+                                    id="edit-item-store"
                                     type="text"
                                     value={editingItem.store || ''}
                                     onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
@@ -293,7 +297,7 @@ const ShoppingListTab: React.FC = () => {
 
                         <button
                             onClick={handleSaveEdit}
-                            disabled={!editingItem.name}
+                            disabled={!editingItem.name?.trim()}
                             className="w-full py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium disabled:opacity-50 mt-2"
                         >
                             Save Changes
