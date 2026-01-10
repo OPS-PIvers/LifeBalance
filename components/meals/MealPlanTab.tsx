@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Meal, MealPlanItem } from '@/types/schema';
+import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
@@ -255,7 +255,7 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
-  const addIngredientsToShoppingList = async (mealIngredients: { name: string; quantity: string }[]) => {
+  const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const normalize = (s: string) => s.trim().toLowerCase();
 
       const ingredientsToAdd = mealIngredients.filter(ing => {
@@ -277,7 +277,7 @@ const MealPlanTab: React.FC = () => {
           addShoppingItem({
               name: ing.name,
               category: 'Uncategorized',
-              quantity: ing.quantity,
+              quantity: ing.quantity || '',
               isPurchased: false
           })
       ));

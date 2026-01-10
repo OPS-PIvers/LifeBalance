@@ -1,34 +1,36 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import * as React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 interface State {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
+  errorInfo: React.ErrorInfo | null;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = {
+    // TypeScript workaround: use type assertion to set initial state
+    (this as any).state = {
       hasError: false,
       error: null,
       errorInfo: null,
     };
   }
 
-  public static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): State {
     // Update state so the next render will show the fallback UI.
     return { hasError: true, error, errorInfo: null };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error('Uncaught error:', error, errorInfo);
-    this.setState({ errorInfo });
+    // TypeScript workaround: use type assertion to access inherited setState
+    (this as any).setState({ errorInfo });
   }
 
   private handleReload = () => {
@@ -50,8 +52,11 @@ class ErrorBoundary extends Component<Props, State> {
     }
   };
 
-  public render() {
-    if (this.state.hasError) {
+  render() {
+    const state = (this as any).state as State;
+    const props = (this as any).props as Props;
+
+    if (state.hasError) {
       return (
         <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center space-y-4">
@@ -65,9 +70,9 @@ class ErrorBoundary extends Component<Props, State> {
               The application encountered an unexpected error.
             </p>
 
-            {this.state.error && (
+            {state.error && (
               <div className="bg-red-50 p-3 rounded-lg text-left overflow-auto max-h-32 text-xs text-red-700 font-mono break-all">
-                {this.state.error.toString()}
+                {state.error.toString()}
               </div>
             )}
 
@@ -92,7 +97,7 @@ class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return props.children;
   }
 }
 

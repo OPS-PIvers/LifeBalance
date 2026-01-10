@@ -267,6 +267,10 @@ export interface Household {
   location?: { lat: number; lon: number };
   lastPaycheckDate?: string; // YYYY-MM-DD of most recent approved paycheck
 
+  // Legacy fields for migration support
+  startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
+  payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate
+
   // Optional references for type awareness, though these are subcollections
   pantry?: PantryItem[];
   meals?: Meal[];
