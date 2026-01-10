@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Loader2 } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import toast from 'react-hot-toast';
@@ -20,6 +20,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<'verified' | 'pending_review'>('verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Dynamic Categories from buckets
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
@@ -43,7 +44,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   }, [isOpen]);
 
   const handleSave = async () => {
-    if (!transaction) return;
+    if (!transaction || isSaving) return;
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -61,23 +62,38 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       return;
     }
 
-    await updateTransaction(transaction.id, {
-      amount: amountNum,
-      merchant: merchant.trim(),
-      category,
-      date,
-      status,
-    });
+    setIsSaving(true);
+    try {
+      await updateTransaction(transaction.id, {
+        amount: amountNum,
+        merchant: merchant.trim(),
+        category,
+        date,
+        status,
+      });
 
-    onClose();
+      onClose();
+    } catch (error) {
+      console.error('Failed to save transaction:', error);
+      toast.error('Failed to save transaction. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async () => {
-    if (!transaction) return;
+    if (!transaction || isSaving) return;
 
-    await deleteTransaction(transaction.id);
-    setShowDeleteConfirm(false);
-    onClose();
+    setIsSaving(true);
+    try {
+      await deleteTransaction(transaction.id);
+      setShowDeleteConfirm(false);
+      onClose();
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (!isOpen || !transaction) return null;
@@ -86,12 +102,20 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
       style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-transaction-title"
     >
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
-          <h2 className="text-lg font-bold text-brand-800">Edit Transaction</h2>
-          <button onClick={onClose} className="text-brand-400 hover:text-brand-600">
+          <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
+          <button
+            onClick={onClose}
+            disabled={isSaving}
+            className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Close modal"
+          >
             <X size={20} />
           </button>
         </div>
@@ -100,17 +124,19 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Amount */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            <label htmlFor="edit-amount" className="text-xs font-bold text-brand-400 uppercase block mb-1">
               Amount
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400">$</span>
               <input
+                id="edit-amount"
                 type="number"
                 step="0.01"
+                disabled={isSaving}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+                className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
                 placeholder="0.00"
               />
             </div>
@@ -118,27 +144,31 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
           {/* Merchant */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            <label htmlFor="edit-merchant" className="text-xs font-bold text-brand-400 uppercase block mb-1">
               Merchant
             </label>
             <input
+              id="edit-merchant"
               type="text"
+              disabled={isSaving}
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
               placeholder="Store name"
             />
           </div>
 
           {/* Category */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            <label htmlFor="edit-category" className="text-xs font-bold text-brand-400 uppercase block mb-1">
               Category
             </label>
             <select
+              id="edit-category"
+              disabled={isSaving}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             >
               {dynamicCategories.map((cat) => (
                 <option key={cat} value={cat}>
@@ -150,26 +180,30 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
           {/* Date */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            <label htmlFor="edit-date" className="text-xs font-bold text-brand-400 uppercase block mb-1">
               Date
             </label>
             <input
+              id="edit-date"
               type="date"
+              disabled={isSaving}
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             />
           </div>
 
           {/* Status */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            <label htmlFor="edit-status" className="text-xs font-bold text-brand-400 uppercase block mb-1">
               Status
             </label>
             <select
+              id="edit-status"
+              disabled={isSaving}
               value={status}
               onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
             >
               <option value="verified">Verified</option>
               <option value="pending_review">Pending Review</option>
@@ -182,15 +216,24 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors"
+              disabled={isSaving}
+              className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors"
+              disabled={isSaving}
+              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Save Changes
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                'Save Changes'
+              )}
             </button>
           </div>
 
@@ -198,7 +241,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           {!showDeleteConfirm ? (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="w-full py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+              disabled={isSaving}
+              className="w-full py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Trash2 size={16} />
               Delete Transaction
@@ -211,15 +255,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200"
+                  disabled={isSaving}
+                  className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg"
+                  disabled={isSaving}
+                  className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Confirm Delete
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
                 </button>
               </div>
             </div>
