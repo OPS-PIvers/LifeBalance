@@ -11,7 +11,9 @@ importScripts('https://www.gstatic.com/firebasejs/11.0.0/firebase-messaging-comp
 // Initialize Firebase for FCM
 // Note: messagingSenderId is the minimal config needed for background messages
 // This value must match your Firebase project's messaging sender ID
-const MESSAGING_SENDER_ID = '611571061016';
+const MESSAGING_SENDER_ID =
+  (self.firebaseConfig && self.firebaseConfig.messagingSenderId) ||
+  self.MESSAGING_SENDER_ID;
 
 try {
   firebase.initializeApp({
