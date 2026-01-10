@@ -192,18 +192,18 @@ const ShoppingListTab: React.FC = () => {
             </form>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="grid grid-cols-2 gap-3">
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="btn-secondary flex items-center gap-2 cursor-pointer text-sm"
+                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
                 title="Optimize your shopping list with AI"
                 aria-label="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 <span>AI List Optimization</span>
              </button>
-             <label className="btn-secondary flex items-center gap-2 cursor-pointer text-sm">
+             <label className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full cursor-pointer">
                 {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                 <span>Scan Receipt to Pantry</span>
                 <input
