@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store } from 'lucide-react';
@@ -82,15 +82,44 @@ const ShoppingListTab: React.FC = () => {
       }
     };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = useCallback(async () => {
       if (!editingItem) return;
       const trimmedName = editingItem.name?.trim();
       if (!trimmedName) return;
 
-      await updateShoppingItem({ ...editingItem, name: trimmedName });
+      // Trim and normalize optional fields
+      const trimmedQuantity = editingItem.quantity?.trim();
+      const normalizedQuantity = trimmedQuantity === '' ? undefined : trimmedQuantity;
+
+      const trimmedStore = editingItem.store?.trim();
+      const normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
+
+      await updateShoppingItem({
+        ...editingItem,
+        name: trimmedName,
+        quantity: normalizedQuantity,
+        store: normalizedStore,
+      });
       setEditingItem(null);
       toast.success('Item updated');
-  };
+  }, [editingItem, updateShoppingItem]);
+
+  // Keyboard support for edit modal
+  useEffect(() => {
+    if (!editingItem) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setEditingItem(null);
+      } else if (e.key === 'Enter' && !e.shiftKey && editingItem.name?.trim()) {
+        e.preventDefault();
+        handleSaveEdit();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingItem, handleSaveEdit]);
 
   // Group by category
   const groupedItems = shoppingList.reduce((acc, item) => {
