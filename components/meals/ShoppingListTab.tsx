@@ -4,6 +4,7 @@ import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
 import { parseGroceryReceipt, optimizeGroceryList } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { normalizeValue } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -110,9 +111,6 @@ const ShoppingListTab: React.FC = () => {
         optimizedItems.map(async (optItem) => {
           const original = shoppingList.find(i => i.id === optItem.id);
           if (!original) return;
-
-          // Normalize values: treat undefined/null/empty as equivalent
-          const normalizeValue = (val: string | undefined | null): string => val?.trim() ?? '';
 
           const origName = normalizeValue(original.name);
           const origCategory = normalizeValue(original.category);
