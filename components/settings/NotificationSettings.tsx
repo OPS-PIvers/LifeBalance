@@ -51,23 +51,35 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   }, [currentPreferences]);
 
   const handleToggle = (key: keyof NotificationPreferences) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        enabled: !(prev[key] as any).enabled
+    setPreferences(prev => {
+      const currentValue = prev[key];
+      if (typeof currentValue === 'object' && currentValue !== null && 'enabled' in currentValue) {
+        return {
+          ...prev,
+          [key]: {
+            ...currentValue,
+            enabled: !currentValue.enabled
+          }
+        };
       }
-    }));
+      return prev;
+    });
   };
 
   const handleTimeChange = (key: keyof NotificationPreferences, time: string) => {
-    setPreferences(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        time
+    setPreferences(prev => {
+      const currentValue = prev[key];
+      if (typeof currentValue === 'object' && currentValue !== null && 'time' in currentValue) {
+        return {
+          ...prev,
+          [key]: {
+            ...currentValue,
+            time
+          }
+        };
       }
-    }));
+      return prev;
+    });
   };
 
   const handleThresholdChange = (threshold: number) => {

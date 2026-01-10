@@ -26,5 +26,9 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "esModuleInterop": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "functions"
+  ]
 }
