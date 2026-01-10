@@ -161,36 +161,34 @@ const ShoppingListTab: React.FC = () => {
     <div className="space-y-6 pb-20">
         {/* Quick Add Form */}
         <div className="bg-white p-4 rounded-xl shadow-sm">
-            <form onSubmit={handleAddSubmit} className="flex flex-col sm:flex-row gap-3 sm:gap-2">
+            <form onSubmit={handleAddSubmit} className="flex items-center gap-2">
                 <input
                     type="text"
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
                     placeholder="Add to list..."
-                    className="w-full sm:flex-1 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
+                    className="flex-1 min-w-0 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm py-2"
                 />
-                <div className="flex gap-2">
-                    <div className="relative flex-1 sm:flex-none">
-                        <select
-                            value={newItemCategory}
-                            onChange={(e) => setNewItemCategory(e.target.value)}
-                            className="w-full sm:w-40 appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-sm pl-3 pr-8 py-2"
-                            aria-label="Category"
-                        >
-                            {CATEGORIES.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                    <button
-                        type="submit"
-                        className="btn-primary p-2 shrink-0"
-                        aria-label="Add item to shopping list"
+                <div className="relative w-28 sm:w-40 shrink-0">
+                    <select
+                        value={newItemCategory}
+                        onChange={(e) => setNewItemCategory(e.target.value)}
+                        className="w-full appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-xs sm:text-sm pl-2 pr-6 py-2 truncate"
+                        aria-label="Category"
                     >
-                        <Plus className="w-6 h-6" />
-                    </button>
+                        {CATEGORIES.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400 pointer-events-none" />
                 </div>
+                <button
+                    type="submit"
+                    className="btn-primary p-2 shrink-0 rounded-lg"
+                    aria-label="Add item to shopping list"
+                >
+                    <Plus className="w-5 h-5" />
+                </button>
             </form>
         </div>
 
