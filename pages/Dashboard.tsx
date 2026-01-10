@@ -77,15 +77,15 @@ const Dashboard: React.FC = () => {
     return map;
   }, [members]);
 
-  // Helper function to render assignee avatar
-  const renderAssigneeAvatar = (assignedTo: string) => {
+  // Helper function to render assignee chip
+  const renderAssigneeChip = (assignedTo: string) => {
     const assignee = memberMap.get(assignedTo);
     if (!assignee) return null;
     
     return assignee.photoURL ? (
-      <img src={assignee.photoURL} alt={assignee.displayName ?? 'Assigned member'} className="w-6 h-6 rounded-full border border-white" />
+      <img src={assignee.photoURL} alt={assignee.displayName ?? 'Assigned member'} className="w-4 h-4 rounded-full border border-white object-cover flex-shrink-0" />
     ) : (
-      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600 border border-white">
+      <div className="w-4 h-4 rounded-full bg-brand-200 flex items-center justify-center text-[8px] font-bold text-brand-600 border border-white flex-shrink-0">
         {assignee.displayName?.charAt(0) || '?'}
       </div>
     );
@@ -209,27 +209,27 @@ const Dashboard: React.FC = () => {
                              isTodoQueueItem(item) ? item.text :
                              isTransactionQueueItem(item) ? item.merchant : ''}
                           </p>
-                          <p className="text-xs text-brand-400 flex items-center gap-1">
+                          <div className="text-xs text-brand-400 flex items-center gap-1">
                              {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
                              {format(parseISO(item.date), 'MMM d, yyyy')}
+                             {isTodoQueueItem(item) && item.assignedTo && (
+                               <div className="ml-1">
+                                 {renderAssigneeChip(item.assignedTo)}
+                               </div>
+                             )}
                              {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
                                <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
                                  <AlertCircle size={10} />
                                  Overdue
                                </span>
                              )}
-                          </p>
+                          </div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
                           <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
-                        )}
-                        {isTodoQueueItem(item) && item.assignedTo && (
-                          <div className="flex items-center">
-                            {renderAssigneeAvatar(item.assignedTo)}
-                          </div>
                         )}
                         {!isExpanded && (
                           <button
