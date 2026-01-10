@@ -12,6 +12,7 @@ export interface HouseholdMember {
   // Tracking when points were last reset (YYYY-MM-DD format)
   lastDailyPointsReset?: string;
   lastWeeklyPointsReset?: string;
+  fcmTokens?: string[]; // Array of FCM tokens for push notifications
 }
 
 export interface Account {

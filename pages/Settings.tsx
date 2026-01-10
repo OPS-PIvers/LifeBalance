@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { signOut } from 'firebase/auth';
@@ -34,6 +34,17 @@ const Settings: React.FC = () => {
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
+
+  // Notification State
+  const [notificationStatus, setNotificationStatus] = useState<NotificationPermission>(
+    'Notification' in window ? Notification.permission : 'default'
+  );
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationStatus(Notification.permission);
+    }
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -92,7 +103,12 @@ const Settings: React.FC = () => {
 
   const handleEnableNotifications = async () => {
     if (!householdId || !user) return;
-    await requestNotificationPermission(householdId, user.uid);
+    const success = await requestNotificationPermission(householdId, user.uid);
+    if (success) {
+      setNotificationStatus('granted');
+    } else if (Notification.permission === 'denied') {
+      setNotificationStatus('denied');
+    }
   };
 
   return (
@@ -139,18 +155,32 @@ const Settings: React.FC = () => {
           <div className="mt-4 pt-4 border-t border-brand-100">
             <button
               onClick={handleEnableNotifications}
-              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+              disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
+              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed"
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
-                  <Bell size={16} className="text-brand-600" />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                  notificationStatus === 'granted' ? 'bg-green-100' : 'bg-brand-200 group-hover:bg-brand-300'
+                }`}>
+                  <Bell size={16} className={notificationStatus === 'granted' ? 'text-green-600' : 'text-brand-600'} />
                 </div>
                 <div className="text-left">
                   <p className="font-semibold text-brand-800 text-sm">Push Notifications</p>
-                  <p className="text-xs text-brand-500">Enable alerts on this device</p>
+                  <p className="text-xs text-brand-500">
+                    {notificationStatus === 'granted' ? 'Notifications enabled' :
+                     notificationStatus === 'denied' ? 'Notifications denied in browser' :
+                     'Enable alerts on this device'}
+                  </p>
                 </div>
               </div>
-              <span className="text-xs font-medium text-brand-600 bg-brand-200 px-2 py-1 rounded-md">Enable</span>
+              <span className={`text-xs font-medium px-2 py-1 rounded-md ${
+                notificationStatus === 'granted' ? 'text-green-700 bg-green-100' :
+                notificationStatus === 'denied' ? 'text-red-700 bg-red-100' :
+                'text-brand-600 bg-brand-200'
+              }`}>
+                {notificationStatus === 'granted' ? 'Enabled' :
+                 notificationStatus === 'denied' ? 'Denied' : 'Enable'}
+              </span>
             </button>
           </div>
         </div>
