@@ -282,48 +282,49 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Edit Modal */}
         {editingItem && (
-            <div
-                className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"
-                onClick={() => setEditingItem(null)}
-            >
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
                 <div
-                    className="bg-white rounded-xl w-full max-w-sm overflow-hidden shadow-xl"
-                    onClick={(e) => e.stopPropagation()}
+                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                    onClick={() => setEditingItem(null)}
+                />
+
+                <div
+                    className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="edit-item-title"
                 >
-                    <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                        <h3 id="edit-item-title" className="font-semibold text-gray-900">Edit Item</h3>
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
+                        <h3 id="edit-item-title" className="text-lg font-bold text-brand-800">Edit Item</h3>
                         <button
                             onClick={() => setEditingItem(null)}
-                            className="text-gray-400 hover:text-gray-600 p-1"
+                            className="p-2 text-brand-400 hover:bg-brand-50 rounded-full transition-colors"
                             aria-label="Close edit modal"
                         >
                             <X className="w-5 h-5" />
                         </button>
                     </div>
 
-                    <div className="p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
                         <div>
-                            <label htmlFor="edit-item-name" className="block text-xs font-bold text-gray-500 uppercase mb-1">Item Name</label>
+                            <label htmlFor="edit-item-name" className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
                             <input
                                 id="edit-item-name"
                                 type="text"
                                 value={editingItem.name}
                                 onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                                className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
+                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 gap-4">
                              <div>
-                                <label htmlFor="edit-item-category" className="block text-xs font-bold text-gray-500 uppercase mb-1">Category</label>
+                                <label htmlFor="edit-item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
                                 <select
                                     id="edit-item-category"
                                     value={editingItem.category || 'Uncategorized'}
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
-                                    className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 >
                                     {CATEGORIES.map(c => (
                                         <option key={c} value={c}>{c}</option>
@@ -331,37 +332,39 @@ const ShoppingListTab: React.FC = () => {
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="edit-item-quantity" className="block text-xs font-bold text-gray-500 uppercase mb-1">Quantity</label>
+                                <label htmlFor="edit-item-quantity" className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
                                 <input
                                     id="edit-item-quantity"
                                     type="text"
                                     value={editingItem.quantity || ''}
                                     onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
                                     placeholder="e.g. 2, 500g"
-                                    className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 />
                             </div>
                         </div>
 
                         <div>
-                            <label htmlFor="edit-item-store" className="block text-xs font-bold text-gray-500 uppercase mb-1">Store (Optional)</label>
-                            <div className="relative">
-                                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <label htmlFor="edit-item-store" className="text-xs font-bold text-brand-400 uppercase">Store (Optional)</label>
+                            <div className="relative mt-1">
+                                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
                                 <input
                                     id="edit-item-store"
                                     type="text"
                                     value={editingItem.store || ''}
                                     onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
                                     placeholder="e.g. Costco, Trader Joe's"
-                                    className="w-full rounded-lg border-gray-300 pl-9 focus:ring-brand-500 focus:border-brand-500 text-sm"
+                                    className="w-full p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 />
                             </div>
                         </div>
+                    </div>
 
+                    <div className="p-4 border-t border-brand-100 flex-shrink-0">
                         <button
                             onClick={handleSaveEdit}
                             disabled={!editingItem.name?.trim()}
-                            className="w-full py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium disabled:opacity-50 mt-2"
+                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                         >
                             Save Changes
                         </button>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
-import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X } from 'lucide-react';
 import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -219,50 +219,62 @@ const PantryTab: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {isAddModalOpen && (
-        <div
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => { resetForm(); setIsAddModalOpen(false); }}
+          />
+
+          <div
+            className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
             role="dialog"
             aria-modal="true"
             aria-labelledby="modal-title"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                resetForm();
-                setIsAddModalOpen(false);
-              }
-            }}
-        >
-          <div className="bg-white rounded-xl w-full max-w-md p-6">
-            <h3 id="modal-title" className="text-lg font-bold mb-4">{editingItem ? 'Edit Item' : 'Add Pantry Item'}</h3>
-            <form onSubmit={handleAddSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
-                  placeholder="e.g., Pasta, Milk"
-                />
-              </div>
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
+              <h3 id="modal-title" className="text-lg font-bold text-brand-800">
+                {editingItem ? 'Edit Item' : 'Add Pantry Item'}
+              </h3>
+              <button
+                onClick={() => { resetForm(); setIsAddModalOpen(false); }}
+                className="p-2 text-brand-400 hover:bg-brand-50 rounded-full transition-colors"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleAddSubmit} className="flex flex-col flex-1 overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newName}
+                    onChange={e => setNewName(e.target.value)}
+                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    placeholder="e.g., Pasta, Milk"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity (Est.)</label>
+                    <label className="text-xs font-bold text-brand-400 uppercase">Quantity (Est.)</label>
                     <input
                       type="text"
                       value={newQuantity}
                       onChange={e => setNewQuantity(e.target.value)}
-                      className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
+                      className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                       placeholder="e.g., 2 boxes, 500g"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
                     <select
                       value={newCategory}
                       onChange={e => setNewCategory(e.target.value)}
-                      className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
+                      className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                     >
                         <option value="Produce">Produce</option>
                         <option value="Dairy">Dairy</option>
@@ -274,40 +286,34 @@ const PantryTab: React.FC = () => {
                         <option value="Household">Household</option>
                     </select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-brand-400 uppercase">Purchase Date (Opt)</label>
+                    <input
+                      type="date"
+                      value={newPurchaseDate}
+                      onChange={e => setNewPurchaseDate(e.target.value)}
+                      className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-brand-400 uppercase">Expiry Date (Opt)</label>
+                    <input
+                      type="date"
+                      value={newExpiry}
+                      onChange={e => setNewExpiry(e.target.value)}
+                      className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date (Opt)</label>
-                  <input
-                    type="date"
-                    value={newPurchaseDate}
-                    onChange={e => setNewPurchaseDate(e.target.value)}
-                    className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Expiry Date (Opt)</label>
-                  <input
-                    type="date"
-                    value={newExpiry}
-                    onChange={e => setNewExpiry(e.target.value)}
-                    className="w-full rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => { resetForm(); setIsAddModalOpen(false); }}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
+              <div className="p-4 border-t border-brand-100 flex-shrink-0">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 text-white bg-brand-600 rounded-lg hover:bg-brand-700"
+                  className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95"
                 >
                   {editingItem ? 'Save Changes' : 'Add Item'}
                 </button>
