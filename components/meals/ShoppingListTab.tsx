@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown } from 'lucide-react';
 import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -169,16 +169,19 @@ const ShoppingListTab: React.FC = () => {
                     placeholder="Add to list..."
                     className="flex-1 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500"
                 />
-                <select
-                    value={newItemCategory}
-                    onChange={(e) => setNewItemCategory(e.target.value)}
-                    className="w-32 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm"
-                    aria-label="Category"
-                >
-                    {CATEGORIES.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <select
+                        value={newItemCategory}
+                        onChange={(e) => setNewItemCategory(e.target.value)}
+                        className="w-40 appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-sm pl-3 pr-8 py-2"
+                        aria-label="Category"
+                    >
+                        {CATEGORIES.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
                 <button
                     type="submit"
                     className="btn-primary p-2"
@@ -193,11 +196,12 @@ const ShoppingListTab: React.FC = () => {
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+                className="btn-secondary flex items-center gap-2 cursor-pointer text-sm"
                 title="Optimize your shopping list with AI"
                 aria-label="AI Optimize List"
              >
-                {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+                {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                <span>AI List Optimization</span>
              </button>
              <label className="btn-secondary flex items-center gap-2 cursor-pointer text-sm">
                 {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
