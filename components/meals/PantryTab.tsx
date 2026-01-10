@@ -50,7 +50,7 @@ const PantryTab: React.FC = () => {
     mapFromOptimizable: (original: PantryItem, optimized: OptimizableItem): PantryItem => ({
       ...original,
       name: optimized.name,
-      category: optimized.category || original.category || 'Pantry',
+      category: optimized.category || original.category || 'Uncategorized',
       quantity: optimized.quantity || original.quantity
     }),
     availableCategories,
