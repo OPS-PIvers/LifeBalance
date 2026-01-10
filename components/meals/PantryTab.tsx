@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
-import { Plus, Trash2, Edit2, Camera, Loader2 } from 'lucide-react';
-import { analyzePantryImage } from '@/services/geminiService';
+import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles } from 'lucide-react';
+import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
+import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -29,6 +31,32 @@ const PantryTab: React.FC = () => {
 
   // Image Upload State
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+
+  // Collect unique existing categories from pantry to guide the AI
+  const existingCategories: string[] = Array.from(new Set(pantry.map((p) => p.category).filter((c): c is string => !!c)));
+  const availableCategories: string[] = Array.from(new Set([...GROCERY_CATEGORIES, ...existingCategories]));
+
+  // Use the shared grocery optimizer hook
+  const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    items: pantry,
+    updateItem: updatePantryItem,
+    mapToOptimizable: (item: PantryItem): OptimizableItem => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity
+      // Pantry items don't have store
+    }),
+    mapFromOptimizable: (original: PantryItem, optimized: OptimizableItem): PantryItem => ({
+      ...original,
+      name: optimized.name,
+      category: optimized.category || original.category || 'Uncategorized',
+      quantity: optimized.quantity || original.quantity
+    }),
+    availableCategories,
+    emptyMessage: "Pantry is empty",
+    errorMessage: "Failed to optimize your pantry"
+  });
 
   const resetForm = () => {
     setNewName('');
@@ -123,6 +151,15 @@ const PantryTab: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-brand-900">My Pantry</h2>
         <div className="flex gap-2">
+           <button
+             onClick={handleOptimize}
+             disabled={isOptimizing || pantry.length === 0}
+             className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+             title="Optimize your pantry with AI"
+             aria-label="AI Optimize List"
+           >
+             {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+           </button>
            <label className="btn-secondary flex items-center gap-2 cursor-pointer">
               {isProcessingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
               <span className="hidden sm:inline">Scan Pantry</span>

@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store } from 'lucide-react';
-import { parseGroceryReceipt } from '@/services/geminiService';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
+import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
+import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -15,7 +17,7 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const CATEGORIES = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Household', 'Uncategorized'];
+const CATEGORIES = [...GROCERY_CATEGORIES];
 
 const ShoppingListTab: React.FC = () => {
   const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem, addPantryItem } = useHousehold();
@@ -28,6 +30,29 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
+
+  // Use the shared grocery optimizer hook
+  const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    items: shoppingList,
+    updateItem: updateShoppingItem,
+    mapToOptimizable: (item: ShoppingItem): OptimizableItem => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity,
+      store: item.store
+    }),
+    mapFromOptimizable: (original: ShoppingItem, optimized: OptimizableItem): ShoppingItem => ({
+      ...original,
+      name: optimized.name,
+      category: optimized.category || original.category,
+      quantity: optimized.quantity || original.quantity,
+      store: optimized.store || original.store
+    }),
+    availableCategories: CATEGORIES,
+    emptyMessage: "List is empty",
+    errorMessage: "Failed to optimize your shopping list"
+  });
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,7 +189,16 @@ const ShoppingListTab: React.FC = () => {
             </form>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+             <button
+                onClick={handleOptimize}
+                disabled={isOptimizing || shoppingList.length === 0}
+                className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+                title="Optimize your shopping list with AI"
+                aria-label="AI Optimize List"
+             >
+                {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+             </button>
              <label className="btn-secondary flex items-center gap-2 cursor-pointer text-sm">
                 {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                 <span>Scan Receipt to Pantry</span>
