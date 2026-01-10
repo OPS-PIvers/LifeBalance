@@ -2437,27 +2437,39 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   };
 
   const refreshInsight = async () => {
-    if (!householdId) {
-      toast.error('No household found');
+    if (!householdId) return;
+
+    // Prevent rapid clicking and multiple API calls
+    if (isGeneratingInsight) {
+      toast.error('An insight is already being generated. Please wait.');
       return;
     }
 
-    setIsGeneratingInsight(true);
+    // Validate that there's sufficient data to analyze
+    const hasTransactions = Array.isArray(transactions) && transactions.length > 0;
+    const hasHabits = Array.isArray(habits) && habits.length > 0;
+    if (!hasTransactions && !hasHabits) {
+      toast.error('Not enough data to generate insights yet. Add some transactions or habit activity first.');
+      return;
+    }
 
     try {
-      // Generate the insight using AI
-      const insightText = await generateInsight(transactions, habits);
+      setIsGeneratingInsight(true);
+      toast.loading('Generating insight...', { id: 'insight-loading' });
+      const newInsightText = await generateInsight(transactions, habits);
 
-      // Save to Firestore
-      await addDoc(collection(db, `households/${householdId}/insights`), {
-        text: insightText,
-        generatedAt: new Date().toISOString()
-      });
+      const newInsight: Omit<Insight, 'id'> = {
+        text: newInsightText,
+        generatedAt: new Date().toISOString(),
+        type: 'general'
+      };
 
-      toast.success('New insight generated!', { icon: '✨' });
+      await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
+
+      toast.success('New insight generated!', { id: 'insight-loading', icon: '✨' });
     } catch (error) {
-      console.error('Failed to generate insight:', error);
-      toast.error('Failed to generate insight');
+      console.error("Failed to generate insight:", error);
+      toast.error('Failed to generate insight', { id: 'insight-loading' });
     } finally {
       setIsGeneratingInsight(false);
     }
