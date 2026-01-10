@@ -490,7 +490,15 @@ const MealPlanTab: React.FC = () => {
                               <textarea
                                   id="meal-instructions"
                                   value={currentMeal.instructions?.join('\n') || ''}
-                                  onChange={e => setCurrentMeal({...currentMeal, instructions: e.target.value.split('\n')})}
+                                  onChange={e =>
+                                      setCurrentMeal({
+                                          ...currentMeal,
+                                          instructions: e.target.value
+                                              .split('\n')
+                                              .map(line => line.trim())
+                                              .filter(line => line.length > 0),
+                                      })
+                                  }
                                   className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
                                   rows={4}
                                   placeholder="Step 1...&#10;Step 2..."
