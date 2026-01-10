@@ -131,6 +131,7 @@ const App: React.FC = () => {
               position="top-center"
               containerStyle={{
                 top: 'calc(env(safe-area-inset-top) + 1rem)',
+                zIndex: 99999,
               }}
               toastOptions={{
                 className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
