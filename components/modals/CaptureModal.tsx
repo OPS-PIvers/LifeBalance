@@ -29,7 +29,14 @@ interface ParsedTransaction {
 }
 
 /**
- * Returns today's date in YYYY-MM-DD format using local timezone
+ * Returns today's date in YYYY-MM-DD format using local timezone.
+ *
+ * Note: We intentionally avoid using `new Date().toISOString().slice(0, 10)`
+ * here. `toISOString()` converts the date to UTC before formatting, which can
+ * cause the calendar date to differ from the user's local date (e.g. around
+ * midnight or in non-UTC time zones). By reading the year, month and day
+ * directly from the local Date instance, we ensure the string reflects the
+ * user's local calendar date.
  */
 const getLocalDateString = (): string => {
   const now = new Date();
@@ -99,7 +106,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, dynamicCategories, currentUser, members]); // Pruned dependencies
+  }, [
+    isOpen,
+    dynamicCategories,
+    currentUser,
+    members,
+    category,
+    transactionDate,
+    todoDate,
+    todoAssignee
+  ]);
 
   // Reset state when closing
   const handleClose = () => {
@@ -316,27 +332,30 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       })
     );
 
-    const succeeded = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    // Map results back to transactions to identify failures
+    const failedIds = new Set<string>();
+    results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+            failedIds.add(selectedTx[index].id);
+        }
+    });
 
-    if (succeeded > 0) {
-      toast.success(`${succeeded} transaction(s) added to Action Queue!`);
-      // If there were failures, keep modal open but reset succeeded ones?
-      // For now, simpler to close if mostly successful, or stay open if partial failure.
-      if (failed > 0) {
-        toast.error(`${failed} failed to add.`);
-        // Remove succeeded from list or just keep list? keeping list lets user retry failed.
-        // But need to know WHICH failed.
-        // For simplicity, close on ANY success as per previous logic, but context says "Return to review view so the user can retry".
-        // Let's implement partial success logic:
-        setParsedTransactions(prev => prev.filter(tx => {
-           // Keep if it failed (was rejected) OR wasn't selected
-           // Finding if this specific tx failed is hard with Promise.allSettled unless we map indices.
-           // But here we rely on 'results' index matching 'selectedTx' index.
-           // This is getting complex.
-           // Let's stick to the reviewer suggestion: stay open if failures exist.
-           return true;
-        }));
+    const succeededCount = selectedTx.length - failedIds.size;
+    const failedCount = failedIds.size;
+
+    if (succeededCount > 0) {
+      toast.success(`${succeededCount} transaction(s) added to Action Queue!`);
+
+      if (failedCount > 0) {
+        toast.error(`${failedCount} failed to add. Please retry.`);
+        // Filter out succeeded transactions, keeping only failed ones (and unselected ones)
+        setParsedTransactions(prev => prev.filter(tx =>
+            // Keep if it failed OR wasn't selected in this batch
+            failedIds.has(tx.id) || !tx.selected
+        ));
+        // Reset selection for remaining items? Or keep them selected?
+        // User probably wants to retry them, so keep selected? Or deselect?
+        // Keeping them as is.
         setView('review');
       } else {
         handleClose();
@@ -395,19 +414,27 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
   // --- To-Do Logic ---
   const handleToDoSubmit = async () => {
-    if (members.length === 0) {
-      toast.error('No household members available.');
-      return;
-    }
+    // 1. Basic field validation
     if (!todoText.trim() || !todoDate) {
       toast.error('Please fill in required fields');
       return;
     }
 
-    // Explicitly handle empty assignee case
-    const assigneeId = todoAssignee || '';
-    if (assigneeId === '') {
-        // Try to recover default if possible, or error out
+    // 2. Member validation
+    if (members.length === 0) {
+      toast.error('No household members available.');
+      return;
+    }
+
+    // 3. Assignee validation
+    // Fallback logic: Use selected assignee, or default to current user, or first member
+    let assigneeId = todoAssignee;
+    if (!assigneeId) {
+        assigneeId = currentUser?.uid || members[0]?.uid || '';
+    }
+
+    if (!assigneeId) {
+        // Should be covered by members.length check, but defensive
         toast.error('Please select an assignee');
         return;
     }
@@ -423,7 +450,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     const maxDate = new Date();
     maxDate.setFullYear(maxDate.getFullYear() + 5);
     if (selected > maxDate) {
-        toast('Date is more than 5 years in future', { icon: '📅' });
+        toast.error('Warning: Due date is more than 5 years in the future');
         // We still allow it, just warn
     }
 
@@ -473,6 +500,21 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const renderHeaderTitle = () => {
+    if (activeTab === 'todo') return 'New Task';
+    if (activeTab === 'shopping') return 'Add Item';
+
+    // Transaction tab logic
+    switch (view) {
+        case 'camera': return 'Scan Receipt';
+        case 'upload': return 'Upload Image';
+        case 'manual': return 'Manual Entry';
+        case 'processing': return 'Processing';
+        case 'review': return 'Review';
+        default: return 'Add Transaction';
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -493,15 +535,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
             <div className="flex items-center justify-between px-6 py-4">
                 <h2 className="text-xl font-bold text-brand-800">
-                    {activeTab === 'transaction' && (
-                        view === 'menu' ? 'Add Transaction' :
-                        view === 'camera' ? 'Scan Receipt' :
-                        view === 'upload' ? 'Upload Image' :
-                        view === 'manual' ? 'Manual Entry' :
-                        view === 'processing' ? 'Processing' : 'Review'
-                    )}
-                    {activeTab === 'todo' && 'New Task'}
-                    {activeTab === 'shopping' && 'Add Item'}
+                    {renderHeaderTitle()}
                 </h2>
                 <button
                     onClick={handleClose}
@@ -932,7 +966,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                                     }`}
                                 >
                                     {member.photoURL ? (
-                                        <img src={member.photoURL} alt={member.displayName || 'User'} className="w-5 h-5 rounded-full" />
+                                        <img src={member.photoURL} alt={member.displayName || 'Household member'} className="w-5 h-5 rounded-full" />
                                     ) : (
                                         <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
                                             {member.displayName?.charAt(0) || 'U'}
@@ -996,7 +1030,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                             id="item-quantity"
                             type="text"
                             value={shoppingQuantity}
-                            onChange={(e) => setShoppingQuantity(e.target.value)}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                // Allow empty (optional field)
+                                if (!raw) {
+                                    setShoppingQuantity('');
+                                    return;
+                                }
+                                // Sanitize: Keep alphanumeric, spaces, and basic punctuation
+                                const sanitized = raw.replace(/[^0-9a-zA-Z\s.,/%-]/g, '');
+                                const limited = sanitized.slice(0, 50);
+                                setShoppingQuantity(limited);
+                            }}
                             placeholder="e.g. 2, 500g"
                             className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                         />
