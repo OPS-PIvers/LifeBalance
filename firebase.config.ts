@@ -13,6 +13,11 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
+// Validate critical config
+if (!firebaseConfig.apiKey) {
+  console.error('Firebase configuration error: Missing VITE_FIREBASE_API_KEY');
+}
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 

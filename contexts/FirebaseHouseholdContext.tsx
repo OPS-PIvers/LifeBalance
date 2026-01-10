@@ -88,6 +88,7 @@ interface HouseholdContextType {
   todos: ToDo[];
 
   // Pay Period Tracking State
+  householdId: string | null;
   currentPeriodId: string;
   bucketSpentMap: Map<string, BucketSpent>;
   householdSettings: Household | null;
@@ -2514,6 +2515,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         insight,
         insightsHistory,
         isGeneratingInsight,
+        householdId,
         currentPeriodId,
         bucketSpentMap,
         householdSettings,

@@ -1,0 +1,104 @@
+import * as React from 'react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
+
+interface Props {
+  children: React.ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error: Error | null;
+  errorInfo: React.ErrorInfo | null;
+}
+
+class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    // TypeScript workaround: use type assertion to set initial state
+    (this as any).state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    // Update state so the next render will show the fallback UI.
+    return { hasError: true, error, errorInfo: null };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error('Uncaught error:', error, errorInfo);
+    // TypeScript workaround: use type assertion to access inherited setState
+    (this as any).setState({ errorInfo });
+  }
+
+  private handleReload = () => {
+    window.location.reload();
+  };
+
+  private handleClearCacheAndReload = () => {
+    if (window.caches) {
+      // Try to clear caches if possible
+      window.caches.keys().then((names) => {
+        Promise.all(names.map((name) => window.caches.delete(name))).then(() => {
+          window.location.reload();
+        });
+      }).catch(() => {
+         window.location.reload();
+      });
+    } else {
+      window.location.reload();
+    }
+  };
+
+  render() {
+    const state = (this as any).state as State;
+    const props = (this as any).props as Props;
+
+    if (state.hasError) {
+      return (
+        <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+
+            <h1 className="text-xl font-bold text-brand-800">Something went wrong</h1>
+
+            <p className="text-sm text-brand-500">
+              The application encountered an unexpected error.
+            </p>
+
+            {state.error && (
+              <div className="bg-red-50 p-3 rounded-lg text-left overflow-auto max-h-32 text-xs text-red-700 font-mono break-all">
+                {state.error.toString()}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 pt-2">
+              <button
+                onClick={this.handleReload}
+                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={18} />
+                <span>Reload Page</span>
+              </button>
+
+              <button
+                 onClick={this.handleClearCacheAndReload}
+                 className="text-xs text-brand-400 hover:text-brand-600 underline"
+              >
+                Clear Cache & Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return props.children;
+  }
+}
+
+export default ErrorBoundary;
