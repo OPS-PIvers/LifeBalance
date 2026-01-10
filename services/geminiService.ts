@@ -1,11 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PantryItem, Meal } from "@/types/schema";
+import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
-const apiKey = (import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
-               (typeof process !== 'undefined' && process.env && process.env.VITE_GEMINI_API_KEY) ||
-               '';
+const apiKey =
+  import.meta.env.VITE_GEMINI_API_KEY ||
+  (typeof process !== "undefined" && process.env?.VITE_GEMINI_API_KEY) ||
+  "";
 
 const ai = new GoogleGenAI({ apiKey });
 
@@ -41,6 +43,12 @@ export interface GroceryItem {
   category: string;
 }
 
+/**
+ * Interface for items that can be optimized by AI.
+ * Used to normalize grocery/pantry items across components.
+ * The optional fields allow for flexibility in what data is available
+ * for optimization (e.g., pantry items don't have stores).
+ */
 export interface OptimizableItem {
   id: string;
   name: string;
@@ -434,13 +442,13 @@ export const parseGroceryReceipt = async (
 /**
  * Optimizes a list of grocery/pantry items by normalizing names and categories
  * @param items - List of items to optimize
- * @param availableCategories - List of valid categories
- * @param _aiClient - Optional injected AI client for testing
+ * @param availableCategories - List of valid categories (defaults to GROCERY_CATEGORIES)
+ * @param _aiClient - Optional injected AI client for testing (used to mock the GoogleGenAI client)
  */
 export const optimizeGroceryList = async (
   items: OptimizableItem[],
-  availableCategories: string[] = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Beverages', 'Frozen', 'Household'],
-  _aiClient?: any
+  availableCategories: string[] = [...GROCERY_CATEGORIES],
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<OptimizableItem[]> => {
   validateApiKey();
 
@@ -463,6 +471,10 @@ export const optimizeGroceryList = async (
 
     const categoriesStr = availableCategories.join(', ');
 
+    // NOTE: This prompt directly interpolates user-controlled data (itemsJson and categoriesStr).
+    // While JSON.stringify provides some protection, there is a theoretical risk of prompt injection
+    // if malicious item names include text that attempts to manipulate the AI's behavior.
+    // This is a known limitation of the current implementation.
     const prompt = `
       You are a grocery list optimizer. I will give you a list of items (with IDs).
       Your goal is to clean up and normalize the data.
@@ -511,6 +523,10 @@ export const optimizeGroceryList = async (
 
   } catch (error) {
     console.error("Gemini Optimization Error:", error);
-    throw new Error("Failed to optimize list.");
+    const errorMessage =
+      error instanceof Error && error.message
+        ? error.message
+        : "Unknown error";
+    throw new Error(`Failed to optimize list: ${errorMessage}`);
   }
 };

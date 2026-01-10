@@ -3,6 +3,8 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
 import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles } from 'lucide-react';
 import { analyzePantryImage, optimizeGroceryList } from '@/services/geminiService';
+import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { normalizeValue } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -122,8 +124,7 @@ const PantryTab: React.FC = () => {
 
       // Collect unique existing categories from pantry to guide the AI
       const existingCategories: string[] = Array.from(new Set(pantry.map((p) => p.category).filter((c): c is string => !!c)));
-      const defaultCategories = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Beverages', 'Frozen', 'Household'];
-      const availableCategories: string[] = Array.from(new Set([...defaultCategories, ...existingCategories])) as string[];
+      const availableCategories: string[] = Array.from(new Set([...GROCERY_CATEGORIES, ...existingCategories]));
 
       const optimizedItems = await optimizeGroceryList(
         pantry.map(p => ({
@@ -136,26 +137,55 @@ const PantryTab: React.FC = () => {
         availableCategories
       );
 
-      // Update items concurrently
+      // Update items concurrently with partial failure handling
       let updatedCount = 0;
-      await Promise.all(optimizedItems.map(async (optItem) => {
-        const original = pantry.find(p => p.id === optItem.id);
-        if (!original) return;
+      const results = await Promise.allSettled(
+        optimizedItems.map(async (optItem) => {
+          const original = pantry.find(p => p.id === optItem.id);
+          if (!original) return;
 
-        // Only update if changed
-        if (original.name !== optItem.name || original.category !== optItem.category || original.quantity !== optItem.quantity) {
-          await updatePantryItem({
-            ...original,
-            name: optItem.name,
-            category: optItem.category || original.category,
-            quantity: optItem.quantity || original.quantity,
-          });
-          updatedCount++;
+          const origName = normalizeValue(original.name);
+          const origCategory = normalizeValue(original.category);
+          const origQuantity = normalizeValue(original.quantity);
+
+          const newName = normalizeValue(optItem.name);
+          const newCategory = normalizeValue(optItem.category) || origCategory;
+          const newQuantity = normalizeValue(optItem.quantity) || origQuantity;
+
+          // Only update if changed
+          if (origName !== newName || origCategory !== newCategory || origQuantity !== newQuantity) {
+            await updatePantryItem({
+              ...original,
+              name: newName,
+              category: newCategory,
+              quantity: newQuantity,
+            });
+            updatedCount++;
+          }
+        })
+      );
+
+      let failedCount = 0;
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          failedCount++;
+          console.error(
+            'Failed to update optimized pantry item:',
+            optimizedItems[index],
+            result.reason
+          );
         }
-      }));
+      });
 
-      if (updatedCount > 0) {
+      if (updatedCount > 0 && failedCount === 0) {
         toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
+      } else if (updatedCount > 0 && failedCount > 0) {
+        toast.success(
+          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
+          { icon: '⚠️' }
+        );
+      } else if (updatedCount === 0 && failedCount > 0) {
+        toast.error('Failed to optimize your pantry. Please try again.');
       } else {
         toast.success('Everything looks good!', { icon: '✨' });
       }
@@ -185,7 +215,7 @@ const PantryTab: React.FC = () => {
              onClick={handleOptimize}
              disabled={isOptimizing || pantry.length === 0}
              className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
-             title="AI Optimize List"
+             title="Optimize your pantry with AI"
              aria-label="AI Optimize List"
            >
              {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}

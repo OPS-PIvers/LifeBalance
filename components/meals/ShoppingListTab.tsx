@@ -3,6 +3,8 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles } from 'lucide-react';
 import { parseGroceryReceipt, optimizeGroceryList } from '@/services/geminiService';
+import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { normalizeValue } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -15,7 +17,7 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const CATEGORIES = ['Produce', 'Dairy', 'Meat', 'Pantry', 'Snacks', 'Household', 'Uncategorized'];
+const CATEGORIES = [...GROCERY_CATEGORIES];
 
 const ShoppingListTab: React.FC = () => {
   const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem, addPantryItem } = useHousehold();
@@ -103,31 +105,58 @@ const ShoppingListTab: React.FC = () => {
         CATEGORIES // Pass the defined categories
       );
 
-      // Update items concurrently
+      // Update items concurrently with partial failure handling
       let updatedCount = 0;
-      await Promise.all(optimizedItems.map(async (optItem) => {
-        const original = shoppingList.find(i => i.id === optItem.id);
-        if (!original) return;
+      const results = await Promise.allSettled(
+        optimizedItems.map(async (optItem) => {
+          const original = shoppingList.find(i => i.id === optItem.id);
+          if (!original) return;
 
-        // Only update if changed
-        if (original.name !== optItem.name ||
-            original.category !== optItem.category ||
-            original.quantity !== optItem.quantity ||
-            original.store !== optItem.store) {
+          const origName = normalizeValue(original.name);
+          const origCategory = normalizeValue(original.category);
+          const origQuantity = normalizeValue(original.quantity);
+          const origStore = normalizeValue(original.store);
 
-          await updateShoppingItem({
-            ...original,
-            name: optItem.name,
-            category: optItem.category || original.category,
-            quantity: optItem.quantity || original.quantity,
-            store: optItem.store || original.store
-          });
-          updatedCount++;
+          const newName = normalizeValue(optItem.name);
+          const newCategory = normalizeValue(optItem.category) || origCategory;
+          const newQuantity = normalizeValue(optItem.quantity) || origQuantity;
+          const newStore = normalizeValue(optItem.store) || origStore;
+
+          // Only update if changed
+          if (origName !== newName || origCategory !== newCategory || origQuantity !== newQuantity || origStore !== newStore) {
+            await updateShoppingItem({
+              ...original,
+              name: newName,
+              category: newCategory,
+              quantity: newQuantity,
+              store: newStore
+            });
+            updatedCount++;
+          }
+        })
+      );
+
+      let failedCount = 0;
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          failedCount++;
+          console.error(
+            'Failed to update optimized shopping item:',
+            optimizedItems[index],
+            result.reason
+          );
         }
-      }));
+      });
 
-      if (updatedCount > 0) {
+      if (updatedCount > 0 && failedCount === 0) {
         toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
+      } else if (updatedCount > 0 && failedCount > 0) {
+        toast.success(
+          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
+          { icon: '⚠️' }
+        );
+      } else if (updatedCount === 0 && failedCount > 0) {
+        toast.error('Failed to optimize your shopping list. Please try again.');
       } else {
         toast.success('Everything looks good!', { icon: '✨' });
       }
@@ -227,7 +256,7 @@ const ShoppingListTab: React.FC = () => {
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
                 className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
-                title="AI Optimize List"
+                title="Optimize your shopping list with AI"
                 aria-label="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
