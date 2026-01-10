@@ -30,23 +30,29 @@ export function calculateBucketSpent(
     ? transactions.filter(tx => tx.payPeriodId === currentPeriodId)
     : transactions; // No period tracking = include all transactions
 
+  // ⚡ Bolt Optimization: Create a map for fast bucket lookup by name (case-insensitive)
+  // Replaces O(Buckets * Transactions) search with O(Buckets + Transactions) map lookup
+  const bucketNameMap = new Map<string, string>();
+  buckets.forEach(b => {
+    bucketNameMap.set(b.name.toLowerCase(), b.id);
+  });
+
   // Sum up spending per bucket
   relevantTransactions.forEach(tx => {
     if (!tx.category) return; // Skip uncategorized transactions
 
-    // Find bucket by matching category name (case-insensitive)
-    const bucket = buckets.find(
-      b => b.name.toLowerCase() === tx.category.toLowerCase()
-    );
+    const bucketId = bucketNameMap.get(tx.category.toLowerCase());
 
-    if (!bucket) return; // Transaction category doesn't match any bucket
+    if (!bucketId) return; // Transaction category doesn't match any bucket
 
-    const currentSpent = spentMap.get(bucket.id)!;
+    const currentSpent = spentMap.get(bucketId);
 
-    if (tx.status === 'verified') {
-      currentSpent.verified += tx.amount;
-    } else if (tx.status === 'pending_review') {
-      currentSpent.pending += tx.amount;
+    if (currentSpent) {
+      if (tx.status === 'verified') {
+        currentSpent.verified += tx.amount;
+      } else if (tx.status === 'pending_review') {
+        currentSpent.pending += tx.amount;
+      }
     }
   });
 
