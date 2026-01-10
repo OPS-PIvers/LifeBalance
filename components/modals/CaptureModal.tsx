@@ -52,6 +52,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [category, setCategory] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [transactionDate, setTransactionDate] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Camera Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -354,6 +355,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
   // Manual entry - creates verified transaction (immediate budget update)
   const handleManualSave = async () => {
+    // Prevent double submission
+    if (isSubmitting) return;
+
     if (!amount || !merchant) {
       toast.error("Please fill in required fields");
       return;
@@ -371,9 +375,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const selectedDate = new Date(transactionDate);
-    const today = new Date(getLocalDateString());
-    if (selectedDate > today) {
+    // Use direct string comparison for YYYY-MM-DD to avoid timezone issues with Date objects
+    // transactionDate is YYYY-MM-DD from input, getLocalDateString() returns YYYY-MM-DD local
+    if (transactionDate > getLocalDateString()) {
       toast.error("Date cannot be in the future");
       return;
     }
@@ -383,6 +387,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.error("Please select a valid category");
       return;
     }
+
+    setIsSubmitting(true);
+    console.log('[CaptureModal] Saving manual transaction...', { amount: parsedAmount, merchant, date: transactionDate });
 
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
@@ -398,10 +405,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
     try {
       await addTransaction(newTransaction);
+      console.log('[CaptureModal] Transaction saved successfully');
       toast.success("Transaction saved!");
       handleClose();
     } catch (error) {
+      console.error('[CaptureModal] Failed to save transaction:', error);
       toast.error("Failed to save transaction");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -764,10 +775,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
               {/* Save Button */}
               <button
+                type="button"
                 onClick={handleManualSave}
-                className="w-full py-4 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-brand-700"
+                disabled={isSubmitting}
+                className="w-full py-4 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-brand-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Save Transaction
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  "Save Transaction"
+                )}
               </button>
             </div>
           )}
