@@ -6,15 +6,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-comp
 
 // Initialize the Firebase app in the service worker
 // Note: For background messages to work reliably, you must provide the messagingSenderId.
-// Since this is a static file, we use a placeholder. Please replace 'YOUR_SENDER_ID'
-// with your actual Sender ID from the Firebase Console (Settings > Cloud Messaging).
-// You can also find it in your firebase.config.ts if it's hardcoded there.
+// This value must match the VITE_FIREBASE_MESSAGING_SENDER_ID in your environment variables.
 
 // Try-catch to prevent SW crash if config is invalid
 try {
   firebase.initializeApp({
-    // Replace with your actual Sender ID
-    messagingSenderId: 'YOUR_SENDER_ID'
+    messagingSenderId: '611571061016'
   });
 
   const messaging = firebase.messaging();
