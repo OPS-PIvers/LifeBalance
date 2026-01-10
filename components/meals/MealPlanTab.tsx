@@ -35,6 +35,8 @@ const MealPlanTab: React.FC = () => {
     name: '',
     description: '',
     ingredients: [],
+    instructions: [],
+    recipeUrl: '',
     tags: []
   });
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -122,7 +124,7 @@ const MealPlanTab: React.FC = () => {
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
-    setCurrentMeal({ tags: [], ingredients: [] });
+      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
     setTargetDate(dateStr);
     setMealType('dinner'); // Default
     setIsAddModalOpen(true);
@@ -134,6 +136,8 @@ const MealPlanTab: React.FC = () => {
           name: linkedMeal?.name || planItem.mealName,
           description: linkedMeal?.description || '',
           ingredients: linkedMeal?.ingredients || [],
+          instructions: linkedMeal?.instructions || [],
+          recipeUrl: linkedMeal?.recipeUrl || '',
           tags: linkedMeal?.tags || []
       });
 
@@ -158,6 +162,8 @@ const MealPlanTab: React.FC = () => {
                name: currentMeal.name!,
                description: currentMeal.description,
                ingredients: currentMeal.ingredients || [],
+               instructions: currentMeal.instructions || [],
+               recipeUrl: currentMeal.recipeUrl || '',
                tags: currentMeal.tags || [],
                rating: existingMeal?.rating ?? 0
            } as Meal);
@@ -168,6 +174,8 @@ const MealPlanTab: React.FC = () => {
                 name: currentMeal.name!,
                 description: currentMeal.description,
                 ingredients: currentMeal.ingredients || [],
+                instructions: currentMeal.instructions || [],
+                recipeUrl: currentMeal.recipeUrl || '',
                 tags: currentMeal.tags || [],
                 rating: 0
             });
@@ -212,7 +220,7 @@ const MealPlanTab: React.FC = () => {
       setEditingMealId(null);
       setEditingPlanItemId(null);
       setMealType('dinner');
-      setCurrentMeal({ tags: [], ingredients: [] });
+      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
       setIngredientName('');
       setIngredientQty('');
       setTagInput('');
@@ -234,6 +242,8 @@ const MealPlanTab: React.FC = () => {
             name: suggestion.name,
             description: suggestion.description,
             ingredients: suggestion.ingredients,
+            instructions: suggestion.instructions,
+            recipeUrl: suggestion.recipeUrl,
             tags: suggestion.tags
         });
         setIsAIModalOpen(false); // Close AI options modal
@@ -472,6 +482,30 @@ const MealPlanTab: React.FC = () => {
                                   className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
                                   rows={2}
                                   placeholder="Add notes about preparation..."
+                              />
+                          </div>
+
+                          <div>
+                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Instructions</label>
+                              <textarea
+                                  id="meal-instructions"
+                                  value={currentMeal.instructions?.join('\n') || ''}
+                                  onChange={e => setCurrentMeal({...currentMeal, instructions: e.target.value.split('\n')})}
+                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
+                                  rows={4}
+                                  placeholder="Step 1...&#10;Step 2..."
+                              />
+                          </div>
+
+                          <div>
+                              <label htmlFor="meal-url" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Recipe URL</label>
+                              <input
+                                  id="meal-url"
+                                  type="url"
+                                  value={currentMeal.recipeUrl || ''}
+                                  onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
+                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
+                                  placeholder="https://example.com/recipe"
                               />
                           </div>
 

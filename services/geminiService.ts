@@ -315,6 +315,8 @@ export interface MealSuggestionResponse {
   name: string;
   description: string;
   ingredients: { name: string; quantity: string; pantryItemId?: string }[];
+  instructions: string[];
+  recipeUrl: string;
   tags: string[];
   reasoning: string;
 }
@@ -332,7 +334,7 @@ export const suggestMeal = async (
     const pantryList = options.pantryItems.map(p => `ID:${p.id} - ${p.name} (${p.quantity})`).join(', ');
     const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
 
-    let prompt = `Suggest a meal plan idea based on the following criteria:\n`;
+    let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
@@ -341,9 +343,11 @@ export const suggestMeal = async (
     prompt += `\nAvailable Pantry Items (with IDs): ${pantryList || "None provided"}\n`;
 
     prompt += `\nReturn a JSON object with:
-    - name: Meal name
+    - name: Meal name (Real dish name)
     - description: Short appetizing description
     - ingredients: Array of objects { name, quantity, pantryItemId (if ingredient matches a provided pantry item ID exactly, otherwise null) }
+    - instructions: Array of strings (Step-by-step cooking instructions)
+    - recipeUrl: A URL to a real recipe for this dish (or a valid search URL if specific one isn't known)
     - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
@@ -371,10 +375,12 @@ export const suggestMeal = async (
                 required: ["name", "quantity"]
               }
             },
+            instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+            recipeUrl: { type: Type.STRING },
             tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             reasoning: { type: Type.STRING }
           },
-          required: ["name", "description", "ingredients", "tags", "reasoning"]
+          required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
         }
       }
     });

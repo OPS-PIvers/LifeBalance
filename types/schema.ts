@@ -220,6 +220,8 @@ export interface Meal {
   name: string;
   description?: string;
   ingredients: MealIngredient[];
+  instructions?: string[]; // Step-by-step cooking instructions
+  recipeUrl?: string; // Link to external recipe
   tags: string[]; // "cheap", "quick", "favorite", "new"
   rating?: number;
   lastCooked?: string; // YYYY-MM-DD
