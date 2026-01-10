@@ -37,25 +37,10 @@ export const requestNotificationPermission = async (
         return false;
       }
 
-      // Get service worker registration if available to prevent conflicts
-      let serviceWorkerRegistration: ServiceWorkerRegistration | undefined;
-      if ('serviceWorker' in navigator) {
-        try {
-          // Look for existing registration at /sw.js (standard PWA SW) or root
-          const registration = await navigator.serviceWorker.getRegistration('/sw.js');
-          if (registration) {
-            serviceWorkerRegistration = registration;
-          }
-        } catch (e) {
-          console.warn('Failed to get service worker registration', e);
-        }
-      }
-
       let token;
       try {
         token = await getToken(messaging, {
-          vapidKey,
-          ...(serviceWorkerRegistration ? { serviceWorkerRegistration } : {})
+          vapidKey
         });
       } catch (tokenError: any) {
         console.error('Error fetching FCM token:', tokenError);
