@@ -459,11 +459,16 @@ export const parseGroceryReceipt = async (
  * @param input - The string to sanitize
  * @returns Sanitized string
  */
+const MAX_PROMPT_INPUT_LENGTH = 500;
+
 const sanitizeForPrompt = (input: string): string => {
-  return input
+  const normalized = input
     .replace(/\n/g, ' ') // Replace newlines with spaces
-    .replace(/["'`]/g, '') // Remove quotes
-    .slice(0, 200); // Limit length to prevent abuse
+    .replace(/["'`]/g, ''); // Remove quotes
+
+  // Truncate by Unicode code points to avoid splitting multi-byte characters (e.g., emojis)
+  const chars = Array.from(normalized);
+  return chars.slice(0, MAX_PROMPT_INPUT_LENGTH).join('');
 };
 
 /**
