@@ -20,16 +20,8 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Initialize Messaging conditionally
-// We need to use a promise-based approach or a getter because isSupported is async
-// and we can't export 'await' result at top level easily in all bundlers without top-level-await support.
-// However, for simplicity and common patterns, we often just export the instance if supported, or null.
-// But isSupported() is async.
-// Standard pattern: Export a function to get messaging, or rely on lazy loading.
-// For now, I'll export `messaging` as the instance, but we can't await at top level safely in all envs.
-// Actually, `getMessaging` checks internally if window is defined. The `isSupported` check helps avoid errors in non-browser envs.
-// Let's try to export it directly but wrap in try-catch for basic environment checks.
-// The previous "await isSupported()" was risky at top level.
+// Initialize Messaging only in browser environments and wrap in try-catch
+// to avoid runtime errors in unsupported contexts (e.g., SSR, tests, or bundlers without top-level await).
 
 let messagingInstance: any = null;
 if (typeof window !== 'undefined') {
