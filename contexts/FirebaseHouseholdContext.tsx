@@ -41,8 +41,10 @@ import {
   Meal,
   ShoppingItem,
   MealPlanItem,
-  ToDo
+  ToDo,
+  Insight
 } from '@/types/schema';
+import { generateInsight } from '@/services/geminiService';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
@@ -77,6 +79,8 @@ interface HouseholdContextType {
   rewardsInventory: RewardItem[];
   freezeBank: FreezeBank | null;
   insight: string;
+  insightsHistory: Insight[];
+  isGeneratingInsight: boolean;
   pantry: PantryItem[];
   meals: Meal[];
   shoppingList: ShoppingItem[];
@@ -133,7 +137,7 @@ interface HouseholdContextType {
   updateChallenge: (challenge: Challenge) => Promise<void>;
   markChallengeComplete: (challengeId: string, success: boolean) => Promise<void>;
   redeemReward: (rewardId: string) => Promise<void>;
-  refreshInsight: () => void;
+  refreshInsight: () => Promise<void>;
 
   // Yearly Goal Actions
   createYearlyGoal: (goal: Omit<YearlyGoal, 'id'>) => Promise<void>;
@@ -193,7 +197,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [rewards, setRewards] = useState<RewardItem[]>([]);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
-  const [insight, setInsight] = useState("You spend 20% less on days you exercise.");
+  const [insight, setInsight] = useState("Tap 'Get Insight' to analyze your habits and spending.");
+  const [insightsHistory, setInsightsHistory] = useState<Insight[]>([]);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
   const [pantry, setPantry] = useState<PantryItem[]>([]);
@@ -411,6 +417,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
         setTodos(data);
       })
+    );
+
+    // Insights listener
+    // NOTE: This query requires a Firestore composite index:
+    //   Collection: households/{householdId}/insights
+    //   Field: generatedAt (Descending)
+    // If the index is missing, Firestore will throw an error with a URL to create it.
+    // You can pre-create the index via the Firebase console or add to firestore.indexes.json:
+    // {
+    //   "collectionGroup": "insights",
+    //   "queryScope": "COLLECTION",
+    //   "fields": [{"fieldPath": "generatedAt", "order": "DESCENDING"}]
+    // }
+    const insightsQuery = query(collection(db, `households/${householdId}/insights`), orderBy('generatedAt', 'desc'));
+    unsubscribers.push(
+      onSnapshot(
+        insightsQuery,
+        (snapshot) => {
+          const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
+          setInsightsHistory(data);
+          if (data.length > 0) {
+            setInsight(data[0].text);
+          }
+        },
+        (error) => {
+          console.error('Error listening to insights collection:', error);
+          // Don't show error toast to user as this is non-critical data
+        }
+      )
     );
 
     return () => {
@@ -2401,16 +2436,43 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
-  const refreshInsight = () => {
-    const insights = [
-      "You spend 20% less on days you exercise.",
-      "Your grocery spending is highest on Sundays.",
-      "Great job maintaining your reading streak!",
-      "You've saved $50 more this week than last week.",
-    ];
-    const random = insights[Math.floor(Math.random() * insights.length)];
-    setInsight(random);
-    toast('Insight refreshed', { icon: '✨' });
+  const refreshInsight = async () => {
+    if (!householdId) return;
+
+    // Prevent rapid clicking and multiple API calls
+    if (isGeneratingInsight) {
+      toast.error('An insight is already being generated. Please wait.');
+      return;
+    }
+
+    // Validate that there's sufficient data to analyze
+    const hasTransactions = Array.isArray(transactions) && transactions.length > 0;
+    const hasHabits = Array.isArray(habits) && habits.length > 0;
+    if (!hasTransactions && !hasHabits) {
+      toast.error('Not enough data to generate insights yet. Add some transactions or habit activity first.');
+      return;
+    }
+
+    try {
+      setIsGeneratingInsight(true);
+      toast.loading('Generating insight...', { id: 'insight-loading' });
+      const newInsightText = await generateInsight(transactions, habits);
+
+      const newInsight: Omit<Insight, 'id'> = {
+        text: newInsightText,
+        generatedAt: new Date().toISOString(),
+        type: 'general'
+      };
+
+      await addDoc(collection(db, `households/${householdId}/insights`), newInsight);
+
+      toast.success('New insight generated!', { id: 'insight-loading', icon: '✨' });
+    } catch (error) {
+      console.error("Failed to generate insight:", error);
+      toast.error('Failed to generate insight', { id: 'insight-loading' });
+    } finally {
+      setIsGeneratingInsight(false);
+    }
   };
 
   // Check for freeze bank rollover on 1st of month (or first login)
@@ -2450,6 +2512,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         rewardsInventory: rewards,
         freezeBank,
         insight,
+        insightsHistory,
+        isGeneratingInsight,
         currentPeriodId,
         bucketSpentMap,
         householdSettings,

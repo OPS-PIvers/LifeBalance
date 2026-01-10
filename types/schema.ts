@@ -290,3 +290,10 @@ export interface ToDo {
   createdBy: string; // uid
   createdAt: string; // ISO timestamp
 }
+
+export interface Insight {
+  id: string;
+  text: string;
+  generatedAt: string; // ISO timestamp
+  type: 'general' | 'spending' | 'habits';
+}
