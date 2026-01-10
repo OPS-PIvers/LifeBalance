@@ -84,6 +84,6 @@
     "predeploy": [
       "npm --prefix \"$RESOURCE_DIR\" run build"
     ],
-    "runtime": "nodejs18"
+    "runtime": "nodejs20"
   }
 }
