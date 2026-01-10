@@ -75,6 +75,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       onClose();
     } catch (error) {
       console.error('Failed to save transaction:', error);
+      toast.error('Failed to save transaction. Please try again.');
     } finally {
       setIsSaving(false);
     }
