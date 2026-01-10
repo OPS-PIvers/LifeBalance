@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store } from 'lucide-react';
@@ -81,8 +81,11 @@ const ShoppingListTab: React.FC = () => {
     };
 
   const handleSaveEdit = async () => {
-      if (!editingItem || !editingItem.name) return;
-      await updateShoppingItem(editingItem);
+      if (!editingItem) return;
+      const trimmedName = editingItem.name.trim();
+      if (!trimmedName) return;
+
+      await updateShoppingItem({ ...editingItem, name: trimmedName });
       setEditingItem(null);
       toast.success('Item updated');
   };
@@ -176,7 +179,7 @@ const ShoppingListTab: React.FC = () => {
                                         <Check className="w-4 h-4" />
                                     </button>
 
-                                    <div className="flex-1 group min-w-0" onClick={() => setEditingItem(item)}>
+                                    <div className="flex-1 group min-w-0">
                                         <div className={`font-medium truncate ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                             {item.name}
                                         </div>
@@ -216,13 +219,23 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Edit Modal */}
         {editingItem && (
-            <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
-                <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden shadow-xl">
+            <div
+                className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"
+                onClick={() => setEditingItem(null)}
+            >
+                <div
+                    className="bg-white rounded-xl w-full max-w-sm overflow-hidden shadow-xl"
+                    onClick={(e) => e.stopPropagation()}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="edit-item-title"
+                >
                     <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                        <h3 className="font-semibold text-gray-900">Edit Item</h3>
+                        <h3 id="edit-item-title" className="font-semibold text-gray-900">Edit Item</h3>
                         <button
                             onClick={() => setEditingItem(null)}
                             className="text-gray-400 hover:text-gray-600 p-1"
+                            aria-label="Close edit modal"
                         >
                             <X className="w-5 h-5" />
                         </button>
