@@ -240,59 +240,62 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
 /**
  * Scheduled function: Runs every hour to check for bill reminders
  */
-export const sendbillreminders = onSchedule("every 1 hours", async () => {
-  logger.info("Checking for bill reminders to send");
+export const sendbillreminders = onSchedule(
+  {schedule: "every 1 hours"},
+  async () => {
+    logger.info("Checking for bill reminders to send");
 
-  const householdsSnapshot = await db.collection("households").get();
+    const householdsSnapshot = await db.collection("households").get();
 
-  for (const householdDoc of householdsSnapshot.docs) {
-    const household = householdDoc.data();
-    const members: HouseholdMember[] = household.members || [];
+    for (const householdDoc of householdsSnapshot.docs) {
+      const household = householdDoc.data();
+      const members: HouseholdMember[] = household.members || [];
 
-    for (const member of members) {
-      const prefs = member.notificationPreferences;
-      if (!prefs?.billReminders?.enabled) continue;
-      if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+      for (const member of members) {
+        const prefs = member.notificationPreferences;
+        if (!prefs?.billReminders?.enabled) continue;
+        if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
 
-      if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
-        // Get calendar items (bills)
-        const calendarSnapshot = await householdDoc.ref
-          .collection("calendar")
-          .where("type", "==", "expense")
-          .where("isPaid", "==", false)
-          .get();
+        if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
+          // Get calendar items (bills)
+          const calendarSnapshot = await householdDoc.ref
+            .collection("calendar")
+            .where("type", "==", "expense")
+            .where("isPaid", "==", false)
+            .get();
 
-        const daysAhead = prefs.billReminders.daysBeforeDue;
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + daysAhead);
-        const targetDateStr = targetDate.toISOString().split("T")[0];
+          const daysAhead = prefs.billReminders.daysBeforeDue;
+          const targetDate = new Date();
+          targetDate.setDate(targetDate.getDate() + daysAhead);
+          const targetDateStr = targetDate.toISOString().split("T")[0];
 
-        const upcomingBills = calendarSnapshot.docs.filter(
-          (doc) => doc.data().date === targetDateStr
-        );
-
-        if (upcomingBills.length > 0) {
-          const totalAmount = upcomingBills.reduce(
-            (sum, doc) => sum + (doc.data().amount || 0),
-            0
+          const upcomingBills = calendarSnapshot.docs.filter(
+            (doc) => doc.data().date === targetDateStr
           );
 
-          await sendNotificationToUser(
-            member.fcmTokens,
-            `Bills due in ${daysAhead} day${daysAhead > 1 ? "s" : ""}`,
-            `${upcomingBills.length} bill${
-              upcomingBills.length > 1 ? "s" : ""
-            } totaling $${totalAmount.toFixed(2)} coming up`,
-            {
-              type: "bill_reminder",
-              url: "/budget",
-            }
-          );
+          if (upcomingBills.length > 0) {
+            const totalAmount = upcomingBills.reduce(
+              (sum, doc) => sum + (doc.data().amount || 0),
+              0
+            );
+
+            await sendNotificationToUser(
+              member.fcmTokens,
+              `Bills due in ${daysAhead} day${daysAhead > 1 ? "s" : ""}`,
+              `${upcomingBills.length} bill${
+                upcomingBills.length > 1 ? "s" : ""
+              } totaling $${totalAmount.toFixed(2)} coming up`,
+              {
+                type: "bill_reminder",
+                url: "/budget",
+              }
+            );
+          }
         }
       }
     }
   }
-});
+);
 
 /**
  * Firestore trigger: Monitor safe-to-spend and send budget alerts
