@@ -13,11 +13,13 @@ import {
   Shield,
   Pencil,
   Trash2,
-  Plus
+  Plus,
+  Bell
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
+import { requestNotificationPermission } from '@/services/notificationService';
 import { HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -88,6 +90,11 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleEnableNotifications = async () => {
+    if (!householdId || !user) return;
+    await requestNotificationPermission(householdId, user.uid);
+  };
+
   return (
     <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -127,6 +134,24 @@ const Settings: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-brand-100">
+            <button
+              onClick={handleEnableNotifications}
+              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
+                  <Bell size={16} className="text-brand-600" />
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-brand-800 text-sm">Push Notifications</p>
+                  <p className="text-xs text-brand-500">Enable alerts on this device</p>
+                </div>
+              </div>
+              <span className="text-xs font-medium text-brand-600 bg-brand-200 px-2 py-1 rounded-md">Enable</span>
+            </button>
           </div>
         </div>
 
