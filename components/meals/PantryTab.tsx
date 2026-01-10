@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
 import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles } from 'lucide-react';
-import { analyzePantryImage, optimizeGroceryList } from '@/services/geminiService';
+import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { normalizeValue } from '@/utils/stringNormalizer';
+import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -31,7 +31,32 @@ const PantryTab: React.FC = () => {
 
   // Image Upload State
   const [isProcessingImage, setIsProcessingImage] = useState(false);
-  const [isOptimizing, setIsOptimizing] = useState(false);
+
+  // Collect unique existing categories from pantry to guide the AI
+  const existingCategories: string[] = Array.from(new Set(pantry.map((p) => p.category).filter((c): c is string => !!c)));
+  const availableCategories: string[] = Array.from(new Set([...GROCERY_CATEGORIES, ...existingCategories]));
+
+  // Use the shared grocery optimizer hook
+  const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    items: pantry,
+    updateItem: updatePantryItem,
+    mapToOptimizable: (item: PantryItem): OptimizableItem => ({
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      quantity: item.quantity
+      // Pantry items don't have store
+    }),
+    mapFromOptimizable: (original: PantryItem, optimized: OptimizableItem): PantryItem => ({
+      ...original,
+      name: optimized.name,
+      category: optimized.category || original.category || 'Pantry',
+      quantity: optimized.quantity || original.quantity
+    }),
+    availableCategories,
+    emptyMessage: "Pantry is empty",
+    errorMessage: "Failed to optimize your pantry"
+  });
 
   const resetForm = () => {
     setNewName('');
@@ -110,91 +135,6 @@ const PantryTab: React.FC = () => {
     } finally {
       setIsProcessingImage(false);
       e.target.value = ''; // Reset file input
-    }
-  };
-
-  const handleOptimize = async () => {
-    if (pantry.length === 0) {
-      toast.error("Pantry is empty");
-      return;
-    }
-
-    try {
-      setIsOptimizing(true);
-
-      // Collect unique existing categories from pantry to guide the AI
-      const existingCategories: string[] = Array.from(new Set(pantry.map((p) => p.category).filter((c): c is string => !!c)));
-      const availableCategories: string[] = Array.from(new Set([...GROCERY_CATEGORIES, ...existingCategories]));
-
-      const optimizedItems = await optimizeGroceryList(
-        pantry.map(p => ({
-          id: p.id,
-          name: p.name,
-          category: p.category,
-          quantity: p.quantity,
-          // Pantry items don't have store, but interface expects it optionally
-        })),
-        availableCategories
-      );
-
-      // Update items concurrently with partial failure handling
-      let updatedCount = 0;
-      const results = await Promise.allSettled(
-        optimizedItems.map(async (optItem) => {
-          const original = pantry.find(p => p.id === optItem.id);
-          if (!original) return;
-
-          const origName = normalizeValue(original.name);
-          const origCategory = normalizeValue(original.category);
-          const origQuantity = normalizeValue(original.quantity);
-
-          const newName = normalizeValue(optItem.name);
-          const newCategory = normalizeValue(optItem.category) || origCategory;
-          const newQuantity = normalizeValue(optItem.quantity) || origQuantity;
-
-          // Only update if changed
-          if (origName !== newName || origCategory !== newCategory || origQuantity !== newQuantity) {
-            await updatePantryItem({
-              ...original,
-              name: newName,
-              category: newCategory,
-              quantity: newQuantity,
-            });
-            updatedCount++;
-          }
-        })
-      );
-
-      let failedCount = 0;
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          failedCount++;
-          console.error(
-            'Failed to update optimized pantry item:',
-            optimizedItems[index],
-            result.reason
-          );
-        }
-      });
-
-      if (updatedCount > 0 && failedCount === 0) {
-        toast.success(`Optimized ${updatedCount} items!`, { icon: '✨' });
-      } else if (updatedCount > 0 && failedCount > 0) {
-        toast.success(
-          `Optimized ${updatedCount} items, but ${failedCount} updates failed.`,
-          { icon: '⚠️' }
-        );
-      } else if (updatedCount === 0 && failedCount > 0) {
-        toast.error('Failed to optimize your pantry. Please try again.');
-      } else {
-        toast.success('Everything looks good!', { icon: '✨' });
-      }
-
-    } catch (error) {
-      console.error("Optimization failed:", error);
-      toast.error("Failed to optimize list");
-    } finally {
-      setIsOptimizing(false);
     }
   };
 

@@ -440,6 +440,19 @@ export const parseGroceryReceipt = async (
 };
 
 /**
+ * Sanitizes a string to prevent prompt injection attacks.
+ * Removes or escapes characters that could be used to manipulate AI behavior.
+ * @param input - The string to sanitize
+ * @returns Sanitized string
+ */
+const sanitizeForPrompt = (input: string): string => {
+  return input
+    .replace(/\n/g, ' ') // Replace newlines with spaces
+    .replace(/["'`]/g, '') // Remove quotes
+    .slice(0, 200); // Limit length to prevent abuse
+};
+
+/**
  * Optimizes a list of grocery/pantry items by normalizing names and categories
  * @param items - List of items to optimize
  * @param availableCategories - List of valid categories (defaults to GROCERY_CATEGORIES)
@@ -457,24 +470,18 @@ export const optimizeGroceryList = async (
   const client = _aiClient || ai;
 
   try {
-    // We process in chunks to avoid hitting token limits if the list is huge,
-    // though for now assuming reasonable list size (< 50 items).
-    // If list is larger, we might need chunking logic, but let's start simple.
-
-    const itemsJson = JSON.stringify(items.map(({ id, name, category, quantity, store }) => ({
+    // Sanitize user input to prevent prompt injection
+    const sanitizedItems = items.map(({ id, name, category, quantity, store }) => ({
       id,
-      name,
-      category: category || 'Uncategorized',
-      quantity: quantity || '',
-      store: store || ''
-    })));
+      name: sanitizeForPrompt(name),
+      category: category ? sanitizeForPrompt(category) : 'Uncategorized',
+      quantity: quantity ? sanitizeForPrompt(quantity) : '',
+      store: store ? sanitizeForPrompt(store) : ''
+    }));
 
+    const itemsJson = JSON.stringify(sanitizedItems);
     const categoriesStr = availableCategories.join(', ');
 
-    // NOTE: This prompt directly interpolates user-controlled data (itemsJson and categoriesStr).
-    // While JSON.stringify provides some protection, there is a theoretical risk of prompt injection
-    // if malicious item names include text that attempts to manipulate the AI's behavior.
-    // This is a known limitation of the current implementation.
     const prompt = `
       You are a grocery list optimizer. I will give you a list of items (with IDs).
       Your goal is to clean up and normalize the data.
