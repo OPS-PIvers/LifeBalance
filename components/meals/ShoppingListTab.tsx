@@ -45,7 +45,7 @@ const ShoppingListTab: React.FC = () => {
     mapFromOptimizable: (original: ShoppingItem, optimized: OptimizableItem): ShoppingItem => ({
       ...original,
       name: optimized.name,
-      category: optimized.category || original.category || 'Uncategorized',
+      category: optimized.category || original.category,
       quantity: optimized.quantity || original.quantity,
       store: optimized.store || original.store
     }),
