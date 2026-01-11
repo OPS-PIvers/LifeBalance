@@ -13,14 +13,34 @@ const Login: React.FC = () => {
 
   // Check for bypass query param
   useEffect(() => {
-    // Check both standard search and hash search (HashRouter often puts query in hash)
+    // 1. Check standard search (?bypass=true)
     const searchParams = new URLSearchParams(location.search);
+    let hasBypass = searchParams.get('bypass') === 'true';
 
-    if (searchParams.get('bypass') === 'true') {
-      localStorage.setItem('JULES_TEST_MODE', 'true');
-      // Force reload to root to pick up the new provider
+    // 2. If not found, check query params within hash (e.g. #/login?bypass=true)
+    // This handles cases where HashRouter is used and params are attached to the hash
+    if (!hasBypass && location.hash) {
+      const queryIndex = location.hash.indexOf('?');
+      if (queryIndex !== -1) {
+        const hashSearch = location.hash.substring(queryIndex);
+        const hashParams = new URLSearchParams(hashSearch);
+        if (hashParams.get('bypass') === 'true') {
+          hasBypass = true;
+        }
+      }
+    }
+
+    // Only allow bypass in development or if specifically enabled via env var
+    // This prevents accidental exposure in production
+    const isBypassAllowed = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_BYPASS === 'true';
+
+    if (hasBypass && isBypassAllowed) {
+      // Use sessionStorage for security so it doesn't persist across browser restarts
+      sessionStorage.setItem('JULES_TEST_MODE', 'true');
+
+      // Force navigation to root to pick up the new provider
+      // No need to call reload() after setting href, as href assignment triggers navigation
       window.location.href = '/';
-      window.location.reload();
     }
   }, [location]);
 

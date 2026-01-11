@@ -58,7 +58,14 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [loading, setLoading] = useState(false);
 
   const signOut = async () => {
+    // Clear auth state before navigation
+    setUser(null);
+    setHouseholdIdState(null);
+
+    // Clear test mode flags
+    sessionStorage.removeItem('JULES_TEST_MODE');
     localStorage.removeItem('JULES_TEST_MODE');
+
     window.location.href = '/';
   };
 

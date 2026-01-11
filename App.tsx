@@ -54,7 +54,12 @@ const App: React.FC = () => {
     }
   }, [notificationPermission]);
 
-  const isBypassMode = localStorage.getItem('JULES_TEST_MODE') === 'true';
+  // Lazy check for bypass mode to avoid accessing storage on every render
+  // We check sessionStorage first (new standard), then localStorage (backward compatibility)
+  const isBypassMode = React.useMemo(() => {
+    return sessionStorage.getItem('JULES_TEST_MODE') === 'true' ||
+           localStorage.getItem('JULES_TEST_MODE') === 'true';
+  }, []);
 
   // Choose providers based on bypass mode
   const AuthProviderComponent = isBypassMode ? MockAuthProvider : AuthProvider;

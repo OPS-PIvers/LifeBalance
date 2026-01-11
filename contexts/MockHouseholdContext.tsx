@@ -64,17 +64,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [transactions, setTransactions] = useState<Transaction[]>(SEED_TRANSACTIONS);
   const [habits, setHabits] = useState<Habit[]>(SEED_HABITS);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [yearlyGoals, setYearlyGoals] = useState<any[]>([]);
-  const [rewards, setRewards] = useState<RewardItem[]>([]);
-  const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
+  const [challenges] = useState<Challenge[]>([]);
+  const [yearlyGoals] = useState<any[]>([]);
+  const [rewards] = useState<RewardItem[]>([]);
+  const [members] = useState<HouseholdMember[]>(SEED_MEMBERS);
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
-  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
-  const [insightsHistory, setInsightsHistory] = useState<Insight[]>([]);
+  const [groceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [insightsHistory] = useState<Insight[]>([]);
   const [insight, setInsight] = useState("Mock Insight: You are doing great!");
 
   // Helpers
