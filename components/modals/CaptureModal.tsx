@@ -9,6 +9,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { analyzeReceipt, parseBankStatement, ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { Modal } from '../ui/Modal';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -427,92 +428,86 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      maxWidth="max-w-md"
+      disableBackdropClose={view === 'processing'}
+      ariaLabelledBy="capture-modal-title"
+      backdropColor="bg-slate-900/90"
+      className="shadow-2xl"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm transition-opacity"
-        onClick={handleClose}
-      />
+      {/* Header */}
+      <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
+          <div className="flex items-center justify-between px-6 py-4">
+              <h2 id="capture-modal-title" className="text-xl font-bold text-brand-800">
+                  {activeTab === 'transaction' && (
+                      view === 'menu' ? 'Add Transaction' :
+                      view === 'camera' ? 'Scan Receipt' :
+                      view === 'upload' ? 'Upload Image' :
+                      view === 'manual' ? 'Manual Entry' :
+                      view === 'processing' ? 'Processing' : 'Review'
+                  )}
+                  {activeTab === 'todo' && 'New Task'}
+                  {activeTab === 'shopping' && 'Add Item'}
+              </h2>
+              <button
+                  onClick={handleClose}
+                  aria-label="Close modal"
+                  className="p-2 bg-brand-100 rounded-full text-brand-600 hover:bg-brand-200 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                  <X size={20} />
+              </button>
+          </div>
 
-      {/* Modal Content */}
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col">
+          {/* Tab Switcher - Only show if not in deep transaction flow */}
+          {view === 'menu' && (
+              <div className="px-6 pb-4">
+                  <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
+                      <button
+                          onClick={() => setActiveTab('transaction')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                              activeTab === 'transaction'
+                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                              : 'text-brand-400 hover:text-brand-600'
+                          }`}
+                      >
+                          <Wallet size={16} />
+                          <span>Expense</span>
+                      </button>
+                      <button
+                          onClick={() => setActiveTab('todo')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                              activeTab === 'todo'
+                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                              : 'text-brand-400 hover:text-brand-600'
+                          }`}
+                      >
+                          <CheckSquare size={16} />
+                          <span>To-Do</span>
+                      </button>
+                      <button
+                          onClick={() => setActiveTab('shopping')}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                              activeTab === 'shopping'
+                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                              : 'text-brand-400 hover:text-brand-600'
+                          }`}
+                      >
+                          <ShoppingBag size={16} />
+                          <span>Shop</span>
+                      </button>
+                  </div>
+              </div>
+          )}
+      </div>
 
-        {/* Header */}
-        <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
-            <div className="flex items-center justify-between px-6 py-4">
-                <h2 className="text-xl font-bold text-brand-800">
-                    {activeTab === 'transaction' && (
-                        view === 'menu' ? 'Add Transaction' :
-                        view === 'camera' ? 'Scan Receipt' :
-                        view === 'upload' ? 'Upload Image' :
-                        view === 'manual' ? 'Manual Entry' :
-                        view === 'processing' ? 'Processing' : 'Review'
-                    )}
-                    {activeTab === 'todo' && 'New Task'}
-                    {activeTab === 'shopping' && 'Add Item'}
-                </h2>
-                <button
-                    onClick={handleClose}
-                    aria-label="Close modal"
-                    className="p-2 bg-brand-100 rounded-full text-brand-600 hover:bg-brand-200 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
-                >
-                    <X size={20} />
-                </button>
-            </div>
+      {/* Body Content */}
+      <div className="p-6 overflow-y-auto flex-1">
 
-            {/* Tab Switcher - Only show if not in deep transaction flow */}
-            {view === 'menu' && (
-                <div className="px-6 pb-4">
-                    <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
-                        <button
-                            onClick={() => setActiveTab('transaction')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'transaction'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <Wallet size={16} />
-                            <span>Expense</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('todo')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'todo'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <CheckSquare size={16} />
-                            <span>To-Do</span>
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('shopping')}
-                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                                activeTab === 'shopping'
-                                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                                : 'text-brand-400 hover:text-brand-600'
-                            }`}
-                        >
-                            <ShoppingBag size={16} />
-                            <span>Shop</span>
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
-
-        {/* Body Content */}
-        <div className="p-6 overflow-y-auto flex-1">
-
-          {/* 1. TRANSACTION TAB */}
-          {activeTab === 'transaction' && (
+        {/* 1. TRANSACTION TAB */}
+        {activeTab === 'transaction' && (
             <>
               {/* Processing View */}
               {view === 'processing' && (
@@ -967,9 +962,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
              </div>
           )}
 
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 
