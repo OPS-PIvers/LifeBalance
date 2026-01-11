@@ -1,14 +1,19 @@
 
-import React, { useState } from 'react';
-import { Star, TrendingUp } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Star, TrendingUp, User } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useAuth } from '../../contexts/AuthContext';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
+import ProfileMenu from './ProfileMenu';
 
 const TopToolbar: React.FC = () => {
   const { safeToSpend, dailyPoints, weeklyPoints } = useHousehold();
+  const { currentUser } = useAuth();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const isPositive = safeToSpend >= 0;
 
@@ -32,7 +37,7 @@ const TopToolbar: React.FC = () => {
           </span>
         </button>
 
-        {/* Right Container: Points Cluster */}
+        {/* Right Container: Points Cluster + Profile */}
         <div className="flex items-center gap-3">
           {/* Points Container - Clickable to open Rewards Modal */}
           <button
@@ -42,35 +47,53 @@ const TopToolbar: React.FC = () => {
             onClick={() => setIsRewardsOpen(true)}
           >
             {/* Daily Points (Gold Star) */}
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end hidden xs:flex">
               <div className="flex items-center gap-1">
-                <span className="text-2xl font-bold text-habit-gold tabular-nums">
+                <span className="text-xl font-bold text-habit-gold tabular-nums">
                   +{dailyPoints}
                 </span>
-                <Star className="w-5 h-5 fill-habit-gold text-habit-gold" />
+                <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
               </div>
-              <span className="text-[10px] text-brand-400 uppercase tracking-wider">Today</span>
+              <span className="text-[9px] text-brand-400 uppercase tracking-wider">Today</span>
             </div>
 
             {/* Vertical Divider */}
-            <div className="h-10 w-px bg-brand-600"></div>
+            <div className="h-8 w-px bg-brand-600 hidden xs:block"></div>
 
             {/* Weekly Points (Blue TrendingUp) */}
             <div className="flex flex-col items-end">
               <div className="flex items-center gap-1">
-                <span className="text-2xl font-bold text-habit-blue tabular-nums">
+                <span className="text-xl font-bold text-habit-blue tabular-nums">
                   +{weeklyPoints}
                 </span>
-                <TrendingUp className="w-5 h-5 text-habit-blue" />
+                <TrendingUp className="w-4 h-4 text-habit-blue" />
               </div>
-              <span className="text-[10px] text-brand-400 uppercase tracking-wider">This Week</span>
+              <span className="text-[9px] text-brand-400 uppercase tracking-wider">Week</span>
             </div>
+          </button>
+
+          {/* Profile Icon */}
+          <button
+            ref={profileButtonRef}
+            type="button"
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            aria-label="Open Profile Menu"
+          >
+            {currentUser?.photoURL ? (
+                <img src={currentUser.photoURL} alt={currentUser.displayName || 'Profile'} className="w-full h-full rounded-full object-cover" />
+            ) : (
+                <span className="font-bold text-sm">
+                    {currentUser?.displayName?.charAt(0) || <User className="w-5 h-5" />}
+                </span>
+            )}
           </button>
         </div>
       </header>
 
       <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
       <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
+      <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} anchorRef={profileButtonRef} />
     </>
   );
 };

@@ -16,6 +16,7 @@ import Settings from './pages/Settings';
 import PlaceholderPage from './pages/PlaceholderPage';
 import MigrateSubmissions from './pages/MigrateSubmissions';
 import MealsPage from './pages/MealsPage';
+import ShoppingPage from './pages/ShoppingPage';
 import ToDosPage from './pages/ToDosPage';
 import { setupForegroundNotificationListener } from './services/notificationService';
 
@@ -155,6 +156,20 @@ const App: React.FC = () => {
                       <TopToolbar />
                       <main>
                         <MealsPage />
+                      </main>
+                      <BottomNav />
+                    </>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/shopping"
+                element={
+                  <ProtectedRoute>
+                    <>
+                      <TopToolbar />
+                      <main>
+                        <ShoppingPage />
                       </main>
                       <BottomNav />
                     </>
