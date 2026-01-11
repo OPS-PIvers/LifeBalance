@@ -153,7 +153,11 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 </button>
 
                 {/* Content */}
-                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleAddItem(item)}>
+                <button
+                  type="button"
+                  className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
+                  onClick={() => handleAddItem(item)}
+                >
                   <div className="font-medium text-gray-900 truncate">{item.name}</div>
                   <div className="text-xs text-gray-500 flex items-center gap-2">
                     <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{item.category}</span>
@@ -162,7 +166,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                       <span className="text-gray-300">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
                     )}
                   </div>
-                </div>
+                </button>
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
