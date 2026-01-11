@@ -31,3 +31,6 @@ functions/node_modules/
 *.njsproj
 *.sln
 *.sw?
+
+# Testing
+coverage/
