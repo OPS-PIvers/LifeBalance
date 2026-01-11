@@ -154,17 +154,29 @@ const MealPlanTab: React.FC = () => {
         // Check if item already exists at target (optional, but good for hygiene)
         // For now, we allow duplicates or let the user manage them
 
-        return addMealPlanItem({
-          date: newDateStr,
-          mealName: item.mealName,
-          mealId: item.mealId,
-          type: item.type,
-          isCooked: false
-        });
+        return addMealPlanItem(
+          {
+            date: newDateStr,
+            mealName: item.mealName,
+            mealId: item.mealId,
+            type: item.type,
+            isCooked: false
+          },
+          { suppressToast: true, throwOnError: true }
+        );
       });
 
-      await Promise.all(promises);
-      toast.success(`Copied ${sourceItems.length} meals to this week`);
+      const results = await Promise.allSettled(promises);
+      const successCount = results.filter(result => result.status === 'fulfilled').length;
+      const failureCount = results.length - successCount;
+
+      if (successCount > 0) {
+        toast.success(`Copied ${successCount} meal${successCount === 1 ? '' : 's'} to this week`);
+      }
+
+      if (failureCount > 0) {
+        toast.error(`Failed to copy ${failureCount} meal${failureCount === 1 ? '' : 's'}`);
+      }
     } catch (error) {
       console.error('Failed to copy meals:', error);
       toast.error('Failed to copy meals');

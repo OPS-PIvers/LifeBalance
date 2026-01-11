@@ -172,7 +172,7 @@ interface HouseholdContextType {
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
 
   // Meal Plan Actions
-  addMealPlanItem: (item: Omit<MealPlanItem, 'id'>) => Promise<void>;
+  addMealPlanItem: (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => Promise<void>;
   updateMealPlanItem: (id: string, updates: Partial<MealPlanItem>) => Promise<void>;
   deleteMealPlanItem: (id: string) => Promise<void>;
 
@@ -2208,17 +2208,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: MEAL PLAN ---
 
-  const addMealPlanItem = async (item: Omit<MealPlanItem, 'id'>) => {
+  const addMealPlanItem = async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
     if (!householdId || !user) return;
     try {
       await addDoc(collection(db, `households/${householdId}/mealPlan`), {
         ...item,
         createdAt: serverTimestamp(),
       });
-      toast.success('Added to plan');
+      if (!options?.suppressToast) {
+        toast.success('Added to plan');
+      }
     } catch (error) {
       console.error('[addMealPlanItem] Failed:', error);
-      toast.error('Failed to add to plan');
+      if (!options?.suppressToast) {
+        toast.error('Failed to add to plan');
+      }
+      if (options?.throwOnError) {
+        throw error;
+      }
     }
   };
 
