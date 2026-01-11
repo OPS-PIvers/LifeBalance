@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { signInWithGoogle } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +9,20 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user, householdId, loading: authLoading } = useAuth();
+  const location = useLocation();
+
+  // Check for bypass query param
+  useEffect(() => {
+    // Check both standard search and hash search (HashRouter often puts query in hash)
+    const searchParams = new URLSearchParams(location.search);
+
+    if (searchParams.get('bypass') === 'true') {
+      localStorage.setItem('JULES_TEST_MODE', 'true');
+      // Force reload to root to pick up the new provider
+      window.location.href = '/';
+      window.location.reload();
+    }
+  }, [location]);
 
   // Redirect if already authenticated
   useEffect(() => {

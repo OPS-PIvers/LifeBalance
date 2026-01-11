@@ -3,7 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { MockAuthProvider } from './contexts/MockAuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
+import { MockHouseholdProvider } from './contexts/MockHouseholdContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import TopToolbar from './components/layout/TopToolbar';
 import BottomNav from './components/layout/BottomNav';
@@ -52,11 +54,22 @@ const App: React.FC = () => {
     }
   }, [notificationPermission]);
 
+  const isBypassMode = localStorage.getItem('JULES_TEST_MODE') === 'true';
+
+  // Choose providers based on bypass mode
+  const AuthProviderComponent = isBypassMode ? MockAuthProvider : AuthProvider;
+  const HouseholdProviderComponent = isBypassMode ? MockHouseholdProvider : FirebaseHouseholdProvider;
+
   return (
     <HashRouter>
-      <AuthProvider>
-        <FirebaseHouseholdProvider>
+      <AuthProviderComponent>
+        <HouseholdProviderComponent>
           <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
+            {isBypassMode && (
+              <div className="bg-red-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[10000]">
+                TEST MODE ENABLED - MOCK DATA
+              </div>
+            )}
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
@@ -177,8 +190,8 @@ const App: React.FC = () => {
               }}
             />
           </div>
-        </FirebaseHouseholdProvider>
-      </AuthProvider>
+        </HouseholdProviderComponent>
+      </AuthProviderComponent>
     </HashRouter>
   );
 };
