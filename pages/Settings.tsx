@@ -222,7 +222,6 @@ const Settings: React.FC = () => {
         {/* Notification Settings - Only show if notifications are granted */}
         {notificationStatus === 'granted' && householdId && user && (
           <NotificationSettings
-            userId={user.uid}
             householdId={householdId}
             currentPreferences={currentUser?.notificationPreferences}
             onSave={handleSaveNotificationPreferences}
