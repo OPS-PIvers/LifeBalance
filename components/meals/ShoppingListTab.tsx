@@ -375,11 +375,7 @@ const ShoppingListTab: React.FC = () => {
                             </span>
                         </div>
                         <div className="divide-y divide-gray-100">
-                            {groupedItems[category].map(item => {
-                                // Resolve store icon if present
-                                const storeObj = getStoreByName(item.store);
-
-                                return (
+    {groupedItems[category].map(item => (
                                 <div key={item.id} className={`p-3 flex items-center gap-3 hover:bg-gray-50 ${item.isPurchased ? 'bg-gray-50' : ''}`}>
                                     <button
                                         onClick={() => toggleShoppingItemPurchased(item.id)}
@@ -423,7 +419,7 @@ const ShoppingListTab: React.FC = () => {
                                         </button>
                                     </div>
                                 </div>
-                            )})}
+                            ))}
                         </div>
                     </div>
                 ))}

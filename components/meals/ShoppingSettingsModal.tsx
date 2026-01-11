@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, X, ChevronRight, Save, RotateCcw } from 'lucide-react';
-import { Store } from '@/types/schema';
+import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 
@@ -43,6 +42,22 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setHasCategoryChanges(false);
     }
   }, [isOpen, groceryCategories]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   const handleAddStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,8 +110,13 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   const saveCategories = async () => {
-    await updateGroceryCategories(localCategories);
-    setHasCategoryChanges(false);
+    try {
+      await updateGroceryCategories(localCategories);
+      setHasCategoryChanges(false);
+    } catch (error) {
+      console.error('Failed to save grocery categories', error);
+      toast.error('Failed to save categories. Please try again.');
+    }
   };
 
   const resetCategories = () => {
