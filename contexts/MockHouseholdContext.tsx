@@ -163,7 +163,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
 
   // No-ops for complex stuff
-  const noOp = async () => {};
+  const noOp = async <T = void>(..._args: unknown[]): Promise<T> => undefined as unknown as T;
 
   return (
     <FirebaseHouseholdContext.Provider

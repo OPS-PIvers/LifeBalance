@@ -56,6 +56,10 @@ const App: React.FC = () => {
 
   // Lazy check for bypass mode.
   // We check sessionStorage only as the primary mechanism for security.
+  // We intentionally use sessionStorage so the bypass flag:
+  // - survives only for the current browser/tab session, and
+  // - is cleared automatically on full browser/tab restart, matching the security intent in Login.tsx.
+  // We do not use localStorage or cookies specifically to avoid persistence across restarts or devices.
   const isBypassMode = sessionStorage.getItem('JULES_TEST_MODE') === 'true';
 
   // Choose providers based on bypass mode

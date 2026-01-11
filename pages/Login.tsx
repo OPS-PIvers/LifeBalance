@@ -39,10 +39,10 @@ const Login: React.FC = () => {
       sessionStorage.setItem('JULES_TEST_MODE', 'true');
 
       // Force navigation to root to pick up the new provider
-      // Use replace() to avoid keeping the bypass URL in browser history
-      window.location.replace('/');
+      // Use replace option to avoid keeping the bypass URL in browser history
+      navigate('/', { replace: true });
     }
-  }, [location]);
+  }, [location, navigate]);
 
   // Redirect if already authenticated
   useEffect(() => {

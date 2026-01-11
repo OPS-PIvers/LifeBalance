@@ -66,10 +66,6 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     // Navigate to login using React Router
     navigate('/login');
-
-    // Force a reload after navigation to ensure clean state for the next session
-    // This mimics the behavior of a full sign-out
-    window.location.reload();
   };
 
   const setHouseholdId = (id: string) => {
