@@ -37,6 +37,17 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
 
+const getHourOptions = () => {
+  return Array.from({ length: 24 }, (_, i) => {
+    const hour = i;
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    const value = `${hour.toString().padStart(2, '0')}:00`;
+    const label = `${displayHour}:00 ${period}`;
+    return { value, label };
+  });
+};
+
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   householdId,
   currentPreferences,
@@ -46,6 +57,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     currentPreferences || DEFAULT_PREFERENCES
   );
   const [isSaving, setIsSaving] = useState(false);
+
+  const hourOptions = getHourOptions();
 
   useEffect(() => {
     if (currentPreferences) {
@@ -231,12 +244,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.habitReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <input
-                type="time"
+              <select
                 value={preferences.habitReminders.time}
                 onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-              />
+                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+              >
+                {hourOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -266,12 +284,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.actionQueueReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <input
-                type="time"
+              <select
                 value={preferences.actionQueueReminders.time}
                 onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-              />
+                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+              >
+                {hourOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -341,12 +364,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.streakWarnings.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <input
-                type="time"
+              <select
                 value={preferences.streakWarnings.time}
                 onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-              />
+                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+              >
+                {hourOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
         </div>
@@ -389,12 +417,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-500" />
-                <input
-                  type="time"
+                <select
                   value={preferences.billReminders.time}
                   onChange={(e) => handleTimeChange('billReminders', e.target.value)}
-                  className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
-                />
+                  className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                >
+                  {hourOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}
