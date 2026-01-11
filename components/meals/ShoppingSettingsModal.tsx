@@ -29,7 +29,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   // Category Form State
   const [newCategoryName, setNewCategoryName] = useState('');
   const [localCategories, setLocalCategories] = useState<string[]>([]);
-  const [hasCategoryChanges, setHasCategoryChanges] = useState(false);
+  const [hasUnsavedCategoryChanges, setHasUnsavedCategoryChanges] = useState(false);
 
   // Initialize local categories from context (or default if empty)
   useEffect(() => {
@@ -39,7 +39,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       } else {
         setLocalCategories([...GROCERY_CATEGORIES]);
       }
-      setHasCategoryChanges(false);
+      setHasUnsavedCategoryChanges(false);
     }
   }, [isOpen, groceryCategories]);
 
@@ -85,9 +85,28 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   const handleDeleteStore = async (id: string) => {
-    if (window.confirm('Are you sure? Items tagged with this store will lose the tag.')) {
-      await deleteStore(id);
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">Delete this store? Items will lose this tag.</span>
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              await deleteStore(id);
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), { duration: 5000 });
   };
 
   // Category Management
@@ -101,18 +120,18 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     setLocalCategories([...localCategories, trimmed]);
     setNewCategoryName('');
-    setHasCategoryChanges(true);
+    setHasUnsavedCategoryChanges(true);
   };
 
   const removeCategory = (catToRemove: string) => {
     setLocalCategories(localCategories.filter(c => c !== catToRemove));
-    setHasCategoryChanges(true);
+    setHasUnsavedCategoryChanges(true);
   };
 
   const saveCategories = async () => {
     try {
       await updateGroceryCategories(localCategories);
-      setHasCategoryChanges(false);
+      setHasUnsavedCategoryChanges(false);
     } catch (error) {
       console.error('Failed to save grocery categories', error);
       toast.error('Failed to save categories. Please try again.');
@@ -120,10 +139,29 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   const resetCategories = () => {
-    if (window.confirm('Reset to default categories?')) {
-        setLocalCategories([...GROCERY_CATEGORIES]);
-        setHasCategoryChanges(true);
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium">Reset to default categories?</span>
+        <div className="flex justify-end gap-2">
+          <button
+            className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+            onClick={() => toast.dismiss(t.id)}
+          >
+            Cancel
+          </button>
+          <button
+            className="px-2 py-1 text-xs bg-brand-600 text-white rounded hover:bg-brand-700"
+            onClick={() => {
+              toast.dismiss(t.id);
+              setLocalCategories([...GROCERY_CATEGORIES]);
+              setHasUnsavedCategoryChanges(true);
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </div>
+    ), { duration: 5000 });
   };
 
   if (!isOpen) return null;
@@ -317,7 +355,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <div className="p-4 border-t border-gray-100 bg-white">
                 <button
                     onClick={saveCategories}
-                    disabled={!hasCategoryChanges}
+                    disabled={!hasUnsavedCategoryChanges}
                     className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                 >
                     Save Category Changes

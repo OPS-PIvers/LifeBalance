@@ -2353,12 +2353,36 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const deleteStore = async (id: string) => {
     if (!householdId || !householdSettings) return;
     try {
+      const storeToDelete = householdSettings.stores?.find(s => s.id === id);
+      const storeName = storeToDelete?.name;
+
+      const batch = writeBatch(db);
+      const householdRef = doc(db, `households/${householdId}`);
+
+      // 1. Remove store from household settings
       const currentStores = householdSettings.stores || [];
       const newStores = currentStores.filter(s => s.id !== id);
+      batch.update(householdRef, { stores: newStores });
 
-      await updateDoc(doc(db, `households/${householdId}`), {
-        stores: newStores
-      });
+      // 2. Remove store tag from shopping list items
+      // Note: This relies on matching by name string as per current schema
+      if (storeName) {
+        const itemsToUpdate = shoppingList.filter(item => item.store === storeName);
+        itemsToUpdate.forEach(item => {
+          const itemRef = doc(db, `households/${householdId}/shoppingList`, item.id);
+          // Use deleteField() to remove the field entirely or set to null/undefined
+          // Since schema defines it as optional string, we update it to delete the field
+          // We can just update with { store: deleteField() } but we need to import deleteField
+          // Alternatively, just update with store: null or similar if the sanitizer handles it.
+          // The sanitizer `sanitizeFirestoreData` removes undefined, converts "" to null.
+          // Let's assume standard updateDoc behavior: we can't easily unset a field without deleteField().
+          // However, we can just set it to null if the schema allows, or empty string.
+          // Let's use standard update for now, setting to null.
+          batch.update(itemRef, { store: null });
+        });
+      }
+
+      await batch.commit();
       toast.success('Store deleted');
     } catch (error) {
       console.error('[deleteStore] Failed:', error);

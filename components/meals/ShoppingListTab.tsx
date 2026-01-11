@@ -196,20 +196,19 @@ const ShoppingListTab: React.FC = () => {
   // Sort categories alphabetically or custom order
   const sortedCategories = Object.keys(groupedItems).sort();
 
-  // Helper to find store object by name for display
-  const getStoreByName = (storeName?: string) => {
-    if (!storeName) return null;
-    return stores.find(s => s.name.toLowerCase() === storeName.toLowerCase());
-  };
-
   return (
     <div className="space-y-6 pb-20">
         <div className="flex justify-between items-center">
              {/* Filter Bar */}
             {stores.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[85%] no-scrollbar">
+                <div
+                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[85%] no-scrollbar"
+                    role="group"
+                    aria-label="Filter by store"
+                >
                     <button
                         onClick={() => setFilterStoreId('all')}
+                        aria-pressed={filterStoreId === 'all'}
                         className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                             filterStoreId === 'all'
                             ? 'bg-brand-600 text-white border-brand-600'
@@ -222,6 +221,8 @@ const ShoppingListTab: React.FC = () => {
                         <button
                             key={store.id}
                             onClick={() => setFilterStoreId(store.id)}
+                            aria-pressed={filterStoreId === store.id}
+                            aria-label={`Filter by ${store.name}`}
                             className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
                                 filterStoreId === store.id
                                 ? 'bg-brand-600 text-white border-brand-600'
@@ -275,13 +276,19 @@ const ShoppingListTab: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                      {/* Store Chips */}
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[calc(100%-3rem)]">
+                                    <div
+                        className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[calc(100%-3rem)]"
+                        role="group"
+                        aria-label="Select store"
+                    >
                         {stores.length > 0 ? (
                             stores.map(store => (
                                 <button
                                     key={store.id}
                                     type="button"
                                     onClick={() => setNewItemStoreId(newItemStoreId === store.id ? '' : store.id)}
+                                    aria-pressed={newItemStoreId === store.id}
+                                    aria-label={`Tag item for ${store.name}`}
                                     className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
                                         newItemStoreId === store.id
                                         ? 'bg-brand-100 text-brand-800 border-brand-200'
@@ -514,12 +521,18 @@ const ShoppingListTab: React.FC = () => {
 
                                 {/* Quick Store Chips in Edit Modal */}
                                 {stores.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
+                                    <div
+                                        className="flex flex-wrap gap-2"
+                                        role="group"
+                                        aria-label="Select store"
+                                    >
                                         {stores.map(store => (
                                             <button
                                                 key={store.id}
                                                 type="button"
                                                 onClick={() => setEditingItem({...editingItem, store: store.name})}
+                                                aria-pressed={editingItem.store === store.name}
+                                                aria-label={`Tag item for ${store.name}`}
                                                 className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
                                                     editingItem.store === store.name
                                                     ? 'bg-brand-100 text-brand-800 border-brand-200'
