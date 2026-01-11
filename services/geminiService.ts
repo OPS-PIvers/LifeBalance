@@ -1,7 +1,9 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { PantryItem, Meal, Transaction, Habit } from "@/types/schema";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 
+// Initialize Gemini Client
+// Uses Vite environment variable for the API key, falls back to process.env for testing
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
 const apiKey =
@@ -107,6 +109,57 @@ const sanitizeForPrompt = (input: string): string => {
 };
 
 /**
+ * Helper to prepare image content parts
+ */
+const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
+  const mimeType = extractMimeType(base64Image);
+  const cleanBase64 = stripDataUrlPrefix(base64Image);
+
+  return [
+    {
+      inlineData: {
+        mimeType,
+        data: cleanBase64
+      }
+    },
+    {
+      text: prompt
+    }
+  ];
+};
+
+/**
+ * Generic helper to generate JSON content from Gemini
+ */
+async function generateJsonContent<T>(
+  promptOrParts: string | Part[],
+  schema: Schema,
+  _aiClient?: Pick<typeof ai, 'models'>,
+  modelName: string = 'gemini-3-flash-preview'
+): Promise<T> {
+  validateApiKey();
+  const client = _aiClient || ai;
+
+  const contents = typeof promptOrParts === 'string'
+    ? { parts: [{ text: promptOrParts }] }
+    : { parts: promptOrParts };
+
+  const response = await client.models.generateContent({
+    model: modelName,
+    contents,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: schema
+    }
+  });
+
+  const text = response.text;
+  if (!text) throw new Error("No data returned from Gemini");
+
+  return JSON.parse(text) as T;
+}
+
+/**
  * Analyzes a receipt image and extracts transaction data
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
@@ -115,14 +168,10 @@ const sanitizeForPrompt = (input: string): string => {
 export const analyzeReceipt = async (
   base64Image: string,
   availableCategories?: string[],
-  availableHabits?: string[]
+  availableHabits?: string[],
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptData> => {
-  validateApiKey();
-
   try {
-    const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = stripDataUrlPrefix(base64Image);
-
     const categoryList = availableCategories?.length
       ? availableCategories.map(sanitizeForPrompt).join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
@@ -131,42 +180,23 @@ export const analyzeReceipt = async (
       ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-            {
-                inlineData: {
-                    mimeType,
-                    data: cleanBase64
-                }
-            },
-            {
-                text: `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''} Return JSON.`
-            }
-        ]
+    const prompt = `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''} Return JSON.`;
+
+    return await generateJsonContent<ReceiptData>(
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.OBJECT,
+        properties: {
+          merchant: { type: Type.STRING },
+          amount: { type: Type.NUMBER },
+          category: { type: Type.STRING },
+          date: { type: Type.STRING },
+          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["merchant", "amount", "category"]
       },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            merchant: { type: Type.STRING },
-            amount: { type: Type.NUMBER },
-            category: { type: Type.STRING },
-            date: { type: Type.STRING },
-            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
-          },
-          required: ["merchant", "amount", "category"]
-        }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return JSON.parse(text) as ReceiptData;
-
+      _aiClient
+    );
   } catch (error) {
     console.error("Gemini OCR Error:", error);
     throw new Error("Failed to analyze receipt. Please try manual entry.");
@@ -182,14 +212,10 @@ export const analyzeReceipt = async (
 export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[],
-  availableHabits?: string[]
+  availableHabits?: string[],
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<BankTransactionData[]> => {
-  validateApiKey();
-
   try {
-    const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = stripDataUrlPrefix(base64Image);
-
     const categoryList = availableCategories?.length
       ? availableCategories.map(sanitizeForPrompt).join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
@@ -198,18 +224,7 @@ export const parseBankStatement = async (
       ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-            {
-                inlineData: {
-                    mimeType,
-                    data: cleanBase64
-                }
-            },
-            {
-                text: `Analyze this bank statement or transaction list screenshot. Extract ALL visible transactions. For each transaction, provide:
+    const prompt = `Analyze this bank statement or transaction list screenshot. Extract ALL visible transactions. For each transaction, provide:
 - merchant: The merchant or payee name
 - amount: The transaction amount as a POSITIVE number (even if shown as negative/debit)
 - date: The transaction date in YYYY-MM-DD format
@@ -217,33 +232,26 @@ export const parseBankStatement = async (
 ${habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : ''}
 
 Only include expense transactions (debits/withdrawals). Skip any credits, deposits, or payments received.
-Return a JSON array of transactions.`
-            }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              merchant: { type: Type.STRING },
-              amount: { type: Type.NUMBER },
-              category: { type: Type.STRING },
-              date: { type: Type.STRING },
-              suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["merchant", "amount", "category", "date"]
-          }
+Return a JSON array of transactions.`;
+
+    const transactions = await generateJsonContent<BankTransactionData[]>(
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            merchant: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            category: { type: Type.STRING },
+            date: { type: Type.STRING },
+            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["merchant", "amount", "category", "date"]
         }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    const transactions = JSON.parse(text) as BankTransactionData[];
+      },
+      _aiClient
+    );
 
     // Ensure amounts are positive
     return transactions.map(tx => ({
@@ -264,61 +272,38 @@ Return a JSON array of transactions.`
  */
 export const analyzePantryImage = async (
   base64Image: string,
-  availableCategories: string[] = [...GROCERY_CATEGORIES]
+  availableCategories: string[] = [...GROCERY_CATEGORIES],
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<Omit<PantryItem, 'id'>[]> => {
-  validateApiKey();
-
   try {
-    const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = stripDataUrlPrefix(base64Image);
-
     const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-            {
-                inlineData: {
-                    mimeType,
-                    data: cleanBase64
-                }
-            },
-            {
-                text: `Analyze this image of a pantry, fridge, or food items. Identify all distinct food items visible.
+    const prompt = `Analyze this image of a pantry, fridge, or food items. Identify all distinct food items visible.
                 For each item:
                 1. Provide a clear, concise 'name' (normalized, user-friendly, fix typos).
                 2. Estimate 'quantity' visible (e.g., "1 box", "approx 500g", "half full").
                 3. Assign the most appropriate 'category' from this list: ${categoriesStr}.
                 4. 'expiryDate': (Optional) If an expiry date is clearly visible, provide in YYYY-MM-DD. Otherwise null.
 
-                Return a JSON array of these items.`
-            }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              quantity: { type: Type.STRING },
-              category: { type: Type.STRING },
-              expiryDate: { type: Type.STRING, nullable: true },
-            },
-            required: ["name", "quantity", "category"]
-          }
+                Return a JSON array of these items.`;
+
+    return await generateJsonContent<Omit<PantryItem, 'id'>[]>(
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            quantity: { type: Type.STRING },
+            category: { type: Type.STRING },
+            expiryDate: { type: Type.STRING, nullable: true },
+          },
+          required: ["name", "quantity", "category"]
         }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return JSON.parse(text) as Omit<PantryItem, 'id'>[];
-
+      },
+      _aiClient
+    );
   } catch (error) {
     console.error("Gemini Pantry Analysis Error:", error);
     throw new Error("Failed to analyze pantry image. Please try manual entry.");
@@ -348,10 +333,9 @@ export interface MealSuggestionResponse {
  * Suggests a meal based on preferences and pantry
  */
 export const suggestMeal = async (
-  options: MealSuggestionRequest
+  options: MealSuggestionRequest,
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<MealSuggestionResponse> => {
-  validateApiKey();
-
   try {
     // Include IDs for pantry items so AI can match them
     const pantryList = options.pantryItems.map(p => `ID:${p.id} - ${p.name} (${p.quantity})`).join(', ');
@@ -374,44 +358,34 @@ export const suggestMeal = async (
     - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [{ text: prompt }]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            description: { type: Type.STRING },
-            ingredients: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  quantity: { type: Type.STRING },
-                  pantryItemId: { type: Type.STRING, nullable: true }
-                },
-                required: ["name", "quantity"]
-              }
-            },
-            instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-            recipeUrl: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            reasoning: { type: Type.STRING }
+    return await generateJsonContent<MealSuggestionResponse>(
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          ingredients: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                quantity: { type: Type.STRING },
+                pantryItemId: { type: Type.STRING, nullable: true }
+              },
+              required: ["name", "quantity"]
+            }
           },
-          required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
-        }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return JSON.parse(text) as MealSuggestionResponse;
+          instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+          recipeUrl: { type: Type.STRING },
+          tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+          reasoning: { type: Type.STRING }
+        },
+        required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
+      },
+      _aiClient
+    );
 
   } catch (error) {
     console.error("Gemini Meal Suggestion Error:", error);
@@ -426,28 +400,13 @@ export const suggestMeal = async (
  */
 export const parseGroceryReceipt = async (
   base64Image: string,
-  availableCategories: string[] = [...GROCERY_CATEGORIES]
+  availableCategories: string[] = [...GROCERY_CATEGORIES],
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<GroceryItem[]> => {
-  validateApiKey();
-
   try {
-    const mimeType = extractMimeType(base64Image);
-    const cleanBase64 = stripDataUrlPrefix(base64Image);
-
     const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [
-            {
-                inlineData: {
-                    mimeType,
-                    data: cleanBase64
-                }
-            },
-            {
-                text: `Analyze this grocery receipt. Extract all purchased food/grocery items.
+    const prompt = `Analyze this grocery receipt. Extract all purchased food/grocery items.
                 For each item:
                 1. Extract the 'name' and Normalize it (fix typos, expand abbreviations, remove unnecessary capitalization, make it user-friendly).
                 2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
@@ -455,33 +414,25 @@ export const parseGroceryReceipt = async (
                 4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
 
                 Ignore taxes, subtotal, total, and non-product lines.
-                Return a JSON array of items.`
-            }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              quantity: { type: Type.STRING },
-              category: { type: Type.STRING },
-              store: { type: Type.STRING }
-            },
-            required: ["name", "quantity", "category"]
-          }
+                Return a JSON array of items.`;
+
+    return await generateJsonContent<GroceryItem[]>(
+      prepareImageContent(base64Image, prompt),
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            quantity: { type: Type.STRING },
+            category: { type: Type.STRING },
+            store: { type: Type.STRING }
+          },
+          required: ["name", "quantity", "category"]
         }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return JSON.parse(text) as GroceryItem[];
-
+      },
+      _aiClient
+    );
   } catch (error) {
     console.error("Gemini Grocery Receipt Parse Error:", error);
     throw new Error("Failed to parse grocery receipt.");
@@ -499,11 +450,7 @@ export const optimizeGroceryList = async (
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<OptimizableItem[]> => {
-  validateApiKey();
-
   if (items.length === 0) return [];
-
-  const client = _aiClient || ai;
 
   try {
     // Sanitize user input to prevent prompt injection
@@ -540,35 +487,24 @@ export const optimizeGroceryList = async (
       Return a JSON array of objects with keys: id, name, category, quantity, store.
     `;
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [{ text: prompt }]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              name: { type: Type.STRING },
-              category: { type: Type.STRING },
-              quantity: { type: Type.STRING },
-              store: { type: Type.STRING }
-            },
-            required: ["id", "name", "category"]
-          }
+    return await generateJsonContent<OptimizableItem[]>(
+      prompt,
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            name: { type: Type.STRING },
+            category: { type: Type.STRING },
+            quantity: { type: Type.STRING },
+            store: { type: Type.STRING }
+          },
+          required: ["id", "name", "category"]
         }
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return JSON.parse(text) as OptimizableItem[];
-
+      },
+      _aiClient
+    );
   } catch (error) {
     console.error("Gemini Optimization Error:", error);
     const errorMessage =
@@ -597,9 +533,12 @@ export const optimizeGroceryList = async (
 export const generateInsight = async (
   transactions: Transaction[],
   habits: Habit[],
-  options?: { includeMerchantNames?: boolean }
+  options?: { includeMerchantNames?: boolean },
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<string> => {
   validateApiKey();
+
+  const client = _aiClient || ai;
 
   const includeMerchantNames = options?.includeMerchantNames !== false; // Default to true for backward compatibility
 
@@ -625,7 +564,7 @@ export const generateInsight = async (
       JSON.stringify(simplifiedHabits)
     );
 
-    const response = await ai.models.generateContent({
+    const response = await client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
         parts: [{ text: prompt }]
