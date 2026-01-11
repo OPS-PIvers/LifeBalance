@@ -679,6 +679,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     syncHouseholdPoints();
   }, [householdId, householdSettings?.points, habits]);
 
+  // Refresh FCM token periodically to prevent token staleness
+  // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
+  // See: https://github.com/firebase/firebase-js-sdk/issues/8013
+  useEffect(() => {
+    if (!householdId || !user) return;
+
+    // Only refresh if notifications are enabled
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    // Import dynamically to avoid circular dependencies
+    import('@/services/notificationService').then(({ refreshFCMTokenIfNeeded }) => {
+      refreshFCMTokenIfNeeded(householdId, user.uid).catch(console.error);
+    });
+  }, [householdId, user]);
+
   // --- ACTIONS: ACCOUNTS ---
 
   const addAccount = async (account: Account) => {

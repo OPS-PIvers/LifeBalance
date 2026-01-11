@@ -342,3 +342,98 @@ export const requestNotificationPermission = async (
     return false;
   }
 };
+
+// Constants for token refresh
+const TOKEN_REFRESH_KEY = 'fcm_token_last_refresh';
+const TOKEN_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+/**
+ * Refresh FCM token if it hasn't been refreshed recently.
+ * iOS/Safari is particularly sensitive to stale tokens.
+ *
+ * Per Firebase documentation, tokens should be refreshed at least monthly,
+ * but weekly is recommended for reliability. Tokens over 270 days old are rejected.
+ *
+ * References:
+ * - https://github.com/firebase/firebase-js-sdk/issues/8013
+ * - https://firebase.google.com/docs/cloud-messaging/manage-tokens
+ */
+export const refreshFCMTokenIfNeeded = async (
+  householdId: string,
+  userId: string
+): Promise<boolean> => {
+  try {
+    // Check if we need to refresh (weekly refresh recommended for iOS)
+    const lastRefresh = localStorage.getItem(TOKEN_REFRESH_KEY);
+    const now = Date.now();
+
+    if (lastRefresh) {
+      const lastRefreshTime = parseInt(lastRefresh, 10);
+      const timeSinceRefresh = now - lastRefreshTime;
+
+      if (timeSinceRefresh < TOKEN_REFRESH_INTERVAL_MS) {
+        console.log('[Notifications] Token refresh not needed yet, last refreshed:',
+          new Date(lastRefreshTime).toISOString());
+        return true;
+      }
+    }
+
+    console.log('[Notifications] Refreshing FCM token...');
+
+    if (!messaging) {
+      console.warn('[Notifications] Firebase Messaging not available for token refresh');
+      return false;
+    }
+
+    if (Notification.permission !== 'granted') {
+      console.log('[Notifications] Notification permission not granted, skipping token refresh');
+      return false;
+    }
+
+    // Validate user
+    const currentUser = auth.currentUser;
+    if (!currentUser || currentUser.uid !== userId) {
+      console.warn('[Notifications] User mismatch, skipping token refresh');
+      return false;
+    }
+
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) {
+      console.warn('[Notifications] VAPID key missing, skipping token refresh');
+      return false;
+    }
+
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (!registration) {
+      console.warn('[Notifications] Service worker not registered, skipping token refresh');
+      return false;
+    }
+
+    // Get a fresh token
+    const token = await getToken(messaging, {
+      vapidKey,
+      serviceWorkerRegistration: registration
+    });
+
+    if (token) {
+      // Update token in Firestore
+      const memberRef = doc(db, `households/${householdId}/members/${userId}`);
+      await updateDoc(memberRef, {
+        fcmTokens: arrayUnion(token),
+        lastTokenRefresh: new Date().toISOString()
+      });
+
+      // Update local storage with refresh timestamp
+      localStorage.setItem(TOKEN_REFRESH_KEY, now.toString());
+
+      console.log('[Notifications] FCM token refreshed successfully');
+      return true;
+    }
+
+    console.warn('[Notifications] Failed to get token during refresh');
+    return false;
+  } catch (error) {
+    console.error('[Notifications] Error refreshing FCM token:', error);
+    return false;
+  }
+};

@@ -1,6 +1,6 @@
 // Service Worker for LifeBalance PWA with Firebase Cloud Messaging
 // IMPORTANT: Update this version string when deploying changes to trigger cache invalidation
-const CACHE_VERSION = 'v1.1.0';
+const CACHE_VERSION = 'v1.2.0';
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
 
 // Firebase Cloud Messaging integration
@@ -22,29 +22,13 @@ try {
     messagingSenderId: MESSAGING_SENDER_ID
   });
 
+  // Initialize messaging but DO NOT use onBackgroundMessage
+  // Firebase's onBackgroundMessage does NOT properly use event.waitUntil(),
+  // which causes Safari/iOS to treat notifications as "silent pushes".
+  // After 3 silent pushes, Safari revokes push permission entirely.
+  // See: https://github.com/firebase/firebase-js-sdk/issues/8010
   const messaging = firebase.messaging();
 
-  // Handle background messages (when app is not in focus)
-  messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Received background message:', payload);
-
-    // Extract notification and data payloads
-    const notificationTitle = payload.notification?.title || 'New Notification';
-    const notificationOptions = {
-      body: payload.notification?.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      // Include data payload for deep linking and custom actions
-      data: {
-        ...payload.data,
-        // Store the click action URL if provided
-        url: payload.data?.url || payload.fcmOptions?.link || '/'
-      }
-    };
-
-    self.registration.showNotification(notificationTitle, notificationOptions);
-  });
-  
   firebaseMessagingReady = true;
   console.log('[SW] Firebase Messaging initialized successfully');
 } catch (error) {
@@ -52,19 +36,31 @@ try {
   firebaseMessagingReady = false;
 }
 
-// Native push event listener - CRITICAL for iOS Safari PWAs
-// iOS 16.4+ uses the standard Web Push API. Firebase's onBackgroundMessage may not
-// catch all push events on iOS, so we add a native handler as a fallback.
-// This listener fires when a push message arrives and the PWA is not in the foreground.
+// Native push event listener - REQUIRED for iOS Safari PWAs
+// This is the ONLY push handler we use because:
+// 1. Firebase's onBackgroundMessage doesn't use event.waitUntil() properly
+// 2. Safari/iOS revokes push permission after 3 "silent" pushes
+// 3. The native 'push' event with event.waitUntil() is the correct pattern per W3C spec
+//
+// References:
+// - https://github.com/firebase/firebase-js-sdk/issues/8010
+// - https://developer.apple.com/documentation/usernotifications/sending_web_push_notifications_in_web_apps_and_browsers
 self.addEventListener('push', (event) => {
-  console.log('[SW] Native push event received:', event);
+  console.log('[SW] Push event received:', event);
 
-  // If Firebase already handled this via onBackgroundMessage, don't double-notify.
-  // Firebase sets a flag on handled messages - check if this was already processed.
-  // However, on iOS this native handler may be the only one that fires.
+  // CRITICAL: We must show a notification for EVERY push event on iOS
+  // If we don't, Safari considers it a "silent push" and will revoke permission
 
   if (!event.data) {
-    console.log('[SW] Push event has no data, skipping');
+    console.log('[SW] Push event has no data, showing fallback notification');
+    // Even with no data, we MUST show something on iOS or permission gets revoked
+    event.waitUntil(
+      self.registration.showNotification('LifeBalance', {
+        body: 'You have a new notification',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png'
+      })
+    );
     return;
   }
 
@@ -73,8 +69,15 @@ self.addEventListener('push', (event) => {
     payload = event.data.json();
     console.log('[SW] Push payload:', payload);
   } catch (e) {
-    // If it's not JSON, try to get text
-    console.log('[SW] Push data is not JSON, trying text:', event.data.text());
+    // If it's not JSON, show a generic notification
+    console.log('[SW] Push data is not JSON:', event.data.text());
+    event.waitUntil(
+      self.registration.showNotification('LifeBalance', {
+        body: event.data.text() || 'You have a new notification',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png'
+      })
+    );
     return;
   }
 
@@ -88,20 +91,20 @@ self.addEventListener('push', (event) => {
     body: notification.body || '',
     icon: notification.icon || '/icon-192.png',
     badge: '/icon-192.png',
-    tag: payload.fcmMessageId || 'lifebalance-notification',
+    tag: payload.fcmMessageId || `lifebalance-${Date.now()}`,
     data: {
       ...data,
       url: data.url || payload.fcmOptions?.link || '/'
     },
-    // iOS-specific: ensure notification shows even if app recently active
-    requireInteraction: false,
-    silent: false
+    // Vibration pattern for mobile devices
+    vibrate: [100, 50, 100]
   };
 
-  // Show the notification
+  // CRITICAL: event.waitUntil() ensures Safari doesn't treat this as a silent push
+  // The Promise passed to waitUntil must resolve BEFORE the event handler completes
   event.waitUntil(
     self.registration.showNotification(title, options)
-      .then(() => console.log('[SW] Notification shown successfully'))
+      .then(() => console.log('[SW] Notification displayed successfully'))
       .catch((err) => console.error('[SW] Failed to show notification:', err))
   );
 });
