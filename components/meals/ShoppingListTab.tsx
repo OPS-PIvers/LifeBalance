@@ -143,7 +143,15 @@ const ShoppingListTab: React.FC = () => {
       const normalizedQuantity = trimmedQuantity === '' ? undefined : trimmedQuantity;
 
       const trimmedStore = editingItem.store?.trim();
-      const normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
+      // Normalize store name against existing stores if possible
+      let normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
+
+      if (normalizedStore) {
+        const matchingStore = stores.find(s => s.name.toLowerCase() === normalizedStore!.toLowerCase());
+        if (matchingStore) {
+            normalizedStore = matchingStore.name;
+        }
+      }
 
       await updateShoppingItem({
         ...editingItem,

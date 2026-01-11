@@ -113,12 +113,17 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const addCategory = () => {
     const trimmed = newCategoryName.trim();
     if (!trimmed) return;
+
+    // Check duplicates case-insensitively
     if (localCategories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
       toast.error('Category already exists');
       return;
     }
 
-    setLocalCategories([...localCategories, trimmed]);
+    // Normalize to Title Case for consistency
+    const normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+
+    setLocalCategories([...localCategories, normalized]);
     setNewCategoryName('');
     setHasUnsavedCategoryChanges(true);
   };
@@ -171,6 +176,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
+        role="presentation"
       />
 
       <div

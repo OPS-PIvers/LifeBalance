@@ -7,6 +7,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   serverTimestamp,
   Timestamp,
   writeBatch,
@@ -2375,10 +2376,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           // We can just update with { store: deleteField() } but we need to import deleteField
           // Alternatively, just update with store: null or similar if the sanitizer handles it.
           // The sanitizer `sanitizeFirestoreData` removes undefined, converts "" to null.
-          // Let's assume standard updateDoc behavior: we can't easily unset a field without deleteField().
-          // However, we can just set it to null if the schema allows, or empty string.
-          // Let's use standard update for now, setting to null.
-          batch.update(itemRef, { store: null });
+          batch.update(itemRef, { store: deleteField() });
         });
       }
 
