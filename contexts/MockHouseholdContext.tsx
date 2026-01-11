@@ -6,6 +6,7 @@ import {
   Transaction,
   CalendarItem,
   Habit,
+  HabitSubmission,
   Challenge,
   RewardItem,
   HouseholdMember,
@@ -80,8 +81,8 @@ const SEED_STORES: Store[] = [
 ];
 
 const SEED_PANTRY: PantryItem[] = [
-  { id: 'p1', name: 'Milk', quantity: 1, unit: 'gallon', category: 'Dairy', expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], addedBy: 'test-user-id', addedAt: new Date().toISOString() },
-  { id: 'p2', name: 'Eggs', quantity: 12, unit: 'count', category: 'Protein', addedBy: 'test-user-id', addedAt: new Date().toISOString() },
+  { id: 'p1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+  { id: 'p2', name: 'Eggs', quantity: '12 count', category: 'Protein' },
 ];
 
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -224,9 +225,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Meal operations
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>) => {
-    const newMeal = { ...meal, id: generateId() } as Meal;
+    const id = generateId();
+    const newMeal = { ...meal, id } as Meal;
     setMeals(prev => [...prev, newMeal]);
     toast.success('Mock: Meal added');
+    return id;
   }, []);
 
   const updateMeal = useCallback(async (meal: Meal) => {
@@ -280,8 +283,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: ToDo added');
   }, []);
 
-  const updateToDo = useCallback(async (todo: ToDo) => {
-    setTodos(prev => prev.map(t => t.id === todo.id ? todo : t));
+  const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
     toast.success('Mock: ToDo updated');
   }, []);
 
@@ -317,10 +320,52 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // No-op functions for features not critical to testing
   const noOp = useCallback(async <T,>(..._args: any[]): Promise<T | void> => {
-    toast.info('Mock: Operation not implemented in test mode');
+    // toast.info doesn't exist, use toast with custom styling instead
+    toast('Mock: Operation not implemented in test mode', {
+      icon: 'ℹ️',
+      duration: 2000
+    });
   }, []);
 
+  // Special no-op that returns empty array (for getHabitSubmissions)
+  const getHabitSubmissions = useCallback(async (_habitId: string, _startDate?: string, _endDate?: string): Promise<HabitSubmission[]> => {
+    return [];
+  }, []);
+
+  // Computed/derived state to match interface
+  const safeToSpend = 4000; // Mock value
+  const dailyPoints = 30;
+  const weeklyPoints = 150;
+  const totalPoints = 500;
+  const currentUser = members[0] || null;
+  const activeChallenge = challenges[0] || null;
+  const activeYearlyGoals: any[] = [];
+  const primaryYearlyGoal = null;
+  const rewardsInventory = rewards;
+  const freezeBank = null;
+  const isGeneratingInsight = false;
+  const householdSettings = null;
+  const currentPeriodId = '2024-01-01';
+  const bucketSpentMap = new Map();
+
   const contextValue: HouseholdContextType = {
+    // Computed State
+    safeToSpend,
+    dailyPoints,
+    weeklyPoints,
+    totalPoints,
+    currentUser,
+    activeChallenge,
+    activeYearlyGoals,
+    primaryYearlyGoal,
+    rewardsInventory,
+    freezeBank,
+    isGeneratingInsight,
+    householdId: 'test-household-id',
+    currentPeriodId,
+    bucketSpentMap,
+    householdSettings,
+
     // Data
     accounts,
     buckets,
@@ -329,7 +374,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     habits,
     challenges,
     yearlyGoals,
-    rewards,
     members,
     pantry,
     meals,
@@ -344,22 +388,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
     // Operations
     addAccount,
-    updateAccount,
     deleteAccount,
     updateAccountBalance,
+    setAccountGoal: noOp,
+    updateAccountOrder: noOp,
+    reorderAccounts: noOp,
     addBucket,
     updateBucket,
     deleteBucket,
+    updateBucketLimit: noOp,
+    reallocateBucket: noOp,
     addTransaction,
     updateTransaction,
+    updateTransactionCategory: noOp,
     deleteTransaction,
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,
+    payCalendarItem: noOp,
+    deferCalendarItem: noOp,
     addHabit,
     updateHabit,
     deleteHabit,
     toggleHabit,
+    resetHabit: noOp,
+    addHabitSubmission: noOp,
+    updateHabitSubmission: noOp,
+    deleteHabitSubmission: noOp,
+    getHabitSubmissions,
     addPantryItem,
     updatePantryItem,
     deletePantryItem,
@@ -369,32 +425,35 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addShoppingItem,
     updateShoppingItem,
     deleteShoppingItem,
-    addMealPlan,
-    deleteMealPlan,
+    toggleShoppingItemPurchased: noOp,
+    clearPurchasedShoppingItems: noOp,
+    addMealPlanItem: addMealPlan,
+    updateMealPlanItem: noOp,
+    deleteMealPlanItem: deleteMealPlan,
     addToDo,
     updateToDo,
     deleteToDo,
+    completeToDo: noOp,
     addStore,
     updateStore,
     deleteStore,
     updateGroceryCategories,
-
-    // Not implemented in mock (safe no-ops)
-    addChallenge: noOp,
-    updateChallenge: noOp,
-    deleteChallenge: noOp,
-    addReward: noOp,
-    updateReward: noOp,
-    deleteReward: noOp,
-    addYearlyGoal: noOp,
-    updateYearlyGoal: noOp,
-    deleteYearlyGoal: noOp,
-    updateHouseholdSettings: noOp,
-    generateInsight: noOp,
-    updateMealPlan: noOp,
     addGroceryCatalogItem: noOp,
     updateGroceryCatalogItem: noOp,
     deleteGroceryCatalogItem: noOp,
+    updateChallenge: noOp,
+    markChallengeComplete: noOp,
+    redeemReward: noOp,
+    refreshInsight: noOp,
+    createYearlyGoal: noOp,
+    updateYearlyGoal: noOp,
+    updateYearlyGoalProgress: noOp,
+    deleteYearlyGoal: noOp,
+    useFreezeBankToken: noOp,
+    rolloverFreezeBankTokens: noOp,
+    addMember: noOp,
+    updateMember: noOp,
+    removeMember: noOp,
   };
 
   return (

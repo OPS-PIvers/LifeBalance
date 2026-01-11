@@ -61,7 +61,7 @@ import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek } from 'date-fns';
 
-interface HouseholdContextType {
+export interface HouseholdContextType {
   // State
   safeToSpend: number;
   dailyPoints: number;
