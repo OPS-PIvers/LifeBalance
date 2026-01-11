@@ -433,7 +433,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={handleClose}
       maxWidth="max-w-md"
-      backdropColor="bg-slate-900/90"
+      disableBackdropClose={view === 'processing'}
     >
       {/* Header */}
       <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">

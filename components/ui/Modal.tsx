@@ -31,6 +31,16 @@ export interface ModalProps {
    * Defaults to true.
    */
   mobileSafePadding?: boolean;
+  /**
+   * If true, clicking the backdrop or pressing Escape will not close the modal.
+   * Useful for processing states or critical confirmations.
+   */
+  disableBackdropClose?: boolean;
+  /**
+   * ID of the element labeling the modal (usually the title).
+   * Enhances accessibility.
+   */
+  ariaLabelledBy?: string;
 }
 
 /**
@@ -52,8 +62,44 @@ export const Modal: React.FC<ModalProps> = ({
   centerContent = true,
   backdropColor = 'bg-slate-900/60',
   mobileSafePadding = true,
+  disableBackdropClose = false,
+  ariaLabelledBy,
 }) => {
+  // Handle Escape key
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !disableBackdropClose) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose, disableBackdropClose]);
+
+  // Lock body scroll
+  React.useEffect(() => {
+    if (isOpen) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalStyle;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (!disableBackdropClose && e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   return (
     <div
@@ -64,6 +110,7 @@ export const Modal: React.FC<ModalProps> = ({
       style={mobileSafePadding ? { paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' } : undefined}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={ariaLabelledBy}
     >
       {/* Backdrop */}
       <div
@@ -71,7 +118,7 @@ export const Modal: React.FC<ModalProps> = ({
           "absolute inset-0 backdrop-blur-sm transition-opacity",
           backdropColor
         )}
-        onClick={onClose}
+        onClick={handleBackdropClick}
         aria-hidden="true"
       />
 
