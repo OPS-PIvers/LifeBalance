@@ -34,7 +34,11 @@ export function calculateBucketSpent(
   // Replaces O(Buckets * Transactions) search with O(Buckets + Transactions) map lookup
   const bucketNameMap = new Map<string, string>();
   buckets.forEach(b => {
-    bucketNameMap.set(b.name.toLowerCase(), b.id);
+    const key = b.name.toLowerCase();
+    // Preserve first-match behavior: only set if this name hasn't been seen yet
+    if (!bucketNameMap.has(key)) {
+      bucketNameMap.set(key, b.id);
+    }
   });
 
   // Sum up spending per bucket
@@ -45,14 +49,14 @@ export function calculateBucketSpent(
 
     if (!bucketId) return; // Transaction category doesn't match any bucket
 
-    const currentSpent = spentMap.get(bucketId);
+    // We know bucketId exists in buckets, and spentMap is initialized from buckets,
+    // so this should always be defined. Using ! to match original fail-fast behavior.
+    const currentSpent = spentMap.get(bucketId)!;
 
-    if (currentSpent) {
-      if (tx.status === 'verified') {
-        currentSpent.verified += tx.amount;
-      } else if (tx.status === 'pending_review') {
-        currentSpent.pending += tx.amount;
-      }
+    if (tx.status === 'verified') {
+      currentSpent.verified += tx.amount;
+    } else if (tx.status === 'pending_review') {
+      currentSpent.pending += tx.amount;
     }
   });
 
