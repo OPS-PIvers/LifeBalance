@@ -20,7 +20,7 @@ import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
-import { requestNotificationPermission } from '@/services/notificationService';
+import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -109,6 +109,9 @@ const Settings: React.FC = () => {
     const success = await requestNotificationPermission(householdId, user.uid);
     if (success) {
       setNotificationStatus('granted');
+      // Set up foreground listener for iOS PWA support
+      // This is critical because iOS PWAs don't support background push notifications
+      setupForegroundNotificationListener();
     } else if ('Notification' in window) {
       // Always reflect the actual browser permission state on failure
       setNotificationStatus(Notification.permission);

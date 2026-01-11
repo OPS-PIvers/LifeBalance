@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send } from 'lucide-react';
+import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
+import { isIOSDevice, isPWA } from '@/services/notificationService';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -154,6 +155,31 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           <span className="hidden sm:inline">Test</span>
         </button>
       </div>
+
+      {/* iOS-specific notice */}
+      {isIOSDevice() && (
+        <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 mb-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-amber-800 text-sm">iOS Notification Note</h4>
+              <p className="text-sm text-amber-700 mt-1">
+                {isPWA() ? (
+                  <>
+                    On iOS, notifications appear when LifeBalance is open.
+                    Keep the app running in the background for best results.
+                  </>
+                ) : (
+                  <>
+                    For the best notification experience, add LifeBalance to your Home Screen.
+                    Tap the Share button and select "Add to Home Screen".
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Habit Reminders */}

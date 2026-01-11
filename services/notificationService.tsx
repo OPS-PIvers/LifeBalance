@@ -1,7 +1,192 @@
-import { getToken } from 'firebase/messaging';
+import React from 'react';
+import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { messaging, db, auth } from '@/firebase.config';
 import toast from 'react-hot-toast';
+
+// Track if foreground listener is already set up to avoid duplicates
+let foregroundListenerInitialized = false;
+
+/**
+ * Detect if the current device is running iOS
+ */
+export const isIOSDevice = (): boolean => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent || navigator.vendor || '';
+  // Check for iOS devices including iPad on iOS 13+ (which reports as Mac)
+  return /iPad|iPhone|iPod/.test(userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+/**
+ * Detect if the app is running as a PWA (added to home screen)
+ */
+export const isPWA = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  // Check if running in standalone mode (PWA)
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    // iOS Safari specific check
+    (window.navigator as any).standalone === true;
+};
+
+/**
+ * Check if the device supports push notifications
+ * iOS PWAs have limited support - only foreground notifications work reliably
+ */
+export const checkNotificationSupport = (): {
+  supported: boolean;
+  foregroundOnly: boolean;
+  reason?: string;
+} => {
+  if (!('Notification' in window)) {
+    return { supported: false, foregroundOnly: false, reason: 'Browser does not support notifications' };
+  }
+
+  if (!('serviceWorker' in navigator)) {
+    return { supported: false, foregroundOnly: false, reason: 'Service workers not supported' };
+  }
+
+  const iOS = isIOSDevice();
+  const pwa = isPWA();
+
+  // iOS PWA: only foreground notifications work
+  if (iOS && pwa) {
+    return {
+      supported: true,
+      foregroundOnly: true,
+      reason: 'iOS PWA: notifications work when app is open'
+    };
+  }
+
+  // iOS Safari (not PWA): Web Push requires iOS 16.4+
+  if (iOS && !pwa) {
+    // Check for iOS version - Web Push requires 16.4+
+    const iOSVersion = parseIOSVersion();
+    if (iOSVersion && iOSVersion < 16.4) {
+      return {
+        supported: false,
+        foregroundOnly: false,
+        reason: 'iOS 16.4 or later required for notifications. Please update your device.'
+      };
+    }
+    return {
+      supported: true,
+      foregroundOnly: true,
+      reason: 'Add to Home Screen for better notification support'
+    };
+  }
+
+  // Desktop/Android: full support
+  return { supported: true, foregroundOnly: false };
+};
+
+/**
+ * Parse iOS version from user agent
+ */
+const parseIOSVersion = (): number | null => {
+  const match = navigator.userAgent.match(/OS (\d+)_(\d+)/);
+  if (match) {
+    return parseFloat(`${match[1]}.${match[2]}`);
+  }
+  return null;
+};
+
+/**
+ * Set up foreground message listener to display notifications when app is open
+ * This is CRITICAL for iOS PWAs where background notifications don't work
+ */
+export const setupForegroundNotificationListener = (): (() => void) | null => {
+  if (!messaging) {
+    console.warn('[Notifications] Firebase Messaging not available');
+    return null;
+  }
+
+  if (foregroundListenerInitialized) {
+    console.log('[Notifications] Foreground listener already initialized');
+    return null;
+  }
+
+  console.log('[Notifications] Setting up foreground message listener');
+
+  const unsubscribe = onMessage(messaging, (payload: MessagePayload) => {
+    console.log('[Notifications] Foreground message received:', payload);
+
+    const title = payload.notification?.title || 'LifeBalance';
+    const body = payload.notification?.body || '';
+    const url = payload.data?.url || '/';
+
+    // Show in-app toast notification
+    toast(
+      (t) => (
+        <div
+          className="flex items-start gap-3 cursor-pointer"
+          onClick={() => {
+            toast.dismiss(t.id);
+            // Navigate to the notification's target URL
+            if (url && url !== '/') {
+              window.location.hash = url;
+            }
+          }}
+        >
+          <div className="flex-shrink-0 w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center">
+            <span className="text-lg">🔔</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-brand-800 text-sm">{title}</p>
+            {body && <p className="text-brand-600 text-xs mt-0.5">{body}</p>}
+            <p className="text-brand-400 text-xs mt-1">Tap to view</p>
+          </div>
+        </div>
+      ),
+      {
+        duration: 8000,
+        style: {
+          background: 'white',
+          padding: '12px 16px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.15)',
+          maxWidth: '400px',
+        },
+      }
+    );
+
+    // Also try to show a native notification if permission granted and document is hidden
+    // This helps when the PWA is open but in background tab
+    if (Notification.permission === 'granted' && document.hidden) {
+      try {
+        const notification = new Notification(title, {
+          body: body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: payload.messageId || 'lifebalance-notification',
+          data: { url }
+        });
+
+        notification.onclick = () => {
+          window.focus();
+          if (url && url !== '/') {
+            window.location.hash = url;
+          }
+          notification.close();
+        };
+      } catch (e) {
+        // Native notifications may not work in all contexts, toast is the fallback
+        console.log('[Notifications] Native notification failed, using toast:', e);
+      }
+    }
+  });
+
+  foregroundListenerInitialized = true;
+  console.log('[Notifications] Foreground listener active');
+
+  return unsubscribe;
+};
 
 export const requestNotificationPermission = async (
   householdId: string,
