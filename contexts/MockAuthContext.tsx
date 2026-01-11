@@ -1,47 +1,45 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User } from 'firebase/auth';
+import React, { useState, ReactNode } from 'react';
+import { User, IdTokenResult } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 
-// Define a simplified User type that matches what Firebase provides but is constructible
-// We cast it to User to satisfy the context interface
-const MOCK_USER: any = {
-  uid: 'test-user-id',
-  email: 'test@example.com',
-  displayName: 'Test User',
-  photoURL: 'https://ui-avatars.com/api/?name=Test+User',
-  emailVerified: true,
-  isAnonymous: false,
-  metadata: {
-    creationTime: new Date().toISOString(),
-    lastSignInTime: new Date().toISOString(),
-  },
-  providerData: [],
-  refreshToken: '',
-  tenantId: null,
-  delete: async () => {},
-  getIdToken: async () => 'mock-token',
-  getIdTokenResult: async () => ({
-    token: 'mock-token',
-    expirationTime: new Date(Date.now() + 3600000).toISOString(),
-    authTime: new Date().toISOString(),
-    issuedAtTime: new Date().toISOString(),
-    signInProvider: 'google.com',
-    signInSecondFactor: null,
-    claims: {}
-  }),
-  reload: async () => {},
-  toJSON: () => ({}),
-  phoneNumber: null,
-  providerId: 'firebase',
+// Define a safe mock user that satisfies the User interface without using 'any'
+// We implement the critical methods and properties needed for the UI
+const createMockUser = (): User => {
+  const now = new Date().toISOString();
+
+  return {
+    uid: 'test-user-id',
+    email: 'test@example.com',
+    displayName: 'Test User',
+    photoURL: 'https://ui-avatars.com/api/?name=Test+User',
+    emailVerified: true,
+    isAnonymous: false,
+    metadata: {
+      creationTime: now,
+      lastSignInTime: now,
+    },
+    providerData: [],
+    refreshToken: 'mock-refresh-token',
+    tenantId: null,
+    phoneNumber: null,
+    providerId: 'firebase',
+
+    // Implement required methods with mock behavior
+    delete: async () => Promise.resolve(),
+    getIdToken: async () => Promise.resolve('mock-token'),
+    getIdTokenResult: async () => Promise.resolve({
+      token: 'mock-token',
+      expirationTime: new Date(Date.now() + 3600000).toISOString(),
+      authTime: now,
+      issuedAtTime: now,
+      signInProvider: 'google.com',
+      signInSecondFactor: null,
+      claims: {}
+    } as IdTokenResult),
+    reload: async () => Promise.resolve(),
+    toJSON: () => ({}),
+  } as unknown as User; // We still need a cast because User has many internal/private properties
 };
-
-// We need to match the AuthContextType from AuthContext.tsx exactly
-interface AuthContextType {
-  user: User | null;
-  householdId: string | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-  setHouseholdId: (id: string) => void;
-}
 
 // Create context matching the real AuthContext
 // We'll export this to use in the provider, but the hook will consume the REAL AuthContext
@@ -53,9 +51,10 @@ interface AuthContextType {
 import { AuthContext } from './AuthContext';
 
 export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(MOCK_USER as User);
+  const [user, setUser] = useState<User | null>(createMockUser());
   const [householdId, setHouseholdIdState] = useState<string | null>('test-household-id');
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const signOut = async () => {
     // Clear auth state before navigation
@@ -64,9 +63,13 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     // Clear test mode flags
     sessionStorage.removeItem('JULES_TEST_MODE');
-    localStorage.removeItem('JULES_TEST_MODE');
 
-    window.location.href = '/';
+    // Navigate to login using React Router
+    navigate('/login');
+
+    // Force a reload after navigation to ensure clean state for the next session
+    // This mimics the behavior of a full sign-out
+    window.location.reload();
   };
 
   const setHouseholdId = (id: string) => {

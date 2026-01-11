@@ -78,7 +78,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [insight, setInsight] = useState("Mock Insight: You are doing great!");
 
   // Helpers
-  const generateId = () => Math.random().toString(36).substr(2, 9);
+  const generateId = () => crypto.randomUUID();
 
   // Actions
   const addAccount = async (account: Account) => {

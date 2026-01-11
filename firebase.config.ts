@@ -17,13 +17,13 @@ const firebaseConfig = {
 if (!firebaseConfig.apiKey) {
   console.error('Firebase configuration error: Missing VITE_FIREBASE_API_KEY. Using mock config for app initialization to prevent crash.');
   // Provide dummy config so initializeApp doesn't crash immediately.
-  // This allows the app to load for "Bypass Mode" usage.
-  // Real Firebase calls will fail, which is expected if keys are missing.
-  firebaseConfig.apiKey = 'mock-api-key';
-  firebaseConfig.authDomain = 'mock-project.firebaseapp.com';
-  firebaseConfig.projectId = 'mock-project';
-  firebaseConfig.appId = '1:1234567890:web:1234567890abcdef'; // Dummy appId to satisfy Firebase checks
-  firebaseConfig.messagingSenderId = '1234567890'; // Dummy senderId
+  // This allows the app to load for "Bypass Mode" usage only.
+  // Any Firebase network or auth calls will fail with these bypass-mode credentials, which is expected.
+  firebaseConfig.apiKey = 'bypass-mode-mock-api-key';
+  firebaseConfig.authDomain = 'bypass-mode-mock-project.firebaseapp.invalid';
+  firebaseConfig.projectId = 'bypass-mode-mock-project';
+  firebaseConfig.appId = '1:000000000000:bypass-mode-mock-app-id-ffffffffffffffff'; // Clearly mock appId to satisfy Firebase checks
+  firebaseConfig.messagingSenderId = 'bypass-mode-mock-sender-id'; // Clearly mock senderId
 }
 
 // Initialize Firebase

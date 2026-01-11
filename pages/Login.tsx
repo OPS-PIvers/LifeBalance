@@ -32,15 +32,15 @@ const Login: React.FC = () => {
 
     // Only allow bypass in development or if specifically enabled via env var
     // This prevents accidental exposure in production
-    const isBypassAllowed = import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_BYPASS === 'true';
+    const isBypassAllowed = import.meta.env.DEV && import.meta.env.VITE_ENABLE_TEST_BYPASS === 'true';
 
     if (hasBypass && isBypassAllowed) {
       // Use sessionStorage for security so it doesn't persist across browser restarts
       sessionStorage.setItem('JULES_TEST_MODE', 'true');
 
       // Force navigation to root to pick up the new provider
-      // No need to call reload() after setting href, as href assignment triggers navigation
-      window.location.href = '/';
+      // Use replace() to avoid keeping the bypass URL in browser history
+      window.location.replace('/');
     }
   }, [location]);
 

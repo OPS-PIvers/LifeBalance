@@ -54,12 +54,9 @@ const App: React.FC = () => {
     }
   }, [notificationPermission]);
 
-  // Lazy check for bypass mode to avoid accessing storage on every render
-  // We check sessionStorage first (new standard), then localStorage (backward compatibility)
-  const isBypassMode = React.useMemo(() => {
-    return sessionStorage.getItem('JULES_TEST_MODE') === 'true' ||
-           localStorage.getItem('JULES_TEST_MODE') === 'true';
-  }, []);
+  // Lazy check for bypass mode.
+  // We check sessionStorage only as the primary mechanism for security.
+  const isBypassMode = sessionStorage.getItem('JULES_TEST_MODE') === 'true';
 
   // Choose providers based on bypass mode
   const AuthProviderComponent = isBypassMode ? MockAuthProvider : AuthProvider;
@@ -71,7 +68,7 @@ const App: React.FC = () => {
         <HouseholdProviderComponent>
           <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
             {isBypassMode && (
-              <div className="bg-red-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[10000]">
+              <div className="bg-red-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-50">
                 TEST MODE ENABLED - MOCK DATA
               </div>
             )}
