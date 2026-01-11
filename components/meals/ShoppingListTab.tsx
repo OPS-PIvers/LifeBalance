@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw } from 'lucide-react';
 import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
+import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -20,14 +21,23 @@ const fileToBase64 = (file: File): Promise<string> => {
 const CATEGORIES = [...GROCERY_CATEGORIES];
 
 const ShoppingListTab: React.FC = () => {
-  const { shoppingList, addShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, updateShoppingItem, addPantryItem } = useHousehold();
+  const {
+    shoppingList,
+    addShoppingItem,
+    deleteShoppingItem,
+    toggleShoppingItemPurchased,
+    updateShoppingItem,
+    addPantryItem,
+    clearPurchasedShoppingItems
+  } = useHousehold();
 
   // Add Form State
   const [newItemName, setNewItemName] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('Uncategorized');
 
-  // Edit Modal State
+  // Modal States
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
 
@@ -201,20 +211,46 @@ const ShoppingListTab: React.FC = () => {
                 aria-label="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>AI List Optimization</span>
+                <span>AI Optimize</span>
              </button>
-             <label className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full cursor-pointer">
-                {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                <span>Scan Receipt to Pantry</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleReceiptUpload}
-                  disabled={isProcessingReceipt}
-                />
-             </label>
+             <button
+                onClick={() => setIsCatalogOpen(true)}
+                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
+                aria-label="Open previously purchased items"
+             >
+                <Clock className="w-4 h-4" />
+                <span>History</span>
+             </button>
         </div>
+
+        <label className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full cursor-pointer">
+          {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+          <span>Scan Receipt to Pantry</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleReceiptUpload}
+            disabled={isProcessingReceipt}
+          />
+        </label>
+
+        {/* Actions Row */}
+        {shoppingList.some(i => i.isPurchased) && (
+            <div className="flex justify-end">
+                <button
+                    onClick={() => {
+                        if (window.confirm('Clear all checked items?')) {
+                            clearPurchasedShoppingItems();
+                        }
+                    }}
+                    className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-800 px-3 py-1 bg-brand-50 hover:bg-brand-100 rounded-full transition-colors"
+                >
+                    <RotateCcw className="w-3 h-3" />
+                    Clear Checked
+                </button>
+            </div>
+        )}
 
         {/* List */}
         {shoppingList.length === 0 ? (
@@ -283,6 +319,11 @@ const ShoppingListTab: React.FC = () => {
                 ))}
             </div>
         )}
+
+        <GroceryCatalogModal
+            isOpen={isCatalogOpen}
+            onClose={() => setIsCatalogOpen(false)}
+        />
 
         {/* Edit Modal */}
         {editingItem && (

@@ -250,6 +250,16 @@ export interface ShoppingItem {
   addedFromMealId?: string; // Traceability
 }
 
+export interface GroceryCatalogItem {
+  id: string;
+  name: string;
+  category: string;
+  defaultQuantity?: string;
+  defaultStore?: string;
+  lastPurchased?: string; // ISO timestamp
+  purchaseCount: number;
+}
+
 export interface Household {
   id: string;
   name: string;
@@ -277,6 +287,7 @@ export interface Household {
   meals?: Meal[];
   shoppingList?: ShoppingItem[];
   todos?: ToDo[];
+  groceryCatalog?: GroceryCatalogItem[];
 }
 
 /**

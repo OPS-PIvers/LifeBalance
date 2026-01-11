@@ -42,7 +42,8 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
-  Insight
+  Insight,
+  GroceryCatalogItem
 } from '@/types/schema';
 import { generateInsight } from '@/services/geminiService';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
@@ -86,6 +87,7 @@ interface HouseholdContextType {
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
   todos: ToDo[];
+  groceryCatalog: GroceryCatalogItem[];
 
   // Pay Period Tracking State
   householdId: string | null;
@@ -170,6 +172,12 @@ interface HouseholdContextType {
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
   deleteShoppingItem: (id: string) => Promise<void>;
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
+  clearPurchasedShoppingItems: () => Promise<void>;
+
+  // Grocery Catalog Actions
+  addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<void>;
+  updateGroceryCatalogItem: (id: string, updates: Partial<GroceryCatalogItem>) => Promise<void>;
+  deleteGroceryCatalogItem: (id: string) => Promise<void>;
 
   // Meal Plan Actions
   addMealPlanItem: (item: Omit<MealPlanItem, 'id'>) => Promise<void>;
@@ -208,6 +216,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
+  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -389,6 +398,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(shoppingListQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ShoppingItem));
         setShoppingList(data);
+      })
+    );
+
+    // Grocery Catalog listener
+    const groceryCatalogQuery = query(collection(db, `households/${householdId}/groceryCatalog`));
+    unsubscribers.push(
+      onSnapshot(groceryCatalogQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as GroceryCatalogItem));
+        setGroceryCatalog(data);
       })
     );
 
@@ -2164,14 +2182,42 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isPurchased: true,
         });
 
-        // Add to pantry if not already exists (robust check by normalized name/category)
-        // This prevents massive duplicates if user toggles aggressively while still
-        // tolerating minor differences in casing/spacing and quantity formatting.
         const normalizeText = (value: string | null | undefined): string => (value ?? '').trim().toLowerCase();
-
         const normalizedItemName = normalizeText(item.name);
         const normalizedItemCategory = normalizeText(item.category);
 
+        // 1. Add to Grocery Catalog (History)
+        // Check if item exists in catalog (by normalized name/category)
+        const existingCatalogItem = groceryCatalog.find(c =>
+          normalizeText(c.name) === normalizedItemName &&
+          normalizeText(c.category) === normalizedItemCategory
+        );
+
+        if (existingCatalogItem) {
+          // Update existing catalog item
+          await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, existingCatalogItem.id), {
+            lastPurchased: new Date().toISOString(),
+            purchaseCount: increment(1),
+            // Update default store if current item has one
+            ...(item.store ? { defaultStore: item.store } : {}),
+            // Update default quantity if current item has one
+            ...(item.quantity ? { defaultQuantity: item.quantity } : {})
+          });
+        } else {
+          // Add new catalog item
+          await addDoc(collection(db, `households/${householdId}/groceryCatalog`), {
+            name: item.name,
+            category: item.category,
+            defaultQuantity: item.quantity,
+            defaultStore: item.store,
+            lastPurchased: new Date().toISOString(),
+            purchaseCount: 1
+          });
+        }
+
+        // 2. Add to pantry if not already exists (robust check by normalized name/category)
+        // This prevents massive duplicates if user toggles aggressively while still
+        // tolerating minor differences in casing/spacing and quantity formatting.
         // Precompute a Set of normalized pantry keys for O(1) lookup
         const pantryKeySet = new Set(
             pantry.map(p => `${normalizeText(p.name)}||${normalizeText(p.category)}`)
@@ -2203,6 +2249,62 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[toggleShoppingItemPurchased] Failed:', error);
       toast.error('Failed to update status');
+    }
+  };
+
+  const clearPurchasedShoppingItems = async () => {
+    if (!householdId) return;
+
+    try {
+      const batch = writeBatch(db);
+      const purchasedItems = shoppingList.filter(item => item.isPurchased);
+
+      if (purchasedItems.length === 0) return;
+
+      purchasedItems.forEach(item => {
+        const itemRef = doc(db, `households/${householdId}/shoppingList`, item.id);
+        batch.delete(itemRef);
+      });
+
+      await batch.commit();
+      toast.success(`Cleared ${purchasedItems.length} items`);
+    } catch (error) {
+      console.error('[clearPurchasedShoppingItems] Failed:', error);
+      toast.error('Failed to clear items');
+    }
+  };
+
+  // --- ACTIONS: GROCERY CATALOG ---
+
+  const addGroceryCatalogItem = async (item: Omit<GroceryCatalogItem, 'id'>) => {
+    if (!householdId) return;
+    try {
+      await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
+    } catch (error) {
+      console.error('[addGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to add to history');
+    }
+  };
+
+  const updateGroceryCatalogItem = async (id: string, updates: Partial<GroceryCatalogItem>) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, id), updates);
+      toast.success('Item updated');
+    } catch (error) {
+      console.error('[updateGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to update item');
+    }
+  };
+
+  const deleteGroceryCatalogItem = async (id: string) => {
+    if (!householdId) return;
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/groceryCatalog`, id));
+      toast.success('Removed from history');
+    } catch (error) {
+      console.error('[deleteGroceryCatalogItem] Failed:', error);
+      toast.error('Failed to remove item');
     }
   };
 
@@ -2524,6 +2626,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         shoppingList,
         mealPlan,
         todos,
+        groceryCatalog,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
@@ -2576,6 +2679,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         updateShoppingItem,
         deleteShoppingItem,
         toggleShoppingItemPurchased,
+        clearPurchasedShoppingItems,
+        addGroceryCatalogItem,
+        updateGroceryCatalogItem,
+        deleteGroceryCatalogItem,
         addMealPlanItem,
         updateMealPlanItem,
         deleteMealPlanItem,
