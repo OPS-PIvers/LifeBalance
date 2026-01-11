@@ -107,7 +107,14 @@ const sanitizeForPrompt = (input: string): string => {
 };
 
 /**
- * Helper to prepare image content parts
+ * Builds a Gemini-compatible image content payload from a base64-encoded image and a text prompt.
+ *
+ * The function extracts the MIME type and strips any data URL prefix from the provided base64 image,
+ * then returns an array of content parts that includes both the image data and the associated text prompt.
+ *
+ * @param base64Image - The image data as a base64-encoded string, optionally including a data URL prefix.
+ * @param prompt - The textual prompt or description to accompany the image in the Gemini request.
+ * @returns An array of content parts containing the cleaned image data and the associated text prompt.
  */
 const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
   const mimeType = extractMimeType(base64Image);
