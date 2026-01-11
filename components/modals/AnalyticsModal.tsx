@@ -69,21 +69,25 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   }, [habits, last7Days]);
 
   // Sentiment Pie
-  const positiveCount = habits.filter(h => h.type === 'positive').length;
-  const negativeCount = habits.filter(h => h.type === 'negative').length;
-  const sentimentData = [
-    { name: 'Positive', value: positiveCount, color: '#10B981' },
-    { name: 'Negative', value: negativeCount, color: '#F43F5E' },
-  ];
+  const sentimentData = useMemo(() => {
+    const positiveCount = habits.filter(h => h.type === 'positive').length;
+    const negativeCount = habits.filter(h => h.type === 'negative').length;
+    return [
+      { name: 'Positive', value: positiveCount, color: '#10B981' },
+      { name: 'Negative', value: negativeCount, color: '#F43F5E' },
+    ];
+  }, [habits]);
 
   // Top Habits (by total count)
-  const frequencyData = [...habits]
-    .sort((a, b) => b.totalCount - a.totalCount)
-    .slice(0, 5)
-    .map(h => ({
-      name: h.title.split(' ').slice(0, 2).join(' '), // First 2 words
-      count: h.totalCount
-    }));
+  const frequencyData = useMemo(() => {
+    return [...habits]
+      .sort((a, b) => b.totalCount - a.totalCount)
+      .slice(0, 5)
+      .map(h => ({
+        name: h.title.split(' ').slice(0, 2).join(' '), // First 2 words
+        count: h.totalCount
+      }));
+  }, [habits]);
 
   // ===== LIFETIME VIEW DATA =====
 
