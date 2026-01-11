@@ -132,8 +132,8 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
 async function generateJsonContent<T>(
   promptOrParts: string | Part[],
   schema: Schema,
-  modelName: string = 'gemini-3-flash-preview',
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<typeof ai, 'models'>,
+  modelName: string = 'gemini-3-flash-preview'
 ): Promise<T> {
   validateApiKey();
   const client = _aiClient || ai;
@@ -194,7 +194,6 @@ export const analyzeReceipt = async (
         },
         required: ["merchant", "amount", "category"]
       },
-      undefined,
       _aiClient
     );
   } catch (error) {
@@ -251,7 +250,6 @@ Return a JSON array of transactions.`;
           required: ["merchant", "amount", "category", "date"]
         }
       },
-      undefined,
       _aiClient
     );
 
@@ -305,7 +303,6 @@ export const analyzePantryImage = async (
           required: ["name", "quantity", "category"]
         }
       },
-      undefined,
       _aiClient
     );
   } catch (error) {
@@ -390,7 +387,6 @@ export const suggestMeal = async (
         },
         required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
       },
-      undefined,
       _aiClient
     );
 
@@ -439,7 +435,6 @@ export const parseGroceryReceipt = async (
           required: ["name", "quantity", "category"]
         }
       },
-      undefined,
       _aiClient
     );
   } catch (error) {
@@ -512,7 +507,6 @@ export const optimizeGroceryList = async (
           required: ["id", "name", "category"]
         }
       },
-      undefined,
       _aiClient
     );
   } catch (error) {
