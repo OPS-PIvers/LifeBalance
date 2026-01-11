@@ -1,6 +1,6 @@
 // Service Worker for LifeBalance PWA with Firebase Cloud Messaging
-// IMPORTANT: Update this version string when deploying changes to trigger cache invalidation
-const CACHE_VERSION = 'v1.2.0';
+// Cache version is timestamp-based to ensure automatic invalidation on new deployments
+const CACHE_VERSION = new Date().toISOString();
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
 
 // Firebase Cloud Messaging integration
