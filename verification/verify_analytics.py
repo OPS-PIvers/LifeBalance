@@ -31,7 +31,7 @@ def verify_analytics_modal():
 
             # Fallback for legacy support if aria-label is missing (should not happen with this PR)
             if not analytics_btn.is_visible():
-                 analytics_btn = page.locator("button.p-3.bg-white.text-brand-600").first
+                analytics_btn = page.locator("button.p-3.bg-white.text-brand-600").first
 
             if analytics_btn.is_visible():
                 print("Found Analytics button, clicking...")
