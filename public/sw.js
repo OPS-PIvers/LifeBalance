@@ -1,6 +1,6 @@
 // Service Worker for LifeBalance PWA with Firebase Cloud Messaging
-// Version is updated on each deploy to trigger cache invalidation
-const CACHE_VERSION = 'v1-' + Date.now();
+// IMPORTANT: Update this version string when deploying changes to trigger cache invalidation
+const CACHE_VERSION = 'v1.1.0';
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
 
 // Firebase Cloud Messaging integration
@@ -51,6 +51,60 @@ try {
   console.error('[SW] Firebase Messaging initialization failed:', error);
   firebaseMessagingReady = false;
 }
+
+// Native push event listener - CRITICAL for iOS Safari PWAs
+// iOS 16.4+ uses the standard Web Push API. Firebase's onBackgroundMessage may not
+// catch all push events on iOS, so we add a native handler as a fallback.
+// This listener fires when a push message arrives and the PWA is not in the foreground.
+self.addEventListener('push', (event) => {
+  console.log('[SW] Native push event received:', event);
+
+  // If Firebase already handled this via onBackgroundMessage, don't double-notify.
+  // Firebase sets a flag on handled messages - check if this was already processed.
+  // However, on iOS this native handler may be the only one that fires.
+
+  if (!event.data) {
+    console.log('[SW] Push event has no data, skipping');
+    return;
+  }
+
+  let payload;
+  try {
+    payload = event.data.json();
+    console.log('[SW] Push payload:', payload);
+  } catch (e) {
+    // If it's not JSON, try to get text
+    console.log('[SW] Push data is not JSON, trying text:', event.data.text());
+    return;
+  }
+
+  // Firebase FCM sends notifications in a specific format
+  // Check for both FCM format and standard Web Push format
+  const notification = payload.notification || payload;
+  const data = payload.data || {};
+
+  const title = notification.title || 'LifeBalance';
+  const options = {
+    body: notification.body || '',
+    icon: notification.icon || '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: payload.fcmMessageId || 'lifebalance-notification',
+    data: {
+      ...data,
+      url: data.url || payload.fcmOptions?.link || '/'
+    },
+    // iOS-specific: ensure notification shows even if app recently active
+    requireInteraction: false,
+    silent: false
+  };
+
+  // Show the notification
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+      .then(() => console.log('[SW] Notification shown successfully'))
+      .catch((err) => console.error('[SW] Failed to show notification:', err))
+  );
+});
 
 // Handle notification clicks for deep linking
 self.addEventListener('notificationclick', (event) => {

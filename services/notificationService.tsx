@@ -36,54 +36,79 @@ export const isPWA = (): boolean => {
 };
 
 /**
+ * Check if the browser supports Web Push (feature detection, not device detection)
+ * This is the recommended approach per Web Push standards
+ */
+export const supportsPush = (): boolean => {
+  return 'serviceWorker' in navigator && 'PushManager' in window;
+};
+
+/**
  * Check if the device supports push notifications
- * iOS PWAs have limited support - only foreground notifications work reliably
+ * Uses feature detection first, then provides iOS-specific guidance
  */
 export const checkNotificationSupport = (): {
   supported: boolean;
-  foregroundOnly: boolean;
+  fullPushSupport: boolean;
   reason?: string;
 } => {
   if (!('Notification' in window)) {
-    return { supported: false, foregroundOnly: false, reason: 'Browser does not support notifications' };
+    return { supported: false, fullPushSupport: false, reason: 'Browser does not support notifications' };
   }
 
   if (!('serviceWorker' in navigator)) {
-    return { supported: false, foregroundOnly: false, reason: 'Service workers not supported' };
+    return { supported: false, fullPushSupport: false, reason: 'Service workers not supported' };
   }
+
+  // Feature detection: check for PushManager support
+  const hasPushManager = 'PushManager' in window;
 
   const iOS = isIOSDevice();
   const pwa = isPWA();
 
-  // iOS PWA: only foreground notifications work
-  if (iOS && pwa) {
-    return {
-      supported: true,
-      foregroundOnly: true,
-      reason: 'iOS PWA: notifications work when app is open'
-    };
-  }
-
-  // iOS Safari (not PWA): Web Push requires iOS 16.4+
+  // iOS Safari (not installed as PWA)
+  // On iOS, Notification API is undefined in regular Safari tabs - only available in PWA mode
   if (iOS && !pwa) {
-    // Check for iOS version - Web Push requires 16.4+
     const iOSVersion = parseIOSVersion();
     if (iOSVersion && iOSVersion < 16.4) {
       return {
         supported: false,
-        foregroundOnly: false,
-        reason: 'iOS 16.4 or later required for notifications. Please update your device.'
+        fullPushSupport: false,
+        reason: 'iOS 16.4 or later required. Please update your device.'
       };
     }
     return {
-      supported: true,
-      foregroundOnly: true,
-      reason: 'Add to Home Screen for better notification support'
+      supported: false,
+      fullPushSupport: false,
+      reason: 'Add to Home Screen first. Tap Share > Add to Home Screen, then enable notifications.'
     };
   }
 
-  // Desktop/Android: full support
-  return { supported: true, foregroundOnly: false };
+  // iOS PWA with iOS 16.4+ - full Web Push IS supported
+  if (iOS && pwa && hasPushManager) {
+    return {
+      supported: true,
+      fullPushSupport: true,
+      reason: 'Background notifications supported on iOS 16.4+'
+    };
+  }
+
+  // iOS PWA without PushManager (older iOS or edge case)
+  if (iOS && pwa && !hasPushManager) {
+    return {
+      supported: true,
+      fullPushSupport: false,
+      reason: 'Notifications work when app is open'
+    };
+  }
+
+  // Desktop/Android with full push support
+  if (hasPushManager) {
+    return { supported: true, fullPushSupport: true };
+  }
+
+  // Fallback: notifications supported but no push
+  return { supported: true, fullPushSupport: false, reason: 'In-app notifications only' };
 };
 
 /**

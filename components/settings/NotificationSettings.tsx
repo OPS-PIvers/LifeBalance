@@ -3,7 +3,7 @@ import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from '
 import { NotificationPreferences } from '@/types/schema';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
-import { isIOSDevice, isPWA } from '@/services/notificationService';
+import { isIOSDevice, isPWA, supportsPush, checkNotificationSupport } from '@/services/notificationService';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -156,23 +156,42 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         </button>
       </div>
 
-      {/* iOS-specific notice */}
+      {/* iOS-specific notice - show helpful guidance based on current state */}
       {isIOSDevice() && (
-        <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 mb-4">
+        <div className={`p-4 rounded-xl border mb-4 ${
+          isPWA() && supportsPush()
+            ? 'bg-green-50 border-green-200'
+            : 'bg-amber-50 border-amber-200'
+        }`}>
           <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <Info className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+              isPWA() && supportsPush() ? 'text-green-600' : 'text-amber-600'
+            }`} />
             <div>
-              <h4 className="font-semibold text-amber-800 text-sm">iOS Notification Note</h4>
-              <p className="text-sm text-amber-700 mt-1">
-                {isPWA() ? (
+              <h4 className={`font-semibold text-sm ${
+                isPWA() && supportsPush() ? 'text-green-800' : 'text-amber-800'
+              }`}>
+                {isPWA() && supportsPush()
+                  ? 'Push Notifications Ready'
+                  : 'iOS Notification Setup'}
+              </h4>
+              <p className={`text-sm mt-1 ${
+                isPWA() && supportsPush() ? 'text-green-700' : 'text-amber-700'
+              }`}>
+                {isPWA() && supportsPush() ? (
                   <>
-                    On iOS, notifications appear when LifeBalance is open.
-                    Keep the app running in the background for best results.
+                    Background notifications are enabled. You'll receive alerts even when
+                    the app is closed.
+                  </>
+                ) : isPWA() ? (
+                  <>
+                    Notifications will appear when the app is open.
+                    For background notifications, ensure you're on iOS 16.4 or later.
                   </>
                 ) : (
                   <>
-                    For the best notification experience, add LifeBalance to your Home Screen.
-                    Tap the Share button and select "Add to Home Screen".
+                    To enable notifications, add LifeBalance to your Home Screen first.
+                    Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from there.
                   </>
                 )}
               </p>
