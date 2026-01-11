@@ -54,16 +54,26 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   currentPreferences,
   onSave
 }) => {
-  const [preferences, setPreferences] = useState<NotificationPreferences>(
-    currentPreferences || DEFAULT_PREFERENCES
-  );
+  // Initialize preferences with timezone fallback to prevent UTC default for existing users
+  const [preferences, setPreferences] = useState<NotificationPreferences>(() => {
+    const base = currentPreferences || DEFAULT_PREFERENCES;
+    return {
+      ...base,
+      // If DB has no timezone, use the browser's current one
+      timezone: base.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+    };
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const hourOptions = getHourOptions();
 
   useEffect(() => {
     if (currentPreferences) {
-      setPreferences(currentPreferences);
+      setPreferences(prev => ({
+        ...currentPreferences,
+        // Preserve existing timezone or fallback to browser's
+        timezone: currentPreferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+      }));
     }
   }, [currentPreferences]);
 
