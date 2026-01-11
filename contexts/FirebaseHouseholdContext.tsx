@@ -232,10 +232,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
-  const [currentPeriodId, setCurrentPeriodId] = useState<string>('');
-  const [bucketSpentMap, setBucketSpentMap] = useState<Map<string, BucketSpent>>(new Map());
 
-  // Derived state
+  // Derived state (Optimized to prevent extra re-renders)
+  const currentPeriodId = householdSettings?.lastPaycheckDate || '';
+  const bucketSpentMap = useMemo(
+    () => calculateBucketSpent(buckets, transactions, currentPeriodId),
+    [buckets, transactions, currentPeriodId]
+  );
+
+  // Other derived state
   const activeChallenge = challenges.find(c => c.status === 'active') || null;
   const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
   const primaryYearlyGoal = activeYearlyGoals[0] || null;
@@ -595,17 +600,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useMidnightScheduler(checkPointsReset, !!householdId, { initialDelayMs: 100 });
 
   // --- PAY PERIOD TRACKING EFFECTS ---
-
-  // Sync current period ID from household settings (paycheck-based tracking)
-  useEffect(() => {
-    setCurrentPeriodId(householdSettings?.lastPaycheckDate || '');
-  }, [householdSettings?.lastPaycheckDate]);
-
-  // Calculate bucket spent amounts whenever transactions, buckets, or period changes
-  useEffect(() => {
-    const spentMap = calculateBucketSpent(buckets, transactions, currentPeriodId);
-    setBucketSpentMap(spentMap);
-  }, [buckets, transactions, currentPeriodId]);
 
   // Run data migration if needed
   useEffect(() => {
