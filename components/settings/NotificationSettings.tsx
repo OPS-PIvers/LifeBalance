@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send } from 'lucide-react';
+import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
+import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -154,6 +155,55 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           <span className="hidden sm:inline">Test</span>
         </button>
       </div>
+
+      {/* iOS-specific notice - show helpful guidance based on current state */}
+      {(() => {
+        const isIOS = isIOSDevice();
+        if (!isIOS) return null;
+
+        const isPwa = isPWA();
+        const hasPushSupport = supportsPush();
+        const isReady = isPwa && hasPushSupport;
+
+        return (
+          <div className={`p-4 rounded-xl border mb-4 ${
+            isReady ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+          }`}>
+            <div className="flex items-start gap-3">
+              <Info className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                isReady ? 'text-green-600' : 'text-amber-600'
+              }`} />
+              <div>
+                <h4 className={`font-semibold text-sm ${
+                  isReady ? 'text-green-800' : 'text-amber-800'
+                }`}>
+                  {isReady ? 'Push Notifications Ready' : 'iOS Notification Setup'}
+                </h4>
+                <p className={`text-sm mt-1 ${
+                  isReady ? 'text-green-700' : 'text-amber-700'
+                }`}>
+                  {isReady ? (
+                    <>
+                      Background notifications are enabled. You'll receive alerts even when
+                      the app is closed.
+                    </>
+                  ) : isPwa ? (
+                    <>
+                      Notifications will appear when the app is open.
+                      For background notifications, ensure you're on iOS 16.4 or later.
+                    </>
+                  ) : (
+                    <>
+                      To enable notifications, add LifeBalance to your Home Screen first.
+                      Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from there.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="space-y-4">
         {/* Habit Reminders */}

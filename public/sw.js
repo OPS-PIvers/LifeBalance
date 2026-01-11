@@ -1,6 +1,6 @@
 // Service Worker for LifeBalance PWA with Firebase Cloud Messaging
-// Version is updated on each deploy to trigger cache invalidation
-const CACHE_VERSION = 'v1-' + Date.now();
+// Cache version is timestamp-based to ensure automatic invalidation on new deployments
+const CACHE_VERSION = new Date().toISOString();
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
 
 // Firebase Cloud Messaging integration
@@ -17,34 +17,46 @@ const MESSAGING_SENDER_ID = '611571061016';
 // Track Firebase Messaging initialization status
 let firebaseMessagingReady = false;
 
+/**
+ * Validate URL to prevent XSS attacks
+ * Only allows relative URLs or same-origin URLs
+ */
+function isValidUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  // Allow relative paths starting with /
+  if (url.startsWith('/')) return true;
+  // Allow hash routes
+  if (url.startsWith('#')) return true;
+  // Block javascript:, data:, and other dangerous protocols
+  if (url.match(/^(javascript|data|vbscript|file):/i)) return false;
+  // For absolute URLs, ensure same origin
+  try {
+    const parsed = new URL(url, self.location.origin);
+    return parsed.origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sanitize URL for storage in notification data
+ */
+function sanitizeUrl(url) {
+  return isValidUrl(url) ? url : '/';
+}
+
 try {
   firebase.initializeApp({
     messagingSenderId: MESSAGING_SENDER_ID
   });
 
+  // Initialize messaging but DO NOT use onBackgroundMessage
+  // Firebase's onBackgroundMessage does NOT properly use event.waitUntil(),
+  // which causes Safari/iOS to treat notifications as "silent pushes".
+  // After 3 silent pushes, Safari revokes push permission entirely.
+  // See: https://github.com/firebase/firebase-js-sdk/issues/8010
   const messaging = firebase.messaging();
 
-  // Handle background messages (when app is not in focus)
-  messaging.onBackgroundMessage((payload) => {
-    console.log('[SW] Received background message:', payload);
-
-    // Extract notification and data payloads
-    const notificationTitle = payload.notification?.title || 'New Notification';
-    const notificationOptions = {
-      body: payload.notification?.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      // Include data payload for deep linking and custom actions
-      data: {
-        ...payload.data,
-        // Store the click action URL if provided
-        url: payload.data?.url || payload.fcmOptions?.link || '/'
-      }
-    };
-
-    self.registration.showNotification(notificationTitle, notificationOptions);
-  });
-  
   firebaseMessagingReady = true;
   console.log('[SW] Firebase Messaging initialized successfully');
 } catch (error) {
@@ -52,25 +64,123 @@ try {
   firebaseMessagingReady = false;
 }
 
+// Native push event listener - REQUIRED for iOS Safari PWAs
+// This is the ONLY push handler we use because:
+// 1. Firebase's onBackgroundMessage doesn't use event.waitUntil() properly
+// 2. Safari/iOS revokes push permission after 3 "silent" pushes
+// 3. The native 'push' event with event.waitUntil() is the correct pattern per W3C spec
+//
+// References:
+// - https://github.com/firebase/firebase-js-sdk/issues/8010
+// - https://developer.apple.com/documentation/usernotifications/sending_web_push_notifications_in_web_apps_and_browsers
+self.addEventListener('push', (event) => {
+  console.log('[SW] Push event received:', event);
+
+  // CRITICAL: We must show a notification for EVERY push event on iOS
+  // If we don't, Safari considers it a "silent push" and will revoke permission
+
+  if (!event.data) {
+    console.log('[SW] Push event has no data, showing fallback notification');
+    // Even with no data, we MUST show something on iOS or permission gets revoked
+    event.waitUntil(
+      self.registration.showNotification('LifeBalance', {
+        body: 'You have a new notification',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png'
+      })
+    );
+    return;
+  }
+
+  let payload;
+  try {
+    payload = event.data.json();
+    console.log('[SW] Push payload:', payload);
+  } catch (e) {
+    // If it's not JSON, show a generic notification
+    console.log('[SW] Push data is not JSON:', event.data.text());
+    event.waitUntil(
+      self.registration.showNotification('LifeBalance', {
+        body: event.data.text() || 'You have a new notification',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png'
+      })
+    );
+    return;
+  }
+
+  // Firebase FCM sends notifications in a specific format
+  // Check for both FCM format and standard Web Push format
+  const notification = payload.notification || payload;
+  const data = payload.data || {};
+
+  const title = notification.title || 'LifeBalance';
+  // Sanitize URL to prevent XSS - only allow relative or same-origin URLs
+  const rawUrl = data.url || payload.fcmOptions?.link || '/';
+  const safeUrl = sanitizeUrl(rawUrl);
+
+  const options = {
+    body: notification.body || '',
+    icon: notification.icon || '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: payload.fcmMessageId || `lifebalance-${Date.now()}`,
+    data: {
+      ...data,
+      url: safeUrl
+    },
+    // Vibration pattern for mobile devices
+    vibrate: [100, 50, 100]
+  };
+
+  // CRITICAL: event.waitUntil() ensures Safari doesn't treat this as a silent push
+  // The Promise passed to waitUntil must resolve BEFORE the event handler completes
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+      .then(() => console.log('[SW] Notification displayed successfully'))
+      .catch((err) => console.error('[SW] Failed to show notification:', err))
+  );
+});
+
 // Handle notification clicks for deep linking
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked:', event.notification.tag);
   event.notification.close();
 
-  // Get the URL from the notification data, default to home
-  const urlToOpen = event.notification.data?.url || '/';
+  // Get the URL from the notification data, validate it, default to home
+  const rawUrl = event.notification.data?.url || '/';
+  const targetPath = sanitizeUrl(rawUrl);
+  // Build full URL for comparison and opening
+  const fullUrlToOpen = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Check if there's already a window open
+      // Check if there's already a window open with matching URL or hash
       for (const client of clientList) {
-        if (client.url === urlToOpen && 'focus' in client) {
+        // Compare full URLs or check if client URL ends with the target path/hash
+        const clientUrl = new URL(client.url);
+        const targetUrl = new URL(fullUrlToOpen);
+
+        // For HashRouter apps, compare the hash portions
+        const hashMatch = clientUrl.hash && targetPath.startsWith('/') &&
+          clientUrl.hash === '#' + targetPath;
+        const exactMatch = client.url === fullUrlToOpen;
+
+        if ((exactMatch || hashMatch) && 'focus' in client) {
           return client.focus();
+        }
+      }
+      // If no matching window, try to focus any existing window and navigate
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus().then(() => {
+            // Navigate to the target URL via postMessage
+            client.postMessage({ type: 'NAVIGATE', url: targetPath });
+          });
         }
       }
       // If no window is open, open a new one
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(fullUrlToOpen);
       }
     })
   );
