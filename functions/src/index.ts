@@ -75,8 +75,14 @@ async function sendNotificationToUser(
     // Remove invalid tokens
     if (response.failureCount > 0) {
       const tokensToRemove: string[] = [];
+      const permanentErrorCodes = [
+        "messaging/registration-token-not-registered",
+        "messaging/invalid-registration-token",
+        "messaging/mismatched-credential"
+      ];
+
       response.responses.forEach((resp, idx) => {
-        if (!resp.success && resp.error?.code === "messaging/registration-token-not-registered") {
+        if (!resp.success && resp.error?.code && permanentErrorCodes.includes(resp.error.code)) {
           tokensToRemove.push(fcmTokens[idx]);
         }
       });
@@ -100,6 +106,12 @@ export function isTimeToSend(
   scheduledTime: string,
   timezone: string = "UTC"
 ): boolean {
+  // Validate scheduledTime format (HH:MM)
+  if (!/^\d{1,2}:\d{2}$/.test(scheduledTime)) {
+    logger.warn(`Invalid scheduled time format: ${scheduledTime}`);
+    return false;
+  }
+
   // Get current time in UTC
   const nowUtc = new Date();
 
@@ -410,6 +422,13 @@ export const sendtestnotification = onCall(async (request) => {
       throw new HttpsError("not-found", "Member profile not found.");
     }
 
+    // Security check: Ensure the authenticated user is accessing their own profile
+    // Note: If admins should be allowed to test others' notifications, adjust this check.
+    // Here we strictly enforce self-testing.
+    if (userId !== request.auth.uid) {
+        throw new HttpsError("permission-denied", "You can only send test notifications to yourself.");
+    }
+
     const memberData = memberDoc.data() as HouseholdMember;
     const tokens = memberData.fcmTokens;
 
@@ -433,6 +452,9 @@ export const sendtestnotification = onCall(async (request) => {
     return { success: true, message: "Test notification sent" };
   } catch (error) {
     logger.error("Error sending test notification:", error);
+    if (error instanceof HttpsError) {
+      throw error;
+    }
     throw new HttpsError("internal", "Failed to send test notification");
   }
 });
