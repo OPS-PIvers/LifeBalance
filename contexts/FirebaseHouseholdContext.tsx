@@ -100,6 +100,7 @@ export interface HouseholdContextType {
   currentPeriodId: string;
   bucketSpentMap: Map<string, BucketSpent>;
   householdSettings: Household | null;
+  household: Household | null; // Alias for householdSettings
 
   // Account Actions
   addAccount: (account: Account) => Promise<void>;
@@ -2755,6 +2756,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         currentPeriodId,
         bucketSpentMap,
         householdSettings,
+        household: householdSettings, // Provide alias
         pantry,
         meals,
         shoppingList,
