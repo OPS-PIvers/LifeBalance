@@ -107,14 +107,7 @@ const sanitizeForPrompt = (input: string): string => {
 };
 
 /**
- * Builds a Gemini-compatible image content payload from a base64-encoded image and a text prompt.
- *
- * The function extracts the MIME type and strips any data URL prefix from the provided base64 image,
- * then returns an array of content parts that includes both the image data and the associated text prompt.
- *
- * @param base64Image - The image data as a base64-encoded string, optionally including a data URL prefix.
- * @param prompt - The textual prompt or description to accompany the image in the Gemini request.
- * @returns An array of content parts containing the cleaned image data and the associated text prompt.
+ * Helper to prepare image content parts
  */
 const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
   const mimeType = extractMimeType(base64Image);
@@ -134,32 +127,13 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
 };
 
 /**
- * Generic helper to generate structured JSON content from Gemini based on a provided schema.
- *
- * This function sends either a plain-text prompt or an array of Gemini {@link Part} objects
- * to the specified Gemini model, requesting a JSON response that conforms to the given
- * {@link Schema}. It is used by multiple higher-level helpers to centralize JSON generation
- * and parsing logic.
- *
- * @template T The expected TypeScript shape of the JSON response once parsed.
- * @param promptOrParts A plain-text prompt string or an array of {@link Part} objects
- * used as the input content for Gemini.
- * @param schema The Gemini {@link Schema} that defines the expected JSON structure of
- * the response. This is passed to Gemini as the `responseSchema`.
- * @param _aiClient Optional Gemini client-like object, typically used for testing or
- * dependency injection. If omitted, the default `ai` client defined in this module
- * will be used.
- * @param modelName The Gemini model name to use for the request. Defaults to
- * `"gemini-3-flash-preview"` if not specified.
- * @returns A promise that resolves to the parsed JSON response, typed as {@link T}.
- * @throws {Error} If the Gemini API key is not configured, or if Gemini returns no
- * text data (in which case an `"No data returned from Gemini"` error is thrown).
+ * Generic helper to generate JSON content from Gemini
  */
 async function generateJsonContent<T>(
   promptOrParts: string | Part[],
   schema: Schema,
-  _aiClient?: Pick<typeof ai, 'models'>,
-  modelName: string = 'gemini-3-flash-preview'
+  modelName: string = 'gemini-3-flash-preview',
+  _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<T> {
   validateApiKey();
   const client = _aiClient || ai;
@@ -188,6 +162,7 @@ async function generateJsonContent<T>(
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
  * @param availableHabits - List of available habits for smart matching
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const analyzeReceipt = async (
   base64Image: string,
@@ -219,6 +194,7 @@ export const analyzeReceipt = async (
         },
         required: ["merchant", "amount", "category"]
       },
+      undefined,
       _aiClient
     );
   } catch (error) {
@@ -232,6 +208,7 @@ export const analyzeReceipt = async (
  * @param base64Image - Base64 encoded image of bank statement/transaction list
  * @param availableCategories - List of available budget categories for smart matching
  * @param availableHabits - List of available habits for smart matching
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseBankStatement = async (
   base64Image: string,
@@ -274,6 +251,7 @@ Return a JSON array of transactions.`;
           required: ["merchant", "amount", "category", "date"]
         }
       },
+      undefined,
       _aiClient
     );
 
@@ -293,6 +271,7 @@ Return a JSON array of transactions.`;
  * Analyzes a pantry image and extracts food items
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available categories for smart matching
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const analyzePantryImage = async (
   base64Image: string,
@@ -326,6 +305,7 @@ export const analyzePantryImage = async (
           required: ["name", "quantity", "category"]
         }
       },
+      undefined,
       _aiClient
     );
   } catch (error) {
@@ -355,6 +335,8 @@ export interface MealSuggestionResponse {
 
 /**
  * Suggests a meal based on preferences and pantry
+ * @param options - Options for meal suggestion
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const suggestMeal = async (
   options: MealSuggestionRequest,
@@ -408,6 +390,7 @@ export const suggestMeal = async (
         },
         required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
       },
+      undefined,
       _aiClient
     );
 
@@ -421,6 +404,7 @@ export const suggestMeal = async (
  * Parses a grocery receipt to extract items
  * @param base64Image - Base64 encoded image
  * @param availableCategories - List of available categories for smart matching
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseGroceryReceipt = async (
   base64Image: string,
@@ -455,6 +439,7 @@ export const parseGroceryReceipt = async (
           required: ["name", "quantity", "category"]
         }
       },
+      undefined,
       _aiClient
     );
   } catch (error) {
@@ -467,7 +452,7 @@ export const parseGroceryReceipt = async (
  * Optimizes a list of grocery/pantry items by normalizing names and categories
  * @param items - List of items to optimize
  * @param availableCategories - List of valid categories (defaults to GROCERY_CATEGORIES)
- * @param _aiClient - Optional injected AI client for testing (used to mock the GoogleGenAI client)
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const optimizeGroceryList = async (
   items: OptimizableItem[],
@@ -527,6 +512,7 @@ export const optimizeGroceryList = async (
           required: ["id", "name", "category"]
         }
       },
+      undefined,
       _aiClient
     );
   } catch (error) {
@@ -553,6 +539,7 @@ export const optimizeGroceryList = async (
  * @param habits - List of habits with completion data
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
+ * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const generateInsight = async (
   transactions: Transaction[],
