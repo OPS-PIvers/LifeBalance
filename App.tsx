@@ -52,11 +52,53 @@ const App: React.FC = () => {
     }
   }, [notificationPermission]);
 
+  // Test mode check - only available in development with explicit flag
+  // This is ONLY checked at render time, not stored anywhere
+  const isTestMode = import.meta.env.DEV &&
+                     import.meta.env.VITE_ENABLE_TEST_MODE === 'true' &&
+                     sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true';
+
+  // Dynamically load mock providers only when needed (tree-shaken in production)
+  const [MockProviders, setMockProviders] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (isTestMode && !MockProviders) {
+      // Dynamic import ensures mock code is excluded from production bundle
+      Promise.all([
+        import('./contexts/MockAuthContext'),
+        import('./contexts/MockHouseholdContext')
+      ]).then(([authModule, householdModule]) => {
+        setMockProviders({
+          Auth: authModule.MockAuthProvider,
+          Household: householdModule.MockHouseholdProvider
+        });
+      });
+    }
+  }, [isTestMode, MockProviders]);
+
+  // Choose providers based on test mode
+  const AuthProviderComponent = (isTestMode && MockProviders) ? MockProviders.Auth : AuthProvider;
+  const HouseholdProviderComponent = (isTestMode && MockProviders) ? MockProviders.Household : FirebaseHouseholdProvider;
+
+  // If test mode is active but providers aren't loaded yet, show loading state
+  if (isTestMode && !MockProviders) {
+    return (
+      <div className="min-h-screen bg-brand-50 flex items-center justify-center">
+        <div className="text-brand-600 font-medium">Loading test mode...</div>
+      </div>
+    );
+  }
+
   return (
     <HashRouter>
-      <AuthProvider>
-        <FirebaseHouseholdProvider>
+      <AuthProviderComponent>
+        <HouseholdProviderComponent>
           <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
+            {isTestMode && (
+              <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[9999] shadow-lg">
+                🧪 TEST MODE - MOCK DATA (Development Only)
+              </div>
+            )}
             <Routes>
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
@@ -177,8 +219,8 @@ const App: React.FC = () => {
               }}
             />
           </div>
-        </FirebaseHouseholdProvider>
-      </AuthProvider>
+        </HouseholdProviderComponent>
+      </AuthProviderComponent>
     </HashRouter>
   );
 };

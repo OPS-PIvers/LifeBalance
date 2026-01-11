@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { signInWithGoogle } from '@/services/authService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,6 +9,31 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { user, householdId, loading: authLoading } = useAuth();
+  const location = useLocation();
+
+  // Check for test mode activation via query parameter
+  useEffect(() => {
+    // Only allow in development mode with explicit env var
+    if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_TEST_MODE !== 'true') {
+      return;
+    }
+
+    // Check for ?test=true in URL (works with HashRouter)
+    const searchParams = new URLSearchParams(location.search);
+    const hashParams = location.hash.includes('?')
+      ? new URLSearchParams(location.hash.substring(location.hash.indexOf('?')))
+      : null;
+
+    const testParam = searchParams.get('test') === 'true' || hashParams?.get('test') === 'true';
+
+    if (testParam) {
+      // Activate test mode for this session only
+      sessionStorage.setItem('LIFEBALANCE_TEST_MODE', 'true');
+
+      // Navigate to root to reload with mock providers
+      navigate('/', { replace: true });
+    }
+  }, [location, navigate]);
 
   // Redirect if already authenticated
   useEffect(() => {

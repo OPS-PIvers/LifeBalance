@@ -228,3 +228,106 @@ The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensi
   - Pantry image analysis for instant inventory updates
   - AI meal suggestions based on available ingredients, budget, and time
   - Dashboard insights (currently randomized, expandable for future AI integration)
+
+## Test Mode for AI Coding Agents
+
+LifeBalance includes a **secure test mode** specifically designed for AI coding agents to explore and test the application without requiring Firebase authentication or a real backend.
+
+### Activating Test Mode
+
+**Requirements:**
+1. Must be running in development mode (`npm run dev`)
+2. Must have `VITE_ENABLE_TEST_MODE=true` in your `.env.local` file
+3. Navigate to: `http://localhost:3000/#/login?test=true`
+
+**Security Features:**
+- ✅ Only works in development (`import.meta.env.DEV`)
+- ✅ Requires explicit environment variable (`VITE_ENABLE_TEST_MODE=true`)
+- ✅ Mock code is **excluded from production builds** via dynamic imports
+- ✅ Session-only persistence (cleared on browser restart)
+- ✅ Visible orange banner: "🧪 TEST MODE - MOCK DATA"
+
+### What Test Mode Provides
+
+**Mock Authentication:**
+- Pre-authenticated as "Test User" (test@example.com)
+- Mock household ID: `test-household-id`
+- No Firebase calls required
+
+**Mock Data:**
+- **Accounts**: 3 sample accounts (checking, savings, credit)
+- **Budget Buckets**: 4 categories (Groceries, Entertainment, Utilities, Gas)
+- **Transactions**: 2 sample transactions
+- **Habits**: 2 health habits ready for tracking
+- **Pantry**: 2 sample items (Milk, Eggs)
+- **Stores**: 2 stores (Safeway, Costco)
+- **Members**: 1 test user with points
+
+**Full CRUD Operations:**
+All context methods are fully implemented with **in-memory persistence**:
+- ✅ Add/Update/Delete accounts, buckets, transactions
+- ✅ Add/Update/Delete habits, calendar items
+- ✅ Add/Update/Delete pantry items, meals, shopping items
+- ✅ Add/Update/Delete todos, stores
+- ✅ Toggle habits, update balances
+- ✅ All operations show toast notifications
+
+### Example Usage
+
+```bash
+# 1. Add to .env.local
+echo "VITE_ENABLE_TEST_MODE=true" >> .env.local
+
+# 2. Start dev server
+npm run dev
+
+# 3. Navigate to test mode URL
+# Browser: http://localhost:3000/#/login?test=true
+
+# 4. Application loads with mock data, no login required
+```
+
+### Implementation Details
+
+**Files:**
+- [contexts/MockAuthContext.tsx](contexts/MockAuthContext.tsx) - Mock authentication provider
+- [contexts/MockHouseholdContext.tsx](contexts/MockHouseholdContext.tsx) - Mock data provider with full CRUD
+- [App.tsx:55-90](App.tsx#L55-L90) - Dynamic import logic (tree-shaken in production)
+- [pages/Login.tsx:14-36](pages/Login.tsx#L14-L36) - Test mode activation
+
+**Key Architecture:**
+- Uses **dynamic imports** (`import()`) to load mock providers
+- Mock code is automatically **tree-shaken** from production builds
+- Providers swap at runtime based on test mode flag
+- All state is kept in-memory (React useState) - no Firebase calls
+
+### Deactivating Test Mode
+
+Test mode automatically deactivates when:
+- User signs out
+- Browser/tab is closed (session storage cleared)
+- User navigates to login without `?test=true` parameter
+
+Or manually:
+```javascript
+sessionStorage.removeItem('LIFEBALANCE_TEST_MODE');
+window.location.reload();
+```
+
+### Production Safety
+
+**Multiple layers of protection:**
+1. **Build-time**: Mock code excluded via dynamic imports
+2. **Runtime**: Requires `import.meta.env.DEV === true`
+3. **Environment**: Requires `VITE_ENABLE_TEST_MODE=true`
+4. **Session**: Only persists in sessionStorage (not localStorage)
+
+**Verification:**
+```bash
+# Build for production
+npm run build
+
+# Check bundle - mock code should NOT be present
+grep -r "MockAuthProvider" dist/   # Should return nothing
+grep -r "TEST MODE" dist/           # Should return nothing
+```
