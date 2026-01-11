@@ -14,7 +14,10 @@ import {
   Pencil,
   Trash2,
   Plus,
-  Bell
+  Bell,
+  Download,
+  FileJson,
+  FileSpreadsheet
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -22,6 +25,7 @@ import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import Card from '@/components/ui/Card';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
+import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -29,7 +33,24 @@ import { db } from '@/firebase.config';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
-  const { members, currentUser, dailyPoints, weeklyPoints, totalPoints, addMember, updateMember, removeMember, habits, householdSettings } = useHousehold();
+  const {
+    members,
+    currentUser,
+    dailyPoints,
+    weeklyPoints,
+    totalPoints,
+    addMember,
+    updateMember,
+    removeMember,
+    habits,
+    householdSettings,
+    transactions,
+    buckets,
+    pantry,
+    meals,
+    shoppingList,
+    calendarItems
+  } = useHousehold();
   const navigate = useNavigate();
 
   // Modal state
@@ -133,6 +154,69 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('Error saving notification preferences:', error);
       throw error;
+    }
+  };
+
+  const handleExportJson = () => {
+    try {
+      // Filter out sensitive data from members
+      const safeMembers = members.map(m => {
+        // Destructure to remove sensitive fields
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { fcmTokens, email, telegramChatId, ...safeMember } = m;
+        return safeMember;
+      });
+
+      const exportData = {
+        meta: {
+          exportedAt: new Date().toISOString(),
+          householdId,
+          exportedBy: user?.uid
+        },
+        household: householdSettings,
+        members: safeMembers,
+        habits,
+        transactions,
+        buckets,
+        calendarItems,
+        pantry,
+        meals,
+        shoppingList
+      };
+
+      generateJsonBackup(exportData);
+      toast.success('Backup downloaded successfully');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to generate backup');
+    }
+  };
+
+  const handleExportCsv = () => {
+    try {
+      if (!transactions || transactions.length === 0) {
+        toast.error('No transactions to export');
+        return;
+      }
+
+      // Flatten transactions for CSV
+      // Note: Only exporting core fields to keep CSV simple.
+      // Power users can use JSON export for full data including isRecurring, autoCategorized, etc.
+      const flatTransactions = transactions.map(tx => ({
+        Date: tx.date,
+        Merchant: tx.merchant,
+        Amount: tx.amount,
+        Category: tx.category,
+        Status: tx.status,
+        Source: tx.source,
+        'Pay Period': tx.payPeriodId || 'N/A'
+      }));
+
+      generateCsvExport(flatTransactions, 'transactions');
+      toast.success('Transactions CSV downloaded');
+    } catch (error) {
+      console.error('CSV Export failed:', error);
+      toast.error('Failed to generate CSV');
     }
   };
 
@@ -282,6 +366,59 @@ const Settings: React.FC = () => {
               </div>
             </div>
           </Card>
+
+        {/* Data Management */}
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+              <Download className="w-6 h-6 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-brand-800">
+                Data Management
+              </h3>
+              <p className="text-sm text-brand-500">
+                Export your household data
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={handleExportJson}
+              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+              aria-label="Export full household data backup as JSON file"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
+                  <FileJson size={16} className="text-brand-700" />
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-brand-800 text-sm">Export Full Backup</p>
+                  <p className="text-xs text-brand-500">Download all data as JSON</p>
+                </div>
+              </div>
+              <Download size={16} className="text-brand-400" />
+            </button>
+
+            <button
+              onClick={handleExportCsv}
+              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+              aria-label="Export transaction history as CSV file"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                  <FileSpreadsheet size={16} className="text-green-700" />
+                </div>
+                <div className="text-left">
+                  <p className="font-semibold text-brand-800 text-sm">Export Transactions</p>
+                  <p className="text-xs text-brand-500">Download for Excel/Sheets (CSV)</p>
+                </div>
+              </div>
+              <Download size={16} className="text-brand-400" />
+            </button>
+          </div>
+        </div>
 
         {/* Members List */}
         <Card className="p-6">
