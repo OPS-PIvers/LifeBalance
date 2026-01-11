@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings } from 'lucide-react';
 import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
+import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -18,8 +19,6 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-const CATEGORIES = [...GROCERY_CATEGORIES];
-
 const ShoppingListTab: React.FC = () => {
   const {
     shoppingList,
@@ -28,16 +27,30 @@ const ShoppingListTab: React.FC = () => {
     toggleShoppingItemPurchased,
     updateShoppingItem,
     addPantryItem,
-    clearPurchasedShoppingItems
+    clearPurchasedShoppingItems,
+    stores,
+    groceryCategories
   } = useHousehold();
+
+  // Combine default and custom categories
+  const categories = useMemo(() => {
+    return (groceryCategories && groceryCategories.length > 0)
+      ? groceryCategories
+      : [...GROCERY_CATEGORIES];
+  }, [groceryCategories]);
 
   // Add Form State
   const [newItemName, setNewItemName] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('Uncategorized');
+  const [newItemStoreId, setNewItemStoreId] = useState<string>('');
 
   // Modal States
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Filter State
+  const [filterStoreId, setFilterStoreId] = useState<string>('all');
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
 
@@ -59,7 +72,7 @@ const ShoppingListTab: React.FC = () => {
       quantity: optimized.quantity || original.quantity,
       store: optimized.store || original.store
     }),
-    availableCategories: CATEGORIES,
+    availableCategories: categories,
     emptyMessage: "List is empty",
     errorMessage: "Failed to optimize your shopping list"
   });
@@ -68,14 +81,17 @@ const ShoppingListTab: React.FC = () => {
     e.preventDefault();
     if (!newItemName) return;
 
+    // Resolve store name from ID
+    const selectedStore = stores.find(s => s.id === newItemStoreId);
+
     await addShoppingItem({
       name: newItemName,
       category: newItemCategory,
-      isPurchased: false
+      isPurchased: false,
+      store: selectedStore ? selectedStore.name : undefined
     });
     setNewItemName('');
-    // Keep category as is for successive adds, or reset? Users usually add multiple of same category or random.
-    // Keeping it seems friendlier.
+    // Keep category and store as is for successive adds
   };
 
   const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -85,7 +101,7 @@ const ShoppingListTab: React.FC = () => {
       try {
         setIsProcessingReceipt(true);
         const base64 = await fileToBase64(file);
-        const items = await parseGroceryReceipt(base64, CATEGORIES);
+        const items = await parseGroceryReceipt(base64, categories);
 
         // Add all found items concurrently for better performance
         const results = await Promise.allSettled(items.map(item =>
@@ -127,7 +143,15 @@ const ShoppingListTab: React.FC = () => {
       const normalizedQuantity = trimmedQuantity === '' ? undefined : trimmedQuantity;
 
       const trimmedStore = editingItem.store?.trim();
-      const normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
+      // Normalize store name against existing stores if possible
+      let normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
+
+      if (normalizedStore) {
+        const matchingStore = stores.find(s => s.name.toLowerCase() === normalizedStore!.toLowerCase());
+        if (matchingStore) {
+            normalizedStore = matchingStore.name;
+        }
+      }
 
       await updateShoppingItem({
         ...editingItem,
@@ -156,8 +180,21 @@ const ShoppingListTab: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingItem, handleSaveEdit]);
 
+  // Filter items
+  const filteredItems = useMemo(() => {
+    if (filterStoreId === 'all') return shoppingList;
+
+    // Find the store name to filter by
+    const storeToFilter = stores.find(s => s.id === filterStoreId);
+    if (!storeToFilter) return shoppingList; // Should not happen, but safe fallback
+
+    return shoppingList.filter(item =>
+        item.store && item.store.toLowerCase() === storeToFilter.name.toLowerCase()
+    );
+  }, [shoppingList, filterStoreId, stores]);
+
   // Group by category
-  const groupedItems = shoppingList.reduce((acc, item) => {
+  const groupedItems = filteredItems.reduce((acc, item) => {
     const cat = item.category || 'Uncategorized';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
@@ -169,36 +206,120 @@ const ShoppingListTab: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20">
-        {/* Quick Add Form */}
-        <div className="bg-white p-4 rounded-xl shadow-sm">
-            <form onSubmit={handleAddSubmit} className="flex items-center gap-2">
-                <input
-                    type="text"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    placeholder="Add to list..."
-                    className="flex-1 min-w-0 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm py-2"
-                />
-                <div className="relative w-28 sm:w-40 shrink-0">
-                    <select
-                        value={newItemCategory}
-                        onChange={(e) => setNewItemCategory(e.target.value)}
-                        className="w-full appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-xs sm:text-sm pl-2 pr-6 py-2 truncate"
-                        aria-label="Category"
-                    >
-                        {CATEGORIES.map(c => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
-                    <ChevronDown className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400 pointer-events-none" />
-                </div>
-                <button
-                    type="submit"
-                    className="btn-primary p-2 shrink-0 rounded-lg"
-                    aria-label="Add item to shopping list"
+        <div className="flex justify-between items-center">
+             {/* Filter Bar */}
+            {stores.length > 0 && (
+                <div
+                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[85%] no-scrollbar"
+                    role="group"
+                    aria-label="Filter by store"
                 >
-                    <Plus className="w-5 h-5" />
+                    <button
+                        onClick={() => setFilterStoreId('all')}
+                        aria-pressed={filterStoreId === 'all'}
+                        className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                            filterStoreId === 'all'
+                            ? 'bg-brand-600 text-white border-brand-600'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                        All Stores
+                    </button>
+                    {stores.map(store => (
+                        <button
+                            key={store.id}
+                            onClick={() => setFilterStoreId(store.id)}
+                            aria-pressed={filterStoreId === store.id}
+                            aria-label={`Filter by ${store.name}`}
+                            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
+                                filterStoreId === store.id
+                                ? 'bg-brand-600 text-white border-brand-600'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                            <Store className="w-3 h-3" />
+                            {store.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Settings Button */}
+            <div className={`flex justify-end ${stores.length === 0 ? 'w-full' : ''}`}>
+                 <button
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                    aria-label="Shopping List Settings"
+                >
+                    <Settings className="w-5 h-5" />
                 </button>
+            </div>
+        </div>
+
+        {/* Quick Add Form */}
+        <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
+            <form onSubmit={handleAddSubmit} className="space-y-3">
+                <div className="flex items-center gap-2">
+                    <input
+                        type="text"
+                        value={newItemName}
+                        onChange={(e) => setNewItemName(e.target.value)}
+                        placeholder="Add to list..."
+                        className="flex-1 min-w-0 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm py-2"
+                    />
+                    <div className="relative w-28 sm:w-40 shrink-0">
+                        <select
+                            value={newItemCategory}
+                            onChange={(e) => setNewItemCategory(e.target.value)}
+                            className="w-full appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-xs sm:text-sm pl-2 pr-6 py-2 truncate"
+                            aria-label="Category"
+                        >
+                            {categories.map(c => (
+                                <option key={c} value={c}>{c}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                     {/* Store Chips */}
+                                    <div
+                        className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[calc(100%-3rem)]"
+                        role="group"
+                        aria-label="Select store"
+                    >
+                        {stores.length > 0 ? (
+                            stores.map(store => (
+                                <button
+                                    key={store.id}
+                                    type="button"
+                                    onClick={() => setNewItemStoreId(newItemStoreId === store.id ? '' : store.id)}
+                                    aria-pressed={newItemStoreId === store.id}
+                                    aria-label={`Tag item for ${store.name}`}
+                                    className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
+                                        newItemStoreId === store.id
+                                        ? 'bg-brand-100 text-brand-800 border-brand-200'
+                                        : 'bg-gray-50 text-gray-500 border-transparent hover:bg-gray-100'
+                                    }`}
+                                >
+                                    <Store className="w-3 h-3" />
+                                    {store.name}
+                                </button>
+                            ))
+                        ) : (
+                             <span className="text-xs text-gray-400 italic pl-1">Add stores in settings to tag items</span>
+                        )}
+                    </div>
+
+                    <button
+                        type="submit"
+                        className="btn-primary p-2 shrink-0 rounded-lg ml-auto"
+                        aria-label="Add item to shopping list"
+                    >
+                        <Plus className="w-5 h-5" />
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -269,7 +390,7 @@ const ShoppingListTab: React.FC = () => {
                             </span>
                         </div>
                         <div className="divide-y divide-gray-100">
-                            {groupedItems[category].map(item => (
+    {groupedItems[category].map(item => (
                                 <div key={item.id} className={`p-3 flex items-center gap-3 hover:bg-gray-50 ${item.isPurchased ? 'bg-gray-50' : ''}`}>
                                     <button
                                         onClick={() => toggleShoppingItemPurchased(item.id)}
@@ -286,10 +407,10 @@ const ShoppingListTab: React.FC = () => {
                                         <div className={`font-medium truncate ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                                             {item.name}
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1">
                                             {item.quantity && <span className="bg-gray-100 px-1.5 py-0.5 rounded">{item.quantity}</span>}
                                             {item.store && (
-                                                <span className="flex items-center gap-1 text-gray-400">
+                                                <span className="flex items-center gap-1 bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded border border-brand-100">
                                                     <Store className="w-3 h-3" /> {item.store}
                                                 </span>
                                             )}
@@ -323,6 +444,11 @@ const ShoppingListTab: React.FC = () => {
         <GroceryCatalogModal
             isOpen={isCatalogOpen}
             onClose={() => setIsCatalogOpen(false)}
+        />
+
+        <ShoppingSettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
         />
 
         {/* Edit Modal */}
@@ -371,7 +497,7 @@ const ShoppingListTab: React.FC = () => {
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
                                     className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 >
-                                    {CATEGORIES.map(c => (
+                                    {categories.map(c => (
                                         <option key={c} value={c}>{c}</option>
                                     ))}
                                 </select>
@@ -391,16 +517,42 @@ const ShoppingListTab: React.FC = () => {
 
                         <div>
                             <label htmlFor="edit-item-store" className="text-xs font-bold text-brand-400 uppercase">Store (Optional)</label>
-                            <div className="relative mt-1">
-                                <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
+                            <div className="space-y-2 mt-2">
                                 <input
                                     id="edit-item-store"
                                     type="text"
                                     value={editingItem.store || ''}
                                     onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
                                     placeholder="e.g. Costco, Trader Joe's"
-                                    className="w-full p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                                    className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                                 />
+
+                                {/* Quick Store Chips in Edit Modal */}
+                                {stores.length > 0 && (
+                                    <div
+                                        className="flex flex-wrap gap-2"
+                                        role="group"
+                                        aria-label="Select store"
+                                    >
+                                        {stores.map(store => (
+                                            <button
+                                                key={store.id}
+                                                type="button"
+                                                onClick={() => setEditingItem({...editingItem, store: store.name})}
+                                                aria-pressed={editingItem.store === store.name}
+                                                aria-label={`Tag item for ${store.name}`}
+                                                className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
+                                                    editingItem.store === store.name
+                                                    ? 'bg-brand-100 text-brand-800 border-brand-200'
+                                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                <Store className="w-3 h-3" />
+                                                {store.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -18,7 +18,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const PantryTab: React.FC = () => {
-  const { pantry, addPantryItem, updatePantryItem, deletePantryItem } = useHousehold();
+  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories } = useHousehold();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
 
@@ -34,7 +34,10 @@ const PantryTab: React.FC = () => {
 
   // Collect unique existing categories from pantry to guide the AI
   const existingCategories: string[] = Array.from(new Set(pantry.map((p) => p.category).filter((c): c is string => !!c)));
-  const availableCategories: string[] = Array.from(new Set([...GROCERY_CATEGORIES, ...existingCategories]));
+
+  // Merge defaults, custom categories, and existing pantry categories
+  const baseCategories = (groceryCategories && groceryCategories.length > 0) ? groceryCategories : GROCERY_CATEGORIES;
+  const availableCategories: string[] = Array.from(new Set([...baseCategories, ...existingCategories]));
 
   // Use the shared grocery optimizer hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -276,14 +279,9 @@ const PantryTab: React.FC = () => {
                       onChange={e => setNewCategory(e.target.value)}
                       className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
                     >
-                        <option value="Produce">Produce</option>
-                        <option value="Dairy">Dairy</option>
-                        <option value="Meat">Meat</option>
-                        <option value="Pantry">Pantry</option>
-                        <option value="Snacks">Snacks</option>
-                        <option value="Beverages">Beverages</option>
-                        <option value="Frozen">Frozen</option>
-                        <option value="Household">Household</option>
+                        {availableCategories.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
                     </select>
                   </div>
                 </div>
