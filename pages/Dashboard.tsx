@@ -171,6 +171,7 @@ const Dashboard: React.FC = () => {
         <button 
           onClick={() => setIsAnalyticsOpen(true)}
           className="p-3 bg-white border border-brand-100 rounded-xl shadow-sm text-brand-600 hover:bg-brand-50 active:scale-95 transition-all"
+          aria-label="Open Analytics"
         >
           <BarChart2 size={20} />
         </button>

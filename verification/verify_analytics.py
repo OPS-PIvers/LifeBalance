@@ -14,8 +14,8 @@ def verify_analytics_modal():
         # networkidle is better than fixed timeout, though dependent on network activity
         try:
             page.wait_for_load_state("networkidle", timeout=10000)
-        except:
-            print("Warning: Network idle timeout, proceeding...")
+        except Exception as e:
+            print(f"Warning: Network idle timeout or error: {e}, proceeding...")
 
         # Check if we are on login page
         if page.url.endswith("/login"):
@@ -24,15 +24,14 @@ def verify_analytics_modal():
 
         try:
             # 2. Find the Analytics button
-            # Try robust selector first (by accessible name)
-            # Note: The button currently lacks an aria-label in the code, so get_by_role might fail if it relies on text content inside.
-            # The button contains <BarChart2 />, so it might not have text.
-            # We will use the class selector as fallback but try to be cleaner.
+            # We have added aria-label="Open Analytics" to the button in Dashboard.tsx
+            # so we should use get_by_role for better accessibility testing.
 
-            # Ideally, we should add aria-label to the button in Dashboard.tsx, but I will stick to verification script changes first.
-            # Actually, I should probably add aria-label to Dashboard.tsx as well for accessibility!
+            analytics_btn = page.get_by_role("button", name="Open Analytics")
 
-            analytics_btn = page.locator("button.p-3.bg-white.text-brand-600").first
+            # Fallback for legacy support if aria-label is missing (should not happen with this PR)
+            if not analytics_btn.is_visible():
+                 analytics_btn = page.locator("button.p-3.bg-white.text-brand-600").first
 
             if analytics_btn.is_visible():
                 print("Found Analytics button, clicking...")
