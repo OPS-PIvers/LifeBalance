@@ -20,6 +20,7 @@ import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
+import Card from '@/components/ui/Card';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
@@ -140,7 +141,7 @@ const Settings: React.FC = () => {
       <div className="max-w-2xl mx-auto space-y-6">
 
         {/* User Profile Card */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
+        <Card className="p-6">
           <div className="flex items-center gap-4">
             {user?.photoURL ? (
               <img
@@ -220,7 +221,7 @@ const Settings: React.FC = () => {
               </p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Notification Settings - Only show if notifications are granted */}
         {notificationStatus === 'granted' && householdId && user && (
@@ -232,7 +233,7 @@ const Settings: React.FC = () => {
         )}
 
         {/* Household Info */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+        <Card className="p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
               <Users className="w-6 h-6 text-brand-600" />
@@ -280,10 +281,10 @@ const Settings: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </Card>
 
         {/* Members List */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
+        <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-brand-800">
               Household Members
@@ -362,10 +363,10 @@ const Settings: React.FC = () => {
                 </div>
               ))}
           </div>
-        </div>
+        </Card>
 
         {/* Sign Out Button */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
+        <Card className="p-6">
           <button
             onClick={handleSignOut}
             className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-700 font-semibold py-3 px-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all duration-200 border-2 border-red-200"
@@ -373,7 +374,7 @@ const Settings: React.FC = () => {
             <LogOut size={20} />
             <span>Sign Out</span>
           </button>
-        </div>
+        </Card>
 
       </div>
 

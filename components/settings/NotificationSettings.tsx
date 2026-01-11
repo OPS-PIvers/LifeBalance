@@ -4,6 +4,7 @@ import { NotificationPreferences } from '@/types/schema';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
+import Card from '@/components/ui/Card';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -134,7 +135,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
+    <Card className="p-6 space-y-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
@@ -409,7 +410,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       >
         {isSaving ? 'Saving...' : 'Save Preferences'}
       </button>
-    </div>
+    </Card>
   );
 };
 
