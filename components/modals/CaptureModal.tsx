@@ -428,8 +428,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <Modal
       isOpen={isOpen}

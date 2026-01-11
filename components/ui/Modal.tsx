@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -21,8 +21,9 @@ export interface ModalProps {
    */
   centerContent?: boolean;
   /**
-   * Background color of the backdrop. Defaults to 'bg-slate-900/50' (or 60/90 based on usage).
-   * Unifier decision: Standardize to 'bg-slate-900/60' for better contrast.
+   * Background color of the backdrop. Defaults to 'bg-slate-900/60'.
+   * Note: Older usages sometimes used 'bg-slate-900/50' or 'bg-slate-900/90'; these have been
+   * standardized to 'bg-slate-900/60' for better contrast.
    */
   backdropColor?: string;
   /**
@@ -52,18 +53,6 @@ export const Modal: React.FC<ModalProps> = ({
   backdropColor = 'bg-slate-900/60',
   mobileSafePadding = true,
 }) => {
-  const [show, setShow] = useState(isOpen);
-
-  useEffect(() => {
-    if (isOpen) setShow(true);
-    else {
-      // Small timeout to allow exit animation if we were implementing one,
-      // but standard usage here just unmounts.
-      // Keeping it simple for now to match existing behavior which is "if (!isOpen) return null".
-      setShow(false);
-    }
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
   return (

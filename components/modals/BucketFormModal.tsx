@@ -62,8 +62,6 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-sm">
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">
