@@ -4,8 +4,6 @@ import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
-// Initialize Gemini Client
-// Uses Vite environment variable for the API key, falls back to process.env for testing
 const apiKey =
   import.meta.env.VITE_GEMINI_API_KEY ||
   (typeof process !== "undefined" && process.env?.VITE_GEMINI_API_KEY) ||
@@ -536,6 +534,9 @@ export const generateInsight = async (
   options?: { includeMerchantNames?: boolean },
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<string> => {
+  // Note: This function performs free-text generation and does not use the
+  // JSON-focused `generateJsonContent` helper, so it validates the API key
+  // directly before calling the Gemini client.
   validateApiKey();
 
   const client = _aiClient || ai;
