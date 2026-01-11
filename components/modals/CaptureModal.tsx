@@ -611,7 +611,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     <button
                       onClick={capturePhoto}
                       aria-label="Capture photo"
-                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform"
+                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-brand-500"
                     >
                       <div className="w-12 h-12 bg-white rounded-full" />
                     </button>
@@ -649,7 +649,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                           <button
                             onClick={() => toggleTransaction(tx.id)}
                             aria-label={tx.selected ? "Deselect transaction" : "Select transaction"}
-                            className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+                            className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                               tx.selected ? 'bg-brand-800 text-white' : 'border-2 border-brand-300'
                             }`}
                           >
