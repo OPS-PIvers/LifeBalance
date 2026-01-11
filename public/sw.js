@@ -148,19 +148,39 @@ self.addEventListener('notificationclick', (event) => {
 
   // Get the URL from the notification data, validate it, default to home
   const rawUrl = event.notification.data?.url || '/';
-  const urlToOpen = sanitizeUrl(rawUrl);
+  const targetPath = sanitizeUrl(rawUrl);
+  // Build full URL for comparison and opening
+  const fullUrlToOpen = new URL(targetPath, self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Check if there's already a window open
+      // Check if there's already a window open with matching URL or hash
       for (const client of clientList) {
-        if (client.url === urlToOpen && 'focus' in client) {
+        // Compare full URLs or check if client URL ends with the target path/hash
+        const clientUrl = new URL(client.url);
+        const targetUrl = new URL(fullUrlToOpen);
+
+        // For HashRouter apps, compare the hash portions
+        const hashMatch = clientUrl.hash && targetPath.startsWith('/') &&
+          clientUrl.hash === '#' + targetPath;
+        const exactMatch = client.url === fullUrlToOpen;
+
+        if ((exactMatch || hashMatch) && 'focus' in client) {
           return client.focus();
+        }
+      }
+      // If no matching window, try to focus any existing window and navigate
+      for (const client of clientList) {
+        if ('focus' in client) {
+          return client.focus().then(() => {
+            // Navigate to the target URL via postMessage
+            client.postMessage({ type: 'NAVIGATE', url: targetPath });
+          });
         }
       }
       // If no window is open, open a new one
       if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+        return clients.openWindow(fullUrlToOpen);
       }
     })
   );

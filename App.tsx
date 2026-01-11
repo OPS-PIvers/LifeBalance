@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -20,11 +20,29 @@ import ToDosPage from './pages/ToDosPage';
 import { setupForegroundNotificationListener } from './services/notificationService';
 
 const App: React.FC = () => {
-  // Set up foreground notification listener to show in-app notifications when app is open
+  // Track notification permission state to react to changes
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    'Notification' in window ? Notification.permission : 'denied'
+  );
+
+  // Listen for permission changes (triggered by Settings.tsx via custom event)
+  useEffect(() => {
+    const handlePermissionChange = () => {
+      if ('Notification' in window) {
+        setNotificationPermission(Notification.permission);
+      }
+    };
+
+    window.addEventListener('notification-permission-changed', handlePermissionChange);
+    return () => {
+      window.removeEventListener('notification-permission-changed', handlePermissionChange);
+    };
+  }, []);
+
+  // Set up foreground notification listener when permission is granted
   // Background notifications on iOS 16.4+ are handled by the service worker's push event
   useEffect(() => {
-    // Only set up if notifications are permitted
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (notificationPermission === 'granted') {
       const unsubscribe = setupForegroundNotificationListener();
       return () => {
         if (unsubscribe) {
@@ -32,7 +50,8 @@ const App: React.FC = () => {
         }
       };
     }
-  }, []);
+  }, [notificationPermission]);
+
   return (
     <HashRouter>
       <AuthProvider>

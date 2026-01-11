@@ -28,8 +28,9 @@ const navigateToUrl = (url: string): void => {
   }
   // Dispatch custom event that can be handled by any router implementation
   window.dispatchEvent(new CustomEvent('app-navigate', { detail: { url } }));
-  // Fallback to direct hash navigation for HashRouter compatibility
-  window.location.hash = url;
+  // Normalize URL by stripping leading # to prevent double hash (##/path)
+  const normalizedUrl = url.startsWith('#') ? url.slice(1) : url;
+  window.location.hash = normalizedUrl;
 };
 
 /**
@@ -42,8 +43,13 @@ export const isIOSDevice = (): boolean => {
 
   const userAgent = navigator.userAgent || '';
   // Check for iOS devices including iPad on iOS 13+ (which reports as Mac)
-  return /iPad|iPhone|iPod/.test(userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // Add pointer:coarse check to avoid false positives on MacBook Pro with Touch Bar
+  const isIOSUserAgent = /iPad|iPhone|iPod/.test(userAgent);
+  const isPadOnMac = navigator.platform === 'MacIntel' &&
+    navigator.maxTouchPoints > 1 &&
+    window.matchMedia('(pointer: coarse)').matches;
+
+  return isIOSUserAgent || isPadOnMac;
 };
 
 /**
@@ -210,8 +216,8 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
     );
 
     // Also try to show a native notification if permission granted and document is hidden
-    // This helps when the PWA is open but in background tab
-    if (Notification.permission === 'granted' && document.hidden) {
+    // Skip on iOS as the Notification constructor is not available in iOS Safari PWAs
+    if (!isIOSDevice() && Notification.permission === 'granted' && document.hidden) {
       try {
         const notification = new Notification(title, {
           body: body,
@@ -235,10 +241,17 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
     }
   });
 
-  foregroundListenerUnsubscribe = unsubscribe;
+  // Wrap unsubscribe to also clear the stored reference
+  const cleanup = () => {
+    unsubscribe();
+    foregroundListenerUnsubscribe = null;
+    console.log('[Notifications] Foreground listener cleaned up');
+  };
+
+  foregroundListenerUnsubscribe = cleanup;
   console.log('[Notifications] Foreground listener active');
 
-  return unsubscribe;
+  return cleanup;
 };
 
 export const requestNotificationPermission = async (
@@ -349,6 +362,8 @@ export const requestNotificationPermission = async (
             fcmTokens: arrayUnion(token)
           });
           toast.success('Notifications enabled!');
+          // Dispatch event to notify App.tsx of permission change
+          window.dispatchEvent(new CustomEvent('notification-permission-changed'));
           return true;
         } catch (updateError) {
           console.error('Failed to save FCM token to user profile:', updateError);
