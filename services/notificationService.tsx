@@ -4,8 +4,33 @@ import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { messaging, db, auth } from '@/firebase.config';
 import toast from 'react-hot-toast';
 
-// Track if foreground listener is already set up to avoid duplicates
-let foregroundListenerInitialized = false;
+// Store the unsubscribe function to allow cleanup and prevent duplicate listeners
+let foregroundListenerUnsubscribe: (() => void) | null = null;
+
+/**
+ * Validate URL to prevent XSS attacks
+ * Only allows relative URLs starting with / or # (for HashRouter)
+ */
+const isValidNavigationUrl = (url: string): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  // Only allow relative paths or hash routes
+  return url.startsWith('/') || url.startsWith('#');
+};
+
+/**
+ * Navigate to a URL using a custom event for router decoupling
+ * This allows the app to handle navigation without tight coupling to HashRouter
+ */
+const navigateToUrl = (url: string): void => {
+  if (!isValidNavigationUrl(url)) {
+    console.warn('[Notifications] Invalid navigation URL blocked:', url);
+    return;
+  }
+  // Dispatch custom event that can be handled by any router implementation
+  window.dispatchEvent(new CustomEvent('app-navigate', { detail: { url } }));
+  // Fallback to direct hash navigation for HashRouter compatibility
+  window.location.hash = url;
+};
 
 /**
  * Detect if the current device is running iOS
@@ -15,7 +40,7 @@ export const isIOSDevice = (): boolean => {
     return false;
   }
 
-  const userAgent = navigator.userAgent || navigator.vendor || '';
+  const userAgent = navigator.userAgent || '';
   // Check for iOS devices including iPad on iOS 13+ (which reports as Mac)
   return /iPad|iPhone|iPod/.test(userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -123,8 +148,10 @@ const parseIOSVersion = (): number | null => {
 };
 
 /**
- * Set up foreground message listener to display notifications when app is open
- * This is CRITICAL for iOS PWAs where background notifications don't work
+ * Set up foreground message listener to display notifications when app is open.
+ * This handles the case when the user has the app open and a push arrives.
+ * Background notifications on iOS 16.4+ are handled by the service worker's
+ * native 'push' event listener.
  */
 export const setupForegroundNotificationListener = (): (() => void) | null => {
   if (!messaging) {
@@ -132,9 +159,10 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
     return null;
   }
 
-  if (foregroundListenerInitialized) {
+  // Return existing unsubscribe function if already initialized
+  if (foregroundListenerUnsubscribe) {
     console.log('[Notifications] Foreground listener already initialized');
-    return null;
+    return foregroundListenerUnsubscribe;
   }
 
   console.log('[Notifications] Setting up foreground message listener');
@@ -153,9 +181,9 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
           className="flex items-start gap-3 cursor-pointer"
           onClick={() => {
             toast.dismiss(t.id);
-            // Navigate to the notification's target URL
+            // Navigate to the notification's target URL using validated navigation
             if (url && url !== '/') {
-              window.location.hash = url;
+              navigateToUrl(url);
             }
           }}
         >
@@ -196,7 +224,7 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
         notification.onclick = () => {
           window.focus();
           if (url && url !== '/') {
-            window.location.hash = url;
+            navigateToUrl(url);
           }
           notification.close();
         };
@@ -207,7 +235,7 @@ export const setupForegroundNotificationListener = (): (() => void) | null => {
     }
   });
 
-  foregroundListenerInitialized = true;
+  foregroundListenerUnsubscribe = unsubscribe;
   console.log('[Notifications] Foreground listener active');
 
   return unsubscribe;

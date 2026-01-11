@@ -20,8 +20,8 @@ import ToDosPage from './pages/ToDosPage';
 import { setupForegroundNotificationListener } from './services/notificationService';
 
 const App: React.FC = () => {
-  // Set up foreground notification listener for iOS PWA support
-  // This is critical because iOS PWAs don't support background push notifications
+  // Set up foreground notification listener to show in-app notifications when app is open
+  // Background notifications on iOS 16.4+ are handled by the service worker's push event
   useEffect(() => {
     // Only set up if notifications are permitted
     if ('Notification' in window && Notification.permission === 'granted') {

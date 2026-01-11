@@ -688,10 +688,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Only refresh if notifications are enabled
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    // Import dynamically to avoid circular dependencies
-    import('@/services/notificationService').then(({ refreshFCMTokenIfNeeded }) => {
-      refreshFCMTokenIfNeeded(householdId, user.uid).catch(console.error);
-    });
+    // Token refresh function
+    const refreshToken = () => {
+      import('@/services/notificationService').then(({ refreshFCMTokenIfNeeded }) => {
+        refreshFCMTokenIfNeeded(householdId, user.uid).catch(console.error);
+      });
+    };
+
+    // Refresh immediately on mount
+    refreshToken();
+
+    // Poll hourly while the app is running to catch any token changes
+    // The refreshFCMTokenIfNeeded function internally checks if 7 days have passed
+    const intervalId = setInterval(refreshToken, 60 * 60 * 1000); // 1 hour
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [householdId, user]);
 
   // --- ACTIONS: ACCOUNTS ---

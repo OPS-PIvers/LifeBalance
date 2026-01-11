@@ -17,6 +17,34 @@ const MESSAGING_SENDER_ID = '611571061016';
 // Track Firebase Messaging initialization status
 let firebaseMessagingReady = false;
 
+/**
+ * Validate URL to prevent XSS attacks
+ * Only allows relative URLs or same-origin URLs
+ */
+function isValidUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  // Allow relative paths starting with /
+  if (url.startsWith('/')) return true;
+  // Allow hash routes
+  if (url.startsWith('#')) return true;
+  // Block javascript:, data:, and other dangerous protocols
+  if (url.match(/^(javascript|data|vbscript|file):/i)) return false;
+  // For absolute URLs, ensure same origin
+  try {
+    const parsed = new URL(url, self.location.origin);
+    return parsed.origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Sanitize URL for storage in notification data
+ */
+function sanitizeUrl(url) {
+  return isValidUrl(url) ? url : '/';
+}
+
 try {
   firebase.initializeApp({
     messagingSenderId: MESSAGING_SENDER_ID
@@ -87,6 +115,10 @@ self.addEventListener('push', (event) => {
   const data = payload.data || {};
 
   const title = notification.title || 'LifeBalance';
+  // Sanitize URL to prevent XSS - only allow relative or same-origin URLs
+  const rawUrl = data.url || payload.fcmOptions?.link || '/';
+  const safeUrl = sanitizeUrl(rawUrl);
+
   const options = {
     body: notification.body || '',
     icon: notification.icon || '/icon-192.png',
@@ -94,7 +126,7 @@ self.addEventListener('push', (event) => {
     tag: payload.fcmMessageId || `lifebalance-${Date.now()}`,
     data: {
       ...data,
-      url: data.url || payload.fcmOptions?.link || '/'
+      url: safeUrl
     },
     // Vibration pattern for mobile devices
     vibrate: [100, 50, 100]
@@ -114,8 +146,9 @@ self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked:', event.notification.tag);
   event.notification.close();
 
-  // Get the URL from the notification data, default to home
-  const urlToOpen = event.notification.data?.url || '/';
+  // Get the URL from the notification data, validate it, default to home
+  const rawUrl = event.notification.data?.url || '/';
+  const urlToOpen = sanitizeUrl(rawUrl);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

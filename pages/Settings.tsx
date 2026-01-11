@@ -109,8 +109,8 @@ const Settings: React.FC = () => {
     const success = await requestNotificationPermission(householdId, user.uid);
     if (success) {
       setNotificationStatus('granted');
-      // Set up foreground listener for iOS PWA support
-      // This is critical because iOS PWAs don't support background push notifications
+      // Set up foreground listener to show in-app notifications when app is open
+      // Background notifications on iOS 16.4+ are handled by the service worker
       setupForegroundNotificationListener();
     } else if ('Notification' in window) {
       // Always reflect the actual browser permission state on failure
