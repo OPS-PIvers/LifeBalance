@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
 import toast from 'react-hot-toast';
-import { format, startOfWeek, addDays } from 'date-fns';
+import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -120,6 +120,56 @@ const MealPlanTab: React.FC = () => {
   // Calendar Logic
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 }); // Sunday start
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  const handleCopyLastWeek = async () => {
+    // 1. Identify source dates (last week)
+    const lastWeekStart = addDays(weekStart, -7);
+    const lastWeekEnd = addDays(lastWeekStart, 6);
+    const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
+    const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
+
+    // 2. Filter items from last week
+    const sourceItems = mealPlan.filter(item =>
+      item.date >= lastWeekStartStr && item.date <= lastWeekEndStr
+    );
+
+    if (sourceItems.length === 0) {
+      toast.error('No meals found in last week to copy');
+      return;
+    }
+
+    if (!window.confirm(`Copy ${sourceItems.length} meals from last week to this week?`)) {
+      return;
+    }
+
+    try {
+      // 3. Map to new items
+      const promises = sourceItems.map(item => {
+        // Calculate day offset from source week start to preserve relative day
+        // Since we copy "last week" to "this week", it's always +7 days
+        const itemDate = parseISO(item.date);
+        const newDate = addDays(itemDate, 7);
+        const newDateStr = format(newDate, 'yyyy-MM-dd');
+
+        // Check if item already exists at target (optional, but good for hygiene)
+        // For now, we allow duplicates or let the user manage them
+
+        return addMealPlanItem({
+          date: newDateStr,
+          mealName: item.mealName,
+          mealId: item.mealId,
+          type: item.type,
+          isCooked: false
+        });
+      });
+
+      await Promise.all(promises);
+      toast.success(`Copied ${sourceItems.length} meals to this week`);
+    } catch (error) {
+      console.error('Failed to copy meals:', error);
+      toast.error('Failed to copy meals');
+    }
+  };
 
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -307,11 +357,20 @@ const MealPlanTab: React.FC = () => {
         >
             <ChevronLeft />
         </button>
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center">
             <h2 className="text-lg font-bold text-brand-900">
                 {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
             </h2>
-            <div className="text-sm text-gray-500">Weekly Plan</div>
+            <div className="flex items-center gap-2 mt-1">
+                <span className="text-sm text-gray-500">Weekly Plan</span>
+                <button
+                    onClick={handleCopyLastWeek}
+                    className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition-colors"
+                    title="Copy meals from previous week"
+                >
+                    <Copy className="w-3 h-3" /> Copy Last Week
+                </button>
+            </div>
         </div>
         <button
             onClick={() => setSelectedDate(d => addDays(d, 7))}
