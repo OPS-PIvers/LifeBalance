@@ -9,3 +9,8 @@
 **Vulnerability:** User-controlled inputs (`availableCategories`, `availableHabits`) were being directly injected into Gemini AI prompts via `.join(', ')`. This allowed potential Prompt Injection if a user created a category/habit with malicious instructions (e.g., "Ignore previous...").
 **Learning:** Even "trusted" user data like categories should be sanitized when constructing LLM prompts, as they become part of the instruction context.
 **Prevention:** Apply `sanitizeForPrompt` (removing quotes, newlines) to all dynamic list items before injecting them into prompt strings.
+
+## 2025-02-25 - IDOR in Member Updates
+**Vulnerability:** Firestore rules for `members/{memberId}` allowed `update` if `isMemberOf(householdId)`. This meant ANY household member could update ANY OTHER member's profile (DisplayName, Email, FCM Tokens, etc.), leading to potential impersonation or denial of service (notifications).
+**Learning:** `isMemberOf` only checks group membership, not resource ownership. For user-specific subcollections, explicit `request.auth.uid == memberId` checks are required.
+**Prevention:** Always scope write permissions to the document owner (`request.auth.uid == resource.id` or similar) unless a specific administrative override is strictly defined.
