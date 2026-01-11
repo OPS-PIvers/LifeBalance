@@ -134,7 +134,26 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
 };
 
 /**
- * Generic helper to generate JSON content from Gemini
+ * Generic helper to generate structured JSON content from Gemini based on a provided schema.
+ *
+ * This function sends either a plain-text prompt or an array of Gemini {@link Part} objects
+ * to the specified Gemini model, requesting a JSON response that conforms to the given
+ * {@link Schema}. It is used by multiple higher-level helpers to centralize JSON generation
+ * and parsing logic.
+ *
+ * @template T The expected TypeScript shape of the JSON response once parsed.
+ * @param promptOrParts A plain-text prompt string or an array of {@link Part} objects
+ * used as the input content for Gemini.
+ * @param schema The Gemini {@link Schema} that defines the expected JSON structure of
+ * the response. This is passed to Gemini as the `responseSchema`.
+ * @param _aiClient Optional Gemini client-like object, typically used for testing or
+ * dependency injection. If omitted, the default `ai` client defined in this module
+ * will be used.
+ * @param modelName The Gemini model name to use for the request. Defaults to
+ * `"gemini-3-flash-preview"` if not specified.
+ * @returns A promise that resolves to the parsed JSON response, typed as {@link T}.
+ * @throws {Error} If the Gemini API key is not configured, or if Gemini returns no
+ * text data (in which case an `"No data returned from Gemini"` error is thrown).
  */
 async function generateJsonContent<T>(
   promptOrParts: string | Part[],
