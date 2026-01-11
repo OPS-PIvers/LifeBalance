@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
@@ -17,8 +17,22 @@ import PlaceholderPage from './pages/PlaceholderPage';
 import MigrateSubmissions from './pages/MigrateSubmissions';
 import MealsPage from './pages/MealsPage';
 import ToDosPage from './pages/ToDosPage';
+import { setupForegroundNotificationListener } from './services/notificationService';
 
 const App: React.FC = () => {
+  // Set up foreground notification listener to show in-app notifications when app is open
+  // Background notifications on iOS 16.4+ are handled by the service worker's push event
+  useEffect(() => {
+    // Only set up if notifications are permitted
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const unsubscribe = setupForegroundNotificationListener();
+      return () => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      };
+    }
+  }, []);
   return (
     <HashRouter>
       <AuthProvider>

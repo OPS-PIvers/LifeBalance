@@ -20,7 +20,7 @@ import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
-import { requestNotificationPermission } from '@/services/notificationService';
+import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -109,6 +109,9 @@ const Settings: React.FC = () => {
     const success = await requestNotificationPermission(householdId, user.uid);
     if (success) {
       setNotificationStatus('granted');
+      // Set up foreground listener to show in-app notifications when app is open
+      // Background notifications on iOS 16.4+ are handled by the service worker
+      setupForegroundNotificationListener();
     } else if ('Notification' in window) {
       // Always reflect the actual browser permission state on failure
       setNotificationStatus(Notification.permission);
