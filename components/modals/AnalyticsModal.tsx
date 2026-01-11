@@ -13,8 +13,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const { habits, transactions, buckets } = useHousehold();
   const [activeTab, setActiveTab] = useState<'week' | 'lifetime' | 'financial'>('week');
 
-  if (!isOpen) return null;
-
   // ===== WEEK VIEW DATA =====
   const last7Days = useMemo(() => {
     const today = new Date();
@@ -324,6 +322,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
   }, [transactions]);
+
+  if (!isOpen) return null;
 
   return (
     <div

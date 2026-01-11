@@ -625,7 +625,7 @@ const Dashboard: React.FC = () => {
 
       </div>
 
-      <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
+      {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
       <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />
       <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />
       
