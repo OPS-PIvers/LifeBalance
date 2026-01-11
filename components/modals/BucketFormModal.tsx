@@ -63,9 +63,9 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-sm">
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-sm" ariaLabelledBy="bucket-form-modal-title">
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">
-        <h2 className="text-lg font-bold text-brand-800">
+        <h2 id="bucket-form-modal-title" className="text-lg font-bold text-brand-800">
           {editingBucket ? 'Edit Bucket' : 'New Bucket'}
         </h2>
         <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-50 rounded-full">

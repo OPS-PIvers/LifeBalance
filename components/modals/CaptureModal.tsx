@@ -434,11 +434,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       onClose={handleClose}
       maxWidth="max-w-md"
       disableBackdropClose={view === 'processing'}
+      ariaLabelledBy="capture-modal-title"
     >
       {/* Header */}
       <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
           <div className="flex items-center justify-between px-6 py-4">
-              <h2 className="text-xl font-bold text-brand-800">
+              <h2 id="capture-modal-title" className="text-xl font-bold text-brand-800">
                   {activeTab === 'transaction' && (
                       view === 'menu' ? 'Add Transaction' :
                       view === 'camera' ? 'Scan Receipt' :

@@ -50,7 +50,7 @@ export interface ModalProps {
  * - Backdrop blur
  * - Animation (zoom-in-95)
  * - Rounded corners (rounded-2xl)
- * - Shadow (shadow-xl/2xl)
+ * - Shadow (shadow-xl)
  * - Mobile safe area handling
  */
 export const Modal: React.FC<ModalProps> = ({
