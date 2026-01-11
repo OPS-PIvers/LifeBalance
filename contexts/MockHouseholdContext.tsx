@@ -26,19 +26,19 @@ const SEED_ACCOUNTS: Account[] = [
 ];
 
 const SEED_BUCKETS: BudgetBucket[] = [
-  { id: 'b1', name: 'Groceries', limit: 600, color: 'green', isVariable: true, isCore: true, createdBy: 'test-user-id' },
-  { id: 'b2', name: 'Entertainment', limit: 200, color: 'purple', isVariable: true, isCore: false, createdBy: 'test-user-id' },
-  { id: 'b3', name: 'Utilities', limit: 300, color: 'blue', isVariable: false, isCore: true, createdBy: 'test-user-id' },
+  { id: 'b1', name: 'Groceries', limit: 600, color: 'green', isVariable: true, isCore: true },
+  { id: 'b2', name: 'Entertainment', limit: 200, color: 'purple', isVariable: true, isCore: false },
+  { id: 'b3', name: 'Utilities', limit: 300, color: 'blue', isVariable: false, isCore: true },
 ];
 
 const SEED_TRANSACTIONS: Transaction[] = [
   {
     id: 'tx1', amount: 45.50, merchant: 'Grocery Store', category: 'Groceries', date: new Date().toISOString().split('T')[0],
-    status: 'verified', createdBy: 'test-user-id', createdAt: new Date().toISOString(), payPeriodId: '2024-01-01'
+    status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false, payPeriodId: '2024-01-01'
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'Electric Co', category: 'Utilities', date: new Date().toISOString().split('T')[0],
-    status: 'verified', createdBy: 'test-user-id', createdAt: new Date().toISOString(), payPeriodId: '2024-01-01'
+    status: 'verified', isRecurring: false, source: 'manual', autoCategorized: false, payPeriodId: '2024-01-01'
   }
 ];
 
@@ -46,14 +46,14 @@ const SEED_HABITS: Habit[] = [
   {
     id: 'h1', title: 'Drink Water', category: 'Health', type: 'positive', basePoints: 5,
     scoringType: 'threshold', period: 'daily', targetCount: 3, totalCount: 1, count: 1,
-    completedDates: [], streakDays: 0, createdBy: 'test-user-id', lastUpdated: new Date().toISOString()
+    completedDates: [], streakDays: 0, createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
   }
 ];
 
 const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com', role: 'admin',
-    points: { daily: 5, weekly: 35, total: 150 }, joinedAt: new Date().toISOString()
+    points: { daily: 5, weekly: 35, total: 150 }
   }
 ];
 
@@ -195,13 +195,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
         householdSettings: {
              id: 'test-household-id',
              name: 'Test Household',
-             memberUids: ['test-user-id'],
-             currency: 'USD',
+             inviteCode: 'TEST01',
+             members,
+             accounts,
+             rewardsInventory: rewards,
+             coreTemplates: { expenses: [], buckets: [] },
              points: { daily: 10, weekly: 50, total: 200 },
              freezeBank: { current: 0, accrued: 0, lastMonth: '' },
-             inviteCode: 'TEST01',
-             createdAt: { seconds: 0, nanoseconds: 0 } as any,
-             createdBy: 'test-user-id'
         },
         pantry,
         meals,
