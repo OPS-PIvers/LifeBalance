@@ -171,6 +171,7 @@ const Dashboard: React.FC = () => {
         <button 
           onClick={() => setIsAnalyticsOpen(true)}
           className="p-3 bg-white border border-brand-100 rounded-xl shadow-sm text-brand-600 hover:bg-brand-50 active:scale-95 transition-all"
+          aria-label="Open Analytics"
         >
           <BarChart2 size={20} />
         </button>
@@ -625,9 +626,9 @@ const Dashboard: React.FC = () => {
 
       </div>
 
-      <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
-      <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />
-      <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />
+      {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
+      {isChallengeModalOpen && <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />}
+      {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
