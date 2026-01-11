@@ -13,8 +13,12 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
   link.download = filename;
   document.body.appendChild(link);
   link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+
+  // Clean up after a small delay to ensure download has started
+  setTimeout(() => {
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, 100);
 };
 
 /**
@@ -29,7 +33,7 @@ export const generateJsonBackup = (data: Record<string, any>, filenamePrefix: st
 
 /**
  * Converts an array of flat objects to CSV format
- * Handles basic escaping for CSV (wrapping in quotes if contains comma, newline, or quote)
+ * Wraps all values in quotes for safety and escapes embedded quotes
  */
 export const convertToCSV = (data: Record<string, any>[]): string => {
   if (data.length === 0) return '';

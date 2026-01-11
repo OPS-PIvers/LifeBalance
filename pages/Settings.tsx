@@ -155,6 +155,14 @@ const Settings: React.FC = () => {
 
   const handleExportJson = () => {
     try {
+      // Filter out sensitive data from members
+      const safeMembers = members.map(m => {
+        // Destructure to remove sensitive fields
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { fcmTokens, email, telegramChatId, ...safeMember } = m;
+        return safeMember;
+      });
+
       const exportData = {
         meta: {
           exportedAt: new Date().toISOString(),
@@ -162,7 +170,7 @@ const Settings: React.FC = () => {
           exportedBy: user?.uid
         },
         household: householdSettings,
-        members,
+        members: safeMembers,
         habits,
         transactions,
         buckets,
@@ -182,7 +190,14 @@ const Settings: React.FC = () => {
 
   const handleExportCsv = () => {
     try {
+      if (!transactions || transactions.length === 0) {
+        toast.error('No transactions to export');
+        return;
+      }
+
       // Flatten transactions for CSV
+      // Note: Only exporting core fields to keep CSV simple.
+      // Power users can use JSON export for full data including isRecurring, autoCategorized, etc.
       const flatTransactions = transactions.map(tx => ({
         Date: tx.date,
         Merchant: tx.merchant,
@@ -190,7 +205,7 @@ const Settings: React.FC = () => {
         Category: tx.category,
         Status: tx.status,
         Source: tx.source,
-        PayPeriod: tx.payPeriodId || 'N/A'
+        'Pay Period': tx.payPeriodId || 'N/A'
       }));
 
       generateCsvExport(flatTransactions, 'transactions');
@@ -368,6 +383,7 @@ const Settings: React.FC = () => {
             <button
               onClick={handleExportJson}
               className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+              aria-label="Export full household data backup as JSON file"
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
@@ -384,6 +400,7 @@ const Settings: React.FC = () => {
             <button
               onClick={handleExportCsv}
               className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+              aria-label="Export transaction history as CSV file"
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
