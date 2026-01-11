@@ -435,6 +435,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       maxWidth="max-w-md"
       disableBackdropClose={view === 'processing'}
       ariaLabelledBy="capture-modal-title"
+      backdropColor="bg-slate-900/90"
+      className="shadow-2xl"
     >
       {/* Header */}
       <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">

@@ -41,6 +41,11 @@ export interface ModalProps {
    * Enhances accessibility.
    */
   ariaLabelledBy?: string;
+  /**
+   * ID of the element describing the modal.
+   * Enhances accessibility.
+   */
+  ariaDescribedBy?: string;
 }
 
 /**
@@ -64,6 +69,7 @@ export const Modal: React.FC<ModalProps> = ({
   mobileSafePadding = true,
   disableBackdropClose = false,
   ariaLabelledBy,
+  ariaDescribedBy,
 }) => {
   // Handle Escape key
   React.useEffect(() => {
@@ -111,6 +117,8 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
+      onClick={handleBackdropClick}
     >
       {/* Backdrop */}
       <div
@@ -118,7 +126,6 @@ export const Modal: React.FC<ModalProps> = ({
           "absolute inset-0 backdrop-blur-sm transition-opacity",
           backdropColor
         )}
-        onClick={handleBackdropClick}
         aria-hidden="true"
       />
 
@@ -126,10 +133,11 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={twMerge(
           "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
-          "max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]", // Standardized max-height
+          "max-h-[calc(100vh-10rem)] max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]", // Standardized max-height with dvh + vh fallback
           maxWidth,
           className
         )}
+        onClick={(e) => e.stopPropagation()}
       >
         {children}
       </div>
