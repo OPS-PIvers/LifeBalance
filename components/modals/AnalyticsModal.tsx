@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, TrendingUp, TrendingDown, Flame, Award, Calendar } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, LineChart, Line, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, differenceInDays } from 'date-fns';
 
 interface AnalyticsModalProps {
   isOpen: boolean;
@@ -9,14 +10,65 @@ interface AnalyticsModalProps {
 }
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { habits } = useHousehold();
-  const [activeTab, setActiveTab] = useState<'week' | 'lifetime'>('week');
+  const { habits, transactions, buckets } = useHousehold();
+  const [activeTab, setActiveTab] = useState<'week' | 'lifetime' | 'financial'>('week');
 
   if (!isOpen) return null;
 
-  // --- MOCK DATA PREPARATION ---
-  
-  // Tab 1: Sentiment Pie
+  // ===== WEEK VIEW DATA =====
+  const last7Days = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = subDays(today, 6 - i);
+      return format(date, 'yyyy-MM-dd');
+    });
+  }, []);
+
+  // Streak Status
+  const streakStats = useMemo(() => {
+    const activeStreaks = habits.filter(h => h.streakDays > 0);
+    const longestStreak = Math.max(...habits.map(h => h.streakDays), 0);
+    const atRisk = habits.filter(h => {
+      if (h.streakDays === 0) return false;
+      const lastCompleted = h.completedDates?.[h.completedDates.length - 1];
+      if (!lastCompleted) return false;
+      const daysSince = differenceInDays(new Date(), parseISO(lastCompleted));
+      return daysSince >= 1;
+    });
+
+    return {
+      activeStreaks: activeStreaks.length,
+      longestStreak,
+      atRisk: atRisk.length,
+      atRiskHabits: atRisk.map(h => h.title)
+    };
+  }, [habits]);
+
+  // Category Performance (past 7 days)
+  const categoryPerformance = useMemo(() => {
+    const categoryMap = new Map<string, { completions: number; points: number }>();
+
+    habits.forEach(habit => {
+      const recentCompletions = habit.completedDates?.filter(d => last7Days.includes(d)).length || 0;
+      if (recentCompletions > 0) {
+        const current = categoryMap.get(habit.category) || { completions: 0, points: 0 };
+        categoryMap.set(habit.category, {
+          completions: current.completions + recentCompletions,
+          points: current.points + (recentCompletions * habit.basePoints)
+        });
+      }
+    });
+
+    return Array.from(categoryMap.entries())
+      .map(([category, data]) => ({
+        category,
+        completions: data.completions,
+        points: data.points
+      }))
+      .sort((a, b) => b.points - a.points);
+  }, [habits, last7Days]);
+
+  // Sentiment Pie
   const positiveCount = habits.filter(h => h.type === 'positive').length;
   const negativeCount = habits.filter(h => h.type === 'negative').length;
   const sentimentData = [
@@ -24,34 +76,250 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     { name: 'Negative', value: negativeCount, color: '#F43F5E' },
   ];
 
-  // Tab 1: Frequency Bar (Top 5)
+  // Top Habits (by total count)
   const frequencyData = [...habits]
     .sort((a, b) => b.totalCount - a.totalCount)
     .slice(0, 5)
     .map(h => ({
-      name: h.title.split(' ')[0], // truncate for chart
+      name: h.title.split(' ').slice(0, 2).join(' '), // First 2 words
       count: h.totalCount
     }));
 
-  // Tab 2: Lifetime Trend (Mocked)
-  const trendData = [
-    { week: 'W1', points: 420 },
-    { week: 'W2', points: 580 },
-    { week: 'W3', points: 550 },
-    { week: 'W4', points: 890 },
-    { week: 'W5', points: 1200 },
-  ];
+  // ===== LIFETIME VIEW DATA =====
 
-  // Tab 2: Day of Week (Mocked)
-  const dayData = [
-    { day: 'Mon', avg: 120 },
-    { day: 'Tue', avg: 145 },
-    { day: 'Wed', avg: 100 },
-    { day: 'Thu', avg: 180 },
-    { day: 'Fri', avg: 90 },
-    { day: 'Sat', avg: 210 },
-    { day: 'Sun', avg: 250 },
-  ];
+  // Weekly Trend - Real data from habit completions
+  const trendData = useMemo(() => {
+    const allCompletions: { date: Date; points: number }[] = [];
+
+    habits.forEach(habit => {
+      habit.completedDates?.forEach(dateStr => {
+        const date = new Date(dateStr);
+        allCompletions.push({ date, points: habit.basePoints });
+      });
+    });
+
+    allCompletions.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (allCompletions.length === 0) {
+      return [{ week: 'No data', points: 0 }];
+    }
+
+    const weeklyPoints = new Map<string, number>();
+
+    allCompletions.forEach(({ date, points }) => {
+      const weekStart = new Date(date);
+      const day = weekStart.getDay();
+      const diff = (day === 0 ? -6 : 1) - day;
+      weekStart.setDate(weekStart.getDate() + diff);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const weekKey = weekStart.toISOString().split('T')[0];
+      weeklyPoints.set(weekKey, (weeklyPoints.get(weekKey) || 0) + points);
+    });
+
+    const sortedWeeks = Array.from(weeklyPoints.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-12);
+
+    return sortedWeeks.map(([weekStart, points], idx) => ({
+      week: `W${idx + 1}`,
+      points,
+      fullDate: weekStart
+    }));
+  }, [habits]);
+
+  // Day of Week Performance
+  const dayData = useMemo(() => {
+    const dayTotals = new Map<number, { total: number; count: number }>();
+
+    habits.forEach(habit => {
+      habit.completedDates?.forEach(dateStr => {
+        const date = new Date(dateStr);
+        const dayOfWeek = date.getDay();
+
+        const current = dayTotals.get(dayOfWeek) || { total: 0, count: 0 };
+        dayTotals.set(dayOfWeek, {
+          total: current.total + habit.basePoints,
+          count: current.count + 1
+        });
+      });
+    });
+
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const result = [];
+
+    for (let i = 1; i <= 7; i++) {
+      const dayIndex = i % 7;
+      const data = dayTotals.get(dayIndex);
+      result.push({
+        day: dayNames[dayIndex],
+        avg: data ? Math.round(data.total / data.count) : 0
+      });
+    }
+
+    return result;
+  }, [habits]);
+
+  // Success Rate by Habit
+  const habitSuccessRates = useMemo(() => {
+    return habits
+      .map(habit => {
+        const totalDays = habit.completedDates?.length || 0;
+        const firstDate = habit.completedDates?.[0];
+        if (!firstDate) return null;
+
+        const daysSinceStart = differenceInDays(new Date(), parseISO(firstDate));
+        const expectedCompletions = habit.period === 'daily' ? daysSinceStart : Math.floor(daysSinceStart / 7);
+        const successRate = expectedCompletions > 0 ? (totalDays / expectedCompletions) * 100 : 0;
+
+        return {
+          name: habit.title.split(' ').slice(0, 2).join(' '),
+          rate: Math.min(successRate, 100)
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b?.rate || 0) - (a?.rate || 0))
+      .slice(0, 5);
+  }, [habits]);
+
+  // Monthly Heatmap (last 90 days)
+  const heatmapData = useMemo(() => {
+    const days = eachDayOfInterval({
+      start: subDays(new Date(), 89),
+      end: new Date()
+    });
+
+    return days.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      let completions = 0;
+
+      habits.forEach(habit => {
+        if (habit.completedDates?.includes(dateStr)) {
+          completions++;
+        }
+      });
+
+      return {
+        date: dateStr,
+        day: format(day, 'MMM d'),
+        completions,
+        intensity: completions === 0 ? 0 : Math.min(completions / 3, 1) // Normalize to 0-1
+      };
+    });
+  }, [habits]);
+
+  // Best/Worst Months
+  const monthlyStats = useMemo(() => {
+    const monthlyData = new Map<string, { points: number; completions: number }>();
+
+    habits.forEach(habit => {
+      habit.completedDates?.forEach(dateStr => {
+        const monthKey = dateStr.substring(0, 7); // YYYY-MM
+        const current = monthlyData.get(monthKey) || { points: 0, completions: 0 };
+        monthlyData.set(monthKey, {
+          points: current.points + habit.basePoints,
+          completions: current.completions + 1
+        });
+      });
+    });
+
+    const sorted = Array.from(monthlyData.entries())
+      .map(([month, data]) => ({
+        month: format(parseISO(month + '-01'), 'MMM yyyy'),
+        ...data
+      }))
+      .sort((a, b) => b.points - a.points);
+
+    return {
+      best: sorted[0],
+      worst: sorted[sorted.length - 1]
+    };
+  }, [habits]);
+
+  // ===== FINANCIAL VIEW DATA =====
+
+  // Spending by Category (last 30 days)
+  const spendingByCategory = useMemo(() => {
+    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+    const categorySpending = new Map<string, number>();
+
+    transactions
+      .filter(t => t.date >= thirtyDaysAgo)
+      .forEach(t => {
+        categorySpending.set(t.category, (categorySpending.get(t.category) || 0) + t.amount);
+      });
+
+    return Array.from(categorySpending.entries())
+      .map(([category, amount]) => ({
+        category,
+        amount: Math.round(amount)
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 8);
+  }, [transactions]);
+
+  // Monthly Spending Trend (last 6 months)
+  const monthlySpending = useMemo(() => {
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const date = subDays(new Date(), i * 30);
+      return {
+        key: format(startOfMonth(date), 'yyyy-MM'),
+        label: format(date, 'MMM')
+      };
+    }).reverse();
+
+    return months.map(({ key, label }) => {
+      const total = transactions
+        .filter(t => t.date.startsWith(key))
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      return {
+        month: label,
+        amount: Math.round(total)
+      };
+    });
+  }, [transactions]);
+
+  // Budget Performance
+  const budgetPerformance = useMemo(() => {
+    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+
+    return buckets.map(bucket => {
+      const spent = transactions
+        .filter(t => t.category === bucket.name && t.date >= thirtyDaysAgo)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      return {
+        name: bucket.name,
+        spent: Math.round(spent),
+        limit: bucket.limit,
+        percentage: bucket.limit > 0 ? (spent / bucket.limit) * 100 : 0
+      };
+    })
+    .filter(b => b.spent > 0)
+    .sort((a, b) => b.percentage - a.percentage)
+    .slice(0, 5);
+  }, [buckets, transactions]);
+
+  // Top Merchants
+  const topMerchants = useMemo(() => {
+    const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
+    const merchantSpending = new Map<string, number>();
+
+    transactions
+      .filter(t => t.date >= thirtyDaysAgo)
+      .forEach(t => {
+        merchantSpending.set(t.merchant, (merchantSpending.get(t.merchant) || 0) + t.amount);
+      });
+
+    return Array.from(merchantSpending.entries())
+      .map(([merchant, amount]) => ({
+        merchant,
+        amount: Math.round(amount)
+      }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [transactions]);
 
   return (
     <div
@@ -73,38 +341,93 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Tabs */}
-        <div className="flex p-2 bg-brand-50 mx-6 mt-4 rounded-xl">
-          <button 
+        <div className="flex p-2 bg-brand-50 mx-6 mt-4 rounded-xl gap-1">
+          <button
             onClick={() => setActiveTab('week')}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'week' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
+            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${activeTab === 'week' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
           >
-            Week View
+            Week
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('lifetime')}
-            className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'lifetime' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
+            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${activeTab === 'lifetime' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
           >
             Lifetime
+          </button>
+          <button
+            onClick={() => setActiveTab('financial')}
+            className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${activeTab === 'financial' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
+          >
+            Financial
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
-          {activeTab === 'week' ? (
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {activeTab === 'week' && (
             <>
-              {/* Chart A: Sentiment */}
+              {/* Streak Status Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 border border-orange-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Flame size={16} className="text-orange-600" />
+                    <span className="text-xs font-bold text-orange-600 uppercase">Active</span>
+                  </div>
+                  <div className="text-2xl font-black text-orange-800">{streakStats.activeStreaks}</div>
+                </div>
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 border border-amber-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Award size={16} className="text-amber-600" />
+                    <span className="text-xs font-bold text-amber-600 uppercase">Longest</span>
+                  </div>
+                  <div className="text-2xl font-black text-amber-800">{streakStats.longestStreak}</div>
+                </div>
+                <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-3 border border-rose-200">
+                  <div className="flex items-center gap-2 mb-1">
+                    <TrendingDown size={16} className="text-rose-600" />
+                    <span className="text-xs font-bold text-rose-600 uppercase">At Risk</span>
+                  </div>
+                  <div className="text-2xl font-black text-rose-800">{streakStats.atRisk}</div>
+                </div>
+              </div>
+
+              {/* Category Performance */}
+              {categoryPerformance.length > 0 && (
+                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Category Performance (7 Days)</h3>
+                  <div className="space-y-3">
+                    {categoryPerformance.map((cat, idx) => (
+                      <div key={cat.category} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-600">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-bold text-brand-800">{cat.category}</div>
+                          <div className="text-xs text-brand-500">{cat.completions} completions</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-black text-habit-positive">+{cat.points}</div>
+                          <div className="text-xs text-brand-400">points</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sentiment Pie */}
               <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Habit Breakdown</h3>
-                <div className="h-64 w-full">
+                <div className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={sentimentData}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius={50}
+                        outerRadius={70}
                         paddingAngle={5}
                         dataKey="value"
                       >
@@ -126,30 +449,54 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* Chart B: Frequency */}
+              {/* Top Habits */}
               <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Top Habits</h3>
-                <div className="h-64 w-full">
+                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Most Completed</h3>
+                <div className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart layout="vertical" data={frequencyData} margin={{ left: 10 }}>
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={60} tick={{fontSize: 12}} />
+                      <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 11}} />
                       <Tooltip cursor={{fill: 'transparent'}} />
-                      <Bar dataKey="count" fill="#1E293B" radius={[0, 4, 4, 0]} barSize={20} />
+                      <Bar dataKey="count" fill="#1E293B" radius={[0, 4, 4, 0]} barSize={16} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'lifetime' && (
             <>
-              {/* Chart C: Trend */}
+              {/* Best/Worst Month Stats */}
+              {monthlyStats.best && monthlyStats.worst && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl p-4 border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp size={16} className="text-green-700" />
+                      <span className="text-xs font-bold text-green-700 uppercase">Best Month</span>
+                    </div>
+                    <div className="text-lg font-black text-green-900">{monthlyStats.best.month}</div>
+                    <div className="text-sm text-green-700">{monthlyStats.best.points} pts • {monthlyStats.best.completions} completions</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar size={16} className="text-slate-700" />
+                      <span className="text-xs font-bold text-slate-700 uppercase">Lowest Month</span>
+                    </div>
+                    <div className="text-lg font-black text-slate-900">{monthlyStats.worst.month}</div>
+                    <div className="text-sm text-slate-700">{monthlyStats.worst.points} pts • {monthlyStats.worst.completions} completions</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Weekly Trend */}
               <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Points Trend</h3>
-                <div className="h-64 w-full">
+                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Points Trend (12 Weeks)</h3>
+                <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={trendData}>
-                      <XAxis dataKey="week" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="week" tick={{fontSize: 11}} axisLine={false} tickLine={false} />
                       <YAxis hide />
                       <Tooltip />
                       <Line type="monotone" dataKey="points" stroke="#FBBF24" strokeWidth={3} dot={{r: 4, fill: '#FBBF24'}} />
@@ -158,19 +505,153 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* Chart D: Day of Week */}
+              {/* Success Rate */}
+              {habitSuccessRates.length > 0 && (
+                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Success Rate by Habit</h3>
+                  <div className="h-52 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={habitSuccessRates} margin={{ left: 10 }}>
+                        <XAxis type="number" domain={[0, 100]} hide />
+                        <YAxis dataKey="name" type="category" width={80} tick={{fontSize: 11}} />
+                        <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} cursor={{fill: '#F1F5F9'}} />
+                        <Bar dataKey="rate" fill="#10B981" radius={[0, 4, 4, 0]} barSize={16} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Day of Week Performance */}
               <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Best Performing Days</h3>
-                <div className="h-64 w-full">
+                <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dayData}>
-                      <XAxis dataKey="day" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
+                      <XAxis dataKey="day" tick={{fontSize: 11}} axisLine={false} tickLine={false} />
                       <Tooltip cursor={{fill: '#F1F5F9'}} />
                       <Bar dataKey="avg" fill="#475569" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
+
+              {/* Activity Heatmap */}
+              <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Activity Heatmap (90 Days)</h3>
+                <div className="grid grid-cols-10 gap-1">
+                  {heatmapData.slice(-90).map((day, idx) => (
+                    <div
+                      key={day.date}
+                      className="aspect-square rounded-sm"
+                      style={{
+                        backgroundColor: day.intensity === 0 ? '#F1F5F9' :
+                          `rgba(16, 185, 129, ${0.2 + day.intensity * 0.8})`
+                      }}
+                      title={`${day.day}: ${day.completions} completions`}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-3 text-xs text-brand-500">
+                  <span>Less active</span>
+                  <div className="flex gap-1">
+                    {[0, 0.33, 0.66, 1].map(intensity => (
+                      <div
+                        key={intensity}
+                        className="w-4 h-4 rounded-sm"
+                        style={{
+                          backgroundColor: intensity === 0 ? '#F1F5F9' :
+                            `rgba(16, 185, 129, ${0.2 + intensity * 0.8})`
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span>More active</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'financial' && (
+            <>
+              {/* Monthly Spending Trend */}
+              <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Spending Trend (6 Months)</h3>
+                <div className="h-52 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlySpending}>
+                      <XAxis dataKey="month" tick={{fontSize: 11}} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <Tooltip formatter={(value: number) => `$${value}`} />
+                      <Area type="monotone" dataKey="amount" stroke="#EF4444" fill="#FEE2E2" strokeWidth={2} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Spending by Category */}
+              {spendingByCategory.length > 0 && (
+                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Top Categories (30 Days)</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={spendingByCategory} margin={{ left: 10 }}>
+                        <XAxis type="number" hide />
+                        <YAxis dataKey="category" type="category" width={80} tick={{fontSize: 11}} />
+                        <Tooltip formatter={(value: number) => `$${value}`} cursor={{fill: 'transparent'}} />
+                        <Bar dataKey="amount" fill="#DC2626" radius={[0, 4, 4, 0]} barSize={18} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* Budget Performance */}
+              {budgetPerformance.length > 0 && (
+                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Budget Performance</h3>
+                  <div className="space-y-3">
+                    {budgetPerformance.map(bucket => (
+                      <div key={bucket.name}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-bold text-brand-800">{bucket.name}</span>
+                          <span className="text-xs font-bold text-brand-600">
+                            ${bucket.spent} / ${bucket.limit}
+                          </span>
+                        </div>
+                        <div className="h-2 bg-brand-100 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              bucket.percentage > 100 ? 'bg-red-500' :
+                              bucket.percentage > 80 ? 'bg-orange-500' :
+                              'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(bucket.percentage, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top Merchants */}
+              {topMerchants.length > 0 && (
+                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
+                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Top Merchants (30 Days)</h3>
+                  <div className="space-y-2">
+                    {topMerchants.map((merchant, idx) => (
+                      <div key={merchant.merchant} className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-money-spent text-white flex items-center justify-center text-xs font-bold">
+                          {idx + 1}
+                        </div>
+                        <div className="flex-1 text-sm font-medium text-brand-800 truncate">{merchant.merchant}</div>
+                        <div className="text-sm font-bold text-money-spent">${merchant.amount}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
