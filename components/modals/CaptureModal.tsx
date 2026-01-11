@@ -459,7 +459,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                 </h2>
                 <button
                     onClick={handleClose}
-                    className="p-2 bg-brand-100 rounded-full text-brand-600 hover:bg-brand-200 transition-colors"
+                    aria-label="Close modal"
+                    className="p-2 bg-brand-100 rounded-full text-brand-600 hover:bg-brand-200 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
                 >
                     <X size={20} />
                 </button>
@@ -609,7 +610,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   <div className="absolute bottom-6 left-0 right-0 flex justify-center">
                     <button
                       onClick={capturePhoto}
-                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform"
+                      aria-label="Capture photo"
+                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-brand-500"
                     >
                       <div className="w-12 h-12 bg-white rounded-full" />
                     </button>
@@ -646,7 +648,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                         <div className="flex items-start gap-3">
                           <button
                             onClick={() => toggleTransaction(tx.id)}
-                            className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+                            aria-label={tx.selected ? "Deselect transaction" : "Select transaction"}
+                            className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
                               tx.selected ? 'bg-brand-800 text-white' : 'border-2 border-brand-300'
                             }`}
                           >
@@ -778,10 +781,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-brand-50 rounded-xl border border-brand-100">
-                    <span className="text-sm font-medium text-brand-700">Recurring Transaction</span>
+                    <span id="recurring-label" className="text-sm font-medium text-brand-700">Recurring Transaction</span>
                     <button
+                      role="switch"
+                      aria-checked={isRecurring}
+                      aria-labelledby="recurring-label"
                       onClick={() => setIsRecurring(!isRecurring)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${isRecurring ? 'bg-money-pos' : 'bg-brand-300'}`}
+                      className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300'}`}
                     >
                       <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
