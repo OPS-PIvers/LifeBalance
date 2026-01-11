@@ -1,7 +1,9 @@
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import {onDocumentUpdated} from "firebase-functions/v2/firestore";
+import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
+import { toZonedTime } from "date-fns-tz";
 
 admin.initializeApp();
 
@@ -74,11 +76,16 @@ async function sendNotificationToUser(
     if (response.failureCount > 0) {
       const tokensToRemove: string[] = [];
       response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
+        if (!resp.success && resp.error?.code === "messaging/registration-token-not-registered") {
           tokensToRemove.push(fcmTokens[idx]);
         }
       });
-      logger.info("Tokens to remove:", tokensToRemove);
+
+      if (tokensToRemove.length > 0) {
+        logger.info("Tokens to remove:", tokensToRemove);
+        // Note: In a real app, you would want to remove these from Firestore here
+        // But we need the userId/householdId context to do that efficiently
+      }
     }
   } catch (error) {
     logger.error("Error sending notification:", error);
@@ -87,19 +94,31 @@ async function sendNotificationToUser(
 
 /**
  * Helper function to check if current time matches scheduled time
+ * This function now correctly handles timezones and relaxed matching for hourly crons
  */
-function isTimeToSend(
+export function isTimeToSend(
   scheduledTime: string,
   timezone: string = "UTC"
 ): boolean {
-  const now = new Date();
-  const currentHour = now.getUTCHours();
-  const currentMinute = now.getUTCMinutes();
+  // Get current time in UTC
+  const nowUtc = new Date();
 
-  const [schedHour, schedMinute] = scheduledTime.split(":").map(Number);
+  // Convert to user's timezone
+  let userTime;
+  try {
+    userTime = toZonedTime(nowUtc, timezone);
+  } catch (e) {
+    logger.warn(`Invalid timezone '${timezone}', falling back to UTC`);
+    userTime = toZonedTime(nowUtc, "UTC");
+  }
 
-  // Simple check - in production, you'd want to handle timezones properly
-  return currentHour === schedHour && currentMinute === schedMinute;
+  const currentHour = userTime.getHours();
+  // We don't check minutes strictly because the cron runs once an hour.
+  // We check if the current hour matches the scheduled hour.
+
+  const [schedHour] = scheduledTime.split(":").map(Number);
+
+  return currentHour === schedHour;
 }
 
 /**
@@ -271,7 +290,7 @@ export const sendbillreminders = onSchedule(
         if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
           // Get calendar items (bills)
           const calendarSnapshot = await householdDoc.ref
-            .collection("calendarItems") // FIXED: calendar -> calendarItems
+            .collection("calendarItems")
             .where("type", "==", "expense")
             .where("isPaid", "==", false)
             .get();
@@ -356,3 +375,64 @@ export const sendbudgetalerts = onDocumentUpdated(
     }
   }
 );
+
+/**
+ * Callable function: Send a test notification to the calling user
+ * This allows users to verify that their device is correctly configured
+ */
+export const sendtestnotification = onCall(async (request) => {
+  // Ensure the user is authenticated
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
+  }
+
+  const userId = request.auth.uid;
+  // We need to find the householdId to look up the user's tokens.
+  // Since we don't have it in the request (unless passed), we can search households.
+  // A better way is to pass householdId in the data.
+  const householdId = request.data.householdId;
+
+  if (!householdId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "The function must be called with a householdId."
+    );
+  }
+
+  try {
+    const memberRef = db.doc(`households/${householdId}/members/${userId}`);
+    const memberDoc = await memberRef.get();
+
+    if (!memberDoc.exists) {
+      throw new HttpsError("not-found", "Member profile not found.");
+    }
+
+    const memberData = memberDoc.data() as HouseholdMember;
+    const tokens = memberData.fcmTokens;
+
+    if (!tokens || tokens.length === 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No notification tokens found for this user."
+      );
+    }
+
+    await sendNotificationToUser(
+      tokens,
+      "Test Notification 🔔",
+      "Great! Your device is set up to receive notifications.",
+      {
+        type: "test_notification",
+        url: "/settings"
+      }
+    );
+
+    return { success: true, message: "Test notification sent" };
+  } catch (error) {
+    logger.error("Error sending test notification:", error);
+    throw new HttpsError("internal", "Failed to send test notification");
+  }
+});

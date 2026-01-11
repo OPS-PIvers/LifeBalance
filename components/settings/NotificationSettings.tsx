@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo } from 'lucide-react';
+import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 
 interface NotificationSettingsProps {
-  userId: string;
+  userId?: string;
   householdId: string;
   currentPreferences?: NotificationPreferences;
   onSave: (preferences: NotificationPreferences) => Promise<void>;
@@ -36,6 +37,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
 };
 
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({
+  householdId,
   currentPreferences,
   onSave
 }) => {
@@ -115,16 +117,42 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
     }
   };
 
+  const handleSendTest = async () => {
+    const toastId = toast.loading('Sending test notification...');
+    try {
+      const functions = getFunctions();
+      const sendTest = httpsCallable(functions, 'sendtestnotification');
+
+      await sendTest({ householdId });
+
+      toast.success('Test notification sent! Check your device.', { id: toastId });
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      toast.error('Failed to send test notification', { id: toastId });
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6 space-y-4">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
-          <Bell className="w-6 h-6 text-brand-600" />
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
+            <Bell className="w-6 h-6 text-brand-600" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-brand-800">Notification Preferences</h3>
+            <p className="text-sm text-brand-500">Customize your alerts</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-lg font-bold text-brand-800">Notification Preferences</h3>
-          <p className="text-sm text-brand-500">Customize your alerts</p>
-        </div>
+
+        <button
+          onClick={handleSendTest}
+          className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-sm font-medium rounded-lg transition-colors border border-brand-200"
+          title="Send a test notification to your device"
+        >
+          <Send className="w-4 h-4" />
+          <span className="hidden sm:inline">Test</span>
+        </button>
       </div>
 
       <div className="space-y-4">
