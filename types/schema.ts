@@ -287,6 +287,12 @@ export interface ShoppingItem {
   addedFromMealId?: string; // Traceability
 }
 
+export interface Store {
+  id: string;
+  name: string;
+  icon?: string; // Lucide icon name
+}
+
 export interface GroceryCatalogItem {
   id: string;
   name: string;
@@ -301,6 +307,8 @@ export interface Household {
   id: string;
   name: string;
   inviteCode: string;
+  groceryCategories?: string[]; // Custom categories
+  stores?: Store[]; // User-defined stores
   members: HouseholdMember[];
   points?: { daily: number; weekly: number; total: number }; // Shared household points
   lastDailyPointsReset?: string; // YYYY-MM-DD format

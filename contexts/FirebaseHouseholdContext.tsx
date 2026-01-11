@@ -43,7 +43,8 @@ import {
   MealPlanItem,
   ToDo,
   Insight,
-  GroceryCatalogItem
+  GroceryCatalogItem,
+  Store
 } from '@/types/schema';
 import { generateInsight } from '@/services/geminiService';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
@@ -88,6 +89,10 @@ interface HouseholdContextType {
   mealPlan: MealPlanItem[];
   todos: ToDo[];
   groceryCatalog: GroceryCatalogItem[];
+
+  // Shopping List Settings
+  stores: Store[];
+  groceryCategories: string[];
 
   // Pay Period Tracking State
   householdId: string | null;
@@ -174,6 +179,12 @@ interface HouseholdContextType {
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
   clearPurchasedShoppingItems: () => Promise<void>;
 
+  // Shopping Settings Actions
+  addStore: (store: Omit<Store, 'id'>) => Promise<void>;
+  updateStore: (store: Store) => Promise<void>;
+  deleteStore: (id: string) => Promise<void>;
+  updateGroceryCategories: (categories: string[]) => Promise<void>;
+
   // Grocery Catalog Actions
   addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<void>;
   updateGroceryCatalogItem: (id: string, updates: Partial<GroceryCatalogItem>) => Promise<void>;
@@ -234,6 +245,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const dailyPoints = householdSettings?.points?.daily || 0;
   const weeklyPoints = householdSettings?.points?.weekly || 0;
   const totalPoints = householdSettings?.points?.total || 0;
+
+  // Shopping Settings state derived from householdSettings
+  const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
+  const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
 
   // Real-time listeners
   useEffect(() => {
@@ -2302,6 +2317,68 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   };
 
+  // --- ACTIONS: SHOPPING SETTINGS ---
+
+  const addStore = async (store: Omit<Store, 'id'>) => {
+    if (!householdId) return;
+    try {
+      const newStore = { ...store, id: crypto.randomUUID() };
+      await updateDoc(doc(db, `households/${householdId}`), {
+        stores: arrayUnion(newStore)
+      });
+      toast.success('Store added');
+    } catch (error) {
+      console.error('[addStore] Failed:', error);
+      toast.error('Failed to add store');
+    }
+  };
+
+  const updateStore = async (updatedStore: Store) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      // We need to replace the object in the array
+      const currentStores = householdSettings.stores || [];
+      const newStores = currentStores.map(s => s.id === updatedStore.id ? updatedStore : s);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        stores: newStores
+      });
+      toast.success('Store updated');
+    } catch (error) {
+      console.error('[updateStore] Failed:', error);
+      toast.error('Failed to update store');
+    }
+  };
+
+  const deleteStore = async (id: string) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentStores = householdSettings.stores || [];
+      const newStores = currentStores.filter(s => s.id !== id);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        stores: newStores
+      });
+      toast.success('Store deleted');
+    } catch (error) {
+      console.error('[deleteStore] Failed:', error);
+      toast.error('Failed to delete store');
+    }
+  };
+
+  const updateGroceryCategories = async (categories: string[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        groceryCategories: categories
+      });
+      toast.success('Categories updated');
+    } catch (error) {
+      console.error('[updateGroceryCategories] Failed:', error);
+      toast.error('Failed to update categories');
+    }
+  };
+
   // --- ACTIONS: GROCERY CATALOG ---
 
   const addGroceryCatalogItem = async (item: Omit<GroceryCatalogItem, 'id'>) => {
@@ -2662,6 +2739,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         mealPlan,
         todos,
         groceryCatalog,
+        stores,
+        groceryCategories,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
@@ -2715,6 +2794,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         deleteShoppingItem,
         toggleShoppingItemPurchased,
         clearPurchasedShoppingItems,
+        addStore,
+        updateStore,
+        deleteStore,
+        updateGroceryCategories,
         addGroceryCatalogItem,
         updateGroceryCatalogItem,
         deleteGroceryCatalogItem,
