@@ -111,8 +111,11 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
   const householdsSnapshot = await db.collection("households").get();
 
   for (const householdDoc of householdsSnapshot.docs) {
-    const household = householdDoc.data();
-    const members: HouseholdMember[] = household.members || [];
+    // Fetch members from subcollection
+    const membersSnapshot = await householdDoc.ref.collection("members").get();
+    const members = membersSnapshot.docs.map(
+      (doc) => doc.data() as HouseholdMember
+    );
 
     for (const member of members) {
       const prefs = member.notificationPreferences;
@@ -146,8 +149,11 @@ export const sendactionqueuereminders = onSchedule(
     const householdsSnapshot = await db.collection("households").get();
 
     for (const householdDoc of householdsSnapshot.docs) {
-      const household = householdDoc.data();
-      const members: HouseholdMember[] = household.members || [];
+      // Fetch members from subcollection
+      const membersSnapshot = await householdDoc.ref.collection("members").get();
+      const members = membersSnapshot.docs.map(
+        (doc) => doc.data() as HouseholdMember
+      );
 
       for (const member of members) {
         const prefs = member.notificationPreferences;
@@ -195,8 +201,11 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
   const householdsSnapshot = await db.collection("households").get();
 
   for (const householdDoc of householdsSnapshot.docs) {
-    const household = householdDoc.data();
-    const members: HouseholdMember[] = household.members || [];
+    // Fetch members from subcollection
+    const membersSnapshot = await householdDoc.ref.collection("members").get();
+    const members = membersSnapshot.docs.map(
+      (doc) => doc.data() as HouseholdMember
+    );
 
     for (const member of members) {
       const prefs = member.notificationPreferences;
@@ -248,8 +257,11 @@ export const sendbillreminders = onSchedule(
     const householdsSnapshot = await db.collection("households").get();
 
     for (const householdDoc of householdsSnapshot.docs) {
-      const household = householdDoc.data();
-      const members: HouseholdMember[] = household.members || [];
+      // Fetch members from subcollection
+      const membersSnapshot = await householdDoc.ref.collection("members").get();
+      const members = membersSnapshot.docs.map(
+        (doc) => doc.data() as HouseholdMember
+      );
 
       for (const member of members) {
         const prefs = member.notificationPreferences;
@@ -259,7 +271,7 @@ export const sendbillreminders = onSchedule(
         if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
           // Get calendar items (bills)
           const calendarSnapshot = await householdDoc.ref
-            .collection("calendar")
+            .collection("calendarItems") // FIXED: calendar -> calendarItems
             .where("type", "==", "expense")
             .where("isPaid", "==", false)
             .get();
@@ -306,7 +318,14 @@ export const sendbudgetalerts = onDocumentUpdated(
     const newData = event.data?.after.data();
     if (!newData) return;
 
-    const members: HouseholdMember[] = newData.members || [];
+    const householdId = event.params.householdId;
+    const householdRef = db.collection("households").doc(householdId);
+
+    // Fetch members from subcollection
+    const membersSnapshot = await householdRef.collection("members").get();
+    const members = membersSnapshot.docs.map(
+      (doc) => doc.data() as HouseholdMember
+    );
 
     // Calculate safe-to-spend (simplified)
     const accounts = newData.accounts || [];
