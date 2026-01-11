@@ -89,6 +89,24 @@ const stripDataUrlPrefix = (base64Image: string): string => {
 };
 
 /**
+ * Sanitizes a string to prevent prompt injection attacks.
+ * Removes or escapes characters that could be used to manipulate AI behavior.
+ * @param input - The string to sanitize
+ * @returns Sanitized string
+ */
+const MAX_PROMPT_INPUT_LENGTH = 500;
+
+const sanitizeForPrompt = (input: string): string => {
+  const normalized = input
+    .replace(/\n/g, ' ') // Replace newlines with spaces
+    .replace(/["'`]/g, ''); // Remove quotes
+
+  // Truncate by Unicode code points to avoid splitting multi-byte characters (e.g., emojis)
+  const chars = Array.from(normalized);
+  return chars.slice(0, MAX_PROMPT_INPUT_LENGTH).join('');
+};
+
+/**
  * Analyzes a receipt image and extracts transaction data
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
@@ -106,11 +124,11 @@ export const analyzeReceipt = async (
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const categoryList = availableCategories?.length
-      ? availableCategories.join(', ')
+      ? availableCategories.map(sanitizeForPrompt).join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const habitList = availableHabits?.length
-      ? availableHabits.join(', ')
+      ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
     const response = await ai.models.generateContent({
@@ -173,11 +191,11 @@ export const parseBankStatement = async (
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
     const categoryList = availableCategories?.length
-      ? availableCategories.join(', ')
+      ? availableCategories.map(sanitizeForPrompt).join(', ')
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const habitList = availableHabits?.length
-      ? availableHabits.join(', ')
+      ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
     const response = await ai.models.generateContent({
@@ -254,7 +272,7 @@ export const analyzePantryImage = async (
     const mimeType = extractMimeType(base64Image);
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
-    const categoriesStr = availableCategories.join(', ');
+    const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -416,7 +434,7 @@ export const parseGroceryReceipt = async (
     const mimeType = extractMimeType(base64Image);
     const cleanBase64 = stripDataUrlPrefix(base64Image);
 
-    const categoriesStr = availableCategories.join(', ');
+    const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -468,24 +486,6 @@ export const parseGroceryReceipt = async (
     console.error("Gemini Grocery Receipt Parse Error:", error);
     throw new Error("Failed to parse grocery receipt.");
   }
-};
-
-/**
- * Sanitizes a string to prevent prompt injection attacks.
- * Removes or escapes characters that could be used to manipulate AI behavior.
- * @param input - The string to sanitize
- * @returns Sanitized string
- */
-const MAX_PROMPT_INPUT_LENGTH = 500;
-
-const sanitizeForPrompt = (input: string): string => {
-  const normalized = input
-    .replace(/\n/g, ' ') // Replace newlines with spaces
-    .replace(/["'`]/g, ''); // Remove quotes
-
-  // Truncate by Unicode code points to avoid splitting multi-byte characters (e.g., emojis)
-  const chars = Array.from(normalized);
-  return chars.slice(0, MAX_PROMPT_INPUT_LENGTH).join('');
 };
 
 /**
