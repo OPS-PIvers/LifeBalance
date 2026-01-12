@@ -47,7 +47,7 @@ const TopToolbar: React.FC = () => {
             onClick={() => setIsRewardsOpen(true)}
           >
             {/* Daily Points (Gold Star) */}
-            <div className="flex-col items-end hidden xs:flex">
+            <div className="hidden xs:flex flex-col items-end">
               <div className="flex items-center gap-1">
                 <span className="text-xl font-bold text-habit-gold tabular-nums">
                   +{dailyPoints}

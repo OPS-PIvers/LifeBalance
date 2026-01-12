@@ -41,6 +41,10 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isOpen && event.key === 'Escape') {
         onClose();
+        // Return focus to profile button when closed via keyboard
+        if (anchorRef.current) {
+          anchorRef.current.focus();
+        }
       }
     };
 
@@ -48,21 +52,17 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, anchorRef]);
 
-  // Manage focus when the profile menu opens and closes
+  // Manage focus when the profile menu opens
   useEffect(() => {
-    if (isOpen) {
-      if (menuRef.current) {
-        const firstFocusable = menuRef.current.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        firstFocusable?.focus();
-      }
-    } else if (anchorRef.current) {
-      anchorRef.current.focus();
+    if (isOpen && menuRef.current) {
+      const firstFocusable = menuRef.current.querySelector<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      firstFocusable?.focus();
     }
-  }, [isOpen, anchorRef]);
+  }, [isOpen]);
 
   const handleLogout = async () => {
     try {
