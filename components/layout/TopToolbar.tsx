@@ -47,7 +47,7 @@ const TopToolbar: React.FC = () => {
             onClick={() => setIsRewardsOpen(true)}
           >
             {/* Daily Points (Gold Star) */}
-            <div className="flex flex-col items-end hidden xs:flex">
+            <div className="hidden xs:flex flex-col items-end">
               <div className="flex items-center gap-1">
                 <span className="text-xl font-bold text-habit-gold tabular-nums">
                   +{dailyPoints}
@@ -58,7 +58,7 @@ const TopToolbar: React.FC = () => {
             </div>
 
             {/* Vertical Divider */}
-            <div className="h-8 w-px bg-brand-600 hidden xs:block"></div>
+            <div className="h-8 w-px bg-brand-600 xs:block hidden"></div>
 
             {/* Weekly Points (Blue TrendingUp) */}
             <div className="flex flex-col items-end">
@@ -82,10 +82,12 @@ const TopToolbar: React.FC = () => {
           >
             {currentUser?.photoURL ? (
                 <img src={currentUser.photoURL} alt={currentUser.displayName || 'Profile'} className="w-full h-full rounded-full object-cover" />
-            ) : (
+            ) : currentUser?.displayName ? (
                 <span className="font-bold text-sm">
-                    {currentUser?.displayName?.charAt(0) || <User className="w-5 h-5" />}
+                    {currentUser.displayName.charAt(0)}
                 </span>
+            ) : (
+                <User className="w-5 h-5" />
             )}
           </button>
         </div>
