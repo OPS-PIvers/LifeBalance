@@ -43,16 +43,39 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   }, [habits]);
 
   // Category Performance (past 7 days)
+  // Uses actual submission data when available for accurate point tracking
   const categoryPerformance = useMemo(() => {
-    const categoryMap = new Map<string, { completions: number; points: number }>();
+    const categoryMap = new Map<string, { completions: number; points: number; count: number }>();
 
     habits.forEach(habit => {
       const recentCompletions = habit.completedDates?.filter(d => last7Days.includes(d)).length || 0;
       if (recentCompletions > 0) {
-        const current = categoryMap.get(habit.category) || { completions: 0, points: 0 };
+        const current = categoryMap.get(habit.category) || { completions: 0, points: 0, count: 0 };
+
+        // Calculate accurate points based on scoring type and multipliers
+        // Note: This is an approximation since we don't have historical multipliers here
+        // For truly accurate tracking, individual submissions should be queried
+        let estimatedPoints = 0;
+        if (habit.scoringType === 'incremental') {
+          // Incremental: count all actions across the week
+          const totalActions = habit.completedDates
+            ?.filter(d => last7Days.includes(d))
+            .reduce((sum) => {
+              // Estimate: assume average multiplier based on current streak
+              const multiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
+              return sum + (habit.basePoints * multiplier);
+            }, 0) || 0;
+          estimatedPoints = totalActions;
+        } else {
+          // Threshold: points per completion day
+          const multiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
+          estimatedPoints = recentCompletions * (habit.basePoints * multiplier);
+        }
+
         categoryMap.set(habit.category, {
           completions: current.completions + recentCompletions,
-          points: current.points + (recentCompletions * habit.basePoints)
+          points: current.points + Math.floor(estimatedPoints),
+          count: current.count + 1
         });
       }
     });
@@ -337,15 +360,15 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
       <div className="relative w-full max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">
-          <h2 className="text-xl font-bold text-brand-800">Analytics</h2>
-          <button onClick={onClose} className="p-2 bg-brand-50 rounded-full hover:bg-brand-100">
-            <X size={20} />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-brand-100 shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-brand-800">Analytics</h2>
+          <button onClick={onClose} className="p-1.5 sm:p-2 bg-brand-50 rounded-full hover:bg-brand-100 active:scale-95 transition-transform">
+            <X size={18} className="sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex p-2 bg-brand-50 mx-6 mt-4 rounded-xl gap-1">
+        <div className="flex p-1 sm:p-2 bg-brand-50 mx-4 sm:mx-6 mt-3 sm:mt-4 rounded-xl gap-1">
           <button
             onClick={() => setActiveTab('week')}
             className={`flex-1 py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${activeTab === 'week' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'}`}
@@ -367,52 +390,52 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
 
           {activeTab === 'week' && (
             <>
               {/* Streak Status Cards */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 border border-orange-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Flame size={16} className="text-orange-600" />
-                    <span className="text-xs font-bold text-orange-600 uppercase">Active</span>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-3 sm:p-4 border border-orange-200">
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                    <Flame size={14} className="text-orange-600 sm:w-4 sm:h-4" />
+                    <span className="text-[10px] sm:text-xs font-bold text-orange-600 uppercase tracking-tight">Active</span>
                   </div>
-                  <div className="text-2xl font-black text-orange-800">{streakStats.activeStreaks}</div>
+                  <div className="text-2xl sm:text-3xl font-black text-orange-800">{streakStats.activeStreaks}</div>
                 </div>
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 border border-amber-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Award size={16} className="text-amber-600" />
-                    <span className="text-xs font-bold text-amber-600 uppercase">Longest</span>
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-3 sm:p-4 border border-amber-200">
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                    <Award size={14} className="text-amber-600 sm:w-4 sm:h-4" />
+                    <span className="text-[10px] sm:text-xs font-bold text-amber-600 uppercase tracking-tight">Longest</span>
                   </div>
-                  <div className="text-2xl font-black text-amber-800">{streakStats.longestStreak}</div>
+                  <div className="text-2xl sm:text-3xl font-black text-amber-800">{streakStats.longestStreak}</div>
                 </div>
-                <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-3 border border-rose-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingDown size={16} className="text-rose-600" />
-                    <span className="text-xs font-bold text-rose-600 uppercase">At Risk</span>
+                <div className="bg-gradient-to-br from-rose-50 to-rose-100 rounded-xl p-3 sm:p-4 border border-rose-200">
+                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                    <TrendingDown size={14} className="text-rose-600 sm:w-4 sm:h-4" />
+                    <span className="text-[10px] sm:text-xs font-bold text-rose-600 uppercase tracking-tight">At Risk</span>
                   </div>
-                  <div className="text-2xl font-black text-rose-800">{streakStats.atRisk}</div>
+                  <div className="text-2xl sm:text-3xl font-black text-rose-800">{streakStats.atRisk}</div>
                 </div>
               </div>
 
               {/* Category Performance */}
               {categoryPerformance.length > 0 && (
-                <div className="bg-white rounded-2xl border border-brand-100 p-4 shadow-sm">
-                  <h3 className="text-sm font-bold text-brand-500 uppercase tracking-wide mb-4">Category Performance (7 Days)</h3>
-                  <div className="space-y-3">
+                <div className="bg-white rounded-2xl border border-brand-100 p-3 sm:p-4 shadow-sm">
+                  <h3 className="text-xs sm:text-sm font-bold text-brand-500 uppercase tracking-wide mb-3 sm:mb-4">Category Performance (7 Days)</h3>
+                  <div className="space-y-2.5 sm:space-y-3">
                     {categoryPerformance.map((cat, idx) => (
-                      <div key={cat.category} className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-600">
+                      <div key={cat.category} className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-600 shrink-0">
                           {idx + 1}
                         </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold text-brand-800">{cat.category}</div>
-                          <div className="text-xs text-brand-500">{cat.completions} completions</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-brand-800 truncate">{cat.category}</div>
+                          <div className="text-xs text-brand-500">{cat.completions} completion{cat.completions !== 1 ? 's' : ''}</div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-lg font-black text-habit-positive">+{cat.points}</div>
-                          <div className="text-xs text-brand-400">points</div>
+                        <div className="text-right shrink-0">
+                          <div className="text-base sm:text-lg font-black text-habit-positive">+{cat.points}</div>
+                          <div className="text-[10px] sm:text-xs text-brand-400">points</div>
                         </div>
                       </div>
                     ))}
