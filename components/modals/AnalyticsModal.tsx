@@ -22,16 +22,33 @@ interface AnalyticsModalProps {
   onClose: () => void;
 }
 
+// Define Tooltip types
+interface CustomTooltipPayloadEntry {
+  name?: string;
+  value?: number | string;
+  color?: string;
+  fill?: string;
+  payload?: any;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: CustomTooltipPayloadEntry[];
+  label?: string;
+  formatter?: (value: any) => React.ReactNode;
+  suffix?: string;
+}
+
 // Chart colors (moved outside component to avoid recreation)
 const CHART_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 
 // Custom Tooltip Component
-const CustomTooltip = ({ active, payload, label, formatter, suffix = '' }: any) => {
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, formatter, suffix = '' }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white p-3 border border-slate-100 shadow-xl rounded-xl z-[70]">
         <p className="text-xs font-bold text-slate-500 mb-1">{label}</p>
-        {payload.map((entry: any, index: number) => (
+        {payload.map((entry, index) => (
           <div key={index} className="flex items-center gap-2 text-sm">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
             <span className="font-medium text-slate-700">
@@ -56,6 +73,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   // Hero Metric: Weekly Points Comparison
   const weeklyProgress = useMemo(() => {
     const now = new Date();
+    // Handles edge case where week hasn't started (though startOfWeek handles this by going back to Monday)
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
     const lastWeekStart = subWeeks(currentWeekStart, 1);
     const lastWeekEnd = subDays(currentWeekStart, 1);
@@ -95,12 +113,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     const thirtyDaysAgo = subDays(new Date(), 30);
 
     habits.forEach(habit => {
-      // Check if habit was active/completed at least once in the last 30 days
-      // or if it was created recently (though we don't have createdAt easily accessible on all habits,
-      // looking at completedDates is a good proxy for "active" habits to include in score).
-      // If a habit has NO completions in 30 days, we might assume it's abandoned or new,
-      // but strictly we should count it if it's an "active" commitment.
-      // To satisfy the feedback: "Consider only counting habits that were active (have completion dates) within the 30-day window"
+      // Only count habits that were active (have completion dates) within the 30-day window
       const recentCompletions = habit.completedDates?.filter(d => parseISO(d) >= thirtyDaysAgo).length || 0;
 
       // Only include in score if it has been active recently
@@ -108,7 +121,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         if (habit.period === 'daily') {
           totalExpected += 30;
         } else {
-          totalExpected += 4;
+          // More precise: 30 days is approx 4.3 weeks, so expect at least 5 completions if perfectly weekly
+          // Using Math.ceil(30 / 7) = 5
+          totalExpected += Math.ceil(30 / 7);
         }
         totalCompleted += recentCompletions;
       }
@@ -185,10 +200,16 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       // Calculate intensity (0-4 scale like GitHub)
       let intensity = 0;
       if (count > 0) {
-        if (count >= maxCompletions * 0.75) intensity = 4;
-        else if (count >= maxCompletions * 0.5) intensity = 3;
-        else if (count >= maxCompletions * 0.25) intensity = 2;
-        else intensity = 1;
+        if (maxCompletions < 4) {
+          // For small maxCompletions, map directly 1-to-1 up to 4
+          intensity = Math.min(count, 4);
+        } else {
+          // Percentage-based scaling
+          if (count >= maxCompletions * 0.75) intensity = 4;
+          else if (count >= maxCompletions * 0.5) intensity = 3;
+          else if (count >= maxCompletions * 0.25) intensity = 2;
+          else intensity = 1;
+        }
       }
 
       return {
@@ -230,7 +251,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     });
 
     return Array.from(categoryStats.entries())
-      .map(([subject, points]) => ({ subject, points, A: points }))
+      .map(([subject, points]) => ({ subject, points, value: points })) // 'value' alias for clarity if needed, but 'points' is fine
       .sort((a, b) => b.points - a.points)
       .slice(0, 6); // Top 6 categories
   }, [habits]);
@@ -242,15 +263,17 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         const completions = habit.completedDates?.length || 0;
         if (completions === 0) return null;
 
-        // Very rough estimate of "success rate" based on assumption of daily/weekly intent
-        // since creation. A perfect calc requires creation date which we might not have reliable access to in old data.
-        // We'll use a simplified metric: Streak vs Age or just recent consistency.
-        // Let's stick to the previous implementation's logic but refined.
+        // Estimate success rate based on "active" days since first completion
         const firstDate = habit.completedDates?.[habit.completedDates.length - 1];
         if (!firstDate) return null;
 
         const daysActive = Math.max(differenceInDays(new Date(), parseISO(firstDate)), 1);
-        const expected = habit.period === 'daily' ? daysActive : Math.ceil(daysActive / 7);
+
+        // Consistent expected calculation: min 1
+        const expected = habit.period === 'daily'
+          ? daysActive
+          : Math.max(Math.ceil(daysActive / 7), 1);
+
         const rate = Math.min(Math.round((completions / expected) * 100), 100);
 
         return {
@@ -285,6 +308,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           if (t.category === 'Income') {
             income += t.amount;
           } else {
+            // Note: Assuming all non-Income transactions are expenses as per app convention
             expense += t.amount;
           }
         });
@@ -301,12 +325,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   }, [transactions]);
 
   // Spending Trend (Area Chart)
-  const spendingTrend = useMemo(() => {
-    return netFlowData.map(d => ({
-      name: d.month,
-      Amount: d.Expense
-    }));
-  }, [netFlowData]);
+  // No separate calculation needed, we can use netFlowData directly in the chart
+  // by referencing the 'Expense' dataKey.
 
   // Category Breakdown
   const spendingCategories = useMemo(() => {
@@ -505,7 +525,10 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   {heatmapData.map((day) => (
                     <div
                       key={day.date}
-                      className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-all hover:scale-125 hover:ring-2 hover:ring-offset-1 hover:ring-brand-200"
+                      tabIndex={0}
+                      role="gridcell"
+                      aria-label={`${day.formattedDate}: ${day.count} completions`}
+                      className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-all hover:scale-125 hover:ring-2 hover:ring-offset-1 hover:ring-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
                       style={{
                         backgroundColor:
                           day.intensity === 0 ? '#f1f5f9' :
@@ -558,7 +581,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                         <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
                         <Radar
                           name="Points"
-                          dataKey="A"
+                          dataKey="points"
                           stroke="#8b5cf6"
                           strokeWidth={2}
                           fill="#8b5cf6"
@@ -626,16 +649,16 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 <h3 className="text-sm font-bold text-slate-700 mb-6">Spending Trend</h3>
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={spendingTrend}>
+                    <AreaChart data={netFlowData}>
                       <defs>
                         <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
                           <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                       <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
-                      <Area type="monotone" dataKey="Amount" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={3} />
+                      <Area type="monotone" dataKey="Expense" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={3} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
