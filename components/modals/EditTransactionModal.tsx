@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trash2, Loader2 } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { Modal } from '../../components/ui/Modal';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -96,183 +97,180 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     }
   };
 
-  if (!isOpen || !transaction) return null;
+  if (!transaction) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="edit-transaction-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      ariaLabelledBy="edit-transaction-title"
+      disableBackdropClose={isSaving}
     >
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
-          <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
+      {/* Header */}
+      <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
+        <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
+        <button
+          onClick={onClose}
+          disabled={isSaving}
+          className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Close modal"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Form */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Amount */}
+        <div>
+          <label htmlFor="edit-amount" className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Amount
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400">$</span>
+            <input
+              id="edit-amount"
+              type="number"
+              step="0.01"
+              disabled={isSaving}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
+              placeholder="0.00"
+            />
+          </div>
+        </div>
+
+        {/* Merchant */}
+        <div>
+          <label htmlFor="edit-merchant" className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Merchant
+          </label>
+          <input
+            id="edit-merchant"
+            type="text"
+            disabled={isSaving}
+            value={merchant}
+            onChange={(e) => setMerchant(e.target.value)}
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
+            placeholder="Store name"
+          />
+        </div>
+
+        {/* Category */}
+        <div>
+          <label htmlFor="edit-category" className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Category
+          </label>
+          <select
+            id="edit-category"
+            disabled={isSaving}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
+          >
+            {dynamicCategories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date */}
+        <div>
+          <label htmlFor="edit-date" className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Date
+          </label>
+          <input
+            id="edit-date"
+            type="date"
+            disabled={isSaving}
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
+          />
+        </div>
+
+        {/* Status */}
+        <div>
+          <label htmlFor="edit-status" className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Status
+          </label>
+          <select
+            id="edit-status"
+            disabled={isSaving}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
+          >
+            <option value="verified">Verified</option>
+            <option value="pending_review">Pending Review</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
+        <div className="flex gap-2">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Close modal"
+            className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X size={20} />
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
 
-        {/* Form */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Amount */}
-          <div>
-            <label htmlFor="edit-amount" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Amount
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400">$</span>
-              <input
-                id="edit-amount"
-                type="number"
-                step="0.01"
+        {/* Delete Button */}
+        {!showDeleteConfirm ? (
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isSaving}
+            className="w-full py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 size={16} />
+            Delete Transaction
+          </button>
+        ) : (
+          <div className="space-y-2 p-3 bg-money-bgNeg rounded-xl">
+            <p className="text-sm text-center text-money-neg font-bold">
+              Are you sure? This cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
                 disabled={isSaving}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-                placeholder="0.00"
-              />
+                className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isSaving}
+                className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
+              </button>
             </div>
           </div>
-
-          {/* Merchant */}
-          <div>
-            <label htmlFor="edit-merchant" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Merchant
-            </label>
-            <input
-              id="edit-merchant"
-              type="text"
-              disabled={isSaving}
-              value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-              placeholder="Store name"
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label htmlFor="edit-category" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Category
-            </label>
-            <select
-              id="edit-category"
-              disabled={isSaving}
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-            >
-              {dynamicCategories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date */}
-          <div>
-            <label htmlFor="edit-date" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Date
-            </label>
-            <input
-              id="edit-date"
-              type="date"
-              disabled={isSaving}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-            />
-          </div>
-
-          {/* Status */}
-          <div>
-            <label htmlFor="edit-status" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Status
-            </label>
-            <select
-              id="edit-status"
-              disabled={isSaving}
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-            >
-              <option value="verified">Verified</option>
-              <option value="pending_review">Pending Review</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Saving...</span>
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </button>
-          </div>
-
-          {/* Delete Button */}
-          {!showDeleteConfirm ? (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isSaving}
-              className="w-full py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Trash2 size={16} />
-              Delete Transaction
-            </button>
-          ) : (
-            <div className="space-y-2 p-3 bg-money-bgNeg rounded-xl">
-              <p className="text-sm text-center text-money-neg font-bold">
-                Are you sure? This cannot be undone.
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={isSaving}
-                  className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={isSaving}
-                  className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 };
 
