@@ -97,6 +97,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
     }
   };
 
+  if (!transaction) return null;
+
   return (
     <Modal
       isOpen={isOpen}
