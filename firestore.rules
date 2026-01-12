@@ -61,14 +61,18 @@ service cloud.firestore {
           )
         );
 
-        // Only admins can change the role field; regular members may update other fields.
-        allow update: if isMemberOf(householdId) &&
-          (
-            // No role change
-            !request.resource.data.diff(resource.data).changedKeys().hasAny(['role']) ||
-            // Role change allowed only for admins
-            isAdminOf(householdId)
-          );
+        // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
+        // Previous rule allowed ANY member to update ANY other member's non-role fields.
+        // New rule restricts updates to:
+        // 1. The user themselves (but they cannot change their own role)
+        // 2. Household Admins (can update any field including role)
+        allow update: if isMemberOf(householdId) && (
+          // Case 1: User updating their own profile (cannot change role)
+          (request.auth.uid == memberId && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])) ||
+          // Case 2: Admin updating any member (including role)
+          isAdminOf(householdId)
+        );
+
         allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
       }
 
