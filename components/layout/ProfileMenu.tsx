@@ -103,9 +103,9 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           </div>
         </div>
         {household && (
-            <div className="mt-3 text-xs font-medium text-brand-500 bg-brand-100/50 py-1 px-2 rounded-md truncate">
-              Household: {household.name}
-            </div>
+          <div className="mt-3 text-xs font-medium text-brand-500 bg-brand-100/50 py-1 px-2 rounded-md truncate">
+            Household: {household.name}
+          </div>
         )}
       </div>
 
@@ -117,6 +117,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             onClose();
           }}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-brand-700 rounded-lg transition-colors text-left"
+          role="menuitem"
         >
           <Settings className="w-4 h-4" />
           Settings
@@ -127,6 +128,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+          role="menuitem"
         >
           <LogOut className="w-4 h-4" />
           Log Out

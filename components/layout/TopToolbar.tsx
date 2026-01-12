@@ -84,13 +84,13 @@ const TopToolbar: React.FC = () => {
               aria-haspopup="menu"
             >
               {currentUser?.photoURL ? (
-                  <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
+                <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
               ) : currentUser?.displayName ? (
-                  <span className="font-bold text-sm">
-                      {currentUser.displayName.charAt(0)}
-                  </span>
+                <span className="font-bold text-sm">
+                  {currentUser.displayName.charAt(0)}
+                </span>
               ) : (
-                  <User className="w-5 h-5" />
+                <User className="w-5 h-5" />
               )}
             </button>
           </div>
