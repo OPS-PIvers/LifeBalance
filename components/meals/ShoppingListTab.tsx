@@ -7,6 +7,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
+import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import toast from 'react-hot-toast';
 
 // Helper for image file to base64
@@ -258,6 +259,7 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Quick Add Form */}
         <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
+            <QuickRestockRow />
             <form onSubmit={handleAddSubmit} className="space-y-3">
                 <div className="flex items-center gap-2">
                     <input
