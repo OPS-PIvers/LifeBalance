@@ -12,7 +12,7 @@ export const QuickRestockRow: React.FC = () => {
   // 2. Filter out items currently in Shopping List (not purchased yet)
   // 3. Filter out items currently in Pantry (optional, but good for "Restock" logic)
   // 4. Sort by purchase count
-  // 5. Take top 10
+  // 5. Take top 15
 
   // Helper for normalization
   const normalize = (s: string) => s.trim().toLowerCase();
@@ -52,8 +52,6 @@ export const QuickRestockRow: React.FC = () => {
       store: item.defaultStore,
       isPurchased: false
     });
-    // Toast is handled by addShoppingItem, but a small custom one is nice
-    toast.success(`Added ${item.name}`, { id: 'quick-add' });
   };
 
   return (
