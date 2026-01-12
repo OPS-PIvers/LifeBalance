@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
@@ -36,6 +36,34 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     };
   }, [isOpen, onClose, anchorRef]);
 
+  // Close menu when pressing Escape for keyboard accessibility
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isOpen && event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  // Manage focus when the profile menu opens and closes
+  useEffect(() => {
+    if (isOpen) {
+      if (menuRef.current) {
+        const firstFocusable = menuRef.current.querySelector<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        firstFocusable?.focus();
+      }
+    } else if (anchorRef.current) {
+      anchorRef.current.focus();
+    }
+  }, [isOpen, anchorRef]);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -60,7 +88,11 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
       <div className="bg-brand-50 p-4 border-b border-brand-100">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-brand-200 flex items-center justify-center text-brand-700 font-bold text-lg">
-            {currentUser?.displayName?.charAt(0) || <User className="w-5 h-5" />}
+            {currentUser?.displayName ? (
+              <span>{currentUser.displayName.charAt(0)}</span>
+            ) : (
+              <User className="w-5 h-5" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-brand-900 truncate">
