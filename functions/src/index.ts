@@ -392,7 +392,11 @@ export const sendbudgetalerts = onDocumentUpdated(
  * Callable function: Send a test notification to the calling user
  * This allows users to verify that their device is correctly configured
  */
-export const sendtestnotification = onCall(async (request) => {
+export const sendtestnotification = onCall(
+  {
+    cors: true,
+  },
+  async (request) => {
   // Ensure the user is authenticated
   if (!request.auth) {
     throw new HttpsError(
