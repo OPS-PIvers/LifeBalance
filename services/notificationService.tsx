@@ -323,7 +323,10 @@ export const requestNotificationPermission = async (
         });
       } catch (tokenError: any) {
         console.error('Error fetching FCM token:', tokenError);
-        
+        console.error('Error code:', tokenError.code);
+        console.error('Error message:', tokenError.message);
+        console.error('Full error:', JSON.stringify(tokenError, null, 2));
+
         // Provide specific error messages based on failure type
         if (tokenError.code === 'messaging/permission-blocked') {
           toast.error('Notification permission blocked. Please enable in browser settings.');
@@ -334,7 +337,7 @@ export const requestNotificationPermission = async (
         } else if (tokenError.message?.includes('VAPID')) {
           toast.error('Configuration error: Invalid VAPID key.');
         } else {
-          toast.error('Failed to connect to push service. Check your internet connection.');
+          toast.error(`Failed to connect to push service. Error: ${tokenError.code || tokenError.message}`);
         }
         return false;
       }
