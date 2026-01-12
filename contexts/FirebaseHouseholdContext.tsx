@@ -604,7 +604,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Run data migration if needed
   useEffect(() => {
     if (!householdId || !householdSettings?.startDate || !currentPeriodId) return;
-    if (transactions.length === 0 && buckets.length === 0) return; // No data to migrate
+    if (buckets.length === 0) return; // No data to migrate
 
     const runMigrations = async () => {
       if (needsMigration(buckets)) {
