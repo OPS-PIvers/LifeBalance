@@ -155,30 +155,29 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
   // Day of Week Performance
   const dayData = useMemo(() => {
-    const dayTotals = new Map<number, { total: number; count: number }>();
+    const dayTotals = new Map<number, number>();
 
     habits.forEach(habit => {
       habit.completedDates?.forEach(dateStr => {
         const date = new Date(dateStr);
         const dayOfWeek = date.getDay();
 
-        const current = dayTotals.get(dayOfWeek) || { total: 0, count: 0 };
-        dayTotals.set(dayOfWeek, {
-          total: current.total + habit.basePoints,
-          count: current.count + 1
-        });
+        // Count total completions per day (not average)
+        const current = dayTotals.get(dayOfWeek) || 0;
+        dayTotals.set(dayOfWeek, current + 1);
       });
     });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const result = [];
 
+    // Start from Monday (1) and wrap to Sunday (0)
     for (let i = 1; i <= 7; i++) {
       const dayIndex = i % 7;
-      const data = dayTotals.get(dayIndex);
+      const completions = dayTotals.get(dayIndex) || 0;
       result.push({
         day: dayNames[dayIndex],
-        avg: data ? Math.round(data.total / data.count) : 0
+        completions
       });
     }
 
@@ -189,17 +188,27 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const habitSuccessRates = useMemo(() => {
     return habits
       .map(habit => {
-        const totalDays = habit.completedDates?.length || 0;
-        const firstDate = habit.completedDates?.[0];
-        if (!firstDate) return null;
+        const completedDates = habit.completedDates || [];
+        if (completedDates.length === 0) return null;
+
+        // completedDates is sorted DESC, so last element is the earliest date
+        const firstDate = completedDates[completedDates.length - 1];
+        const totalCompletions = completedDates.length;
 
         const daysSinceStart = differenceInDays(new Date(), parseISO(firstDate));
-        const expectedCompletions = habit.period === 'daily' ? daysSinceStart : Math.floor(daysSinceStart / 7);
-        const successRate = expectedCompletions > 0 ? (totalDays / expectedCompletions) * 100 : 0;
+
+        // Expected completions based on period
+        const expectedCompletions = habit.period === 'daily'
+          ? daysSinceStart + 1  // +1 to include start day
+          : Math.max(Math.floor(daysSinceStart / 7), 1); // At least 1 week
+
+        const successRate = expectedCompletions > 0 ? (totalCompletions / expectedCompletions) * 100 : 0;
 
         return {
           name: habit.title.split(' ').slice(0, 2).join(' '),
-          rate: Math.min(successRate, 100)
+          rate: Math.min(Math.round(successRate), 100),
+          completions: totalCompletions,
+          expected: expectedCompletions
         };
       })
       .filter(Boolean)
@@ -556,8 +565,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dayData}>
                       <XAxis dataKey="day" tick={{fontSize: 11}} axisLine={false} tickLine={false} />
-                      <Tooltip cursor={{fill: '#F1F5F9'}} />
-                      <Bar dataKey="avg" fill="#475569" radius={[4, 4, 0, 0]} />
+                      <Tooltip formatter={(value: number) => `${value} completion${value !== 1 ? 's' : ''}`} cursor={{fill: '#F1F5F9'}} />
+                      <Bar dataKey="completions" fill="#475569" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
