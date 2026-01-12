@@ -82,8 +82,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     <div
       ref={menuRef}
       className="absolute top-14 right-4 z-50 w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
-      role="dialog"
-      aria-modal="true"
+      role="menu"
       aria-label="Profile Menu"
     >
       {/* User Info Header */}
