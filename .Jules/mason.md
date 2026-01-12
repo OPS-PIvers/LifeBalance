@@ -1,0 +1,1 @@
+## 2024-05-22 - Package Manager Standardization **Bottleneck:** Mixed usage of npm and pnpm causing potential lockfile drift. **Fix:** Standardized on pnpm for all local and CI operations. Removed package-lock.json.
