@@ -1,26 +1,29 @@
 import React, { useState, useMemo } from 'react';
-import { X, TrendingUp, TrendingDown, Flame, Award, Calendar, DollarSign, Activity, Target, ArrowRight } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Flame, Activity, Target } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip,
-  LineChart, Line, ResponsiveContainer,
+  ResponsiveContainer,
+  Line,
   AreaChart, Area, CartesianGrid,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   Legend, ComposedChart
 } from 'recharts';
 import {
-  format, subDays, startOfMonth, endOfMonth, eachDayOfInterval,
-  isSameDay, parseISO, differenceInDays, startOfWeek, subWeeks,
-  getISOWeek, addDays, isSameWeek, subMonths
+  format, subDays, eachDayOfInterval,
+  parseISO, differenceInDays, startOfWeek, subWeeks,
+  subMonths
 } from 'date-fns';
 import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 
 interface AnalyticsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+// Chart colors (moved outside component to avoid recreation)
+const CHART_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 
 // Custom Tooltip Component
 const CustomTooltip = ({ active, payload, label, formatter, suffix = '' }: any) => {
@@ -43,7 +46,7 @@ const CustomTooltip = ({ active, payload, label, formatter, suffix = '' }: any) 
 };
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { habits, transactions, buckets } = useHousehold();
+  const { habits, transactions } = useHousehold();
   const [activeTab, setActiveTab] = useState<'overview' | 'habits' | 'spending'>('overview');
 
   // ==========================================
@@ -71,9 +74,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       });
     });
 
-    const percentChange = lastWeekPoints > 0
-      ? ((currentWeekPoints - lastWeekPoints) / lastWeekPoints) * 100
-      : 100;
+    let percentChange = 100;
+    if (lastWeekPoints > 0) {
+      percentChange = ((currentWeekPoints - lastWeekPoints) / lastWeekPoints) * 100;
+    } else if (currentWeekPoints === 0 && lastWeekPoints === 0) {
+      percentChange = 0;
+    }
 
     return {
       current: currentWeekPoints,
@@ -89,17 +95,23 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     const thirtyDaysAgo = subDays(new Date(), 30);
 
     habits.forEach(habit => {
-      // Only count active habits
-      if (habit.period === 'daily') {
-        // Simple estimation: 30 days * target count (usually 1)
-        totalExpected += 30;
-      } else {
-        // Weekly: 4 weeks
-        totalExpected += 4;
-      }
-
+      // Check if habit was active/completed at least once in the last 30 days
+      // or if it was created recently (though we don't have createdAt easily accessible on all habits,
+      // looking at completedDates is a good proxy for "active" habits to include in score).
+      // If a habit has NO completions in 30 days, we might assume it's abandoned or new,
+      // but strictly we should count it if it's an "active" commitment.
+      // To satisfy the feedback: "Consider only counting habits that were active (have completion dates) within the 30-day window"
       const recentCompletions = habit.completedDates?.filter(d => parseISO(d) >= thirtyDaysAgo).length || 0;
-      totalCompleted += recentCompletions;
+
+      // Only include in score if it has been active recently
+      if (recentCompletions > 0) {
+        if (habit.period === 'daily') {
+          totalExpected += 30;
+        } else {
+          totalExpected += 4;
+        }
+        totalCompleted += recentCompletions;
+      }
     });
 
     if (totalExpected === 0) return 0;
@@ -218,8 +230,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     });
 
     return Array.from(categoryStats.entries())
-      .map(([subject, A]) => ({ subject, A }))
-      .sort((a, b) => b.A - a.A)
+      .map(([subject, points]) => ({ subject, points, A: points }))
+      .sort((a, b) => b.points - a.points)
       .slice(0, 6); // Top 6 categories
   }, [habits]);
 
@@ -309,14 +321,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         totalSpent += t.amount;
       });
 
-    const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
-
     return Array.from(totals.entries())
       .map(([name, value], index) => ({
         name,
         value: Math.round(value),
         percent: totalSpent > 0 ? Math.round((value / totalSpent) * 100) : 0,
-        fill: COLORS[index % COLORS.length]
+        fill: CHART_COLORS[index % CHART_COLORS.length]
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
@@ -356,7 +366,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           {['overview', 'habits', 'spending'].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab as any)}
+              onClick={() => setActiveTab(tab as 'overview' | 'habits' | 'spending')}
               className={clsx(
                 "pb-3 text-sm font-bold transition-all relative capitalize",
                 activeTab === tab ? "text-brand-600" : "text-slate-400 hover:text-slate-600"
@@ -499,10 +509,10 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                       style={{
                         backgroundColor:
                           day.intensity === 0 ? '#f1f5f9' :
-                          day.intensity === 1 ? '#d1fae5' : // 100
-                          day.intensity === 2 ? '#6ee7b7' : // 300
-                          day.intensity === 3 ? '#10b981' : // 500
-                          '#047857',                        // 700
+                          day.intensity === 1 ? '#6ee7b7' : // emerald-300 (better contrast than 100)
+                          day.intensity === 2 ? '#34d399' : // emerald-400
+                          day.intensity === 3 ? '#10b981' : // emerald-500
+                          '#047857',                        // emerald-700
                       }}
                       title={`${day.formattedDate}: ${day.count} completions`}
                     />
@@ -513,8 +523,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   <span>Less</span>
                   <div className="flex gap-1">
                     <div className="w-3 h-3 rounded-[2px] bg-slate-100" />
-                    <div className="w-3 h-3 rounded-[2px] bg-emerald-100" />
                     <div className="w-3 h-3 rounded-[2px] bg-emerald-300" />
+                    <div className="w-3 h-3 rounded-[2px] bg-emerald-400" />
                     <div className="w-3 h-3 rounded-[2px] bg-emerald-500" />
                     <div className="w-3 h-3 rounded-[2px] bg-emerald-700" />
                   </div>
