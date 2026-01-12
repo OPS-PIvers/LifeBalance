@@ -137,6 +137,7 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
   logger.info("Checking for habit reminders to send");
 
   const householdsSnapshot = await db.collection("households").get();
+  logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
 
   for (const householdDoc of householdsSnapshot.docs) {
     // Fetch members from subcollection
@@ -144,14 +145,26 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
     const members = membersSnapshot.docs.map(
       (doc) => doc.data() as HouseholdMember
     );
+    logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
 
     for (const member of members) {
       const prefs = member.notificationPreferences;
-      if (!prefs?.habitReminders?.enabled) continue;
-      if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+
+      if (!prefs?.habitReminders?.enabled) {
+        logger.info(`Member ${member.uid}: habit reminders not enabled`);
+        continue;
+      }
+
+      if (!member.fcmTokens || member.fcmTokens.length === 0) {
+        logger.info(`Member ${member.uid}: no FCM tokens found`);
+        continue;
+      }
+
+      logger.info(`Member ${member.uid}: has ${member.fcmTokens.length} token(s), scheduled time: ${prefs.habitReminders.time}, timezone: ${prefs.timezone}`);
 
       // Check if it's time to send
       if (isTimeToSend(prefs.habitReminders.time, prefs.timezone)) {
+        logger.info(`Member ${member.uid}: sending habit reminder now`);
         await sendNotificationToUser(
           member.fcmTokens,
           "Time for your daily habit check-in! 🎯",
@@ -161,6 +174,8 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
             url: "/habits",
           }
         );
+      } else {
+        logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
       }
     }
   }
@@ -175,6 +190,7 @@ export const sendactionqueuereminders = onSchedule(
     logger.info("Checking for action queue reminders to send");
 
     const householdsSnapshot = await db.collection("households").get();
+    logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
 
     for (const householdDoc of householdsSnapshot.docs) {
       // Fetch members from subcollection
@@ -182,11 +198,22 @@ export const sendactionqueuereminders = onSchedule(
       const members = membersSnapshot.docs.map(
         (doc) => doc.data() as HouseholdMember
       );
+      logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
 
       for (const member of members) {
         const prefs = member.notificationPreferences;
-        if (!prefs?.actionQueueReminders?.enabled) continue;
-        if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+
+        if (!prefs?.actionQueueReminders?.enabled) {
+          logger.info(`Member ${member.uid}: action queue reminders not enabled`);
+          continue;
+        }
+
+        if (!member.fcmTokens || member.fcmTokens.length === 0) {
+          logger.info(`Member ${member.uid}: no FCM tokens found`);
+          continue;
+        }
+
+        logger.info(`Member ${member.uid}: has ${member.fcmTokens.length} token(s), scheduled time: ${prefs.actionQueueReminders.time}, timezone: ${prefs.timezone}`);
 
         if (isTimeToSend(prefs.actionQueueReminders.time, prefs.timezone)) {
           // Get today's todos for this household
@@ -202,6 +229,7 @@ export const sendactionqueuereminders = onSchedule(
           );
 
           if (todayTodos.length > 0) {
+            logger.info(`Member ${member.uid}: sending action queue reminder (${todayTodos.length} todos)`);
             await sendNotificationToUser(
               member.fcmTokens,
               `Good morning! You have ${todayTodos.length} task${
@@ -213,7 +241,11 @@ export const sendactionqueuereminders = onSchedule(
                 url: "/dashboard",
               }
             );
+          } else {
+            logger.info(`Member ${member.uid}: no todos for today, skipping notification`);
           }
+        } else {
+          logger.info(`Member ${member.uid}: not time to send yet`);
         }
       }
     }
@@ -227,6 +259,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
   logger.info("Checking for streak warnings to send");
 
   const householdsSnapshot = await db.collection("households").get();
+  logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
 
   for (const householdDoc of householdsSnapshot.docs) {
     // Fetch members from subcollection
@@ -234,11 +267,22 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
     const members = membersSnapshot.docs.map(
       (doc) => doc.data() as HouseholdMember
     );
+    logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
 
     for (const member of members) {
       const prefs = member.notificationPreferences;
-      if (!prefs?.streakWarnings?.enabled) continue;
-      if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+
+      if (!prefs?.streakWarnings?.enabled) {
+        logger.info(`Member ${member.uid}: streak warnings not enabled`);
+        continue;
+      }
+
+      if (!member.fcmTokens || member.fcmTokens.length === 0) {
+        logger.info(`Member ${member.uid}: no FCM tokens found`);
+        continue;
+      }
+
+      logger.info(`Member ${member.uid}: has ${member.fcmTokens.length} token(s), scheduled time: ${prefs.streakWarnings.time}, timezone: ${prefs.timezone}`);
 
       if (isTimeToSend(prefs.streakWarnings.time, prefs.timezone)) {
         // Get habits subcollection
@@ -257,6 +301,7 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
         });
 
         if (habitsAtRisk.length > 0) {
+          logger.info(`Member ${member.uid}: sending streak warning (${habitsAtRisk.length} habits at risk)`);
           await sendNotificationToUser(
             member.fcmTokens,
             "Don't break your streak! 🔥",
@@ -268,7 +313,11 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
               url: "/habits",
             }
           );
+        } else {
+          logger.info(`Member ${member.uid}: no habits at risk, skipping notification`);
         }
+      } else {
+        logger.info(`Member ${member.uid}: not time to send yet`);
       }
     }
   }
@@ -283,6 +332,7 @@ export const sendbillreminders = onSchedule(
     logger.info("Checking for bill reminders to send");
 
     const householdsSnapshot = await db.collection("households").get();
+    logger.info(`Found ${householdsSnapshot.docs.length} household(s)`);
 
     for (const householdDoc of householdsSnapshot.docs) {
       // Fetch members from subcollection
@@ -290,11 +340,22 @@ export const sendbillreminders = onSchedule(
       const members = membersSnapshot.docs.map(
         (doc) => doc.data() as HouseholdMember
       );
+      logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
 
       for (const member of members) {
         const prefs = member.notificationPreferences;
-        if (!prefs?.billReminders?.enabled) continue;
-        if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
+
+        if (!prefs?.billReminders?.enabled) {
+          logger.info(`Member ${member.uid}: bill reminders not enabled`);
+          continue;
+        }
+
+        if (!member.fcmTokens || member.fcmTokens.length === 0) {
+          logger.info(`Member ${member.uid}: no FCM tokens found`);
+          continue;
+        }
+
+        logger.info(`Member ${member.uid}: has ${member.fcmTokens.length} token(s), scheduled time: ${prefs.billReminders.time}, timezone: ${prefs.timezone}`);
 
         if (isTimeToSend(prefs.billReminders.time, prefs.timezone)) {
           // Get calendar items (bills)
@@ -319,6 +380,7 @@ export const sendbillreminders = onSchedule(
               0
             );
 
+            logger.info(`Member ${member.uid}: sending bill reminder (${upcomingBills.length} bills, $${totalAmount.toFixed(2)})`);
             await sendNotificationToUser(
               member.fcmTokens,
               `Bills due in ${daysAhead} day${daysAhead > 1 ? "s" : ""}`,
@@ -330,7 +392,11 @@ export const sendbillreminders = onSchedule(
                 url: "/budget",
               }
             );
+          } else {
+            logger.info(`Member ${member.uid}: no upcoming bills, skipping notification`);
           }
+        } else {
+          logger.info(`Member ${member.uid}: not time to send yet`);
         }
       }
     }
