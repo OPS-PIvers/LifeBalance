@@ -48,7 +48,7 @@ const TopToolbar: React.FC = () => {
               onClick={() => setIsRewardsOpen(true)}
             >
               {/* Daily Points (Gold Star) */}
-              <div className="hidden xs:flex flex-col items-end">
+              <div className="hidden sm:flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-gold tabular-nums">
                     +{dailyPoints}
@@ -59,7 +59,7 @@ const TopToolbar: React.FC = () => {
               </div>
 
               {/* Vertical Divider */}
-              <div className="h-8 w-px bg-brand-600 xs:block hidden"></div>
+              <div className="h-8 w-px bg-brand-600 hidden sm:block"></div>
 
               {/* Weekly Points (Blue TrendingUp) */}
               <div className="flex flex-col items-end">
@@ -81,7 +81,7 @@ const TopToolbar: React.FC = () => {
               className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               aria-label="Open Profile Menu"
               aria-expanded={isProfileOpen}
-              aria-haspopup="dialog"
+              aria-haspopup="menu"
             >
               {currentUser?.photoURL ? (
                   <img src={currentUser.photoURL} alt={currentUser.displayName ? `${currentUser.displayName}'s profile picture` : 'Profile picture'} className="w-full h-full rounded-full object-cover" />
