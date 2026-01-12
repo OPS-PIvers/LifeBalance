@@ -44,11 +44,11 @@ const TopToolbar: React.FC = () => {
             <button
               type="button"
               aria-label="View Rewards and Points breakdown"
-              className="flex items-center gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
               onClick={() => setIsRewardsOpen(true)}
             >
               {/* Daily Points (Gold Star) */}
-              <div className="hidden sm:flex flex-col items-end">
+              <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-gold tabular-nums">
                     +{dailyPoints}
@@ -59,7 +59,7 @@ const TopToolbar: React.FC = () => {
               </div>
 
               {/* Vertical Divider */}
-              <div className="h-8 w-px bg-brand-600 hidden sm:block"></div>
+              <div className="h-8 w-px bg-brand-600"></div>
 
               {/* Weekly Points (Blue TrendingUp) */}
               <div className="flex flex-col items-end">
