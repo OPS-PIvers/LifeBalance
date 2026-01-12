@@ -6,9 +6,11 @@ import { signOut as authServiceSignOut } from '@/services/authService';
 
 interface AuthContextType {
   user: User | null;
+  currentUser: User | null; // Alias for user
   householdId: string | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  logout: () => Promise<void>; // Alias for signOut
   setHouseholdId: (id: string) => void;
 }
 
@@ -52,7 +54,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, householdId, loading, signOut, setHouseholdId }}>
+    <AuthContext.Provider value={{
+      user,
+      currentUser: user, // Provide alias
+      householdId,
+      loading,
+      signOut,
+      logout: signOut, // Provide alias
+      setHouseholdId
+    }}>
       {children}
     </AuthContext.Provider>
   );

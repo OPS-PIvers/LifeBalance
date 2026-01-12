@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, Plus, Activity, Utensils, CheckSquare, Settings } from 'lucide-react';
+import { LayoutDashboard, Wallet, Plus, Activity, Utensils, CheckSquare, ShoppingCart } from 'lucide-react';
 import CaptureModal from '../modals/CaptureModal';
 
 const BottomNav: React.FC = () => {
@@ -68,11 +68,11 @@ const BottomNav: React.FC = () => {
                 </>
               )}
             </NavLink>
-            <NavLink to="/settings" className={navLinkClass}>
+            <NavLink to="/shopping" className={navLinkClass}>
               {({ isActive }) => (
                 <>
-                  <Settings className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Settings</span>
+                  <ShoppingCart className={iconClass(isActive)} />
+                  <span className="text-[10px] font-medium">Shopping</span>
                 </>
               )}
             </NavLink>

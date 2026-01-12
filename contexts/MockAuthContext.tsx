@@ -70,7 +70,15 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   return (
-    <AuthContext.Provider value={{ user, householdId, loading, signOut, setHouseholdId }}>
+    <AuthContext.Provider value={{
+      user,
+      currentUser: user,
+      householdId,
+      loading,
+      signOut,
+      logout: signOut,
+      setHouseholdId
+    }}>
       {children}
     </AuthContext.Provider>
   );

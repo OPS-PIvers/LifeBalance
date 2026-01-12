@@ -365,6 +365,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     currentPeriodId,
     bucketSpentMap,
     householdSettings,
+    household: householdSettings,
 
     // Data
     accounts,
