@@ -53,7 +53,7 @@ import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
-import { migrateTransactionsToPeriods, migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
+import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
@@ -607,10 +607,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (transactions.length === 0 && buckets.length === 0) return; // No data to migrate
 
     const runMigrations = async () => {
-      if (needsMigration(transactions, buckets)) {
+      if (needsMigration(buckets)) {
         console.log('[Migration] Starting pay period migration...');
         try {
-          await migrateTransactionsToPeriods(householdId, householdSettings.startDate!);
           await migrateBucketsToPeriods(householdId, currentPeriodId);
           toast.success('Data migrated to pay period tracking');
         } catch (error) {
