@@ -176,20 +176,30 @@ const MealPlanTab: React.FC = () => {
         return;
     }
 
-    // 2. Collect all ingredients
-    const allIngredients: MealIngredient[] = [];
+    // 2. Collect and deduplicate ingredients
+    const ingredientMap = new Map<string, MealIngredient>();
     let mealCount = 0;
 
     weekPlanItems.forEach(item => {
         if (!item.mealId) return;
         const meal = meals.find(m => m.id === item.mealId);
         if (meal && meal.ingredients && meal.ingredients.length > 0) {
-            allIngredients.push(...meal.ingredients);
+            meal.ingredients.forEach(ing => {
+                // Deduplicate by normalized name
+                const key = ing.name.trim().toLowerCase();
+                if (!ingredientMap.has(key)) {
+                    ingredientMap.set(key, ing);
+                }
+                // Note: We don't sum quantities because they are strings (e.g. "1 box", "2 cups")
+                // Adding the item once is enough to get it on the list for review.
+            });
             mealCount++;
         }
     });
 
-    if (allIngredients.length === 0) {
+    const uniqueIngredients = Array.from(ingredientMap.values());
+
+    if (uniqueIngredients.length === 0) {
         toast('No ingredients found in planned meals', { icon: '🤷' });
         return;
     }
@@ -198,8 +208,8 @@ const MealPlanTab: React.FC = () => {
         return;
     }
 
-    // 3. Add to list (reusing existing logic which filters dupes)
-    await addIngredientsToShoppingList(allIngredients);
+    // 3. Add to list
+    await addIngredientsToShoppingList(uniqueIngredients);
   };
 
   const handleCopyLastWeek = async () => {
@@ -421,14 +431,14 @@ const MealPlanTab: React.FC = () => {
                         className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition-colors"
                         title="Copy meals from previous week"
                     >
-                        <Copy className="w-3 h-3" /> Copy Week
+                        <Copy className="w-3 h-3" /> Copy Last Week
                     </button>
                     <button
                         onClick={handleShopForWeek}
                         className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-brand-100 hover:bg-brand-200 text-brand-700 px-2 py-1 rounded-full transition-colors"
                         title="Add all ingredients to shopping list"
                     >
-                        <ShoppingCart className="w-3 h-3" /> Shop Week
+                        <ShoppingCart className="w-3 h-3" /> Shop This Week
                     </button>
                 </div>
             </div>
