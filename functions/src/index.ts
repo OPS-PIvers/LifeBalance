@@ -3,7 +3,7 @@ import {onDocumentUpdated} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
-import { toZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
 
 admin.initializeApp();
 
@@ -112,21 +112,18 @@ export function isTimeToSend(
     return false;
   }
 
-  // Get current time in UTC
-  const nowUtc = new Date();
+  const now = new Date();
 
-  // Convert to user's timezone
-  let userTime;
+  let currentHour: number;
   try {
-    userTime = toZonedTime(nowUtc, timezone);
+    // formatInTimeZone throws if timezone is invalid
+    const hourStr = formatInTimeZone(now, timezone, "H");
+    currentHour = parseInt(hourStr, 10);
   } catch (e) {
     logger.warn(`Invalid timezone '${timezone}', falling back to UTC`);
-    userTime = toZonedTime(nowUtc, "UTC");
+    const hourStr = formatInTimeZone(now, "UTC", "H");
+    currentHour = parseInt(hourStr, 10);
   }
-
-  const currentHour = userTime.getHours();
-  // We don't check minutes strictly because the cron runs once an hour.
-  // We check if the current hour matches the scheduled hour.
 
   const [schedHour] = scheduledTime.split(":").map(Number);
 
