@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 
@@ -71,6 +72,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
       navigate('/login');
     } catch (error) {
       console.error('Failed to log out', error);
+      toast.error('Logout failed. Please try again.');
     }
   };
 
