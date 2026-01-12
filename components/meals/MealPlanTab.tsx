@@ -121,6 +121,87 @@ const MealPlanTab: React.FC = () => {
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 }); // Sunday start
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
+  const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
+      const normalize = (s: string) => s.trim().toLowerCase();
+
+      const ingredientsToAdd = mealIngredients.filter(ing => {
+          const ingName = normalize(ing.name);
+          // Check if we have it in pantry (exact match normalized)
+          const inPantry = pantry.some(p => normalize(p.name) === ingName);
+          // Check if already in shopping list
+          const inList = shoppingList.some(s => normalize(s.name) === ingName && !s.isPurchased);
+
+          return !inPantry && !inList;
+      });
+
+      if (ingredientsToAdd.length === 0) {
+          toast.success('No new ingredients needed - check your pantry and list!');
+          return;
+      }
+
+      const results = await Promise.allSettled(ingredientsToAdd.map(ing =>
+          addShoppingItem({
+              name: ing.name,
+              category: 'Uncategorized',
+              quantity: ing.quantity || '',
+              isPurchased: false
+          })
+      ));
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failedResults = results.filter(r => r.status === 'rejected');
+
+      if (failedResults.length > 0) {
+          console.error('Failed to add ingredients:', failedResults);
+      }
+
+      if (successCount > 0) {
+          toast.success(`Added ${successCount} items to shopping list`);
+      } else if (failedResults.length > 0) {
+          toast.error('Failed to add ingredients');
+      }
+  };
+
+  const handleShopForWeek = async () => {
+    // 1. Get all meals for this week
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+
+    const weekPlanItems = mealPlan.filter(item =>
+        item.date >= weekStartStr && item.date <= weekEndStr
+    );
+
+    if (weekPlanItems.length === 0) {
+        toast('No meals planned for this week', { icon: '📅' });
+        return;
+    }
+
+    // 2. Collect all ingredients
+    const allIngredients: MealIngredient[] = [];
+    let mealCount = 0;
+
+    weekPlanItems.forEach(item => {
+        if (!item.mealId) return;
+        const meal = meals.find(m => m.id === item.mealId);
+        if (meal && meal.ingredients && meal.ingredients.length > 0) {
+            allIngredients.push(...meal.ingredients);
+            mealCount++;
+        }
+    });
+
+    if (allIngredients.length === 0) {
+        toast('No ingredients found in planned meals', { icon: '🤷' });
+        return;
+    }
+
+    if (!window.confirm(`Add ingredients for ${mealCount} meals to shopping list?`)) {
+        return;
+    }
+
+    // 3. Add to list (reusing existing logic which filters dupes)
+    await addIngredientsToShoppingList(allIngredients);
+  };
+
   const handleCopyLastWeek = async () => {
     // 1. Identify source dates (last week)
     const lastWeekStart = addDays(weekStart, -7);
@@ -317,47 +398,6 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
-  const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
-      const normalize = (s: string) => s.trim().toLowerCase();
-
-      const ingredientsToAdd = mealIngredients.filter(ing => {
-          const ingName = normalize(ing.name);
-          // Check if we have it in pantry (exact match normalized)
-          const inPantry = pantry.some(p => normalize(p.name) === ingName);
-          // Check if already in shopping list
-          const inList = shoppingList.some(s => normalize(s.name) === ingName && !s.isPurchased);
-
-          return !inPantry && !inList;
-      });
-
-      if (ingredientsToAdd.length === 0) {
-          toast.success('No new ingredients needed - check your pantry and list!');
-          return;
-      }
-
-      const results = await Promise.allSettled(ingredientsToAdd.map(ing =>
-          addShoppingItem({
-              name: ing.name,
-              category: 'Uncategorized',
-              quantity: ing.quantity || '',
-              isPurchased: false
-          })
-      ));
-
-      const successCount = results.filter(r => r.status === 'fulfilled').length;
-      const failedResults = results.filter(r => r.status === 'rejected');
-
-      if (failedResults.length > 0) {
-          console.error('Failed to add ingredients:', failedResults);
-      }
-
-      if (successCount > 0) {
-          toast.success(`Added ${successCount} items to shopping list`);
-      } else if (failedResults.length > 0) {
-          toast.error('Failed to add ingredients');
-      }
-  };
-
   return (
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
@@ -375,13 +415,22 @@ const MealPlanTab: React.FC = () => {
             </h2>
             <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm text-gray-500">Weekly Plan</span>
-                <button
-                    onClick={handleCopyLastWeek}
-                    className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition-colors"
-                    title="Copy meals from previous week"
-                >
-                    <Copy className="w-3 h-3" /> Copy Last Week
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleCopyLastWeek}
+                        className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition-colors"
+                        title="Copy meals from previous week"
+                    >
+                        <Copy className="w-3 h-3" /> Copy Week
+                    </button>
+                    <button
+                        onClick={handleShopForWeek}
+                        className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-brand-100 hover:bg-brand-200 text-brand-700 px-2 py-1 rounded-full transition-colors"
+                        title="Add all ingredients to shopping list"
+                    >
+                        <ShoppingCart className="w-3 h-3" /> Shop Week
+                    </button>
+                </div>
             </div>
         </div>
         <button
