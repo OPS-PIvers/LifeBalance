@@ -8,17 +8,8 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { Transaction, BudgetBucket, Household } from '@/types/schema';
+import { BudgetBucket } from '@/types/schema';
 import toast from 'react-hot-toast';
-
-// DEPRECATED: Old date-based period migration - no longer used
-// Kept for reference only
-export async function migrateTransactionsToPeriods(
-  householdId: string,
-  startDate: string
-): Promise<void> {
-  console.warn('[Migration] migrateTransactionsToPeriods is deprecated');
-}
 
 /**
  * Migrate buckets to include currentPeriodId and remove deprecated spent field
@@ -69,20 +60,15 @@ export async function migrateBucketsToPeriods(
 
 /**
  * Check if migration is needed for a household
- * Returns true if any transactions or buckets are missing period fields
+ * Returns true if any buckets are missing period fields
  *
- * @param transactions - All transactions
  * @param buckets - All buckets
  * @returns true if migration is needed
  */
 export function needsMigration(
-  transactions: Transaction[],
   buckets: BudgetBucket[]
 ): boolean {
-  const transactionsNeedMigration = transactions.some(t => !t.payPeriodId);
-  const bucketsNeedMigration = buckets.some(b => !b.currentPeriodId);
-
-  return transactionsNeedMigration || bucketsNeedMigration;
+  return buckets.some(b => !b.currentPeriodId);
 }
 
 /**
