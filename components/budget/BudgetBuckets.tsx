@@ -22,22 +22,12 @@ const BudgetBuckets: React.FC = () => {
   } = useHousehold();
 
   // ⚡ Bolt Optimization: Pre-calculate transactions grouped by bucket
-  // Instead of filtering the entire transaction list for every bucket (O(Buckets * Transactions)),
-  // we do a single pass to group them (O(Transactions)).
-  // This reduces complexity from quadratic to linear relative to data size.
+  // Replaced O(N log N) global sort with O(N) grouping + O(K log K) per-bucket sort.
+  // This avoids allocating a large sorted array and is faster for large transaction sets.
   const transactionsByBucket = useMemo(() => {
     const map = new Map<string, Transaction[]>();
 
-    // 1. Filter relevant transactions once
-    const relevantTransactions = transactions.filter(tx =>
-      // If currentPeriodId is set, match exact period. If not set, allow all periods.
-      currentPeriodId ? tx.payPeriodId === currentPeriodId : true
-    );
-
-    // 2. Sort them once (using toSorted to avoid mutation)
-    const sortedTransactions = relevantTransactions.toSorted((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // 3. Create a normalized map for Bucket Name -> Bucket ID
+    // 1. Create a normalized map for Bucket Name -> Bucket ID (O(Buckets))
     const nameToIdMap = new Map<string, string>();
     buckets.forEach(b => {
       const key = b.name.toLowerCase();
@@ -47,15 +37,27 @@ const BudgetBuckets: React.FC = () => {
       }
     });
 
-    // 4. Group transactions by bucket
-    sortedTransactions.forEach(tx => {
+    // 2. Single pass: Filter & Group (O(Transactions))
+    transactions.forEach(tx => {
+      // Period Check
+      if (currentPeriodId && tx.payPeriodId !== currentPeriodId) return;
       if (!tx.category) return;
+
       const bucketId = nameToIdMap.get(tx.category.toLowerCase());
       if (bucketId) {
-        const list = map.get(bucketId) || [];
+        // We know bucketId exists, so we can lazily initialize the array
+        let list = map.get(bucketId);
+        if (!list) {
+            list = [];
+            map.set(bucketId, list);
+        }
         list.push(tx);
-        map.set(bucketId, list);
       }
+    });
+
+    // 3. Sort each small group independently (O(K log K) where K is subset size)
+    map.forEach((list) => {
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     });
 
     return map;
