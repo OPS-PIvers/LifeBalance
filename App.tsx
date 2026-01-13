@@ -5,8 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import TopToolbar from './components/layout/TopToolbar';
-import BottomNav from './components/layout/BottomNav';
+import MainLayout from './components/layout/MainLayout';
 import Login from './pages/Login';
 import HouseholdSetup from './pages/HouseholdSetup';
 import Dashboard from './pages/Dashboard';
@@ -110,13 +109,9 @@ const App: React.FC = () => {
                 path="/"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <Dashboard />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <Dashboard />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -124,13 +119,9 @@ const App: React.FC = () => {
                 path="/budget"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <Budget />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <Budget />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -138,13 +129,9 @@ const App: React.FC = () => {
                 path="/habits"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <Habits />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <Habits />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -152,13 +139,9 @@ const App: React.FC = () => {
                 path="/meals"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <MealsPage />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <MealsPage />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -166,13 +149,9 @@ const App: React.FC = () => {
                 path="/shopping"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <ShoppingPage />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <ShoppingPage />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -180,13 +159,9 @@ const App: React.FC = () => {
                 path="/todos"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <ToDosPage />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <ToDosPage />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
@@ -194,13 +169,9 @@ const App: React.FC = () => {
                 path="/settings"
                 element={
                   <ProtectedRoute>
-                    <>
-                      <TopToolbar />
-                      <main>
-                        <Settings />
-                      </main>
-                      <BottomNav />
-                    </>
+                    <MainLayout>
+                      <Settings />
+                    </MainLayout>
                   </ProtectedRoute>
                 }
               />
