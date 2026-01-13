@@ -106,21 +106,32 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       return;
     }
 
+    const trimmedMerchant = merchant.trim();
+    if (!trimmedMerchant) {
+      toast.error('Please enter a merchant name');
+      return;
+    }
+
+    if (!category) {
+      toast.error('Please select a category');
+      return;
+    }
+
     setIsSaving(true);
     try {
       // Create new transaction with same details
       // We use the current form state so user can modify before duplicating if they want
       await addTransaction({
         amount: amountNum,
-        merchant: merchant.trim(),
+        merchant: trimmedMerchant,
         category,
         date: new Date().toISOString().split('T')[0], // Default to today for the copy
         status: 'verified',
         isRecurring: false,
         source: 'manual',
-        autoCategorized: true,
+        autoCategorized: transaction.autoCategorized ?? false,
         // Let addTransaction handle ID and timestamps
-      } as any);
+      } as unknown as Transaction);
 
       toast.success('Transaction duplicated');
       onClose();
@@ -274,7 +285,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         {/* Secondary Actions Row */}
         {!showDeleteConfirm && (
           <div className="flex gap-2">
-             <button
+            <button
               onClick={handleDuplicate}
               disabled={isSaving}
               className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
