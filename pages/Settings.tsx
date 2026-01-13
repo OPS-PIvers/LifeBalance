@@ -20,6 +20,17 @@ import {
   FileSpreadsheet,
   ChevronDown
 } from 'lucide-react';
+import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import MemberModal from '@/components/modals/MemberModal';
+import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
+import NotificationSettings from '@/components/settings/NotificationSettings';
+import Card from '@/components/ui/Card';
+import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
+import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
+import { HouseholdMember, NotificationPreferences } from '@/types/schema';
+import toast from 'react-hot-toast';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/firebase.config';
 
 interface SettingsSectionProps {
   id: string;
@@ -40,7 +51,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 }) => (
   <Card className="overflow-hidden">
     <button
+      type="button"
       onClick={() => onToggle(id)}
+      aria-expanded={isOpen}
+      aria-controls={`section-content-${id}`}
       className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
     >
       <div className="flex items-center gap-3">
@@ -54,6 +68,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       />
     </button>
     <div
+      id={`section-content-${id}`}
       className={`grid transition-all duration-200 ease-in-out ${
         isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
       }`}
@@ -66,17 +81,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     </div>
   </Card>
 );
-import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
-import MemberModal from '@/components/modals/MemberModal';
-import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
-import NotificationSettings from '@/components/settings/NotificationSettings';
-import Card from '@/components/ui/Card';
-import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
-import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences } from '@/types/schema';
-import toast from 'react-hot-toast';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/firebase.config';
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
