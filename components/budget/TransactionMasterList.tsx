@@ -70,7 +70,8 @@ const TransactionMasterList: React.FC = () => {
       setTransactionToDelete(null);
     } catch (error) {
       console.error('Failed to delete transaction:', error);
-      toast.error('Failed to delete transaction');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      toast.error(`Failed to delete transaction: ${errorMessage}`);
     } finally {
       setIsDeleting(false);
     }
@@ -89,8 +90,10 @@ const TransactionMasterList: React.FC = () => {
   };
 
   const getSanitizedLabel = (name: string, action: string) => {
-    const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
-    const truncatedName = sanitizedName.length > 20 ? `${sanitizedName.slice(0, 20)}...` : sanitizedName;
+    // Replace all non-alphanumeric chars (except spaces) with nothing
+    // Then replace multiple spaces with single space
+    const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const truncatedName = sanitizedName.length > 30 ? `${sanitizedName.slice(0, 30)}...` : sanitizedName;
     return `${action} transaction from ${truncatedName}`;
   };
 

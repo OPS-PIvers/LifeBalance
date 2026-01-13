@@ -24,13 +24,23 @@ const firebaseConfig = {
 };
 
 // Validate critical config
-if (!import.meta.env.VITE_FIREBASE_API_KEY) {
+const isProd = import.meta.env.PROD;
+const isUsingMockConfig = firebaseConfig.apiKey === mockConfig.apiKey;
+const isApiKeyMissing = !import.meta.env.VITE_FIREBASE_API_KEY;
+
+if (isApiKeyMissing) {
   const msg = 'Firebase configuration warning: Missing VITE_FIREBASE_API_KEY. Using mock configuration.';
-  if (import.meta.env.PROD) {
+  if (isProd) {
     console.error(msg);
+    // Hard failure in production if API key is missing
+    throw new Error('Firebase configuration error: Missing Firebase API Key in production environment.');
   } else {
     console.warn(msg);
   }
+} else if (isUsingMockConfig && isProd) {
+  // Edge case: env var exists but equals the mock value (unlikely but possible via some config injection)
+  console.error('Firebase configuration error: Using mock configuration in production.');
+  throw new Error('Firebase configuration error: Using mock configuration in production.');
 }
 
 // Initialize Firebase
