@@ -42,20 +42,54 @@ interface CustomTooltipProps {
 // Chart colors (moved outside component to avoid recreation)
 const CHART_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 
+// Heatmap intensity colors (matching GitHub-style contribution graph)
+const HEATMAP_COLORS = {
+  0: '#f1f5f9', // slate-100 - no activity
+  1: '#6ee7b7', // emerald-300 - light activity
+  2: '#34d399', // emerald-400 - moderate activity
+  3: '#10b981', // emerald-500 - high activity
+  4: '#047857', // emerald-700 - very high activity
+} as const;
+
+// Common chart styling
+const CHART_STYLES = {
+  xAxis: {
+    axisLine: false,
+    tickLine: false,
+    tick: { fill: '#94a3b8', fontSize: 11 },
+    dy: 10,
+  },
+  yAxis: {
+    axisLine: false,
+    tickLine: false,
+  },
+  cartesianGrid: {
+    strokeDasharray: '3 3',
+    vertical: false,
+    stroke: '#f1f5f9',
+  },
+  tooltip: {
+    cursor: { fill: '#f8fafc' },
+  },
+} as const;
+
 // Custom Tooltip Component
 const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, formatter, suffix = '' }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-white p-3 border border-slate-100 shadow-xl rounded-xl z-[70]">
         <p className="text-xs font-bold text-slate-500 mb-1">{label}</p>
-        {payload.map((entry, index) => (
-          <div key={index} className="flex items-center gap-2 text-sm">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
-            <span className="font-medium text-slate-700">
-              {entry.name}: {formatter ? formatter(entry.value) : entry.value}{suffix}
-            </span>
-          </div>
-        ))}
+        {payload.map((entry, index) => {
+          const key = entry.name ?? entry.payload?.name ?? entry.payload?.dataKey ?? index;
+          return (
+            <div key={key} className="flex items-center gap-2 text-sm">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+              <span className="font-medium text-slate-700">
+                {entry.name}: {formatter ? formatter(entry.value) : entry.value}{suffix}
+              </span>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -84,10 +118,13 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     habits.forEach(habit => {
       habit.completedDates?.forEach(dateStr => {
         const date = parseISO(dateStr);
+        // Handle negative habits: they subtract from points totals
+        const habitPoints = (habit as any).type === 'negative' ? -habit.basePoints : habit.basePoints;
+        
         if (date >= currentWeekStart) {
-          currentWeekPoints += habit.basePoints;
+          currentWeekPoints += habitPoints;
         } else if (date >= lastWeekStart && date <= lastWeekEnd) {
-          lastWeekPoints += habit.basePoints;
+          lastWeekPoints += habitPoints;
         }
       });
     });
@@ -113,20 +150,16 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     const thirtyDaysAgo = subDays(new Date(), 30);
 
     habits.forEach(habit => {
-      // Only count habits that were active (have completion dates) within the 30-day window
       const recentCompletions = habit.completedDates?.filter(d => parseISO(d) >= thirtyDaysAgo).length || 0;
 
-      // Only include in score if it has been active recently
-      if (recentCompletions > 0) {
-        if (habit.period === 'daily') {
-          totalExpected += 30;
-        } else {
-          // More precise: 30 days is approx 4.3 weeks, so expect at least 5 completions if perfectly weekly
-          // Using Math.ceil(30 / 7) = 5
-          totalExpected += Math.ceil(30 / 7);
-        }
-        totalCompleted += recentCompletions;
+      // Include all habits in calculation for accurate consistency measurement
+      if (habit.period === 'daily') {
+        totalExpected += 30;
+      } else {
+        // For weekly habits, calculate expected completions over 30 days (approximately 4.3 weeks)
+        totalExpected += Math.ceil(30 / 7);
       }
+      totalCompleted += recentCompletions;
     });
 
     if (totalExpected === 0) return 0;
@@ -144,7 +177,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       let points = 0;
       habits.forEach(h => {
         if (h.completedDates?.includes(dateStr)) {
-          points += h.basePoints;
+          // Handle negative habits: they subtract from daily points
+          if ((h as any).type === 'negative') {
+            points -= h.basePoints;
+          } else {
+            points += h.basePoints;
+          }
         }
       });
       return { date: format(parseISO(dateStr), 'MMM d'), points };
@@ -204,7 +242,18 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           // For small maxCompletions, map directly 1-to-1 up to 4
           intensity = Math.min(count, 4);
         } else {
-          // Percentage-based scaling
+          // Percentage-based scaling:
+          // When there are many completions overall, we normalize counts relative to the
+          // busiest day so that the 0–4 intensity steps roughly correspond to quartiles:
+          // - >= 75% of maxCompletions → intensity 4 (top activity days)
+          // - >= 50% of maxCompletions → intensity 3
+          // - >= 25% of maxCompletions → intensity 2
+          // -  > 0% of maxCompletions → intensity 1
+          //
+          // This keeps the heatmap visually comparable across households with very
+          // different absolute completion counts and mimics GitHub's relative
+          // contribution shading without letting a few extreme days collapse all other
+          // active days into the same low intensity.
           if (count >= maxCompletions * 0.75) intensity = 4;
           else if (count >= maxCompletions * 0.5) intensity = 3;
           else if (count >= maxCompletions * 0.25) intensity = 2;
@@ -241,17 +290,23 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     }));
   }, [habits]);
 
-  // Category Radar
+  // Category Radar (Last 90 Days)
   const categoryRadarData = useMemo(() => {
     const categoryStats = new Map<string, number>();
+    const cutoffDate = subDays(new Date(), 90);
 
     habits.forEach(habit => {
-      const points = habit.totalCount * habit.basePoints;
+      const recentCompletions = habit.completedDates?.filter(dateStr => {
+        const completionDate = parseISO(dateStr);
+        return completionDate >= cutoffDate;
+      }).length || 0;
+
+      const points = recentCompletions * habit.basePoints;
       categoryStats.set(habit.category, (categoryStats.get(habit.category) || 0) + points);
     });
 
     return Array.from(categoryStats.entries())
-      .map(([subject, points]) => ({ subject, points, value: points })) // 'value' alias for clarity if needed, but 'points' is fine
+      .map(([subject, points]) => ({ subject, points, value: points })) // Expose both 'points' and 'value' so existing RadarChart configs can safely use either dataKey without breaking
       .sort((a, b) => b.points - a.points)
       .slice(0, 6); // Top 6 categories
   }, [habits]);
@@ -264,12 +319,13 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         if (completions === 0) return null;
 
         // Estimate success rate based on "active" days since first completion
+        // Note: Assumes completedDates array is sorted chronologically with earliest date at the end
         const firstDate = habit.completedDates?.[habit.completedDates.length - 1];
         if (!firstDate) return null;
 
         const daysActive = Math.max(differenceInDays(new Date(), parseISO(firstDate)), 1);
 
-        // Consistent expected calculation: min 1
+        // Calculate expected completions with a minimum of 1 to avoid division by zero in the success rate
         const expected = habit.period === 'daily'
           ? daysActive
           : Math.max(Math.ceil(daysActive / 7), 1);
@@ -307,8 +363,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         .forEach(t => {
           if (t.category === 'Income') {
             income += t.amount;
-          } else {
-            // Note: Assuming all non-Income transactions are expenses as per app convention
+          } else if (t.category === 'Expense') {
+            // Only count transactions explicitly categorized as 'Expense' here.
+            // Other categories (e.g., transfers, refunds) are excluded from this Income vs Expense view.
             expense += t.amount;
           }
         });
@@ -332,24 +389,50 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const spendingCategories = useMemo(() => {
     const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
     const totals = new Map<string, number>();
-    let totalSpent = 0;
 
     transactions
       .filter(t => t.date >= thirtyDaysAgo && t.category !== 'Income')
       .forEach(t => {
         totals.set(t.category, (totals.get(t.category) || 0) + t.amount);
-        totalSpent += t.amount;
       });
 
-    return Array.from(totals.entries())
-      .map(([name, value], index) => ({
+    // Calculate total across ALL categories for accurate percentages
+    const totalAllCategories = Array.from(totals.values()).reduce((acc, val) => acc + val, 0);
+
+    // Helper function to generate stable color from category name
+    const getCategoryColor = (categoryName: string) => {
+      // Simple hash function for consistent color assignment
+      let hash = 0;
+      for (let i = 0; i < categoryName.length; i++) {
+        hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
+    };
+
+    const allCategories = Array.from(totals.entries())
+      .map(([name, value]) => ({
         name,
         value: Math.round(value),
-        percent: totalSpent > 0 ? Math.round((value / totalSpent) * 100) : 0,
-        fill: CHART_COLORS[index % CHART_COLORS.length]
+        percent: totalAllCategories > 0 ? Math.round((value / totalAllCategories) * 100) : 0,
+        fill: getCategoryColor(name),
       }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
+      .sort((a, b) => b.value - a.value);
+
+    // Return top 6 for display, but with "Other" category if there are more
+    const top6 = allCategories.slice(0, 6);
+    const remaining = allCategories.slice(6);
+
+    if (remaining.length > 0) {
+      const otherTotal = remaining.reduce((acc, cat) => acc + cat.value, 0);
+      top6.push({
+        name: 'Other',
+        value: otherTotal,
+        percent: totalAllCategories > 0 ? Math.round((otherTotal / totalAllCategories) * 100) : 0,
+        fill: '#94a3b8', // slate-400
+      });
+    }
+
+    return top6;
   }, [transactions]);
 
 
@@ -464,15 +547,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 <div className="h-48">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={activityTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid {...CHART_STYLES.cartesianGrid} />
                       <XAxis
                         dataKey="date"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{fill: '#94a3b8', fontSize: 10}}
-                        dy={10}
+                        {...CHART_STYLES.xAxis}
                       />
-                      <Tooltip content={<CustomTooltip suffix=" pts" />} cursor={{fill: '#f8fafc'}} />
+                      <Tooltip content={<CustomTooltip suffix=" pts" />} {...CHART_STYLES.tooltip} />
                       <Bar
                         dataKey="points"
                         fill="#6366f1"
@@ -495,7 +575,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                           {idx + 1}
                         </div>
                         <div className="flex-1">
-                          <div className="font-bold text-slate-700">{habit.title}</div>
+                          <div className="font-bold text-slate-700 truncate max-w-[200px]">{habit.title}</div>
                           <div className="text-xs text-slate-400">{habit.category}</div>
                         </div>
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold">
@@ -530,14 +610,15 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                       aria-label={`${day.formattedDate}: ${day.count} completions`}
                       className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-all hover:scale-125 hover:ring-2 hover:ring-offset-1 hover:ring-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
                       style={{
-                        backgroundColor:
-                          day.intensity === 0 ? '#f1f5f9' :
-                          day.intensity === 1 ? '#6ee7b7' : // emerald-300 (better contrast than 100)
-                          day.intensity === 2 ? '#34d399' : // emerald-400
-                          day.intensity === 3 ? '#10b981' : // emerald-500
-                          '#047857',                        // emerald-700
+                        backgroundColor: HEATMAP_COLORS[day.intensity as keyof typeof HEATMAP_COLORS],
                       }}
                       title={`${day.formattedDate}: ${day.count} completions`}
+                      onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          // Could trigger tooltip or detail view on keyboard interaction
+                        }
+                      }}
                     />
                   ))}
                 </div>
@@ -545,11 +626,11 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center justify-end gap-2 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
                   <span>Less</span>
                   <div className="flex gap-1">
-                    <div className="w-3 h-3 rounded-[2px] bg-slate-100" />
-                    <div className="w-3 h-3 rounded-[2px] bg-emerald-300" />
-                    <div className="w-3 h-3 rounded-[2px] bg-emerald-400" />
-                    <div className="w-3 h-3 rounded-[2px] bg-emerald-500" />
-                    <div className="w-3 h-3 rounded-[2px] bg-emerald-700" />
+                    <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: HEATMAP_COLORS[0] }} />
+                    <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: HEATMAP_COLORS[1] }} />
+                    <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: HEATMAP_COLORS[2] }} />
+                    <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: HEATMAP_COLORS[3] }} />
+                    <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: HEATMAP_COLORS[4] }} />
                   </div>
                   <span>More</span>
                 </div>
@@ -562,8 +643,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   <div className="h-48">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={dayOfWeekData}>
-                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#94a3b8'}} />
-                        <Tooltip content={<CustomTooltip suffix=" completions" />} cursor={{fill: '#f8fafc'}} />
+                        <XAxis dataKey="day" {...CHART_STYLES.xAxis} />
+                        <Tooltip content={<CustomTooltip suffix=" completions" />} {...CHART_STYLES.tooltip} />
                         <Bar dataKey="completions" fill="#3b82f6" radius={[4, 4, 4, 4]} barSize={20} />
                       </BarChart>
                     </ResponsiveContainer>
@@ -572,7 +653,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
                 {/* Category Radar */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                  <h3 className="text-sm font-bold text-slate-700 mb-2">Category Balance</h3>
+                  <h3 className="text-sm font-bold text-slate-700 mb-2">Category Balance (Last 90 Days)</h3>
                   <div className="h-52 -ml-6">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart cx="50%" cy="50%" outerRadius="70%" data={categoryRadarData}>
@@ -601,7 +682,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   {successRates.map((habit) => (
                     <div key={habit.name}>
                       <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-bold text-slate-700">{habit.name}</span>
+                        <span className="text-sm font-bold text-slate-700 truncate max-w-[65%]">{habit.name}</span>
                         <span className="text-xs font-bold text-slate-500">{habit.rate}%</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -631,10 +712,10 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={netFlowData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} dy={10} />
+                      <CartesianGrid {...CHART_STYLES.cartesianGrid} />
+                      <XAxis dataKey="month" {...CHART_STYLES.xAxis} />
                       <YAxis hide />
-                      <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} cursor={{fill: '#f8fafc'}} />
+                      <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} {...CHART_STYLES.tooltip} />
                       <Legend iconType="circle" wrapperStyle={{paddingTop: 20}} />
                       <Bar dataKey="Income" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
                       <Bar dataKey="Expense" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={20} />
@@ -656,7 +737,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                           <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                         </linearGradient>
                       </defs>
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                      <XAxis dataKey="month" {...CHART_STYLES.xAxis} />
                       <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
                       <Area type="monotone" dataKey="Expense" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={3} />
                     </AreaChart>
@@ -666,44 +747,53 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
               {/* Category Breakdown */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-4">Top Spending Categories</h3>
-                <div className="flex flex-col sm:flex-row items-center gap-8">
-                  <div className="h-48 w-48 shrink-0 relative">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={spendingCategories}
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={2}
-                          dataKey="value"
-                        >
-                          {spendingCategories.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                      <span className="text-xs text-slate-400 font-bold uppercase">Total</span>
-                      <span className="text-lg font-black text-slate-800">
-                        ${Math.round(spendingCategories.reduce((acc, curr) => acc + curr.value, 0)).toLocaleString()}
-                      </span>
+                <h3 className="text-sm font-bold text-slate-700 mb-4">Top Spending Categories (Last 30 Days)</h3>
+                {spendingCategories.length === 0 ? (
+                  <div className="flex items-center justify-center h-48 text-slate-400">
+                    <div className="text-center">
+                      <p className="text-sm font-medium">No spending data available</p>
+                      <p className="text-xs mt-1">Start tracking expenses to see insights</p>
                     </div>
                   </div>
-
-                  <div className="flex-1 w-full space-y-2">
-                    {spendingCategories.map((item) => (
-                      <div key={item.name} className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
-                        <div className="flex-1 text-sm font-bold text-slate-700 truncate">{item.name}</div>
-                        <div className="text-sm font-medium text-slate-500">{item.percent}%</div>
-                        <div className="text-sm font-bold text-slate-800 w-16 text-right">${item.value.toLocaleString()}</div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center gap-8">
+                    <div className="h-48 w-48 shrink-0 relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={spendingCategories}
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={2}
+                            dataKey="value"
+                          >
+                            {spendingCategories.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
+                            ))}
+                          </Pie>
+                          <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                        <span className="text-xs text-slate-400 font-bold uppercase">Total</span>
+                        <span className="text-lg font-black text-slate-800">
+                          ${Math.round(spendingCategories.reduce((acc, curr) => acc + curr.value, 0)).toLocaleString()}
+                        </span>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="flex-1 w-full space-y-2">
+                      {spendingCategories.map((item) => (
+                        <div key={item.name} className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
+                          <div className="flex-1 text-sm font-bold text-slate-700 truncate">{item.name}</div>
+                          <div className="text-sm font-medium text-slate-500">{item.percent}%</div>
+                          <div className="text-sm font-bold text-slate-800 w-16 text-right">${item.value.toLocaleString()}</div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
