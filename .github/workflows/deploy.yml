@@ -33,6 +33,9 @@ jobs:
       - name: Type check
         run: pnpm lint
 
+      - name: Run unit tests
+        run: pnpm test
+
       - name: Generate build version
         run: |
           BUILD_VERSION=$(date +%s)

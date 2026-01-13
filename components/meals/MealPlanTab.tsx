@@ -294,7 +294,7 @@ const MealPlanTab: React.FC = () => {
           tags: linkedMeal?.tags || []
       });
 
-      setTargetDate(planItem.date);
+      setTargetDate(planItem.date || '');
       setEditingMealId(planItem.mealId); // If it exists
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
@@ -487,9 +487,9 @@ const MealPlanTab: React.FC = () => {
                                             </div>
                                             {linkedMeal?.description && <div className="text-xs text-brand-700 mt-1">{linkedMeal.description}</div>}
                                             <div className="flex gap-2 mt-2">
-                                                {linkedMeal?.ingredients?.length > 0 && (
+                                                {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (
                                                     <button
-                                                        onClick={() => addIngredientsToShoppingList(linkedMeal.ingredients)}
+                                                        onClick={() => addIngredientsToShoppingList(linkedMeal!.ingredients)}
                                                         className="text-xs flex items-center gap-1 text-brand-600 bg-white px-2 py-1 rounded border border-brand-200 hover:bg-brand-50"
                                                     >
                                                         <ShoppingCart className="w-3 h-3" /> Shop Ingredients
@@ -499,7 +499,7 @@ const MealPlanTab: React.FC = () => {
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             <button
-                                                onClick={() => handleEditMealPlanItem(planItem, linkedMeal)}
+                                                onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
                                                 className="text-gray-400 hover:text-brand-500"
                                                 aria-label={`Edit ${mealName}`}
                                             >

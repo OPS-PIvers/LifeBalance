@@ -207,6 +207,11 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     };
   }, [habits]);
 
+  // Ensure safe usage of habits in renders
+  // Casting to Habit[] is safe here because the filter removes any potential nulls,
+  // and streakStats.top is derived from habits array.
+  const safeTopStreaks = (streakStats.top || []).filter((h): h is NonNullable<typeof h> => !!h) as import('../../types/schema').Habit[];
+
   // ==========================================
   // 2. HABITS DATA
   // ==========================================
@@ -565,11 +570,13 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Top Streaks */}
-              {streakStats.top.length > 0 && (
+              {safeTopStreaks.length > 0 && (
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
                   <h3 className="text-sm font-bold text-slate-700 mb-4">Top Performers</h3>
                   <div className="space-y-3">
-                    {streakStats.top.map((habit, idx) => (
+                    {safeTopStreaks.map((habit, idx) => {
+                      if (!habit) return null;
+                      return (
                       <div key={habit.id} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
                         <div className="w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm text-sm font-bold text-slate-500">
                           {idx + 1}
@@ -583,7 +590,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                           {habit.streakDays} days
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               )}

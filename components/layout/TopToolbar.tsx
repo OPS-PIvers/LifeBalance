@@ -13,7 +13,7 @@ const TopToolbar: React.FC = () => {
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const profileButtonRef = useRef<HTMLButtonElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null!);
 
   const isPositive = safeToSpend >= 0;
 
