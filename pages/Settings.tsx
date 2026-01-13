@@ -48,39 +48,49 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   isOpen,
   onToggle,
   children
-}) => (
-  <Card className="overflow-hidden">
-    <button
-      type="button"
-      onClick={() => onToggle(id)}
-      aria-expanded={isOpen}
-      aria-controls={`section-content-${id}`}
-      className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
-    >
-      <div className="flex items-center gap-3">
-        {icon && <div className="text-brand-600">{icon}</div>}
-        <h3 className="text-lg font-bold text-brand-800">{title}</h3>
-      </div>
-      <ChevronDown
-        className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
-          isOpen ? 'rotate-180' : ''
+}) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle(id);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        onKeyDown={handleKeyDown}
+        aria-expanded={isOpen}
+        aria-controls={`section-content-${id}`}
+        className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {icon && <div className="text-brand-600">{icon}</div>}
+          <h3 id={`section-title-${id}`} className="text-lg font-bold text-brand-800">{title}</h3>
+        </div>
+        <ChevronDown
+          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      <div
+        id={`section-content-${id}`}
+        role="region"
+        aria-labelledby={`section-title-${id}`}
+        className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out ${
+          isOpen ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
         }`}
-      />
-    </button>
-    <div
-      id={`section-content-${id}`}
-      className={`grid transition-all duration-200 ease-in-out ${
-        isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-      }`}
-    >
-      <div className="overflow-hidden">
+      >
         <div className="p-4 border-t border-gray-100 space-y-4">
           {children}
         </div>
       </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
@@ -584,7 +594,7 @@ const Settings: React.FC = () => {
           </div>
         </SettingsSection>
 
-        {/* Sign Out Button */}
+        {/* Account Section */}
         <SettingsSection
           id="account"
           title="Account"
