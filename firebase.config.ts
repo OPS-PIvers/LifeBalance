@@ -5,12 +5,12 @@ import { getMessaging, type Messaging } from 'firebase/messaging';
 
 // Fallback to mock config if env vars are missing (for Test Mode/CI)
 const mockConfig = {
-  apiKey: "mock-api-key",
-  authDomain: "mock-app.firebaseapp.com",
-  projectId: "mock-app",
-  storageBucket: "mock-app.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:mock123",
+  apiKey: "test-mode-api-key",
+  authDomain: "test-mode-app.firebaseapp.example",
+  projectId: "test-mode-project",
+  storageBucket: "test-mode-app.appspot.example",
+  messagingSenderId: "ci-environment-sender-id",
+  appId: "test-mode-app-id",
 };
 
 const firebaseConfig = {

@@ -1,13 +1,15 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
+import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
+import { Modal } from '../ui/Modal';
+import toast from 'react-hot-toast';
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, buckets, deleteTransaction } = useHousehold();
+  const { transactions, deleteTransaction } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,6 +19,10 @@ const TransactionMasterList: React.FC = () => {
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Delete Confirmation State
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Derived State: Unique Categories
   const categories = useMemo(() => {
@@ -40,7 +46,8 @@ const TransactionMasterList: React.FC = () => {
         const matchesSource = sourceFilter === 'all' ||
           (sourceFilter === 'recurring' && tx.isRecurring) ||
           (sourceFilter === 'manual' && tx.source === 'manual') ||
-          (sourceFilter === 'scanned' && (tx.source === 'camera-scan' || tx.source === 'file-upload'));
+          (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
+          (sourceFilter === 'file-upload' && tx.source === 'file-upload');
 
         return matchesSearch && matchesCategory && matchesSource;
       })
@@ -53,9 +60,19 @@ const TransactionMasterList: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
-      await deleteTransaction(id);
+  const confirmDelete = async () => {
+    if (!transactionToDelete || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteTransaction(transactionToDelete.id);
+      toast.success('Transaction deleted');
+      setTransactionToDelete(null);
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      toast.error('Failed to delete transaction');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -116,7 +133,8 @@ const TransactionMasterList: React.FC = () => {
             <option value="all">All Sources</option>
             <option value="recurring">Recurring</option>
             <option value="manual">Manual Entry</option>
-            <option value="scanned">Scanned / AI</option>
+            <option value="camera-scan">Camera Scan</option>
+            <option value="file-upload">File Upload</option>
           </select>
 
           {(categoryFilter !== 'all' || sourceFilter !== 'all') && (
@@ -190,7 +208,7 @@ const TransactionMasterList: React.FC = () => {
                     <Edit size={16} />
                   </button>
                   <button
-                    onClick={() => handleDelete(tx.id)}
+                    onClick={() => setTransactionToDelete(tx)}
                     className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
                     aria-label={`Delete transaction from ${tx.merchant}`}
                   >
@@ -209,6 +227,43 @@ const TransactionMasterList: React.FC = () => {
         onClose={() => setIsEditModalOpen(false)}
         transaction={editingTransaction}
       />
+
+      {/* Delete Confirmation Modal */}
+      {transactionToDelete && (
+        <Modal
+          isOpen={true}
+          onClose={() => !isDeleting && setTransactionToDelete(null)}
+          title="Confirm Delete"
+          disableBackdropClose={isDeleting}
+        >
+          <div className="p-4 space-y-4">
+            <p className="text-brand-600">
+              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>${transactionToDelete.amount.toFixed(2)}</strong>?
+            </p>
+            <p className="text-sm text-money-neg font-bold">
+              This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setTransactionToDelete(null)}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
