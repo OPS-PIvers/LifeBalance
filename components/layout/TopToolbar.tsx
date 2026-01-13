@@ -19,8 +19,8 @@ const TopToolbar: React.FC = () => {
 
   return (
     <>
-      <div className="relative">
-        <header className="sticky top-0 z-40 w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+      <div className="relative z-40">
+        <header className="w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
