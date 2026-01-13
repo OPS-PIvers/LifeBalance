@@ -16,7 +16,7 @@ const BottomNav: React.FC = () => {
 
   return (
     <>
-      <nav className="fixed bottom-0 z-50 w-full bg-white/95 backdrop-blur-md border-t border-brand-200 shadow-soft pb-safe">
+      <nav className="w-full bg-white/95 backdrop-blur-md border-t border-brand-200 shadow-soft pb-safe">
         <div className="flex items-center justify-between h-16 px-2 relative">
           
           {/* Left Group */}
