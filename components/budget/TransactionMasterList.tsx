@@ -233,10 +233,10 @@ const TransactionMasterList: React.FC = () => {
         <Modal
           isOpen={true}
           onClose={() => !isDeleting && setTransactionToDelete(null)}
-          title="Confirm Delete"
           disableBackdropClose={isDeleting}
         >
           <div className="p-4 space-y-4">
+            <h3 className="text-lg font-bold text-brand-800">Confirm Delete</h3>
             <p className="text-brand-600">
               Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>${transactionToDelete.amount.toFixed(2)}</strong>?
             </p>
