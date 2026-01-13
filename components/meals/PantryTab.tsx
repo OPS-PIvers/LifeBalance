@@ -250,8 +250,9 @@ const PantryTab: React.FC = () => {
             <form onSubmit={handleAddSubmit} className="flex flex-col flex-1 overflow-hidden">
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
+                  <label htmlFor="pantry-item-name" className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
                   <input
+                    id="pantry-item-name"
                     type="text"
                     required
                     value={newName}
@@ -263,8 +264,9 @@ const PantryTab: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-brand-400 uppercase">Quantity (Est.)</label>
+                    <label htmlFor="pantry-item-quantity" className="text-xs font-bold text-brand-400 uppercase">Quantity (Est.)</label>
                     <input
+                      id="pantry-item-quantity"
                       type="text"
                       value={newQuantity}
                       onChange={e => setNewQuantity(e.target.value)}
@@ -273,8 +275,9 @@ const PantryTab: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
+                    <label htmlFor="pantry-item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
                     <select
+                      id="pantry-item-category"
                       value={newCategory}
                       onChange={e => setNewCategory(e.target.value)}
                       className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
@@ -288,8 +291,9 @@ const PantryTab: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-brand-400 uppercase">Purchase Date (Opt)</label>
+                    <label htmlFor="pantry-item-purchase-date" className="text-xs font-bold text-brand-400 uppercase">Purchase Date (Opt)</label>
                     <input
+                      id="pantry-item-purchase-date"
                       type="date"
                       value={newPurchaseDate}
                       onChange={e => setNewPurchaseDate(e.target.value)}
@@ -297,8 +301,9 @@ const PantryTab: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-brand-400 uppercase">Expiry Date (Opt)</label>
+                    <label htmlFor="pantry-item-expiry-date" className="text-xs font-bold text-brand-400 uppercase">Expiry Date (Opt)</label>
                     <input
+                      id="pantry-item-expiry-date"
                       type="date"
                       value={newExpiry}
                       onChange={e => setNewExpiry(e.target.value)}
