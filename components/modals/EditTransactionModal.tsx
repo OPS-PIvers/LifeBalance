@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Loader2 } from 'lucide-react';
+import { X, Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../../components/ui/Modal';
@@ -13,7 +13,7 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, buckets } = useHousehold();
+  const { updateTransaction, deleteTransaction, addTransaction, buckets } = useHousehold();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
@@ -92,6 +92,52 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       onClose();
     } catch (error) {
       console.error('Failed to delete transaction:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!transaction || isSaving) return;
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    const trimmedMerchant = merchant.trim();
+    if (!trimmedMerchant) {
+      toast.error('Please enter a merchant name');
+      return;
+    }
+
+    if (!category) {
+      toast.error('Please select a category');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Create new transaction with same details
+      // We use the current form state so user can modify before duplicating if they want
+      await addTransaction({
+        amount: amountNum,
+        merchant: trimmedMerchant,
+        category,
+        date: new Date().toISOString().split('T')[0], // Default to today for the copy
+        status: 'verified',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: transaction.autoCategorized ?? false,
+        // Let addTransaction handle ID and timestamps
+      } as unknown as Transaction);
+
+      toast.success('Transaction duplicated');
+      onClose();
+    } catch (error) {
+      console.error('Failed to duplicate transaction:', error);
+      toast.error('Failed to duplicate transaction');
     } finally {
       setIsSaving(false);
     }
@@ -236,17 +282,30 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           </button>
         </div>
 
-        {/* Delete Button */}
-        {!showDeleteConfirm ? (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isSaving}
-            className="w-full py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Trash2 size={16} />
-            Delete Transaction
-          </button>
-        ) : (
+        {/* Secondary Actions Row */}
+        {!showDeleteConfirm && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleDuplicate}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Copy size={16} />
+              Duplicate
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={isSaving}
+              className="flex-1 py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          </div>
+        )}
+
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && (
           <div className="space-y-2 p-3 bg-money-bgNeg rounded-xl">
             <p className="text-sm text-center text-money-neg font-bold">
               Are you sure? This cannot be undone.
