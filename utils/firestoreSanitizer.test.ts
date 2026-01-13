@@ -1,8 +1,12 @@
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { sanitizeFirestoreData, MAX_FIRESTORE_STRING_LENGTH } from './firestoreSanitizer';
 
 describe('sanitizeFirestoreData', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('converts undefined values to null', () => {
     const input = { a: 1, b: undefined, c: 'test' };
     const output = sanitizeFirestoreData(input);
@@ -41,13 +45,41 @@ describe('sanitizeFirestoreData', () => {
     expect(output).toEqual(input);
   });
 
-  it('truncates strings exceeding the maximum length', () => {
+  it('truncates strings exceeding the maximum length and warns', () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const longString = 'a'.repeat(MAX_FIRESTORE_STRING_LENGTH + 100);
     const expectedString = 'a'.repeat(MAX_FIRESTORE_STRING_LENGTH);
     const input = { notes: longString };
+
     const output = sanitizeFirestoreData(input);
+
     expect(output.notes).toHaveLength(MAX_FIRESTORE_STRING_LENGTH);
     expect(output.notes).toBe(expectedString);
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'String truncated from length',
+      longString.length,
+      'to',
+      MAX_FIRESTORE_STRING_LENGTH
+    );
+  });
+
+  it('handles strings needing both trimming and truncation', () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const content = 'a'.repeat(MAX_FIRESTORE_STRING_LENGTH + 50);
+    const inputString = `   ${content}   `; // Leading/trailing spaces
+
+    const input = { notes: inputString };
+    const output = sanitizeFirestoreData(input);
+
+    // Should be trimmed first (removing spaces), then truncated
+    expect(output.notes).toHaveLength(MAX_FIRESTORE_STRING_LENGTH);
+    expect(output.notes).toBe(content.slice(0, MAX_FIRESTORE_STRING_LENGTH));
+    expect(consoleSpy).toHaveBeenCalledWith(
+      'String truncated from length',
+      content.length, // Length after trim
+      'to',
+      MAX_FIRESTORE_STRING_LENGTH
+    );
   });
 
   it('preserves strings exactly at the maximum length', () => {

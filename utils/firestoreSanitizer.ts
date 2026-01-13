@@ -26,6 +26,12 @@ export const sanitizeFirestoreData = (obj: any): any => {
   if (typeof obj === 'string') {
     const trimmed = obj.trim();
     if (trimmed.length > MAX_FIRESTORE_STRING_LENGTH) {
+      console.warn(
+        'String truncated from length',
+        trimmed.length,
+        'to',
+        MAX_FIRESTORE_STRING_LENGTH
+      );
       return trimmed.slice(0, MAX_FIRESTORE_STRING_LENGTH);
     }
     return trimmed === "" ? null : trimmed;
