@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSafeToSpend, findNextPaycheckDate } from './safeToSpendCalculator';
 import { Account, BudgetBucket, CalendarItem, Transaction } from '@/types/schema';
-import { addDays, addMonths, format, subDays } from 'date-fns';
+import { addDays, format, subDays } from 'date-fns';
 
 describe('findNextPaycheckDate', () => {
   const today = new Date();
