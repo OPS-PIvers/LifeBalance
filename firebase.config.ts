@@ -3,19 +3,29 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getMessaging, type Messaging } from 'firebase/messaging';
 
+// Fallback to mock config if env vars are missing (for Test Mode/CI)
+const mockConfig = {
+  apiKey: "mock-api-key",
+  authDomain: "mock-app.firebaseapp.com",
+  projectId: "mock-app",
+  storageBucket: "mock-app.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:mock123",
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || mockConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || mockConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || mockConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || mockConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || mockConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || mockConfig.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Validate critical config
-if (!firebaseConfig.apiKey) {
-  console.error('Firebase configuration error: Missing VITE_FIREBASE_API_KEY');
+// Validate critical config (only warn if we fell back to mock)
+if (!import.meta.env.VITE_FIREBASE_API_KEY) {
+  console.warn('Firebase configuration warning: Missing VITE_FIREBASE_API_KEY. Using mock configuration.');
 }
 
 // Initialize Firebase

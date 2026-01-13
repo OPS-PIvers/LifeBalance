@@ -1,0 +1,216 @@
+
+import React, { useState, useMemo } from 'react';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { Transaction } from '../../types/schema';
+import EditTransactionModal from '../modals/EditTransactionModal';
+
+const TransactionMasterList: React.FC = () => {
+  const { transactions, buckets, deleteTransaction } = useHousehold();
+
+  // State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+
+  // Edit Modal State
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Derived State: Unique Categories
+  const categories = useMemo(() => {
+    const cats = new Set(transactions.map(t => t.category).filter(Boolean));
+    return Array.from(cats).sort();
+  }, [transactions]);
+
+  // Derived State: Filtered & Sorted Transactions
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter(tx => {
+        // Search Filter (Merchant or Amount)
+        const matchesSearch =
+          tx.merchant.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          tx.amount.toString().includes(searchTerm);
+
+        // Category Filter
+        const matchesCategory = categoryFilter === 'all' || tx.category === categoryFilter;
+
+        // Source Filter
+        const matchesSource = sourceFilter === 'all' ||
+          (sourceFilter === 'recurring' && tx.isRecurring) ||
+          (sourceFilter === 'manual' && tx.source === 'manual') ||
+          (sourceFilter === 'scanned' && (tx.source === 'camera-scan' || tx.source === 'file-upload'));
+
+        return matchesSearch && matchesCategory && matchesSource;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, searchTerm, categoryFilter, sourceFilter]);
+
+  // Handlers
+  const handleEdit = (tx: Transaction) => {
+    setEditingTransaction(tx);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this transaction? This cannot be undone.')) {
+      await deleteTransaction(id);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setCategoryFilter('all');
+    setSourceFilter('all');
+  };
+
+  const getSourceIcon = (source: string, isRecurring: boolean) => {
+    if (isRecurring) return <History size={12} className="text-purple-500" />;
+    if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-blue-500" />;
+    return null;
+  };
+
+  return (
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Filters Card */}
+      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search merchant or amount..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Filter Chips / Dropdowns */}
+        <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Sources</option>
+            <option value="recurring">Recurring</option>
+            <option value="manual">Manual Entry</option>
+            <option value="scanned">Scanned / AI</option>
+          </select>
+
+          {(categoryFilter !== 'all' || sourceFilter !== 'all') && (
+            <button
+              onClick={clearFilters}
+              className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Transaction List */}
+      <div className="space-y-2">
+        {filteredTransactions.length === 0 ? (
+          <div className="text-center py-10 text-brand-400">
+            <Filter className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <p>No transactions found matching your filters.</p>
+            <button onClick={clearFilters} className="mt-2 text-brand-600 font-bold text-sm hover:underline">
+              Clear all filters
+            </button>
+          </div>
+        ) : (
+          filteredTransactions.map(tx => (
+            <div
+              key={tx.id}
+              className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm flex items-center justify-between hover:border-brand-300 transition-colors group"
+            >
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                   tx.category === 'Income' ? 'bg-green-100 text-green-600' : 'bg-brand-100 text-brand-600'
+                }`}>
+                  {tx.category === 'Income' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-brand-800 truncate">{tx.merchant}</p>
+                    {getSourceIcon(tx.source, tx.isRecurring)}
+                  </div>
+                  <p className="text-xs text-brand-500 truncate flex items-center gap-1">
+                    {format(parseISO(tx.date), 'MMM d, yyyy')}
+                    <span className="w-1 h-1 rounded-full bg-brand-300" />
+                    <span className="font-medium text-brand-600">{tx.category}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pl-2">
+                <div className="text-right">
+                  <p className={`font-mono font-bold ${
+                    tx.category === 'Income' ? 'text-green-600' : 'text-brand-800'
+                  }`}>
+                    {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
+                  </p>
+                  {tx.status === 'pending_review' && (
+                    <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
+                      Pending
+                    </p>
+                  )}
+                </div>
+
+                {/* Actions (visible on mobile, enhanced on hover for desktop) */}
+                <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleEdit(tx)}
+                    className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                    aria-label={`Edit transaction from ${tx.merchant}`}
+                  >
+                    <Edit size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(tx.id)}
+                    className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
+                    aria-label={`Delete transaction from ${tx.merchant}`}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Edit Modal */}
+      <EditTransactionModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        transaction={editingTransaction}
+      />
+    </div>
+  );
+};
+
+export default TransactionMasterList;
