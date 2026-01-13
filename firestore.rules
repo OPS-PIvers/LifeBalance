@@ -8,6 +8,7 @@ service cloud.firestore {
     }
 
     // Helper function: Check if user is member of household
+    // Used for subcollections where we don't have access to the household doc's memberUids field directly
     function isMemberOf(householdId) {
       return isAuthenticated() &&
              exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
@@ -21,8 +22,12 @@ service cloud.firestore {
 
     // Households collection
     match /households/{householdId} {
-      // Allow any authenticated user to read specific doc (needed for joining via invite code)
-      allow get: if isAuthenticated();
+      // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
+      // Only members can read the household document.
+      // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
+      // This aligns with the list rule below.
+      allow get: if isAuthenticated() && request.auth.uid in resource.data.memberUids;
+
       // Allow listing only if user is a member (prevents enumeration of all households)
       allow list: if request.auth.uid in resource.data.memberUids;
 
