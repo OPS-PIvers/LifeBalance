@@ -23,9 +23,14 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Validate critical config (only warn if we fell back to mock)
+// Validate critical config
 if (!import.meta.env.VITE_FIREBASE_API_KEY) {
-  console.warn('Firebase configuration warning: Missing VITE_FIREBASE_API_KEY. Using mock configuration.');
+  const msg = 'Firebase configuration warning: Missing VITE_FIREBASE_API_KEY. Using mock configuration.';
+  if (import.meta.env.PROD) {
+    console.error(msg);
+  } else {
+    console.warn(msg);
+  }
 }
 
 // Initialize Firebase

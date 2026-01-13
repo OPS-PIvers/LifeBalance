@@ -88,6 +88,12 @@ const TransactionMasterList: React.FC = () => {
     return null;
   };
 
+  const getSanitizedLabel = (name: string, action: string) => {
+    const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').trim();
+    const truncatedName = sanitizedName.length > 20 ? `${sanitizedName.slice(0, 20)}...` : sanitizedName;
+    return `${action} transaction from ${truncatedName}`;
+  };
+
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
@@ -113,7 +119,7 @@ const TransactionMasterList: React.FC = () => {
         </div>
 
         {/* Filter Chips / Dropdowns */}
-        <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -203,14 +209,14 @@ const TransactionMasterList: React.FC = () => {
                   <button
                     onClick={() => handleEdit(tx)}
                     className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                    aria-label={`Edit transaction from ${tx.merchant}`}
+                    aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
                   >
                     <Edit size={16} />
                   </button>
                   <button
                     onClick={() => setTransactionToDelete(tx)}
                     className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
-                    aria-label={`Delete transaction from ${tx.merchant}`}
+                    aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -221,12 +227,14 @@ const TransactionMasterList: React.FC = () => {
         )}
       </div>
 
-      {/* Edit Modal */}
-      <EditTransactionModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        transaction={editingTransaction}
-      />
+      {/* Edit Modal - Conditionally Rendered */}
+      {editingTransaction && (
+        <EditTransactionModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          transaction={editingTransaction}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {transactionToDelete && (

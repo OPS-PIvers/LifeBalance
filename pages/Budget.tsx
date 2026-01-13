@@ -14,7 +14,7 @@ const Budget: React.FC = () => {
     <div className="min-h-screen bg-brand-50 pb-28 pt-4">
       <div className="px-4">
         {/* Sub-Navigation */}
-        <div className="bg-brand-100 p-1 rounded-xl flex gap-1 mb-6 overflow-x-auto hide-scrollbar">
+        <div className="bg-brand-100 p-1 rounded-xl flex gap-1 mb-6 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setActiveTab('calendar')}
             className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
