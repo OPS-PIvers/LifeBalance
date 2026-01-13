@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { Modal } from '../ui/Modal';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -89,127 +90,149 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      disableBackdropClose={isSaving}
+      ariaLabelledBy="habit-form-title"
+    >
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
+        <h2 id="habit-form-title" className="text-lg font-bold text-brand-800">
+          {editingHabit ? 'Edit Habit' : 'New Habit'}
+        </h2>
+        <button
+          onClick={onClose}
+          disabled={isSaving}
+          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full disabled:opacity-50"
+          aria-label="Close"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-      <div className="relative w-full max-w-md max-h-[calc(100vh-8rem)] sm:max-h-[85vh] bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
-          <h2 className="text-lg font-bold text-brand-800">
-            {editingHabit ? 'Edit Habit' : 'New Habit'}
-          </h2>
-          <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-50 rounded-full">
-            <X size={20} />
-          </button>
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+
+        {/* Title */}
+        <div>
+          <label className="text-xs font-bold text-brand-400 uppercase" htmlFor="habit-title">Title</label>
+          <input
+            id="habit-title"
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. Drink Water"
+            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
+            disabled={isSaving}
+          />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-
-          {/* Title */}
+        {/* Type & Category */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Drink Water"
+            <label className="text-xs font-bold text-brand-400 uppercase" htmlFor="habit-category">Category</label>
+            <select
+              id="habit-category"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
               className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
-            />
+              disabled={isSaving}
+            >
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-brand-400 uppercase">Type</label>
+            <div className="flex bg-brand-50 p-1 rounded-xl mt-1">
+               <button
+                 onClick={() => setType('positive')}
+                 disabled={isSaving}
+                 type="button"
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'}`}
+               >Good</button>
+               <button
+                 onClick={() => setType('negative')}
+                 disabled={isSaving}
+                 type="button"
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'}`}
+               >Bad</button>
+             </div>
+          </div>
+        </div>
+
+        {/* Scoring Logic */}
+        <div className="bg-brand-50 p-4 rounded-xl border border-brand-100">
+          <h3 className="text-sm font-bold text-brand-700 mb-3">Scoring Strategy</h3>
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button
+              onClick={() => setScoringType('incremental')}
+              disabled={isSaving}
+              type="button"
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50'}`}
+            >
+              <span className="block font-bold mb-1">Incremental</span>
+              <span className="text-brand-400">Points for every tap.</span>
+            </button>
+            <button
+              onClick={() => setScoringType('threshold')}
+              disabled={isSaving}
+              type="button"
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50'}`}
+            >
+              <span className="block font-bold mb-1">Threshold</span>
+              <span className="text-brand-400">Points only when target met.</span>
+            </button>
           </div>
 
-          {/* Type & Category */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
-              <select
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
-              >
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <label className="text-xs font-bold text-brand-400 uppercase" htmlFor="habit-points">Points</label>
+              <input
+                id="habit-points"
+                type="number"
+                value={basePoints}
+                onChange={e => setBasePoints(e.target.value)}
+                className="w-full mt-1 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
+                disabled={isSaving}
+              />
             </div>
             <div>
-              <label className="text-xs font-bold text-brand-400 uppercase">Type</label>
-              <div className="flex bg-brand-50 p-1 rounded-xl mt-1">
-                 <button
-                   onClick={() => setType('positive')}
-                   className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${type === 'positive' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'}`}
-                 >Good</button>
-                 <button
-                   onClick={() => setType('negative')}
-                   className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${type === 'negative' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'}`}
-                 >Bad</button>
-               </div>
-            </div>
-          </div>
-
-          {/* Scoring Logic */}
-          <div className="bg-brand-50 p-4 rounded-xl border border-brand-100">
-            <h3 className="text-sm font-bold text-brand-700 mb-3">Scoring Strategy</h3>
-
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => setScoringType('incremental')}
-                className={`p-3 rounded-xl border text-left text-xs transition-all ${scoringType === 'incremental' ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50'}`}
-              >
-                <span className="block font-bold mb-1">Incremental</span>
-                <span className="text-brand-400">Points for every tap.</span>
-              </button>
-              <button
-                onClick={() => setScoringType('threshold')}
-                className={`p-3 rounded-xl border text-left text-xs transition-all ${scoringType === 'threshold' ? 'bg-white border-brand-300 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50'}`}
-              >
-                <span className="block font-bold mb-1">Threshold</span>
-                <span className="text-brand-400">Points only when target met.</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase">Points</label>
-                <input
+              <label className="text-xs font-bold text-brand-400 uppercase" htmlFor="habit-target">Target ({period})</label>
+              <div className="flex items-center gap-2 mt-1">
+                 <input
+                  id="habit-target"
                   type="number"
-                  value={basePoints}
-                  onChange={e => setBasePoints(e.target.value)}
-                  className="w-full mt-1 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
+                  value={targetCount}
+                  onChange={e => setTargetCount(e.target.value)}
+                  className="w-20 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
+                  disabled={isSaving}
                 />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase">Target ({period})</label>
-                <div className="flex items-center gap-2 mt-1">
-                   <input
-                    type="number"
-                    value={targetCount}
-                    onChange={e => setTargetCount(e.target.value)}
-                    className="w-20 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
-                  />
-                  <button
-                    onClick={() => setPeriod(period === 'daily' ? 'weekly' : 'daily')}
-                    className="text-[10px] font-bold uppercase bg-white border border-brand-200 px-2 py-2.5 rounded-lg min-w-[60px]"
-                  >
-                    {period}
-                  </button>
-                </div>
+                <button
+                  onClick={() => setPeriod(period === 'daily' ? 'weekly' : 'daily')}
+                  disabled={isSaving}
+                  type="button"
+                  className="text-[10px] font-bold uppercase bg-white border border-brand-200 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
+                >
+                  {period}
+                </button>
               </div>
             </div>
           </div>
-
         </div>
 
-        <div className="p-4 border-t border-brand-100 flex-shrink-0">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className={`w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
-          >
-            {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <div className="p-4 border-t border-brand-100 flex-shrink-0">
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className={`w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
+        >
+          {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
+        </button>
+      </div>
+    </Modal>
   );
 };
 
