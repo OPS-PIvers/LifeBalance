@@ -1,11 +1,18 @@
 
 /**
- * Recursively sanitizes an object for Firestore by removing undefined values
- * and trimming strings to prevent whitespace issues.
+ * Maximum allowed string length for Firestore fields to prevent DoS via large payloads.
+ * 10,000 characters is approximately 10KB-40KB depending on encoding, well below the 1MB document limit,
+ * but large enough for practically any user text field (notes, descriptions).
+ */
+export const MAX_FIRESTORE_STRING_LENGTH = 10000;
+
+/**
+ * Recursively sanitizes an object for Firestore by removing undefined values,
+ * trimming strings, and enforcing length limits to prevent abuse.
  * Firestore does not accept undefined values in documents.
  *
  * @param obj The object to sanitize
- * @returns A new object with undefined values removed and strings trimmed
+ * @returns A new object with undefined values removed, strings trimmed and truncated
  */
 export const sanitizeFirestoreData = (obj: any): any => {
   if (obj === undefined) {
@@ -18,6 +25,15 @@ export const sanitizeFirestoreData = (obj: any): any => {
 
   if (typeof obj === 'string') {
     const trimmed = obj.trim();
+    if (trimmed.length > MAX_FIRESTORE_STRING_LENGTH) {
+      console.warn(
+        'String truncated from length',
+        trimmed.length,
+        'to',
+        MAX_FIRESTORE_STRING_LENGTH
+      );
+      return trimmed.slice(0, MAX_FIRESTORE_STRING_LENGTH);
+    }
     return trimmed === "" ? null : trimmed;
   }
 
