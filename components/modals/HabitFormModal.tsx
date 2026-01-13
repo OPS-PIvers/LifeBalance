@@ -102,6 +102,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           {editingHabit ? 'Edit Habit' : 'New Habit'}
         </h2>
         <button
+          type="button"
           onClick={onClose}
           disabled={isSaving}
           className="p-2 text-brand-400 hover:bg-brand-50 rounded-full disabled:opacity-50"
@@ -225,6 +226,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
       <div className="p-4 border-t border-brand-100 flex-shrink-0">
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSaving}
           className={`w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
