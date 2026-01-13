@@ -1,6 +1,56 @@
 import { CalendarItem } from '@/types/schema';
 import { addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, differenceInCalendarWeeks, differenceInCalendarMonths, startOfDay } from 'date-fns';
 
+const MONDAY = 1;
+const MAX_ITERATIONS = 1000;
+
+/**
+ * Calculates the first occurrence date on or after the range start.
+ * Implements "jump" logic to skip years of iterations.
+ */
+function calculateStartDate(originalDate: Date, rangeStart: Date, frequency: string): Date {
+  let currentDate = originalDate;
+
+  // Only jump if we are behind
+  if (isBefore(originalDate, rangeStart)) {
+    if (frequency === 'weekly') {
+      const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
+      if (weeksDiff > 0) {
+        currentDate = addWeeks(originalDate, weeksDiff);
+      }
+    } else if (frequency === 'bi-weekly') {
+      const weeksDiff = Math.floor(differenceInCalendarWeeks(rangeStart, originalDate, { weekStartsOn: MONDAY }));
+      const jumps = Math.floor(weeksDiff / 2);
+      if (jumps > 0) {
+        currentDate = addWeeks(originalDate, jumps * 2);
+      }
+    } else if (frequency === 'monthly') {
+      const monthsDiff = differenceInCalendarMonths(rangeStart, originalDate);
+      if (monthsDiff > 0) {
+        currentDate = addMonths(originalDate, monthsDiff);
+      }
+    }
+  }
+
+  return currentDate;
+}
+
+/**
+ * Advances the date by one period based on frequency.
+ */
+function getNextOccurrence(currentDate: Date, frequency: string): Date {
+  switch (frequency) {
+    case 'weekly':
+      return addWeeks(currentDate, 1);
+    case 'bi-weekly':
+      return addWeeks(currentDate, 2);
+    case 'monthly':
+      return addMonths(currentDate, 1);
+    default:
+      return currentDate; // Should not happen if validated
+  }
+}
+
 /**
  * Generates recurring instances of a calendar item within a date range.
  * If the item is not recurring, returns just the original item.
@@ -30,48 +80,13 @@ export function generateRecurringInstances(
   const end = startOfDay(rangeEnd);
 
   // Optimization: Skip directly to the start of the range
-  // Instead of iterating from originalDate (which could be years ago),
-  // calculate the first occurrence on or after rangeStart.
+  let currentDate = calculateStartDate(originalDate, start, item.frequency);
 
-  let currentDate = originalDate;
-
-  // If the original date is before the range start, jump forward
-  if (isBefore(originalDate, start)) {
-    if (item.frequency === 'weekly') {
-      const weeksDiff = Math.floor(differenceInCalendarWeeks(start, originalDate, { weekStartsOn: 1 }));
-      // Jump to roughly the right week, then adjust
-      // We use floor to ensure we don't overshoot
-      if (weeksDiff > 0) {
-        currentDate = addWeeks(originalDate, weeksDiff);
-      }
-    } else if (item.frequency === 'bi-weekly') {
-      const weeksDiff = Math.floor(differenceInCalendarWeeks(start, originalDate, { weekStartsOn: 1 }));
-      // Ensure we jump by even number of weeks
-      const jumps = Math.floor(weeksDiff / 2);
-      if (jumps > 0) {
-        currentDate = addWeeks(originalDate, jumps * 2);
-      }
-    } else if (item.frequency === 'monthly') {
-      const monthsDiff = differenceInCalendarMonths(start, originalDate);
-      if (monthsDiff > 0) {
-        currentDate = addMonths(originalDate, monthsDiff);
-      }
-    }
-
-    // The jump might have landed us slightly before start, or on it.
-    // Loop will handle moving to the exact next valid occurrence if needed.
-    // If we overshot (unlikely with floor/diff logic but possible with day alignment),
-    // the loop condition won't execute or will exit early.
-  }
-
-  // Generate instances within the range
-  // Limit to 1000 instances to prevent infinite loops (increased from 100 due to better starting point)
   let iterationCount = 0;
-  const maxIterations = 1000;
 
   while (
     (isSameDay(currentDate, end) || isBefore(currentDate, end)) &&
-    iterationCount < maxIterations
+    iterationCount < MAX_ITERATIONS
   ) {
     // Only add if within range (inclusive)
     if (isSameDay(currentDate, start) || isAfter(currentDate, start)) {
@@ -82,21 +97,13 @@ export function generateRecurringInstances(
       });
     }
 
-    // Move to next occurrence based on frequency
-    switch (item.frequency) {
-      case 'weekly':
-        currentDate = addWeeks(currentDate, 1);
-        break;
-      case 'bi-weekly':
-        currentDate = addWeeks(currentDate, 2);
-        break;
-      case 'monthly':
-        currentDate = addMonths(currentDate, 1);
-        break;
-      default:
-        // Safety break for unknown frequency
-        iterationCount = maxIterations;
-        break;
+    const nextDate = getNextOccurrence(currentDate, item.frequency);
+
+    // Safety check to prevent infinite loop if date didn't change (e.g. unknown frequency)
+    if (nextDate.getTime() === currentDate.getTime()) {
+      iterationCount = MAX_ITERATIONS; // Break loop
+    } else {
+      currentDate = nextDate;
     }
 
     iterationCount++;
@@ -132,17 +139,21 @@ export function expandCalendarItems(
   const deletedDatesMap = new Map<string, Set<string>>();
 
   for (const paidInstance of paidInstances) {
-    if (!paidDatesMap.has(paidInstance.parentRecurringId!)) {
-      paidDatesMap.set(paidInstance.parentRecurringId!, new Set());
+    if (paidInstance.parentRecurringId) {
+      if (!paidDatesMap.has(paidInstance.parentRecurringId)) {
+        paidDatesMap.set(paidInstance.parentRecurringId, new Set());
+      }
+      paidDatesMap.get(paidInstance.parentRecurringId)?.add(paidInstance.date);
     }
-    paidDatesMap.get(paidInstance.parentRecurringId!)!.add(paidInstance.date);
   }
 
   for (const deletedInstance of deletedInstances) {
-    if (!deletedDatesMap.has(deletedInstance.parentRecurringId!)) {
-      deletedDatesMap.set(deletedInstance.parentRecurringId!, new Set());
+    if (deletedInstance.parentRecurringId) {
+      if (!deletedDatesMap.has(deletedInstance.parentRecurringId)) {
+        deletedDatesMap.set(deletedInstance.parentRecurringId, new Set());
+      }
+      deletedDatesMap.get(deletedInstance.parentRecurringId)?.add(deletedInstance.date);
     }
-    deletedDatesMap.get(deletedInstance.parentRecurringId!)!.add(deletedInstance.date);
   }
 
   // Generate recurring instances, excluding paid and deleted dates
