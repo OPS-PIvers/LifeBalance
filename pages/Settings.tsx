@@ -17,7 +17,8 @@ import {
   Bell,
   Download,
   FileJson,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ChevronDown
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -30,6 +31,66 @@ import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
+
+interface SettingsSectionProps {
+  id: string;
+  title: string;
+  icon?: React.ReactNode;
+  isOpen: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}
+
+const SettingsSection: React.FC<SettingsSectionProps> = ({
+  id,
+  title,
+  icon,
+  isOpen,
+  onToggle,
+  children
+}) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onToggle(id);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        onKeyDown={handleKeyDown}
+        aria-expanded={isOpen}
+        aria-controls={`section-content-${id}`}
+        className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          {icon && <div className="text-brand-600">{icon}</div>}
+          <h3 id={`section-title-${id}`} className="text-lg font-bold text-brand-800">{title}</h3>
+        </div>
+        <ChevronDown
+          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      <div
+        id={`section-content-${id}`}
+        role="region"
+        aria-labelledby={`section-title-${id}`}
+        className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out ${
+          isOpen ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
+        <div className="p-4 border-t border-gray-100 space-y-4">
+          {children}
+        </div>
+      </div>
+    </Card>
+  );
+};
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
@@ -59,6 +120,13 @@ const Settings: React.FC = () => {
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
+
+  // Section State
+  const [openSection, setOpenSection] = useState<string | null>('profile');
+
+  const handleToggleSection = (id: string) => {
+    setOpenSection(prev => prev === id ? null : id);
+  };
 
   // Notification State
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission>(
@@ -224,116 +292,131 @@ const Settings: React.FC = () => {
     <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
 
-        {/* User Profile Card */}
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            {user?.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || 'User'}
-                className="w-16 h-16 rounded-full"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-brand-200 flex items-center justify-center">
-                <User className="w-8 h-8 text-brand-600" />
-              </div>
-            )}
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-brand-800">
-                {user?.displayName || 'User'}
-              </h2>
-              <p className="text-sm text-brand-500">{user?.email}</p>
-              {currentUser && (
-                <div className="flex items-center gap-2 mt-1">
-                  {currentUser.role === 'admin' ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                      <Crown size={12} />
-                      Admin
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
-                      <Shield size={12} />
-                      Member
-                    </span>
-                  )}
+        <SettingsSection
+          id="profile"
+          title="Profile & Preferences"
+          icon={<User className="w-5 h-5" />}
+          isOpen={openSection === 'profile'}
+          onToggle={handleToggleSection}
+        >
+          {/* User Profile Card */}
+          <div>
+            <div className="flex items-center gap-4">
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  className="w-16 h-16 rounded-full"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-brand-200 flex items-center justify-center">
+                  <User className="w-8 h-8 text-brand-600" />
                 </div>
+              )}
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-brand-800">
+                  {user?.displayName || 'User'}
+                </h2>
+                <p className="text-sm text-brand-500">{user?.email}</p>
+                {currentUser && (
+                  <div className="flex items-center gap-2 mt-1">
+                    {currentUser.role === 'admin' ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                        <Crown size={12} />
+                        Admin
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
+                        <Shield size={12} />
+                        Member
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-brand-100">
+              <button
+                onClick={handleEnableNotifications}
+                disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
+                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed"
+                aria-label={
+                  notificationStatus === 'granted'
+                    ? 'Push notifications enabled'
+                    : notificationStatus === 'denied'
+                    ? 'Push notifications denied by browser'
+                    : 'Enable push notifications'
+                }
+                aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                    notificationStatus === 'granted' ? 'bg-green-100' : 'bg-brand-200 group-hover:bg-brand-300'
+                  }`}>
+                    <Bell size={16} className={notificationStatus === 'granted' ? 'text-green-600' : 'text-brand-600'} />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-brand-800 text-sm">Push Notifications</p>
+                    <p className="text-xs text-brand-500">
+                      {notificationStatus === 'granted' ? 'Notifications enabled' :
+                       notificationStatus === 'denied' ? 'Notifications denied in browser' :
+                       'Enable alerts on this device'}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-xs font-medium px-2 py-1 rounded-md ${
+                  notificationStatus === 'granted' ? 'text-green-700 bg-green-100' :
+                  notificationStatus === 'denied' ? 'text-red-700 bg-red-100' :
+                  'text-brand-600 bg-brand-200'
+                }`}>
+                  {notificationStatus === 'granted' ? 'Enabled' :
+                   notificationStatus === 'denied' ? 'Denied' : 'Enable'}
+                </span>
+              </button>
+              {notificationStatus === 'denied' && (
+                <p id="notification-denied-help" className="sr-only">
+                  Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
+                </p>
               )}
             </div>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-brand-100">
-            <button
-              onClick={handleEnableNotifications}
-              disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
-              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed"
-              aria-label={
-                notificationStatus === 'granted' 
-                  ? 'Push notifications enabled' 
-                  : notificationStatus === 'denied'
-                  ? 'Push notifications denied by browser'
-                  : 'Enable push notifications'
-              }
-              aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                  notificationStatus === 'granted' ? 'bg-green-100' : 'bg-brand-200 group-hover:bg-brand-300'
-                }`}>
-                  <Bell size={16} className={notificationStatus === 'granted' ? 'text-green-600' : 'text-brand-600'} />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-brand-800 text-sm">Push Notifications</p>
-                  <p className="text-xs text-brand-500">
-                    {notificationStatus === 'granted' ? 'Notifications enabled' :
-                     notificationStatus === 'denied' ? 'Notifications denied in browser' :
-                     'Enable alerts on this device'}
-                  </p>
-                </div>
+          {/* Notification Settings - Only show if notifications are granted */}
+          {notificationStatus === 'granted' && householdId && user && (
+            <NotificationSettings
+              householdId={householdId}
+              currentPreferences={currentUser?.notificationPreferences}
+              onSave={handleSaveNotificationPreferences}
+            />
+          )}
+        </SettingsSection>
+
+        <SettingsSection
+          id="household"
+          title="Household"
+          icon={<Users className="w-5 h-5" />}
+          isOpen={openSection === 'household'}
+          onToggle={handleToggleSection}
+        >
+          {/* Household Info */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
+                <Users className="w-6 h-6 text-brand-600" />
               </div>
-              <span className={`text-xs font-medium px-2 py-1 rounded-md ${
-                notificationStatus === 'granted' ? 'text-green-700 bg-green-100' :
-                notificationStatus === 'denied' ? 'text-red-700 bg-red-100' :
-                'text-brand-600 bg-brand-200'
-              }`}>
-                {notificationStatus === 'granted' ? 'Enabled' :
-                 notificationStatus === 'denied' ? 'Denied' : 'Enable'}
-              </span>
-            </button>
-            {notificationStatus === 'denied' && (
-              <p id="notification-denied-help" className="sr-only">
-                Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
-              </p>
-            )}
-          </div>
-        </Card>
-
-        {/* Notification Settings - Only show if notifications are granted */}
-        {notificationStatus === 'granted' && householdId && user && (
-          <NotificationSettings
-            householdId={householdId}
-            currentPreferences={currentUser?.notificationPreferences}
-            onSave={handleSaveNotificationPreferences}
-          />
-        )}
-
-        {/* Household Info */}
-        <Card className="p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-brand-600" />
+              <div>
+                <h3 className="text-lg font-bold text-brand-800">
+                  {householdSettings.name}
+                </h3>
+                <p className="text-sm text-brand-500">
+                  {members.length} {members.length === 1 ? 'member' : 'members'}
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-bold text-brand-800">
-                {householdSettings.name}
-              </h3>
-              <p className="text-sm text-brand-500">
-                {members.length} {members.length === 1 ? 'member' : 'members'}
-              </p>
-            </div>
-          </div>
 
-          {/* Invite Code */}
-          <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
+            {/* Invite Code */}
+            <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
             {/* Shared Household Points */}
             <div className="mt-4 p-4 bg-gradient-to-r from-brand-50 to-habit-blue-50 rounded-xl border border-brand-200">
@@ -365,145 +448,160 @@ const Settings: React.FC = () => {
                 </button>
               </div>
             </div>
-          </Card>
+          </div>
 
-        {/* Data Management */}
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-              <Download className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
+          {/* Members List */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-brand-800">
-                Data Management
+                Household Members
               </h3>
-              <p className="text-sm text-brand-500">
-                Export your household data
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <button
-              onClick={handleExportJson}
-              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
-              aria-label="Export full household data backup as JSON file"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
-                  <FileJson size={16} className="text-brand-700" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-brand-800 text-sm">Export Full Backup</p>
-                  <p className="text-xs text-brand-500">Download all data as JSON</p>
-                </div>
-              </div>
-              <Download size={16} className="text-brand-400" />
-            </button>
-
-            <button
-              onClick={handleExportCsv}
-              className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
-              aria-label="Export transaction history as CSV file"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                  <FileSpreadsheet size={16} className="text-green-700" />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-brand-800 text-sm">Export Transactions</p>
-                  <p className="text-xs text-brand-500">Download for Excel/Sheets (CSV)</p>
-                </div>
-              </div>
-              <Download size={16} className="text-brand-400" />
-            </button>
-          </div>
-        </div>
-
-        {/* Members List */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-brand-800">
-              Household Members
-            </h3>
-            {currentUser?.role === 'admin' && (
-              <button
-                onClick={handleAddMember}
-                className="p-2 bg-brand-100 text-brand-700 rounded-xl hover:bg-brand-200 transition-colors"
-                title="Add Member"
-              >
-                <Plus size={20} />
-              </button>
-            )}
-          </div>
-          <div className="space-y-3">
-            {members
-              .sort((a, b) => {
-                // Sort admins first
-                if (a.role === 'admin' && b.role !== 'admin') return -1;
-                if (a.role !== 'admin' && b.role === 'admin') return 1;
-                return a.displayName.localeCompare(b.displayName);
-              })
-              .map((member) => (
-                <div
-                  key={member.uid}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100"
+              {currentUser?.role === 'admin' && (
+                <button
+                  onClick={handleAddMember}
+                  className="p-2 bg-brand-100 text-brand-700 rounded-xl hover:bg-brand-200 transition-colors"
+                  title="Add Member"
                 >
-                  {member.photoURL ? (
-                    <img
-                      src={member.photoURL}
-                      alt={member.displayName}
-                      className="w-10 h-10 rounded-full"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-brand-200 flex items-center justify-center">
-                      <User className="w-5 h-5 text-brand-600" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-brand-800 truncate">
-                        {member.displayName}
-                        {member.uid === user?.uid && (
-                          <span className="text-brand-500 font-normal ml-1">(You)</span>
+                  <Plus size={20} />
+                </button>
+              )}
+            </div>
+            <div className="space-y-3">
+              {members
+                .sort((a, b) => {
+                  // Sort admins first
+                  if (a.role === 'admin' && b.role !== 'admin') return -1;
+                  if (a.role !== 'admin' && b.role === 'admin') return 1;
+                  return a.displayName.localeCompare(b.displayName);
+                })
+                .map((member) => (
+                  <div
+                    key={member.uid}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100"
+                  >
+                    {member.photoURL ? (
+                      <img
+                        src={member.photoURL}
+                        alt={member.displayName}
+                        className="w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-brand-200 flex items-center justify-center">
+                        <User className="w-5 h-5 text-brand-600" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-brand-800 truncate">
+                          {member.displayName}
+                          {member.uid === user?.uid && (
+                            <span className="text-brand-500 font-normal ml-1">(You)</span>
+                          )}
+                        </p>
+                        {member.role === 'admin' && (
+                          <Crown size={14} className="text-amber-600 flex-shrink-0" />
                         )}
-                      </p>
-                      {member.role === 'admin' && (
-                        <Crown size={14} className="text-amber-600 flex-shrink-0" />
+                      </div>
+                      {member.email && (
+                        <p className="text-xs text-brand-500 truncate">{member.email}</p>
                       )}
                     </div>
-                    {member.email && (
-                      <p className="text-xs text-brand-500 truncate">{member.email}</p>
+                    {/* Admin Actions */}
+                    {currentUser?.role === 'admin' && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditMember(member)}
+                          className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
+                          title="Edit Member"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        {member.uid !== currentUser.uid && (
+                          <button
+                            onClick={() => handleRemoveMember(member)}
+                            className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove Member"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                  {/* Admin Actions */}
-                  {currentUser?.role === 'admin' && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleEditMember(member)}
-                        className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
-                        title="Edit Member"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      {member.uid !== currentUser.uid && (
-                        <button
-                          onClick={() => handleRemoveMember(member)}
-                          className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Remove Member"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+            </div>
           </div>
-        </Card>
+        </SettingsSection>
 
-        {/* Sign Out Button */}
-        <Card className="p-6">
+        <SettingsSection
+          id="data"
+          title="Data Management"
+          icon={<Download className="w-5 h-5" />}
+          isOpen={openSection === 'data'}
+          onToggle={handleToggleSection}
+        >
+          {/* Data Management */}
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                <Download className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-brand-800">
+                  Data Management
+                </h3>
+                <p className="text-sm text-brand-500">
+                  Export your household data
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleExportJson}
+                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+                aria-label="Export full household data backup as JSON file"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
+                    <FileJson size={16} className="text-brand-700" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-brand-800 text-sm">Export Full Backup</p>
+                    <p className="text-xs text-brand-500">Download all data as JSON</p>
+                  </div>
+                </div>
+                <Download size={16} className="text-brand-400" />
+              </button>
+
+              <button
+                onClick={handleExportCsv}
+                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+                aria-label="Export transaction history as CSV file"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                    <FileSpreadsheet size={16} className="text-green-700" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-semibold text-brand-800 text-sm">Export Transactions</p>
+                    <p className="text-xs text-brand-500">Download for Excel/Sheets (CSV)</p>
+                  </div>
+                </div>
+                <Download size={16} className="text-brand-400" />
+              </button>
+            </div>
+          </div>
+        </SettingsSection>
+
+        {/* Account Section */}
+        <SettingsSection
+          id="account"
+          title="Account"
+          icon={<LogOut className="w-5 h-5" />}
+          isOpen={openSection === 'account'}
+          onToggle={handleToggleSection}
+        >
           <button
             onClick={handleSignOut}
             className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-700 font-semibold py-3 px-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all duration-200 border-2 border-red-200"
@@ -511,7 +609,7 @@ const Settings: React.FC = () => {
             <LogOut size={20} />
             <span>Sign Out</span>
           </button>
-        </Card>
+        </SettingsSection>
 
       </div>
 
