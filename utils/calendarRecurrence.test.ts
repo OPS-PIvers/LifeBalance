@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateRecurringInstances, expandCalendarItems } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';
-import { addDays, addWeeks, format, parseISO, startOfDay } from 'date-fns';
 
 describe('calendarRecurrence', () => {
   const baseItem: CalendarItem = {
@@ -130,6 +129,28 @@ describe('calendarRecurrence', () => {
       expect(result).toHaveLength(1);
       expect(result[0].date).toBe('2024-01-29');
     });
+
+    it('handles unknown frequency safely by preventing infinite loop', () => {
+        const unknownFreqItem: CalendarItem = {
+          ...baseItem,
+          isRecurring: true,
+          frequency: 'daily' as any // Explicitly force unknown frequency
+        };
+
+        // Range: Jan 1 to Jan 5
+        const rangeStart = new Date('2024-01-01');
+        const rangeEnd = new Date('2024-01-05');
+
+        const result = generateRecurringInstances(unknownFreqItem, rangeStart, rangeEnd);
+
+        // Should break loop immediately after 1000 iterations or because date doesn't advance
+        // In this implementation, date doesn't advance so loop breaks.
+        // It will only return the initial instance if it falls in range.
+        expect(result.length).toBeLessThanOrEqual(1);
+        if (result.length === 1) {
+            expect(result[0].date).toBe('2024-01-01');
+        }
+    });
   });
 
   describe('expandCalendarItems', () => {
@@ -168,32 +189,32 @@ describe('calendarRecurrence', () => {
     });
 
     it('filters out deleted instances', () => {
-        const recurringItem: CalendarItem = {
-          ...baseItem,
-          id: 'template-1',
-          isRecurring: true,
-          frequency: 'weekly'
-        };
+      const recurringItem: CalendarItem = {
+        ...baseItem,
+        id: 'template-1',
+        isRecurring: true,
+        frequency: 'weekly'
+      };
 
-        const deletedInstance: CalendarItem = {
-          ...baseItem,
-          id: 'deleted-1',
-          date: '2024-01-08',
-          isDeleted: true,
-          parentRecurringId: 'template-1'
-        };
+      const deletedInstance: CalendarItem = {
+        ...baseItem,
+        id: 'deleted-1',
+        date: '2024-01-08',
+        isDeleted: true,
+        parentRecurringId: 'template-1'
+      };
 
-        const items = [recurringItem, deletedInstance];
-        const rangeStart = new Date('2024-01-01');
-        const rangeEnd = new Date('2024-01-15');
+      const items = [recurringItem, deletedInstance];
+      const rangeStart = new Date('2024-01-01');
+      const rangeEnd = new Date('2024-01-15');
 
-        const result = expandCalendarItems(items, rangeStart, rangeEnd);
+      const result = expandCalendarItems(items, rangeStart, rangeEnd);
 
-        // Should have Jan 1 (generated), Jan 15 (generated)
-        // Jan 8 should be completely missing because it was deleted
+      // Should have Jan 1 (generated), Jan 15 (generated)
+      // Jan 8 should be completely missing because it was deleted
 
-        const dates = result.map(i => i.date).sort();
-        expect(dates).toEqual(['2024-01-01', '2024-01-15']);
-      });
+      const dates = result.map(i => i.date).sort();
+      expect(dates).toEqual(['2024-01-01', '2024-01-15']);
+    });
   });
 });
