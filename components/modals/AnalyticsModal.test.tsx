@@ -73,37 +73,9 @@ describe('AnalyticsModal', () => {
     const handleClose = vi.fn();
     render(<AnalyticsModal isOpen={true} onClose={handleClose} />);
 
-    // The close button is the one with the X icon in the header.
-    // It's the only button in the header div aside from tabs which are in a separate div.
-    // But let's just find by icon if we can, or iterate buttons.
-    // Actually, simply clicking the backdrop also calls onClose in the current implementation.
-
-    // Let's try to find the button.
-    const buttons = screen.getAllByRole('button');
-    // Find the one that doesn't have text (tabs have text)
-    const closeBtn = buttons.find(b => !b.textContent);
-
-    if (closeBtn) {
-        fireEvent.click(closeBtn);
-        expect(handleClose).toHaveBeenCalledTimes(1);
-    } else {
-        // Maybe the X icon has a role? No.
-        // Let's use the backdrop click test instead if specific button selection is hard.
-        // But we really should find that button.
-        // Inspecting the code:
-        // <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
-        //   <X size={20} />
-        // </button>
-
-        // We can look for the button with the class 'rounded-full' as tabs don't have that usually.
-        const headerClose = buttons.find(b => b.className.includes('rounded-full'));
-        if (headerClose) {
-            fireEvent.click(headerClose);
-            expect(handleClose).toHaveBeenCalledTimes(1);
-        } else {
-             throw new Error("Close button not found");
-        }
-    }
+    const closeButton = screen.getByLabelText('Close modal');
+    fireEvent.click(closeButton);
+    expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
   it('switches tabs', () => {

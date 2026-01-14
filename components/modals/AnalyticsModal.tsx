@@ -442,7 +442,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-4xl"
-      className="max-h-[calc(100dvh-6rem)] sm:max-h-[85vh] rounded-3xl flex flex-col overflow-hidden"
+      className="max-h-[calc(100dvh-6rem)] sm:max-h-[85vh] rounded-3xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white z-10">
@@ -453,7 +453,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           </h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">Track your progress and financial health</p>
         </div>
-        <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
+        <button onClick={onClose} aria-label="Close modal" className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
           <X size={20} />
         </button>
       </div>
