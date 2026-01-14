@@ -126,12 +126,12 @@ export const processToggleHabit = (
     newCount++;
     newTotalCount++;
   } else {
-    if (newCount > 0) newCount--;
-    if (newTotalCount > 0) newTotalCount--;
-    if (newCount === 0 && direction === 'down') {
+    if (habit.count === 0) {
       // Can't go below 0
       return null;
     }
+    if (newCount > 0) newCount--;
+    if (newTotalCount > 0) newTotalCount--;
   }
 
   // 2. Determine if Scorable (Points + Completion)
