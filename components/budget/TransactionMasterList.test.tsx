@@ -5,6 +5,11 @@ import { generateCsvExport } from '../../utils/exportUtils';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Mock dependencies
+vi.mock('@/firebase.config', () => ({
+  db: {},
+  auth: {},
+  messaging: null,
+}));
 vi.mock('../../contexts/FirebaseHouseholdContext');
 vi.mock('../../utils/exportUtils');
 vi.mock('react-hot-toast', () => ({
