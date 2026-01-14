@@ -80,12 +80,14 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         id={`section-content-${id}`}
         role="region"
         aria-labelledby={`section-title-${id}`}
-        className={`overflow-hidden transition-[max-height,opacity] duration-200 ease-in-out ${
-          isOpen ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-in-out ${
+          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         }`}
       >
-        <div className="p-4 border-t border-gray-100 space-y-4">
-          {children}
+        <div className="overflow-hidden">
+          <div className="p-4 border-t border-gray-100 space-y-4">
+            {children}
+          </div>
         </div>
       </div>
     </Card>
