@@ -126,7 +126,6 @@ describe('habitLogic', () => {
     const baseHabit: Habit = {
       id: 'h1',
       title: 'Test Habit',
-      householdId: 'hh1',
       count: 0,
       totalCount: 0,
       targetCount: 1,
