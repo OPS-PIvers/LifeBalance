@@ -102,7 +102,11 @@ describe('TransactionMasterList Export', () => {
     expect(exportedTransactions).toHaveLength(1);
     expect(exportedTransactions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ Merchant: 'Coffee Shop' })
+        expect.objectContaining({
+          Merchant: 'Coffee Shop',
+          isRecurring: false,
+          autoCategorized: false
+        })
       ])
     );
     expect(exportedTransactions).not.toEqual(
