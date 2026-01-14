@@ -4,3 +4,10 @@
 **Prevention:**
 1. Restrict `allow get` to members only. We used `request.auth.uid in resource.data.memberUids` to avoid an extra read cost (`exists()`).
 2. Secure the `update` rule to prevent users from adding themselves to `memberUids` without first proving possession of the invite code (via creating a `members/{uid}` document first).
+
+## 2024-06-18 - [DoS/Privilege Escalation] Unauthorized Member Management
+**Vulnerability:** Regular household members could modify the `memberUids` array on the `Household` document. This allowed them to (1) remove other members (DoS) or (2) add arbitrary users to `memberUids`. Adding arbitrary users to `memberUids` granted those users READ access to the household document (and thus the invite code), bypassing the invite code check mechanism for initial access.
+**Learning:** `allow update` rules must validate *content* changes, not just user identity. Membership lists control access and must be protected.
+**Prevention:**
+1. Restricted `memberUids` additions: Users can only add *themselves* (after they have joined properly via `members/` subcollection).
+2. Restricted `memberUids` removals: Users can only remove *themselves* (leave). Only Admins can remove *others* (kick).
