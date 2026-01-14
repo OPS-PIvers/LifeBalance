@@ -49,6 +49,7 @@ import {
 } from '@/types/schema';
 import { generateInsight } from '@/services/geminiService';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
+import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
@@ -2220,15 +2221,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isPurchased: true,
         });
 
-        const normalizeText = (value: string | null | undefined): string => (value ?? '').trim().toLowerCase();
-        const normalizedItemName = normalizeText(item.name);
-        const normalizedItemCategory = normalizeText(item.category);
+        const normalizedItemName = normalizeToKey(item.name);
+        const normalizedItemCategory = normalizeToKey(item.category);
 
         // 1. Add to Grocery Catalog (History)
         // Check if item exists in catalog (by normalized name/category)
         const existingCatalogItem = groceryCatalog.find(c =>
-          normalizeText(c.name) === normalizedItemName &&
-          normalizeText(c.category) === normalizedItemCategory
+          normalizeToKey(c.name) === normalizedItemName &&
+          normalizeToKey(c.category) === normalizedItemCategory
         );
 
         if (existingCatalogItem) {
@@ -2258,7 +2258,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // tolerating minor differences in casing/spacing and quantity formatting.
         // Precompute a Set of normalized pantry keys for O(1) lookup
         const pantryKeySet = new Set(
-            pantry.map(p => `${normalizeText(p.name)}||${normalizeText(p.category)}`)
+            pantry.map(p => `${normalizeToKey(p.name)}||${normalizeToKey(p.category)}`)
         );
 
         const itemKey = `${normalizedItemName}||${normalizedItemCategory}`;
