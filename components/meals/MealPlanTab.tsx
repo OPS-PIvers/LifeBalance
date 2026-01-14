@@ -68,7 +68,7 @@ const MealPlanTab: React.FC = () => {
   // Memoize filtered pantry items
   const filteredPantryItems = useMemo(() => {
     const searchLower = normalizeToKey(pantrySearch);
-    return sortedPantry.filter(item => item.name.toLowerCase().includes(searchLower));
+    return sortedPantry.filter(item => normalizeToKey(item.name).includes(searchLower));
   }, [sortedPantry, pantrySearch]);
 
   const handleAddTag = () => {

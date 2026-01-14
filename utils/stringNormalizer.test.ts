@@ -45,6 +45,10 @@ describe('stringNormalizer', () => {
       expect(normalizeToKey('')).toBe('');
     });
 
+    it('returns empty string for string with only whitespace', () => {
+      expect(normalizeToKey(' ')).toBe('');
+    });
+
     it('handles already lowercase strings', () => {
       expect(normalizeToKey('hello')).toBe('hello');
     });
