@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
+import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, Loader2 } from 'lucide-react';
 import { Account } from '../../types/schema';
+import { Modal } from '../ui/Modal';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
@@ -21,6 +22,7 @@ const BudgetAccounts: React.FC = () => {
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -77,10 +79,16 @@ const BudgetAccounts: React.FC = () => {
     }
   };
 
-  const handleDeleteAccount = () => {
-    if (deletingId) {
-      deleteAccount(deletingId);
+  const handleDeleteAccount = async () => {
+    if (!deletingId || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await deleteAccount(deletingId);
       setDeletingId(null);
+    } catch (error) {
+      console.error('Failed to delete account', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -190,6 +198,7 @@ const BudgetAccounts: React.FC = () => {
               <button
                 onClick={() => setIsGoalModalOpen(account.id)}
                 className="p-1.5 rounded-full bg-brand-50 text-brand-400 hover:text-habit-gold hover:bg-yellow-50 transition-colors"
+                aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
               </button>
@@ -201,6 +210,7 @@ const BudgetAccounts: React.FC = () => {
             <button
               onClick={() => setDeletingId(account.id)}
               className="p-1.5 rounded-full text-brand-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+              aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
             </button>
@@ -217,6 +227,7 @@ const BudgetAccounts: React.FC = () => {
                 <button
                   onClick={() => saveEditing(account.id)}
                   className="p-1.5 bg-brand-800 text-white rounded-lg active:scale-95"
+                  aria-label="Save balance"
                 >
                   <Check size={16} />
                 </button>
@@ -225,6 +236,15 @@ const BudgetAccounts: React.FC = () => {
               <div
                 onClick={() => startEditing(account.id, account.balance)}
                 className="group cursor-pointer text-right"
+                role="button"
+                tabIndex={0}
+                aria-label={`Edit balance for ${account.name}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    startEditing(account.id, account.balance);
+                  }
+                }}
               >
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
                   ${account.balance.toLocaleString()}
@@ -391,31 +411,45 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Delete Confirmation Modal */}
       {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-             <div className="flex justify-between items-center mb-4">
+        <Modal
+          isOpen={true}
+          onClose={() => !isDeleting && setDeletingId(null)}
+          disableBackdropClose={isDeleting}
+        >
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-brand-800">Delete Account?</h3>
-              <button onClick={() => setDeletingId(null)}><X size={20} className="text-brand-400" /></button>
+              <button
+                onClick={() => !isDeleting && setDeletingId(null)}
+                className="text-brand-400 hover:text-brand-600 transition-colors"
+                aria-label="Close"
+                disabled={isDeleting}
+              >
+                <X size={20} />
+              </button>
             </div>
-             <p className="text-sm text-brand-500 mb-4">
-               Are you sure you want to delete this account? This action cannot be undone.
-             </p>
-             <div className="flex gap-3">
-               <button
-                 onClick={() => setDeletingId(null)}
-                 className="flex-1 py-3 border border-brand-200 text-brand-600 font-bold rounded-xl"
-               >
-                 Cancel
-               </button>
-               <button
-                 onClick={handleDeleteAccount}
-                 className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl"
-               >
-                 Delete
-               </button>
-             </div>
-           </div>
-        </div>
+            <p className="text-sm text-brand-500 mb-6">
+              Are you sure you want to delete this account? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="flex-1 py-3 border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors disabled:opacity-50"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={isDeleting}
+              >
+                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
