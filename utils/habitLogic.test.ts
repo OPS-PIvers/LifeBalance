@@ -126,6 +126,7 @@ describe('habitLogic', () => {
     const baseHabit: Habit = {
       id: 'h1',
       title: 'Test Habit',
+      category: 'Health',
       count: 0,
       totalCount: 0,
       targetCount: 1,
@@ -136,7 +137,8 @@ describe('habitLogic', () => {
       completedDates: [],
       streakDays: 0,
       lastUpdated: new Date().toISOString(),
-      createdBy: 'u1'
+      createdBy: 'u1',
+      weatherSensitive: false
     };
 
     describe('Incremental Scoring', () => {
