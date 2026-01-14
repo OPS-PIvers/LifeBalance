@@ -39,7 +39,31 @@ service cloud.firestore {
       // this ensures that no one can add themselves to memberUids without a valid invite.
       allow update: if isMemberOf(householdId) &&
                         // Prevent modification of immutable fields
-                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']);
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
+                        // 🛡️ SENTINEL FIX: Restrict memberUids modifications
+                        // 1. Adding members: Only allow adding YOURSELF (request.auth.uid). Prevents adding unauthorized users.
+                        (
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberUids']) ||
+                          (
+                            request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).size() == 0 ||
+                            (
+                              request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).size() == 1 &&
+                              request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).hasAny([request.auth.uid])
+                            )
+                          )
+                        ) &&
+                        // 2. Removing members: Admin can remove anyone. Users can only remove THEMSELVES.
+                        (
+                          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberUids']) ||
+                          isAdminOf(householdId) ||
+                          (
+                            resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).size() == 0 ||
+                            (
+                              resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).size() == 1 &&
+                              resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).hasAny([request.auth.uid])
+                            )
+                          )
+                        );
       allow delete: if isAdminOf(householdId);
 
       // Members subcollection
