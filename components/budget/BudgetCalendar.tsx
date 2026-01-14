@@ -2,9 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import toast from 'react-hot-toast';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem } = useHousehold();
@@ -19,6 +20,7 @@ const BudgetCalendar: React.FC = () => {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('expense');
+  const [date, setDate] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
@@ -45,6 +47,7 @@ const BudgetCalendar: React.FC = () => {
     setTitle('');
     setAmount('');
     setType('expense');
+    setDate(format(selectedDate, 'yyyy-MM-dd'));
     setIsRecurring(false);
     setFrequency('monthly');
     setEditingItem(null);
@@ -70,6 +73,7 @@ const BudgetCalendar: React.FC = () => {
     setTitle(itemToEdit.title);
     setAmount(itemToEdit.amount.toString());
     setType(itemToEdit.type);
+    setDate(itemToEdit.date);
     setIsRecurring(!!itemToEdit.isRecurring);
     setFrequency(itemToEdit.frequency || 'monthly');
     setEditingItem(itemToEdit);
@@ -77,13 +81,13 @@ const BudgetCalendar: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!title || !amount) return;
+    if (!title || !amount || !date) return;
 
     const newItem: CalendarItem = {
       id: editingItem ? editingItem.id : crypto.randomUUID(),
       title,
       amount: parseFloat(amount),
-      date: format(selectedDate, 'yyyy-MM-dd'),
+      date: date,
       type,
       isPaid: editingItem ? editingItem.isPaid : false,
       isRecurring,
@@ -92,9 +96,30 @@ const BudgetCalendar: React.FC = () => {
 
     if (editingItem) {
       updateCalendarItem(newItem);
+      toast.success('Event updated');
     } else {
       addCalendarItem(newItem);
+      toast.success('Event added');
     }
+    setIsAddModalOpen(false);
+  };
+
+  const handleDuplicate = () => {
+    if (!title || !amount || !date) return;
+
+    const newItem: CalendarItem = {
+      id: crypto.randomUUID(),
+      title: `${title} (Copy)`,
+      amount: parseFloat(amount),
+      date: date,
+      type,
+      isPaid: false, // Reset status for duplicate
+      isRecurring,
+      frequency: isRecurring ? frequency : undefined
+    };
+
+    addCalendarItem(newItem);
+    toast.success('Event duplicated');
     setIsAddModalOpen(false);
   };
 
@@ -268,6 +293,16 @@ const BudgetCalendar: React.FC = () => {
                  className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
                />
 
+               <div>
+                 <label className="text-xs font-bold text-brand-400 uppercase ml-1 mb-1 block">Date</label>
+                 <input
+                   type="date"
+                   value={date}
+                   onChange={e => setDate(e.target.value)}
+                   className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-medium"
+                 />
+               </div>
+
                <div className="flex items-center justify-between">
                  <label className="text-sm font-bold text-brand-600">Recurring?</label>
                  <button 
@@ -290,12 +325,23 @@ const BudgetCalendar: React.FC = () => {
                  </select>
                )}
 
-               <button 
-                 onClick={handleSave}
-                 className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl mt-2"
-               >
-                 Save Event
-               </button>
+               <div className="flex gap-2 mt-2">
+                 {editingItem && (
+                   <button
+                     onClick={handleDuplicate}
+                     className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
+                   >
+                     <Copy size={18} />
+                     Duplicate
+                   </button>
+                 )}
+                 <button
+                   onClick={handleSave}
+                   className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+                 >
+                   {editingItem ? 'Save Changes' : 'Add Event'}
+                 </button>
+               </div>
             </div>
           </div>
         </div>
