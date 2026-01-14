@@ -48,8 +48,8 @@ const BudgetBuckets: React.FC = () => {
         // We know bucketId exists, so we can lazily initialize the array
         let list = map.get(bucketId);
         if (!list) {
-            list = [];
-            map.set(bucketId, list);
+          list = [];
+          map.set(bucketId, list);
         }
         list.push(tx);
       }
