@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2 } from 'lucide-react';
+import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2, Download } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
+import { generateCsvExport } from '../../utils/exportUtils';
 
 const TransactionMasterList: React.FC = () => {
   const { transactions, deleteTransaction } = useHousehold();
@@ -83,6 +84,21 @@ const TransactionMasterList: React.FC = () => {
     setSourceFilter('all');
   };
 
+  const handleExport = () => {
+    try {
+      if (filteredTransactions.length === 0) {
+        toast.error('No transactions to export');
+        return;
+      }
+
+      generateCsvExport(filteredTransactions, 'transactions-export');
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export transactions');
+    }
+  };
+
   const getSourceIcon = (source: string, isRecurring: boolean) => {
     if (isRecurring) return <History size={12} className="text-purple-500" />;
     if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-blue-500" />;
@@ -154,6 +170,17 @@ const TransactionMasterList: React.FC = () => {
               Clear
             </button>
           )}
+
+          {/* Export Button */}
+          <button
+            onClick={handleExport}
+            disabled={filteredTransactions.length === 0}
+            className="ml-auto px-3 py-2 bg-brand-800 text-white rounded-lg text-sm font-medium hover:bg-brand-900 transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export filtered transactions to CSV"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Export</span>
+          </button>
         </div>
       </div>
 
