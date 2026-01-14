@@ -136,7 +136,6 @@ describe('habitLogic', () => {
       completedDates: [],
       streakDays: 0,
       lastUpdated: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
       createdBy: 'u1'
     };
 
