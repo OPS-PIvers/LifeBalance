@@ -3,6 +3,7 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
+import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 
@@ -66,8 +67,8 @@ const MealPlanTab: React.FC = () => {
 
   // Memoize filtered pantry items
   const filteredPantryItems = useMemo(() => {
-    const searchLower = pantrySearch.toLowerCase().trim();
-    return sortedPantry.filter(item => item.name.toLowerCase().includes(searchLower));
+    const searchLower = normalizeToKey(pantrySearch);
+    return sortedPantry.filter(item => normalizeToKey(item.name).includes(searchLower));
   }, [sortedPantry, pantrySearch]);
 
   const handleAddTag = () => {
@@ -122,14 +123,12 @@ const MealPlanTab: React.FC = () => {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
-      const normalize = (s: string) => s.trim().toLowerCase();
-
       const ingredientsToAdd = mealIngredients.filter(ing => {
-          const ingName = normalize(ing.name);
+          const ingName = normalizeToKey(ing.name);
           // Check if we have it in pantry (exact match normalized)
-          const inPantry = pantry.some(p => normalize(p.name) === ingName);
+          const inPantry = pantry.some(p => normalizeToKey(p.name) === ingName);
           // Check if already in shopping list
-          const inList = shoppingList.some(s => normalize(s.name) === ingName && !s.isPurchased);
+          const inList = shoppingList.some(s => normalizeToKey(s.name) === ingName && !s.isPurchased);
 
           return !inPantry && !inList;
       });
@@ -186,7 +185,7 @@ const MealPlanTab: React.FC = () => {
         if (meal && meal.ingredients && meal.ingredients.length > 0) {
             meal.ingredients.forEach(ing => {
                 // Deduplicate by normalized name
-                const key = ing.name.trim().toLowerCase();
+                const key = normalizeToKey(ing.name);
                 if (!ingredientMap.has(key)) {
                     ingredientMap.set(key, ing);
                 }

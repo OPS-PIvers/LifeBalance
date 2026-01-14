@@ -1,6 +1,7 @@
 import React from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
+import { normalizeToKey } from '@/utils/stringNormalizer';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,22 +15,19 @@ export const QuickRestockRow: React.FC = () => {
   // 4. Sort by purchase count
   // 5. Take top 15
 
-  // Helper for normalization
-  const normalize = (s: string) => s.trim().toLowerCase();
-
   // Create lookup sets for fast filtering
   // We check normalized names
   const shoppingListNames = new Set(
-    shoppingList.filter(i => !i.isPurchased).map(i => normalize(i.name))
+    shoppingList.filter(i => !i.isPurchased).map(i => normalizeToKey(i.name))
   );
 
   const pantryNames = new Set(
-    pantry.map(i => normalize(i.name))
+    pantry.map(i => normalizeToKey(i.name))
   );
 
   const suggestions = groceryCatalog
     .filter(item => {
-      const name = normalize(item.name);
+      const name = normalizeToKey(item.name);
       // Exclude if already in list
       if (shoppingListNames.has(name)) return false;
       // Exclude if currently in pantry (we assume if it's in pantry, you don't need it yet)
