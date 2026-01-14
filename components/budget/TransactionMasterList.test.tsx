@@ -36,6 +36,8 @@ describe('TransactionMasterList', () => {
       date: '2023-01-01',
       source: 'manual',
       isRecurring: false,
+      status: 'verified',
+      autoCategorized: false,
     },
     {
       id: '2',
@@ -45,6 +47,8 @@ describe('TransactionMasterList', () => {
       date: '2023-01-05',
       source: 'manual',
       isRecurring: false,
+      status: 'verified',
+      autoCategorized: false,
     },
     {
       id: '3',
@@ -54,6 +58,8 @@ describe('TransactionMasterList', () => {
       date: '2023-01-03',
       source: 'manual',
       isRecurring: false,
+      status: 'verified',
+      autoCategorized: false,
     },
   ];
 
@@ -73,8 +79,8 @@ describe('TransactionMasterList', () => {
     expect(merchants[2]).toBe('Earlier Date');
   });
 
-  it('filters transactions correctly', () => {
-     (useHousehold as any).mockReturnValue({
+  it('renders all transactions', () => {
+    (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
     });
