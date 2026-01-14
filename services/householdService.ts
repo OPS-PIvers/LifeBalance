@@ -123,12 +123,9 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
       throw new Error('You are already a member of this household');
     }
 
-    // Add user to household memberUids array
-    await updateDoc(doc(db, 'households', householdId), {
-      memberUids: arrayUnion(userId),
-    });
-
-    // Add member document
+    // Add member document FIRST
+    // This proves possession of valid invite code (validated by Firestore rules)
+    // and establishes membership required for the subsequent updateDoc call.
     await setDoc(doc(db, 'households', householdId, 'members', userId), {
       uid: userId,
       inviteCode: inviteCode.toUpperCase(),
@@ -142,6 +139,12 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
         total: 0,
       },
       joinedAt: serverTimestamp(),
+    });
+
+    // Add user to household memberUids array
+    // This is now secured by requiring the member document to exist first
+    await updateDoc(doc(db, 'households', householdId), {
+      memberUids: arrayUnion(userId),
     });
 
     return householdId;
