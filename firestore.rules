@@ -8,6 +8,7 @@ service cloud.firestore {
     }
 
     // Helper function: Check if user is member of household
+    // Used for subcollections where we don't have access to the household doc's memberUids field directly
     function isMemberOf(householdId) {
       return isAuthenticated() &&
              exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
@@ -21,20 +22,24 @@ service cloud.firestore {
 
     // Households collection
     match /households/{householdId} {
-      // Allow any authenticated user to read specific doc (needed for joining via invite code)
-      allow get: if isAuthenticated();
+      // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
+      // Only members can read the household document.
+      // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
+      // This aligns with the list rule below.
+      allow get: if isAuthenticated() && request.auth.uid in resource.data.memberUids;
+
       // Allow listing only if user is a member (prevents enumeration of all households)
       allow list: if request.auth.uid in resource.data.memberUids;
 
       allow create: if isAuthenticated();
-      // Allow update if member (but cannot modify immutable fields), OR if only adding self to memberUids (for joining via invite)
-      allow update: if (isMemberOf(householdId) &&
+      // Allow update if member (but cannot modify immutable fields).
+      // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
+      // This implicitly requires the user to have a valid member document in the members/ subcollection.
+      // Since creating a member document requires validating the invite code (see members create rule),
+      // this ensures that no one can add themselves to memberUids without a valid invite.
+      allow update: if isMemberOf(householdId) &&
                         // Prevent modification of immutable fields
-                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode'])) ||
-                       (isAuthenticated() &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids']) &&
-                        request.auth.uid in request.resource.data.memberUids &&
-                        !(request.auth.uid in resource.data.memberUids));
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']);
       allow delete: if isAdminOf(householdId);
 
       // Members subcollection
