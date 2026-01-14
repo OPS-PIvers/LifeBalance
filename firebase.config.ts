@@ -3,19 +3,44 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getMessaging, type Messaging } from 'firebase/messaging';
 
+// Fallback to mock config if env vars are missing (for Test Mode/CI)
+const mockConfig = {
+  apiKey: "test-mode-api-key",
+  authDomain: "test-mode-app.firebaseapp.example",
+  projectId: "test-mode-project",
+  storageBucket: "test-mode-app.appspot.example",
+  messagingSenderId: "ci-environment-sender-id",
+  appId: "test-mode-app-id",
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || mockConfig.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || mockConfig.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || mockConfig.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || mockConfig.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || mockConfig.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || mockConfig.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 // Validate critical config
-if (!firebaseConfig.apiKey) {
-  console.error('Firebase configuration error: Missing VITE_FIREBASE_API_KEY');
+const isProd = import.meta.env.PROD;
+const isUsingMockConfig = firebaseConfig.apiKey === mockConfig.apiKey;
+const isApiKeyMissing = !import.meta.env.VITE_FIREBASE_API_KEY;
+
+if (isApiKeyMissing) {
+  const msg = 'Firebase configuration warning: Missing VITE_FIREBASE_API_KEY. Using mock configuration.';
+  if (isProd) {
+    console.error(msg);
+    // Hard failure in production if API key is missing
+    throw new Error('Firebase configuration error: Missing Firebase API Key in production environment.');
+  } else {
+    console.warn(msg);
+  }
+} else if (isUsingMockConfig && isProd) {
+  // Edge case: env var exists but equals the mock value (unlikely but possible via some config injection)
+  console.error('Firebase configuration error: Using mock configuration in production.');
+  throw new Error('Firebase configuration error: Using mock configuration in production.');
 }
 
 // Initialize Firebase
