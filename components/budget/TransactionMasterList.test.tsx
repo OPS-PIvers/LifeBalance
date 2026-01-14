@@ -67,8 +67,8 @@ describe('TransactionMasterList Export', () => {
 
     expect(generateCsvExport).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ merchant: 'Coffee Shop' }), // Sorted by date desc
-        expect.objectContaining({ merchant: 'Grocery Store' })
+        expect.objectContaining({ Merchant: 'Coffee Shop' }), // Sorted by date desc
+        expect.objectContaining({ Merchant: 'Grocery Store' })
       ]),
       'transactions-export'
     );
@@ -95,18 +95,20 @@ describe('TransactionMasterList Export', () => {
     const exportBtn = screen.getByTitle('Export filtered transactions to CSV');
     fireEvent.click(exportBtn);
 
-    expect(generateCsvExport).toHaveBeenCalledWith(
+    // Ensure export called exactly once and does not include Grocery Store
+    expect(generateCsvExport).toHaveBeenCalledTimes(1);
+
+    const [exportedTransactions] = (generateCsvExport as any).mock.calls[0];
+    expect(exportedTransactions).toHaveLength(1);
+    expect(exportedTransactions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ merchant: 'Coffee Shop' })
-      ]),
-      'transactions-export'
+        expect.objectContaining({ Merchant: 'Coffee Shop' })
+      ])
     );
-    // Should NOT contain Grocery Store
-    expect(generateCsvExport).not.toHaveBeenCalledWith(
+    expect(exportedTransactions).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ merchant: 'Grocery Store' })
-      ]),
-      'transactions-export'
+        expect.objectContaining({ Merchant: 'Grocery Store' })
+      ])
     );
   });
 });

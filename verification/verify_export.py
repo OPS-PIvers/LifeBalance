@@ -1,5 +1,4 @@
 
-import time
 from playwright.sync_api import sync_playwright
 
 def verify_export_feature():
@@ -41,8 +40,8 @@ def verify_export_feature():
             # Take a screenshot even on failure if possible to debug
             try:
                 page.screenshot(path="verification/error_state.png")
-            except:
-                pass
+            except Exception as screenshot_error:
+                print(f"Failed to capture error state screenshot: {screenshot_error}")
         finally:
             browser.close()
 

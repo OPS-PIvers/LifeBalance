@@ -91,7 +91,18 @@ const TransactionMasterList: React.FC = () => {
         return;
       }
 
-      generateCsvExport(filteredTransactions, 'transactions-export');
+      // Transform data for user-friendly export
+      const exportData = filteredTransactions.map(tx => ({
+        Date: tx.date,
+        Merchant: tx.merchant,
+        Amount: tx.amount,
+        Category: tx.category,
+        Status: tx.status,
+        Source: tx.source,
+        'Pay Period': tx.payPeriodId || 'N/A'
+      }));
+
+      generateCsvExport(exportData, 'transactions-export');
       toast.success('Export started');
     } catch (error) {
       console.error('Export failed:', error);
