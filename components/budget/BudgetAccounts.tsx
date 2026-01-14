@@ -415,10 +415,12 @@ const BudgetAccounts: React.FC = () => {
           isOpen={true}
           onClose={() => !isDeleting && setDeletingId(null)}
           disableBackdropClose={isDeleting}
+          ariaLabelledBy="delete-account-title"
+          ariaDescribedBy="delete-account-desc"
         >
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-brand-800">Delete Account?</h3>
+              <h3 id="delete-account-title" className="font-bold text-lg text-brand-800">Delete Account?</h3>
               <button
                 onClick={() => !isDeleting && setDeletingId(null)}
                 className="text-brand-400 hover:text-brand-600 transition-colors"
@@ -428,7 +430,7 @@ const BudgetAccounts: React.FC = () => {
                 <X size={20} />
               </button>
             </div>
-            <p className="text-sm text-brand-500 mb-6">
+            <p id="delete-account-desc" className="text-sm text-brand-500 mb-6">
               Are you sure you want to delete this account? This action cannot be undone.
             </p>
             <div className="flex gap-3">
@@ -445,7 +447,7 @@ const BudgetAccounts: React.FC = () => {
                 disabled={isDeleting}
               >
                 {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>Delete</span>
+                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
               </button>
             </div>
           </div>
