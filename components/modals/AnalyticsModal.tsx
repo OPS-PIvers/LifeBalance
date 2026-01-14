@@ -17,6 +17,7 @@ import {
   subMonths
 } from 'date-fns';
 import { clsx } from 'clsx';
+import { Modal } from '../ui/Modal';
 
 interface AnalyticsModalProps {
   isOpen: boolean;
@@ -440,38 +441,31 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   }, [transactions]);
 
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-4xl"
+      className="max-h-[calc(100dvh-6rem)] sm:max-h-[85vh] rounded-3xl"
     >
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      <div className="relative w-full max-h-[calc(100dvh-6rem)] sm:max-h-[85vh] max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white z-10">
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Activity className="text-brand-600" size={24} />
-              Analytics & Insights
-            </h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Track your progress and financial health</p>
-          </div>
-          <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
-            <X size={20} />
-          </button>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white z-10">
+        <div>
+          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <Activity className="text-brand-600" size={24} />
+            Analytics & Insights
+          </h2>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">Track your progress and financial health</p>
         </div>
+        <button onClick={onClose} aria-label="Close modal" className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
+          <X size={20} />
+        </button>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex px-6 pt-4 pb-2 bg-white shrink-0 gap-8 border-b border-slate-100">
-          {['overview', 'habits', 'spending'].map((tab) => (
-            <button
+      {/* Tabs */}
+      <div className="flex px-6 pt-4 pb-2 bg-white shrink-0 gap-8 border-b border-slate-100">
+        {['overview', 'habits', 'spending'].map((tab) => (
+          <button
               key={tab}
               onClick={() => setActiveTab(tab as 'overview' | 'habits' | 'spending')}
               className={clsx(
@@ -803,8 +797,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           )}
 
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

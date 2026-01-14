@@ -1,0 +1,95 @@
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect } from 'vitest';
+import AnalyticsModal from './AnalyticsModal';
+
+// Mock the household context
+vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+  useHousehold: () => ({
+    habits: [
+      {
+        id: '1',
+        title: 'Drink Water',
+        category: 'Health',
+        basePoints: 10,
+        period: 'daily',
+        streakDays: 5,
+        completedDates: ['2023-01-01', '2023-01-02'],
+      }
+    ],
+    transactions: [
+      {
+        id: 't1',
+        amount: 100,
+        category: 'Food',
+        date: '2023-01-01',
+      }
+    ],
+  }),
+}));
+
+// Mock Recharts to avoid DOM dependency issues
+vi.mock('recharts', async () => {
+  const Original = await vi.importActual('recharts');
+  return {
+    ...Original,
+    ResponsiveContainer: ({ children }: any) => <div className="recharts-responsive-container">{children}</div>,
+    BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+    PieChart: ({ children }: any) => <div data-testid="pie-chart">{children}</div>,
+    AreaChart: ({ children }: any) => <div data-testid="area-chart">{children}</div>,
+    RadarChart: ({ children }: any) => <div data-testid="radar-chart">{children}</div>,
+    ComposedChart: ({ children }: any) => <div data-testid="composed-chart">{children}</div>,
+    // Mock child components that expect context
+    XAxis: () => <div data-testid="x-axis" />,
+    YAxis: () => <div data-testid="y-axis" />,
+    CartesianGrid: () => <div data-testid="cartesian-grid" />,
+    Tooltip: () => <div data-testid="tooltip" />,
+    Legend: () => <div data-testid="legend" />,
+    Bar: () => <div data-testid="bar" />,
+    Area: () => <div data-testid="area" />,
+    Line: () => <div data-testid="line" />,
+    Radar: () => <div data-testid="radar" />,
+    PolarGrid: () => <div data-testid="polar-grid" />,
+    PolarAngleAxis: () => <div data-testid="polar-angle-axis" />,
+    PolarRadiusAxis: () => <div data-testid="polar-radius-axis" />,
+    Pie: () => <div data-testid="pie" />,
+    Cell: () => <div data-testid="cell" />,
+  };
+});
+
+describe('AnalyticsModal', () => {
+  it('renders nothing when closed', () => {
+    render(<AnalyticsModal isOpen={false} onClose={() => {}} />);
+    expect(screen.queryByText('Analytics & Insights')).not.toBeInTheDocument();
+  });
+
+  it('renders content when open', () => {
+    render(<AnalyticsModal isOpen={true} onClose={() => {}} />);
+    expect(screen.getByText('Analytics & Insights')).toBeInTheDocument();
+    expect(screen.getByText('Track your progress and financial health')).toBeInTheDocument();
+  });
+
+  it('calls onClose when close button is clicked', () => {
+    const handleClose = vi.fn();
+    render(<AnalyticsModal isOpen={true} onClose={handleClose} />);
+
+    const closeButton = screen.getByLabelText('Close modal');
+    fireEvent.click(closeButton);
+    expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches tabs', () => {
+    render(<AnalyticsModal isOpen={true} onClose={() => {}} />);
+
+    // Default is overview
+    expect(screen.getByText('Points This Week')).toBeInTheDocument();
+
+    // Switch to Habits
+    fireEvent.click(screen.getByText('habits'));
+    expect(screen.getByText('Consistency Heatmap')).toBeInTheDocument();
+
+    // Switch to Spending
+    fireEvent.click(screen.getByText('spending'));
+    expect(screen.getByText('Income vs Expense (6 Months)')).toBeInTheDocument();
+  });
+});
