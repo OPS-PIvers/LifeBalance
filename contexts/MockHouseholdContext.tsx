@@ -344,7 +344,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const rewardsInventory = rewards;
   const freezeBank = null;
   const isGeneratingInsight = false;
-  const householdSettings = null;
+  const householdSettings = {
+    id: 'test-household-id',
+    name: 'Test Household',
+    inviteCode: 'TEST-1234',
+    members: members,
+    freezeBank: { tokens: 3, maxTokens: 3, lastRolloverDate: '2024-01-01', lastRolloverMonth: '2024-01', history: [] },
+    accounts: accounts,
+    rewardsInventory: rewards,
+    coreTemplates: { expenses: [], buckets: [] },
+    stores: stores,
+    groceryCategories: groceryCategories
+  } as any;
   const currentPeriodId = '2024-01-01';
   const bucketSpentMap = new Map();
 
