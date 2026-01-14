@@ -717,6 +717,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <input
                         type="number"
                         value={amount}
+                        aria-label="Amount"
                         onChange={(e) => {
                           const value = e.target.value;
                           if (value === '' || parseFloat(value) >= 0) setAmount(value);
@@ -734,8 +735,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Merchant</label>
+                    <label htmlFor="manual-merchant" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Merchant</label>
                     <input
+                      id="manual-merchant"
                       type="text"
                       value={merchant}
                       onChange={(e) => setMerchant(e.target.value)}
@@ -745,8 +747,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Date</label>
+                    <label htmlFor="manual-date" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Date</label>
                     <input
+                      id="manual-date"
                       type="date"
                       value={transactionDate}
                       onChange={(e) => setTransactionDate(e.target.value)}
@@ -756,8 +759,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">Category</label>
-                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">Category</label>
+                    <div
+                      className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
+                      role="radiogroup"
+                      aria-labelledby="manual-category-label"
+                    >
                       {dynamicCategories.length === 0 && <span className="text-sm text-brand-400">No buckets found.</span>}
                       {dynamicCategories.map(cat => (
                         <button
