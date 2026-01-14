@@ -1,1 +1,2 @@
 ## 2024-05-22 - Package Manager Standardization **Bottleneck:** Mixed usage of npm and pnpm causing potential lockfile drift. **Fix:** Standardized on pnpm for all local and CI operations. Removed package-lock.json.
+## 2024-02-13 - Monorepo Workspace Config **Bottleneck:** `functions` directory used `npm` and `package-lock.json` while root used `pnpm`, leading to toolchain fragmentation and broken lint scripts. **Fix:** Created `pnpm-workspace.yaml` to manage both root and `functions`. Standardized `functions/package.json` to use `pnpm` and `tsc` for linting.
