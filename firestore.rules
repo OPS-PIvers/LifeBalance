@@ -48,20 +48,20 @@ service cloud.firestore {
                             request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).size() == 0 ||
                             (
                               request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).size() == 1 &&
-                              request.auth.uid in request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet())
+                              request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet()).hasAny([request.auth.uid])
                             )
                           )
                         ) &&
-                        // 2. Removing members: Only allow removing YOURSELF (leaving) OR if you are Admin (kicking).
+                        // 2. Removing members: Admin can remove anyone. Users can only remove THEMSELVES.
                         (
                           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberUids']) ||
+                          isAdminOf(householdId) ||
                           (
                             resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).size() == 0 ||
                             (
                               resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).size() == 1 &&
-                              request.auth.uid in resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet())
-                            ) ||
-                            isAdminOf(householdId)
+                              resource.data.memberUids.toSet().difference(request.resource.data.memberUids.toSet()).hasAny([request.auth.uid])
+                            )
                           )
                         );
       allow delete: if isAdminOf(householdId);
