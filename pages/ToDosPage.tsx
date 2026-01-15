@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
+import { generateCsvExport } from '../utils/exportUtils';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -97,6 +98,60 @@ const ToDosPage: React.FC = () => {
     setAssignedTo(todo.assignedTo);
     setEditingId(todo.id);
     setIsAddModalOpen(true);
+  };
+
+  const handleExport = () => {
+    try {
+      // Filter for active (not completed) tasks
+      const activeTodos = todos.filter(t => !t.isCompleted);
+
+      if (activeTodos.length === 0) {
+        toast.error('No active tasks to export');
+        return;
+      }
+
+      const today = startOfToday();
+
+      // Map to CSV friendly format
+      const exportData = activeTodos.map(todo => {
+        const assignee = members.find(m => m.uid === todo.assignedTo);
+        const dueDate = parseISO(todo.completeByDate);
+
+        // Calculate status text
+        let status = 'Future';
+        if (isBefore(dueDate, today)) {
+          status = 'Overdue';
+        } else if (isToday(dueDate)) {
+          status = 'Today';
+        } else if (isTomorrow(dueDate)) {
+          status = 'Tomorrow';
+        } else if (isBefore(dueDate, addDays(endOfWeek(today, { weekStartsOn: 1 }), 1))) {
+          status = 'This Week';
+        }
+
+        return {
+          'Task': todo.text,
+          'Due Date': todo.completeByDate,
+          'Assigned To': assignee?.displayName || 'Unassigned',
+          'Status': status,
+          'Created At': todo.createdAt ? format(parseISO(todo.createdAt), 'yyyy-MM-dd') : ''
+        };
+      });
+
+      // Sort by Due Date then Priority
+      exportData.sort((a, b) => {
+        if (a['Due Date'] !== b['Due Date']) {
+          return a['Due Date'].localeCompare(b['Due Date']);
+        }
+        return 0;
+      });
+
+      generateCsvExport(exportData, 'todo-list');
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export tasks');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -206,13 +261,25 @@ const ToDosPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-brand-800">To-Do List</h1>
           <p className="text-sm text-brand-500">Stay on top of your tasks</p>
         </div>
-        <button
-          onClick={openAddModal}
-          className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
-          aria-label="Add new task"
-        >
-          <Plus size={16} /> New Task
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            disabled={todos.filter(t => !t.isCompleted).length === 0}
+            className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Export active tasks to CSV"
+            title="Export active tasks to CSV"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <button
+            onClick={openAddModal}
+            className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
+            aria-label="Add new task"
+          >
+            <Plus size={16} /> New Task
+          </button>
+        </div>
       </div>
 
       {/* Immediate Section */}
