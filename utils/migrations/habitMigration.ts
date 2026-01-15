@@ -32,6 +32,7 @@ export function needsHabitMigration(
  * Migrate orphaned preset habits to custom habits
  * Finds habits with presetIds that no longer exist in PRESET_HABITS
  * and converts them to custom habits (isCustom: true, remove presetId).
+ * Handles batching for large datasets (Firestore limit: 500 writes per batch).
  *
  * @param householdId - The household ID
  * @param habits - All habits
@@ -42,30 +43,34 @@ export async function migrateOrphanedHabits(
 ): Promise<void> {
   try {
     const presetIds = new Set(PRESET_HABITS.map(h => h.id));
-    const batch = writeBatch(db);
-    let count = 0;
+    const orphanedHabits = habits.filter(habit =>
+      habit.presetId && !habit.isCustom && !presetIds.has(habit.presetId)
+    );
 
-    habits.forEach(habit => {
-      // Check if this is an orphaned preset habit
-      if (habit.presetId && !habit.isCustom && !presetIds.has(habit.presetId)) {
+    if (orphanedHabits.length === 0) return;
+
+    // Process in chunks of 500 to respect Firestore limits
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < orphanedHabits.length; i += CHUNK_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = orphanedHabits.slice(i, i + CHUNK_SIZE);
+
+      chunk.forEach(habit => {
         const habitRef = doc(db, `households/${householdId}/habits`, habit.id);
-
         batch.update(habitRef, {
           isCustom: true,
           presetId: deleteField(),
-          // We can optionally explicitly set fields that might be missing if they were purely relied upon from preset
-          // but usually the habit object in DB has copies of title, category, etc.
         });
+      });
 
-        count++;
-      }
-    });
-
-    if (count > 0) {
       await batch.commit();
-      console.log(`[HabitMigration] Converted ${count} orphaned preset habits to custom habits`);
-      toast.success(`Updated ${count} habits to custom`);
     }
+
+    console.log(`[HabitMigration] Converted ${orphanedHabits.length} orphaned preset habits to custom habits`);
+
+    // User-friendly toast explaining why habits changed (if they noticed)
+    toast.success('Your habits have been preserved after an update.');
+
   } catch (error) {
     console.error('[HabitMigration] Failed to migrate habits:', error);
     // Don't throw, just log, to avoid crashing the app loop

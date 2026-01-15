@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode, useCallback } from 'react';
 import {
   collection,
   query,
@@ -648,16 +648,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [householdId, householdSettings]);
 
   // Migrate orphaned preset habits to custom habits
+  const hasAttemptedHabitMigration = useRef(false);
+
   useEffect(() => {
     if (!householdId || !habits.length) return;
+    if (hasAttemptedHabitMigration.current) return;
 
     const runHabitMigration = async () => {
       if (needsHabitMigration(habits)) {
+        // Mark as attempted before running to prevent race conditions/loops
+        hasAttemptedHabitMigration.current = true;
+
         console.log('[Migration] Starting habit migration...');
         try {
           await migrateOrphanedHabits(householdId, habits);
         } catch (error) {
           console.error('[Migration] Failed to migrate habits:', error);
+          // Allow retrying on next session/reload if it failed
+          // But kept true for this session to avoid loop spamming
         }
       }
     };
