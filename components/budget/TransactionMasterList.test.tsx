@@ -1,11 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { generateCsvExport } from '../../utils/exportUtils';
 
 // Mock dependencies
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
   useHousehold: vi.fn(),
+}));
+
+vi.mock('../../utils/exportUtils', () => ({
+  generateCsvExport: vi.fn(),
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -24,9 +29,14 @@ vi.mock('lucide-react', () => ({
   ArrowDownLeft: () => <div data-testid="arrow-down-left-icon" />,
   FileText: () => <div data-testid="file-text-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
+  Download: () => <div data-testid="download-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const mockTransactions = [
     {
       id: '1',
@@ -90,5 +100,77 @@ describe('TransactionMasterList', () => {
     expect(screen.getByText('Later Date')).toBeInTheDocument();
     expect(screen.getByText('Middle Date')).toBeInTheDocument();
     expect(screen.getByText('Earlier Date')).toBeInTheDocument();
+  });
+
+  it('renders the export button', () => {
+    (useHousehold as any).mockReturnValue({
+      transactions: mockTransactions,
+      deleteTransaction: vi.fn(),
+    });
+
+    render(<TransactionMasterList />);
+    expect(screen.getByTitle('Export filtered transactions to CSV')).toBeInTheDocument();
+  });
+
+  it('calls generateCsvExport when export button is clicked', () => {
+    (useHousehold as any).mockReturnValue({
+      transactions: mockTransactions,
+      deleteTransaction: vi.fn(),
+    });
+
+    render(<TransactionMasterList />);
+    const exportBtn = screen.getByTitle('Export filtered transactions to CSV');
+
+    fireEvent.click(exportBtn);
+
+    expect(generateCsvExport).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ Merchant: 'Later Date' }),
+        expect.objectContaining({ Merchant: 'Middle Date' }),
+        expect.objectContaining({ Merchant: 'Earlier Date' })
+      ]),
+      'transactions-export'
+    );
+  });
+
+  it('disables export button when no transactions match filter', () => {
+    (useHousehold as any).mockReturnValue({
+      transactions: mockTransactions,
+      deleteTransaction: vi.fn(),
+    });
+
+    render(<TransactionMasterList />);
+
+    // Type in search box to filter everything out
+    const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
+    fireEvent.change(searchInput, { target: { value: 'NonExistent' } });
+
+    const exportBtn = screen.getByTitle('Export filtered transactions to CSV');
+    expect(exportBtn).toBeDisabled();
+  });
+
+  it('exports only filtered transactions', () => {
+    (useHousehold as any).mockReturnValue({
+      transactions: mockTransactions,
+      deleteTransaction: vi.fn(),
+    });
+
+    render(<TransactionMasterList />);
+
+    // Filter by 'Later' (should match 'Later Date')
+    const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
+    fireEvent.change(searchInput, { target: { value: 'Later' } });
+
+    const exportBtn = screen.getByTitle('Export filtered transactions to CSV');
+    fireEvent.click(exportBtn);
+
+    // Ensure export called exactly once and only includes 'Later Date'
+    expect(generateCsvExport).toHaveBeenCalledTimes(1);
+
+    const [exportedTransactions] = (generateCsvExport as any).mock.calls[0];
+    expect(exportedTransactions).toHaveLength(1);
+    expect(exportedTransactions[0]).toEqual(
+      expect.objectContaining({ Merchant: 'Later Date' })
+    );
   });
 });
