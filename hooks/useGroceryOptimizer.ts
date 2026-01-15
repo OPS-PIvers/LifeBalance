@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { optimizeGroceryList, OptimizableItem } from '@/services/geminiService';

@@ -448,7 +448,7 @@ const Dashboard: React.FC = () => {
                                       setExpandedId(null);
                                       setSelectedHabitIds([]); // Reset
                                     }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
                                   >
                                     Budgeted in Calendar
                                 </button>

@@ -26,16 +26,7 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       ...reactPlugin.configs.recommended.rules,
-      ...reactPlugin.configs['jsx-runtime'].rules,
-
-      // Downgrade common errors to warnings to prevent breaking the build
-      // TODO: Fix these issues and restore 'error' severity
-      'react/no-unescaped-entities': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unused-vars': 'warn',
-      'react-hooks/rules-of-hooks': 'warn',
-      'react-hooks/exhaustive-deps': 'warn',
-      'react-hooks/preserve-manual-memoization': 'warn'
+      ...reactPlugin.configs['jsx-runtime'].rules
     },
     settings: {
       react: {

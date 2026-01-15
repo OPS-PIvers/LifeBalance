@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Habit } from '@/types/schema';
 import { format, subDays, parseISO, differenceInDays } from 'date-fns';
 

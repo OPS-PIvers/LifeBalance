@@ -1,5 +1,5 @@
 import { Habit, Challenge } from '@/types/schema';
-import { format, startOfMonth, endOfMonth, parseISO, getDaysInMonth } from 'date-fns';
+import { format, parseISO, getDaysInMonth } from 'date-fns';
 import { getEffectiveTargetValue, getEffectiveTargetType } from './migrations/challengeMigration';
 
 export interface ChallengeProgress {
@@ -98,7 +98,7 @@ function calculatePercentageProgress(
   const challengeMonth = challenge.month || monthKey;
   const [year, month] = challengeMonth.split('-').map(Number);
   const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = endOfMonth(monthStart);
+  // const monthEnd = endOfMonth(monthStart); // Unused
   const daysInMonth = getDaysInMonth(monthStart);
 
   // For percentage mode, we track unique "success days"
@@ -179,9 +179,10 @@ function calculateNegativeHabitSuccessDays(
  */
 export function getChallengeStatusMessage(
   progress: ChallengeProgress,
-  targetType: 'count' | 'percentage'
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _targetType: 'count' | 'percentage'
 ): string {
-  const { progress: progressPercent, currentValue } = progress;
+  const { progress: progressPercent } = progress;
 
   if (progressPercent >= 100) {
     return '🎉 Challenge Complete!';

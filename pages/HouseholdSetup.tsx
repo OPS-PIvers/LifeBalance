@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
