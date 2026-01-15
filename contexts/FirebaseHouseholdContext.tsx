@@ -56,6 +56,7 @@ import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
+import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
@@ -645,6 +646,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runPaycheckMigration();
   }, [householdId, householdSettings]);
+
+  // Migrate orphaned preset habits to custom habits
+  useEffect(() => {
+    if (!householdId || !habits.length) return;
+
+    const runHabitMigration = async () => {
+      if (needsHabitMigration(habits)) {
+        console.log('[Migration] Starting habit migration...');
+        try {
+          await migrateOrphanedHabits(householdId, habits);
+        } catch (error) {
+          console.error('[Migration] Failed to migrate habits:', error);
+        }
+      }
+    };
+
+    runHabitMigration();
+  }, [householdId, habits]);
 
   // Sync daily/weekly/total points from actual habit completions
   // This ensures points accurately reflect completed habits, fixing any desync issues
