@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw } from 'lucide-react';

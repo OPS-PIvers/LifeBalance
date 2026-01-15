@@ -1,0 +1,456 @@
+
+> lifebalance@0.0.0 lint /app
+> tsc --noEmit && eslint .
+
+
+/app/App.tsx
+  15:8   warning  'PlaceholderPage' is defined but never used  @typescript-eslint/no-unused-vars
+  62:60  warning  Unexpected any. Specify a different type     @typescript-eslint/no-explicit-any
+
+/app/components/ErrorBoundary.tsx
+  18:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  56:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/budget/BudgetAccounts.tsx
+  358:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/budget/BudgetCalendar.tsx
+   38:21  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This dependency may be mutated later, which could cause the value to change unexpectedly.
+
+/app/components/budget/BudgetCalendar.tsx:38:21
+  36 |   const expandedCalendarItems = useMemo(
+  37 |     () => expandCalendarItems(calendarItems, startDate, endDate),
+> 38 |     [calendarItems, startDate, endDate]
+     |                     ^^^^^^^^^ This dependency may be modified later
+  39 |   );
+  40 |
+  41 |   // Filter items for the selected date           react-hooks/preserve-manual-memoization
+   38:32  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This dependency may be mutated later, which could cause the value to change unexpectedly.
+
+/app/components/budget/BudgetCalendar.tsx:38:32
+  36 |   const expandedCalendarItems = useMemo(
+  37 |     () => expandCalendarItems(calendarItems, startDate, endDate),
+> 38 |     [calendarItems, startDate, endDate]
+     |                                ^^^^^^^ This dependency may be modified later
+  39 |   );
+  40 |
+  41 |   // Filter items for the selected date  react-hooks/preserve-manual-memoization
+  319:34  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-explicit-any
+
+/app/components/budget/TransactionMasterList.test.tsx
+   77:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  153:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  170:58  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/meals/MealPlanTab.tsx
+  334:20  warning  'error' is defined but never used         @typescript-eslint/no-unused-vars
+  403:14  warning  'e' is defined but never used             @typescript-eslint/no-unused-vars
+  459:62  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  592:78  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/meals/QuickRestockRow.tsx
+  6:8  warning  'toast' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/components/meals/ShoppingListTab.tsx
+  165:6  warning  React Hook useCallback has a missing dependency: 'stores'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/app/components/meals/ShoppingSettingsModal.tsx
+  38:9  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/components/meals/ShoppingSettingsModal.tsx:38:9
+  36 |     if (isOpen) {
+  37 |       if (groceryCategories && groceryCategories.length > 0) {
+> 38 |         setLocalCategories([...groceryCategories]);
+     |         ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  39 |       } else {
+  40 |         setLocalCategories([...GROCERY_CATEGORIES]);
+  41 |       }  react-hooks/set-state-in-effect
+
+/app/components/modals/AnalyticsModal.test.tsx
+  36:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  37:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:30  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  39:31  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  40:32  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  41:35  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/modals/AnalyticsModal.tsx
+   33:13  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   40:23  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/modals/BucketFormModal.tsx
+  25:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/components/modals/BucketFormModal.tsx:25:7
+  23 |   useEffect(() => {
+  24 |     if (editingBucket) {
+> 25 |       setName(editingBucket.name);
+     |       ^^^^^^^ Avoid calling setState() directly within an effect
+  26 |       setLimit(editingBucket.limit.toString());
+  27 |       setColor(editingBucket.color);
+  28 |     } else {  react-hooks/set-state-in-effect
+
+/app/components/modals/CaptureModal.tsx
+    5:47  warning  'User' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+   10:23  warning  'HouseholdMember' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            @typescript-eslint/no-unused-vars
+   68:9   warning  The 'dynamicCategories' array makes the dependencies of useEffect Hook (at line 102) change on every render. To fix this, wrap the initialization of 'dynamicCategories' in its own useMemo() Hook                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+   87:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/components/modals/CaptureModal.tsx:87:9
+  85 |       // Transaction defaults
+  86 |       if (!category && dynamicCategories.length > 0) {
+> 87 |         setCategory(dynamicCategories[0]);
+     |         ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  88 |       }
+  89 |       if (!transactionDate) {
+  90 |         setTransactionDate(getLocalDateString());                                                                                                                                                                                                                                                                        react-hooks/set-state-in-effect
+  183:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `stopCamera`, but the source dependencies were [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]. Inferred different dependency than source.
+
+/app/components/modals/CaptureModal.tsx:183:36
+  181 |   };
+  182 |
+> 183 |   const capturePhoto = useCallback(async () => {
+      |                                    ^^^^^^^^^^^^^
+> 184 |     if (!videoRef.current || !canvasRef.current) return;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 185 |     const video = videoRef.current;
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 217 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 218 |   }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
+      | ^^^^ Could not preserve existing manual memoization
+  219 |
+  220 |   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  221 |     const file = event.target.files?.[0];     react-hooks/preserve-manual-memoization
+  183:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `matchCategory`, but the source dependencies were [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]. Inferred different dependency than source.
+
+/app/components/modals/CaptureModal.tsx:183:36
+  181 |   };
+  182 |
+> 183 |   const capturePhoto = useCallback(async () => {
+      |                                    ^^^^^^^^^^^^^
+> 184 |     if (!videoRef.current || !canvasRef.current) return;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 185 |     const video = videoRef.current;
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 217 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 218 |   }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
+      | ^^^^ Could not preserve existing manual memoization
+  219 |
+  220 |   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  221 |     const file = event.target.files?.[0];  react-hooks/preserve-manual-memoization
+  183:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `matchHabits`, but the source dependencies were [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]. Inferred different dependency than source.
+
+/app/components/modals/CaptureModal.tsx:183:36
+  181 |   };
+  182 |
+> 183 |   const capturePhoto = useCallback(async () => {
+      |                                    ^^^^^^^^^^^^^
+> 184 |     if (!videoRef.current || !canvasRef.current) return;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 185 |     const video = videoRef.current;
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 217 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 218 |   }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
+      | ^^^^ Could not preserve existing manual memoization
+  219 |
+  220 |   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  221 |     const file = event.target.files?.[0];    react-hooks/preserve-manual-memoization
+  183:36  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. The inferred dependencies did not match the manually specified dependencies, which could cause the value to change more or less frequently than expected. The inferred dependency was `handleClose`, but the source dependencies were [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]. Inferred different dependency than source.
+
+/app/components/modals/CaptureModal.tsx:183:36
+  181 |   };
+  182 |
+> 183 |   const capturePhoto = useCallback(async () => {
+      |                                    ^^^^^^^^^^^^^
+> 184 |     if (!videoRef.current || !canvasRef.current) return;
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 185 |     const video = videoRef.current;
+      …
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 217 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 218 |   }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
+      | ^^^^ Could not preserve existing manual memoization
+  219 |
+  220 |   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  221 |     const file = event.target.files?.[0];    react-hooks/preserve-manual-memoization
+  213:16  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  218:6   warning  React Hook useCallback has missing dependencies: 'handleClose', 'matchCategory', 'matchHabits', and 'stopCamera'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/exhaustive-deps
+  365:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  405:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+  426:14  warning  'error' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      @typescript-eslint/no-unused-vars
+
+/app/components/modals/ChallengeHubModal.tsx
+   2:26  warning  'Calendar' is defined but never used                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+   3:21  warning  'Habit' is defined but never used                                                                                                                                                                                                                                @typescript-eslint/no-unused-vars
+   7:10  warning  'getMissedHabitDates' is defined but never used                                                                                                                                                                                                                  @typescript-eslint/no-unused-vars
+  93:11  warning  React Hook "useFreezeBankToken" is called in function "handleUseFreeze" that is neither a React function component nor a custom React Hook function. React component names must start with an uppercase letter. React Hook names must start with the word "use"  react-hooks/rules-of-hooks
+
+/app/components/modals/GroceryCatalogModal.tsx
+  137:44  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  137:58  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/app/components/modals/HabitCreatorWizard.tsx
+  393:81   warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  393:108  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/app/components/modals/HabitFormModal.tsx
+  3:13  warning  'Check' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/components/modals/HabitSubmissionLogModal.tsx
+    5:52  warning  'eachDayOfInterval' is defined but never used                                                                       @typescript-eslint/no-unused-vars
+   37:6   warning  React Hook useEffect has a missing dependency: 'loadSubmissions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  425:55  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                     react/no-unescaped-entities
+  425:70  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                     react/no-unescaped-entities
+  430:27  warning  'dayCount' is assigned a value but never used                                                                       @typescript-eslint/no-unused-vars
+
+/app/components/modals/InsightsArchiveModal.tsx
+  70:21  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  70:36  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/app/components/modals/PointsBreakdownModal.tsx
+  192:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/components/modals/RewardsModal.tsx
+  2:13  warning  'Lock' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/components/modals/SafeToSpendModal.tsx
+  2:17  warning  'useState' is defined but never used      @typescript-eslint/no-unused-vars
+  3:42  warning  'ChevronDown' is defined but never used   @typescript-eslint/no-unused-vars
+  3:55  warning  'ChevronUp' is defined but never used     @typescript-eslint/no-unused-vars
+  5:10  warning  'startOfToday' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/components/modals/YearlyGoalFormModal.tsx
+  26:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/app/components/modals/YearlyGoalFormModal.tsx:26:7
+  24 |   useEffect(() => {
+  25 |     if (editingGoal) {
+> 26 |       setTitle(editingGoal.title);
+     |       ^^^^^^^^ Avoid calling setState() directly within an effect
+  27 |       setDescription(editingGoal.description || '');
+  28 |       setYear(editingGoal.year);
+  29 |       setRequiredMonths(editingGoal.requiredMonths);  react-hooks/set-state-in-effect
+
+/app/components/settings/NotificationSettings.tsx
+   72:22  warning  'prev' is defined but never used                                 @typescript-eslint/no-unused-vars
+  211:64  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+  217:63  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+  282:82  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/app/contexts/AuthContext.tsx
+  17:14  warning  Fast refresh only works when a file only exports components. Move your React context(s) to a separate file                      react-refresh/only-export-components
+  71:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+/app/contexts/FirebaseHouseholdContext.tsx
+   208:14  warning  Fast refresh only works when a file only exports components. Move your React context(s) to a separate file                      react-refresh/only-export-components
+   380:81  warning  Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+   709:6   warning  React Hook useEffect has a missing dependency: 'householdSettings'. Either include it or remove the dependency array            react-hooks/exhaustive-deps
+  1613:22  warning  Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+  1634:27  warning  Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+  1712:29  warning  Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+  1743:27  warning  'progress' is assigned a value but never used                                                                                   @typescript-eslint/no-unused-vars
+  1873:20  warning  Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+  2719:6   warning  React Hook useCallback has a missing dependency: 'rolloverFreezeBankTokens'. Either include it or remove the dependency array   react-hooks/exhaustive-deps
+  2835:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+/app/contexts/MockAuthContext.tsx
+  45:10  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/contexts/MockHouseholdContext.tsx
+   96:34  warning  Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  117:9   warning  'updateAccount' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  322:42  warning  '_args' is defined but never used                   @typescript-eslint/no-unused-vars
+  322:49  warning  Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  331:50  warning  '_habitId' is defined but never used                @typescript-eslint/no-unused-vars
+  331:68  warning  '_startDate' is defined but never used              @typescript-eslint/no-unused-vars
+  331:89  warning  '_endDate' is defined but never used                @typescript-eslint/no-unused-vars
+  342:28  warning  Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+  358:8   warning  Unexpected any. Specify a different type            @typescript-eslint/no-explicit-any
+
+/app/hooks/useGroceryOptimizer.ts
+  126:46  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/pages/Dashboard.tsx
+   98:9   warning  The 'today' object construction makes the dependencies of useMemo Hook (at line 105) change on every render. To fix this, wrap the initialization of 'today' in its own useMemo() Hook                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/exhaustive-deps
+  103:33  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This value was memoized in source but not in compilation output.
+
+/app/pages/Dashboard.tsx:103:33
+  101 |   // Expand recurring calendar items for a reasonable range (1 month past to 3 months future)
+  102 |   // This ensures we catch any due recurring items
+> 103 |   const expandedCalendarItems = useMemo(
+      |                                 ^^^^^^^^
+> 104 |     () => expandCalendarItems(calendarItems, subMonths(today, 1), addMonths(today, 3)),
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 105 |     [calendarItems, today]
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 106 |   );
+      | ^^^^ Could not preserve existing memoization
+  107 |
+  108 |   // 1. Due Calendar Items (Past or Today, Unpaid)
+  109 |   const dueCalendarItems: ActionQueueItem[] = expandedCalendarItems.filter(item =>  react-hooks/preserve-manual-memoization
+  105:21  error    Compilation Skipped: Existing memoization could not be preserved
+
+React Compiler has skipped optimizing this component because the existing manual memoization could not be preserved. This dependency may be mutated later, which could cause the value to change unexpectedly.
+
+/app/pages/Dashboard.tsx:105:21
+  103 |   const expandedCalendarItems = useMemo(
+  104 |     () => expandCalendarItems(calendarItems, subMonths(today, 1), addMonths(today, 3)),
+> 105 |     [calendarItems, today]
+      |                     ^^^^^ This dependency may be modified later
+  106 |   );
+  107 |
+  108 |   // 1. Due Calendar Items (Past or Today, Unpaid)                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react-hooks/preserve-manual-memoization
+  169:52  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react/no-unescaped-entities
+  621:17  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react/no-unescaped-entities
+  621:27  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 react/no-unescaped-entities
+
+/app/pages/Habits.tsx
+  74:45  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+  74:49  warning  `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`  react/no-unescaped-entities
+
+/app/pages/HouseholdSetup.tsx
+  46:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  64:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/pages/Login.tsx
+  55:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/pages/MigrateSubmissions.tsx
+   21:31  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   21:57  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   42:19  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   44:53  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   56:34  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+   56:40  warning  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+  235:55  warning  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/app/pages/Settings.tsx
+  1:27  warning  'useEffect' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/pages/ToDosPage.tsx
+   78:27  warning  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+   79:47  warning  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+   80:39  warning  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  154:42  warning  React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+
+/app/services/authService.ts
+  12:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  24:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/services/householdService.ts
+  151:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/services/notificationService.tsx
+   66:26  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  324:28  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/calendarRecurrence.test.ts
+  137:33  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/challengeCalculator.ts
+    2:18  warning  'startOfMonth' is defined but never used           @typescript-eslint/no-unused-vars
+  101:9   warning  'monthEnd' is assigned a value but never used      @typescript-eslint/no-unused-vars
+  182:3   warning  'targetType' is defined but never used             @typescript-eslint/no-unused-vars
+  184:38  warning  'currentValue' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/app/utils/exportUtils.ts
+  27:57  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:51  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:56  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/firestoreSanitizer.ts
+  17:44  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:50  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  50:19  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/freezeBankValidator.ts
+  106:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/utils/habitLogic.test.ts
+    1:32  warning  'vi' is defined but never used                 @typescript-eslint/no-unused-vars
+    1:36  warning  'afterEach' is defined but never used          @typescript-eslint/no-unused-vars
+    1:47  warning  'beforeEach' is defined but never used         @typescript-eslint/no-unused-vars
+    7:3   warning  'ToggleHabitResult' is defined but never used  @typescript-eslint/no-unused-vars
+   10:37  warning  'addDays' is defined but never used            @typescript-eslint/no-unused-vars
+   18:72  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   27:12  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   36:12  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   47:12  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   56:12  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   65:12  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  124:74  warning  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+
+/app/utils/habitLogic.ts
+   18:49  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:3   warning  'currentUser' is defined but never used   @typescript-eslint/no-unused-vars
+
+/app/utils/migrations/challengeMigration.ts
+  1:49  warning  'doc' is defined but never used  @typescript-eslint/no-unused-vars
+
+/app/utils/migrations/freezeBankMigration.ts
+  57:15  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/migrations/payPeriodMigration.ts
+   36:39  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:59  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/app/utils/safeToSpendCalculator.ts
+  2:10  warning  'startOfToday' is defined but never used          @typescript-eslint/no-unused-vars
+  3:10  warning  'calculateBucketSpent' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 158 problems (12 errors, 146 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.

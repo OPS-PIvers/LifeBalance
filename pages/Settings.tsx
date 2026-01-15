@@ -135,12 +135,6 @@ const Settings: React.FC = () => {
     'Notification' in window ? Notification.permission : 'default'
   );
 
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationStatus(Notification.permission);
-    }
-  }, []);
-
   const handleSignOut = async () => {
     try {
       await signOut(auth);

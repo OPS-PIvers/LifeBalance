@@ -391,14 +391,14 @@ const Section: React.FC<{
   members: HouseholdMember[];
 }> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
 
-  if (items.length === 0) return null;
-
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
     const map = new Map<string, HouseholdMember>();
     members.forEach(member => map.set(member.uid, member));
     return map;
   }, [members]);
+
+  if (items.length === 0) return null;
 
   const colorStyles = {
     rose: 'text-rose-600 bg-rose-50 border-rose-100',
