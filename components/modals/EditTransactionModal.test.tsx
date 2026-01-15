@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import EditTransactionModal from './EditTransactionModal';
@@ -71,8 +71,6 @@ describe('EditTransactionModal', () => {
     date: '2024-05-20',
     status: 'verified',
     payPeriodId: '2024-05-01',
-    createdAt: '2024-05-20T10:00:00Z',
-    createdBy: 'user1',
     isRecurring: false,
     source: 'manual',
     autoCategorized: false,
