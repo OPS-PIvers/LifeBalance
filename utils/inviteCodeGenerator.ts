@@ -14,8 +14,13 @@ export const generateInviteCode = async (): Promise<string> => {
 
   while (!isUnique && attempts < maxAttempts) {
     code = '';
+    // 🛡️ Sentinel Security Fix: Use crypto.getRandomValues() for secure random generation
+    // Math.random() is not cryptographically secure and can be predictable.
+    const randomValues = new Uint32Array(6);
+    crypto.getRandomValues(randomValues);
+
     for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      code += chars.charAt(randomValues[i] % chars.length);
     }
 
     // Check if code already exists
