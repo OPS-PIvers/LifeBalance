@@ -26,8 +26,6 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
     currentPeriodId,
   } = useHousehold();
 
-  if (!isOpen) return null;
-
   // Re-calculate the breakdown for display (logic mirrors safeToSpendCalculator)
 
   // 1. Checking

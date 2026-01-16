@@ -2,6 +2,7 @@
 import React from 'react';
 import { X, Lock } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { Modal } from '../ui/Modal';
 
 interface RewardsModalProps {
   isOpen: boolean;
@@ -11,37 +12,29 @@ interface RewardsModalProps {
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, totalPoints, redeemReward } = useHousehold();
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-lg"
+      className="bg-brand-50"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative w-full max-w-lg bg-brand-50 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white shrink-0">
-          <div>
-            <h2 className="text-xl font-bold">Rewards Store</h2>
-            <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
-          </div>
-          <button 
-            onClick={onClose}
-            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
-          >
-            <X size={20} />
-          </button>
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white shrink-0">
+        <div>
+          <h2 className="text-xl font-bold">Rewards Store</h2>
+          <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
         </div>
+        <button
+          onClick={onClose}
+          className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-        {/* Grid */}
-        <div className="p-6 overflow-y-auto grid grid-cols-2 gap-4">
+      {/* Grid */}
+      <div className="p-6 overflow-y-auto grid grid-cols-2 gap-4">
           {rewardsInventory.map(reward => {
             const canAfford = totalPoints >= reward.cost;
 
@@ -72,9 +65,8 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
               </div>
             );
           })}
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

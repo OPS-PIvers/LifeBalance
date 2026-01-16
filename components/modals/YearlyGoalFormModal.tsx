@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { YearlyGoal } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { Modal } from '../ui/Modal';
 
 interface YearlyGoalFormModalProps {
   isOpen: boolean;
@@ -66,34 +67,25 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
     onClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-md"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50 shrink-0">
+        <h2 className="text-lg font-bold text-brand-800">
+          {editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
+        </h2>
+        <button
+          onClick={onClose}
+          className="p-2 text-brand-400 hover:bg-brand-100 rounded-full transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-      {/* Modal */}
-      <div className="relative w-full max-w-md max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50 shrink-0">
-          <h2 className="text-lg font-bold text-brand-800">
-            {editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-brand-400 hover:bg-brand-100 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Title */}
           <div>
             <label className="text-xs font-bold text-brand-400 uppercase">
@@ -169,8 +161,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             {editingGoal ? 'Update Goal' : 'Create Goal'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 };
 
