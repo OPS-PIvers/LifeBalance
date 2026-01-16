@@ -34,7 +34,7 @@ describe('BudgetCalendar', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
