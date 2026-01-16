@@ -1,5 +1,4 @@
-/* eslint-disable */
-/* eslint-disable */
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { YearlyGoal } from '@/types/schema';
