@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/CustomHabitForm';
 import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
+import { Modal } from '../ui/Modal';
 
 // UUID generator with fallback for non-secure contexts
 const generateId = (): string => {
@@ -256,8 +257,6 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       if (e.key === 'Escape') {
         if (deleteConfirmHabit) {
           cancelDelete();
-        } else {
-          handleClose();
         }
       }
     };
@@ -266,22 +265,18 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, deleteConfirmHabit, handleClose]);
-
-  if (!isOpen) return null;
+  }, [isOpen, deleteConfirmHabit]);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      maxWidth="max-w-lg"
+      disableBackdropClose={!!deleteConfirmHabit}
     >
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleClose} />
-
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
-          <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
+        <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
                 onClick={() => setView('main')}
@@ -376,43 +371,41 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           )}
         </div>
 
-        {/* Delete Confirmation Dialog */}
-        {deleteConfirmHabit && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40" onClick={cancelDelete} />
-            <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-money-neg">
-                  <AlertTriangle size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-brand-800">Delete Habit?</h3>
-                  <p className="text-sm text-brand-400">This action cannot be undone.</p>
-                </div>
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirmHabit && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={cancelDelete} />
+          <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-money-neg">
+                <AlertTriangle size={20} />
               </div>
-              <p className="text-sm text-brand-600 mb-6">
-                Are you sure you want to delete <span className="font-semibold">"{deleteConfirmHabit.title}"</span>?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={cancelDelete}
-                  className="flex-1 py-2.5 bg-brand-100 text-brand-700 font-semibold rounded-xl hover:bg-brand-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteConfirmed}
-                  className="flex-1 py-2.5 bg-money-neg text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
-                >
-                  Delete
-                </button>
+              <div>
+                <h3 className="font-bold text-brand-800">Delete Habit?</h3>
+                <p className="text-sm text-brand-400">This action cannot be undone.</p>
               </div>
             </div>
+            <p className="text-sm text-brand-600 mb-6">
+              Are you sure you want to delete <span className="font-semibold">"{deleteConfirmHabit.title}"</span>?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 py-2.5 bg-brand-100 text-brand-700 font-semibold rounded-xl hover:bg-brand-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirmed}
+                className="flex-1 py-2.5 bg-money-neg text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-        )}
-
-      </div>
-    </div>
+        </div>
+      )}
+    </Modal>
   );
 };
 

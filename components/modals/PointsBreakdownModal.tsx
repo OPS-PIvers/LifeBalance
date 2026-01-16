@@ -8,6 +8,7 @@ import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase.config';
+import { Modal } from '../ui/Modal';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;
@@ -111,8 +112,6 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
       .filter((h): h is NonNullable<typeof h> => h !== null)
       .sort((a, b) => b.calculatedPoints - a.calculatedPoints);
   }, [habits, view]);
-
-  if (!isOpen) return null;
 
   const getTitle = () => {
     switch (view) {
@@ -316,26 +315,23 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-      onClick={onClose}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-md"
+      backdropColor="bg-black/50"
     >
-      <div
-        className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in fade-in zoom-in duration-200 max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
-          <h2 className="text-lg font-bold text-gray-800">{getTitle()}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
+      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
+        <h2 className="text-lg font-bold text-gray-800">{getTitle()}</h2>
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {contributions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -387,13 +383,12 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
-            {view === 'total' && "Total points are estimated from lifetime counts."}
-            {view === 'weekly' && "Points are calculated based on completed days this week."}
-            {view === 'daily' && "Points earned today."}
-        </div>
+      <div className="p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
+        {view === 'total' && "Total points are estimated from lifetime counts."}
+        {view === 'weekly' && "Points are calculated based on completed days this week."}
+        {view === 'daily' && "Points earned today."}
       </div>
-    </div>
+    </Modal>
   );
 };
 
