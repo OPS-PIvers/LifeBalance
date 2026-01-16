@@ -32,6 +32,13 @@ describe('generateInviteCode', () => {
     }
   });
 
+  it('should use crypto.getRandomValues', async () => {
+    const getRandomValuesSpy = vi.spyOn(crypto, 'getRandomValues');
+    await generateInviteCode();
+    expect(getRandomValuesSpy).toHaveBeenCalled();
+    expect(getRandomValuesSpy.mock.calls[0][0]).toBeInstanceOf(Uint32Array);
+  });
+
   it('should retry on collision', async () => {
     // First call returns exists=true (collision), second returns false (success)
     vi.mocked(getDoc)
@@ -41,5 +48,13 @@ describe('generateInviteCode', () => {
     const code = await generateInviteCode();
     expect(code).toHaveLength(6);
     expect(getDoc).toHaveBeenCalledTimes(2);
+  });
+
+  it('should throw error after max attempts', async () => {
+    // Always return exists=true (collision)
+    vi.mocked(getDoc).mockResolvedValue({ exists: () => true } as any);
+
+    await expect(generateInviteCode()).rejects.toThrow('Failed to generate unique invite code');
+    expect(getDoc).toHaveBeenCalledTimes(10);
   });
 });
