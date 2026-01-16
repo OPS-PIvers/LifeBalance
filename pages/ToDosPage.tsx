@@ -62,6 +62,52 @@ const ToDosPage: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isAddModalOpen]);
 
+  // Form State
+  const [text, setText] = useState('');
+  const [completeByDate, setCompleteByDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [assignedTo, setAssignedTo] = useState('');
+
+  // Categorize To-Dos
+  const { immediate, upcoming, radar } = useMemo(() => {
+    const active = todos.filter(t => !t.isCompleted);
+    const today = currentDate;
+    const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
+
+    const immediate: ToDo[] = [];
+    const upcoming: ToDo[] = [];
+    const radar: ToDo[] = [];
+
+    // Create a map of parsed dates for efficient sorting
+    const dateMap = new Map<string, number>();
+
+    active.forEach(todo => {
+      const date = parseISO(todo.completeByDate);
+      dateMap.set(todo.id, date.getTime());
+
+      // Overdue items: strictly before the start of today
+      if (isBefore(date, today)) {
+        immediate.push(todo);
+      // Immediate items: due today or tomorrow
+      } else if (isToday(date) || isTomorrow(date)) {
+        immediate.push(todo);
+      } else if (isBefore(date, addDays(endOfCurrentWeek, 1))) { // Within this week
+        upcoming.push(todo);
+      } else {
+        radar.push(todo);
+      }
+    });
+
+    // Sort by date using pre-parsed timestamps
+    const sortByCompleteByDate = (a: ToDo, b: ToDo) =>
+      (dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0);
+
+    return {
+      immediate: immediate.sort(sortByCompleteByDate),
+      upcoming: upcoming.sort(sortByCompleteByDate),
+      radar: radar.sort(sortByCompleteByDate)
+    };
+  }, [todos, currentDate]);
+
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
@@ -73,11 +119,6 @@ const ToDosPage: React.FC = () => {
       </div>
     );
   }
-
-  // Form State
-  const [text, setText] = useState('');
-  const [completeByDate, setCompleteByDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [assignedTo, setAssignedTo] = useState('');
 
   // Open modal for adding
   const openAddModal = () => {
@@ -149,47 +190,6 @@ const ToDosPage: React.FC = () => {
       toast.error('Failed to save to-do. Please try again.');
     }
   };
-
-  // Categorize To-Dos
-  const { immediate, upcoming, radar } = useMemo(() => {
-    const active = todos.filter(t => !t.isCompleted);
-    const today = currentDate;
-    const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
-
-    const immediate: ToDo[] = [];
-    const upcoming: ToDo[] = [];
-    const radar: ToDo[] = [];
-
-    // Create a map of parsed dates for efficient sorting
-    const dateMap = new Map<string, number>();
-    
-    active.forEach(todo => {
-      const date = parseISO(todo.completeByDate);
-      dateMap.set(todo.id, date.getTime());
-
-      // Overdue items: strictly before the start of today
-      if (isBefore(date, today)) {
-        immediate.push(todo);
-      // Immediate items: due today or tomorrow
-      } else if (isToday(date) || isTomorrow(date)) {
-        immediate.push(todo);
-      } else if (isBefore(date, addDays(endOfCurrentWeek, 1))) { // Within this week
-        upcoming.push(todo);
-      } else {
-        radar.push(todo);
-      }
-    });
-
-    // Sort by date using pre-parsed timestamps
-    const sortByCompleteByDate = (a: ToDo, b: ToDo) => 
-      (dateMap.get(a.id) || 0) - (dateMap.get(b.id) || 0);
-
-    return {
-      immediate: immediate.sort(sortByCompleteByDate),
-      upcoming: upcoming.sort(sortByCompleteByDate),
-      radar: radar.sort(sortByCompleteByDate)
-    };
-  }, [todos, currentDate]);
 
   // Action Implementation
   // Swiping is not implemented in this MVP web/PWA version to avoid adding external
@@ -391,14 +391,14 @@ const Section: React.FC<{
   members: HouseholdMember[];
 }> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
 
-  if (items.length === 0) return null;
-
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
     const map = new Map<string, HouseholdMember>();
     members.forEach(member => map.set(member.uid, member));
     return map;
   }, [members]);
+
+  if (items.length === 0) return null;
 
   const colorStyles = {
     rose: 'text-rose-600 bg-rose-50 border-rose-100',

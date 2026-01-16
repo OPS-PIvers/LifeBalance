@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';

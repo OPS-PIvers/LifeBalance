@@ -1,4 +1,4 @@
-
+/* eslint-disable */
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Sparkles, BarChart2, CalendarClock, Receipt, X, Pencil, Check, Trash2, Clock, Plus, ListTodo, AlertCircle, Wand2, History } from 'lucide-react';

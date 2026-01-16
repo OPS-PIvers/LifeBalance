@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { X, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';

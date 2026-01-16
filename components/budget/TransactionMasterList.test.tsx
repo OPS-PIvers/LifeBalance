@@ -74,6 +74,7 @@ describe('TransactionMasterList', () => {
   ];
 
   it('renders transactions sorted by date descending', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -90,6 +91,7 @@ describe('TransactionMasterList', () => {
   });
 
   it('renders all transactions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -103,6 +105,7 @@ describe('TransactionMasterList', () => {
   });
 
   it('renders the export button', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -113,6 +116,7 @@ describe('TransactionMasterList', () => {
   });
 
   it('calls generateCsvExport when export button is clicked', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -134,6 +138,7 @@ describe('TransactionMasterList', () => {
   });
 
   it('disables export button when no transactions match filter', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -150,6 +155,7 @@ describe('TransactionMasterList', () => {
   });
 
   it('exports only filtered transactions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
@@ -167,6 +173,7 @@ describe('TransactionMasterList', () => {
     // Ensure export called exactly once and only includes 'Later Date'
     expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [exportedTransactions] = (generateCsvExport as any).mock.calls[0];
     expect(exportedTransactions).toHaveLength(1);
     expect(exportedTransactions[0]).toEqual(

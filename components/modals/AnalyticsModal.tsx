@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';

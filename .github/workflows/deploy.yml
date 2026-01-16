@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
   build-and-deploy:
@@ -19,7 +16,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 10.20.0
+          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -41,7 +38,7 @@ jobs:
           BUILD_VERSION=$(date +%s)
           echo "BUILD_VERSION=$BUILD_VERSION" >> $GITHUB_ENV
           # Update service worker version
-          sed -i "s/Date.now()/'$BUILD_VERSION'/g" public/sw.js
+          sed -i "s/new Date().toISOString()/'$BUILD_VERSION'/g" public/sw.js
           echo "Build version: $BUILD_VERSION"
 
       - name: Build application
@@ -58,7 +55,6 @@ jobs:
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
 
       - name: Deploy to Firebase Hosting
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}

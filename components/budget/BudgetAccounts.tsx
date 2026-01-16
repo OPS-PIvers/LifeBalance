@@ -355,7 +355,7 @@ const BudgetAccounts: React.FC = () => {
               />
               <select
                 value={newType}
-                onChange={(e: any) => setNewType(e.target.value)}
+                onChange={(e) => setNewType(e.target.value as Account['type'])}
                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
               >
                 <option value="checking">Checking</option>
