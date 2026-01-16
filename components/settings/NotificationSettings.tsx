@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';

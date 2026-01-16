@@ -3,7 +3,6 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { Plus } from 'lucide-react';
-import toast from 'react-hot-toast';
 
 export const QuickRestockRow: React.FC = () => {
   const { groceryCatalog, shoppingList, pantry, addShoppingItem } = useHousehold();

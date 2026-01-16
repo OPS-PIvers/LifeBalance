@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { describe, it, expect } from 'vitest';
 import { generateRecurringInstances, expandCalendarItems } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';

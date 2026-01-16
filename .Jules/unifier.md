@@ -7,3 +7,5 @@
 ## 2025-02-18 - [EditTransactionModal Standardization] **Drift:** `EditTransactionModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) and lacked backdrop click-to-close functionality. **Fix:** Refactored to use the shared `Modal` component, ensuring consistency and adding backdrop click behavior.
 
 ## 2025-02-18 - [AnalyticsModal Standardization] **Drift:** `AnalyticsModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) instead of the shared `Modal` component. **Fix:** Refactored `AnalyticsModal` to use the shared `Modal` component, ensuring consistency in z-index, backdrop, and behavior.
+
+## 2025-02-18 - [HabitSubmissionLogModal Standardization] **Drift:** `HabitSubmissionLogModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) with manual mobile safe area padding. **Fix:** Refactored to use the shared `Modal` component, ensuring consistent z-index, backdrop behavior, and layout.

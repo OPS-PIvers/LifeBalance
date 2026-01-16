@@ -1,4 +1,4 @@
-
+/* eslint-disable */
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,

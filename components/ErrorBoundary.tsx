@@ -14,8 +14,7 @@ interface State {
 class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    // TypeScript workaround: use type assertion to set initial state
-    (this as any).state = {
+    this.state = {
       hasError: false,
       error: null,
       errorInfo: null,
@@ -29,8 +28,7 @@ class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error('Uncaught error:', error, errorInfo);
-    // TypeScript workaround: use type assertion to access inherited setState
-    (this as any).setState({ errorInfo });
+    this.setState({ errorInfo });
   }
 
   private handleReload = () => {
@@ -53,10 +51,7 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   render() {
-    const state = (this as any).state as State;
-    const props = (this as any).props as Props;
-
-    if (state.hasError) {
+    if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center space-y-4">
@@ -70,9 +65,9 @@ class ErrorBoundary extends React.Component<Props, State> {
               The application encountered an unexpected error.
             </p>
 
-            {state.error && (
+            {this.state.error && (
               <div className="bg-red-50 p-3 rounded-lg text-left overflow-auto max-h-32 text-xs text-red-700 font-mono break-all">
-                {state.error.toString()}
+                {this.state.error.toString()}
               </div>
             )}
 
@@ -97,7 +92,7 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    return props.children;
+    return this.props.children;
   }
 }
 

@@ -12,7 +12,6 @@ import Dashboard from './pages/Dashboard';
 import Budget from './pages/Budget';
 import Habits from './pages/Habits';
 import Settings from './pages/Settings';
-import PlaceholderPage from './pages/PlaceholderPage';
 import MigrateSubmissions from './pages/MigrateSubmissions';
 import MealsPage from './pages/MealsPage';
 import ShoppingPage from './pages/ShoppingPage';
@@ -59,6 +58,7 @@ const App: React.FC = () => {
                      sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true';
 
   // Dynamically load mock providers only when needed (tree-shaken in production)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [MockProviders, setMockProviders] = React.useState<any>(null);
 
   React.useEffect(() => {

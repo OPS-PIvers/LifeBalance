@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { signOut } from 'firebase/auth';
@@ -134,12 +134,6 @@ const Settings: React.FC = () => {
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission>(
     'Notification' in window ? Notification.permission : 'default'
   );
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationStatus(Notification.permission);
-    }
-  }, []);
 
   const handleSignOut = async () => {
     try {
