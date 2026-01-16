@@ -19,7 +19,7 @@ vi.mock('react-hot-toast', () => ({
 
 // Mock Child Modals
 vi.mock('../modals/EditTransactionModal', () => ({
-  default: ({ isOpen, onClose, transaction }: any) => isOpen ? (
+  default: ({ isOpen, onClose, transaction }: { isOpen: boolean; onClose: () => void; transaction: { merchant: string } }) => isOpen ? (
     <div data-testid="edit-modal">
       Edit Modal for {transaction.merchant}
       <button onClick={onClose}>Close</button>
@@ -28,7 +28,7 @@ vi.mock('../modals/EditTransactionModal', () => ({
 }));
 
 vi.mock('../modals/BatchCategorizeModal', () => ({
-  default: ({ isOpen, onClose, onConfirm, count }: any) => isOpen ? (
+  default: ({ isOpen, onClose, onConfirm, count }: { isOpen: boolean; onClose: () => void; onConfirm: (category: string) => void; count: number }) => isOpen ? (
     <div data-testid="batch-categorize-modal">
       Batch Categorize {count} items
       <button onClick={() => onConfirm('Food')}>Confirm Food</button>
@@ -108,11 +108,11 @@ describe('TransactionMasterList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    vi.mocked(useHousehold).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: mockDeleteTransaction,
       updateTransaction: mockUpdateTransaction,
-    });
+    } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
