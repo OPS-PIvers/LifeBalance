@@ -113,7 +113,10 @@ export const Modal: React.FC<ModalProps> = ({
         "fixed inset-0 z-[60] flex p-4",
         centerContent && "items-center justify-center"
       )}
-      style={mobileSafePadding ? { paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))' } : undefined}
+      style={mobileSafePadding ? {
+        paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+        paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
+      } : undefined}
       role="dialog"
       aria-modal="true"
       aria-labelledby={ariaLabelledBy}
