@@ -80,7 +80,7 @@ const BudgetCalendar: React.FC = () => {
     setIsAddModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title || !amount || !date) return;
 
     const newItem: CalendarItem = {
@@ -94,14 +94,17 @@ const BudgetCalendar: React.FC = () => {
       frequency: isRecurring ? frequency : undefined
     };
 
-    if (editingItem) {
-      updateCalendarItem(newItem);
-      toast.success('Event updated');
-    } else {
-      addCalendarItem(newItem);
-      toast.success('Event added');
+    try {
+      if (editingItem) {
+        await updateCalendarItem(newItem);
+      } else {
+        await addCalendarItem(newItem);
+      }
+      setIsAddModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save calendar item:", error);
+      toast.error("Failed to save event");
     }
-    setIsAddModalOpen(false);
   };
 
   const handleDuplicate = () => {
