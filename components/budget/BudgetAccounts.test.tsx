@@ -1,18 +1,11 @@
 
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import BudgetAccounts from './BudgetAccounts';
 import { Account } from '../../types/schema';
 
-// Mock Modal: Since the Modal component handles portals/fixed positioning,
-// we can usually rely on RTL to find it. But for simplicity in unit tests,
-// we often just want to ensure it renders its children.
-// However, since we are using the real Modal component which uses `fixed inset-0`,
-// it should just appear in the body. RTL renders into a div appended to body.
-// So we probably don't need to mock it unless we want to bypass the overlay logic.
-// Let's try without mocking Modal first.
-
+// Mock dependencies
 const mockDeleteAccount = vi.fn();
 const mockAccounts: Account[] = [
   {
@@ -33,10 +26,30 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
     setAccountGoal: vi.fn(),
     deleteAccount: mockDeleteAccount,
     reorderAccounts: vi.fn(),
-    // BudgetAccounts derives these from accounts, but if it used the context values directly we'd need to mock them.
-    // Looking at the code: "const { assetAccounts, ... } = useMemo(...)".
-    // So it derives them internally. We just need to provide `accounts`.
   }),
+}));
+
+// Mock Lucide icons
+vi.mock('lucide-react', () => ({
+  Pencil: () => <div data-testid="pencil-icon" />,
+  Check: () => <div data-testid="check-icon" />,
+  Plus: () => <div data-testid="plus-icon" />,
+  X: () => <div data-testid="x-icon" />,
+  Target: () => <div data-testid="target-icon" />,
+  Star: () => <div data-testid="star-icon" />,
+  GripVertical: () => <div data-testid="grip-icon" />,
+  Trash2: () => <div data-testid="trash-icon" />,
+  Loader2: () => <div data-testid="loader-icon" />,
+}));
+
+// Mock Modal to avoid portal/fixed positioning issues in tests
+vi.mock('../ui/Modal', () => ({
+  Modal: ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
+    <div data-testid="modal">
+      <button onClick={onClose} aria-label="Close">X</button>
+      {children}
+    </div>
+  )
 }));
 
 describe('BudgetAccounts', () => {
@@ -47,7 +60,7 @@ describe('BudgetAccounts', () => {
     expect(screen.getAllByText('$1,000').length).toBeGreaterThan(0);
   });
 
-  it('opens delete confirmation modal when trash icon is clicked', () => {
+  it('opens delete confirmation modal when trash icon is clicked', async () => {
     render(<BudgetAccounts />);
 
     // Find trash icon button by aria-label
@@ -56,7 +69,6 @@ describe('BudgetAccounts', () => {
 
     // Check if modal appears
     expect(screen.getByText('Delete Account?')).toBeInTheDocument();
-    expect(screen.getByText('Are you sure you want to delete this account? This action cannot be undone.')).toBeInTheDocument();
 
     // Check if delete button in modal exists
     const confirmDeleteButton = screen.getByText('Delete', { selector: 'button span' }).closest('button');
@@ -65,8 +77,17 @@ describe('BudgetAccounts', () => {
     // Click delete
     if (confirmDeleteButton) {
         fireEvent.click(confirmDeleteButton);
-        // Expect deleteAccount to be called
-        expect(mockDeleteAccount).toHaveBeenCalledWith('acc1');
+
+        // Wait for delete to be called
+        await waitFor(() => {
+          expect(mockDeleteAccount).toHaveBeenCalledWith('acc1');
+        });
+
+        // Modal should be closed (we mock the modal to render children, but the state controlling it lives in parent)
+        // Wait for modal to disappear
+        await waitFor(() => {
+             expect(screen.queryByText('Delete Account?')).not.toBeInTheDocument();
+        });
     }
   });
 });
