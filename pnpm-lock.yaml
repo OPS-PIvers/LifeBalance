@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@google/genai':
-        specifier: ^1.35.0
-        version: 1.36.0
+        specifier: ^1.37.0
+        version: 1.37.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -874,11 +874,11 @@ packages:
     resolution: {integrity: sha512-r3ZwDMiz4nwW6R922Z1pwpePxyRwE5GdevYX63hRmAQUkUQJcBH/79EnQPDv5cOv1mFBgevdNWQfi3tie3dHrQ==}
     engines: {node: '>=14'}
 
-  '@google/genai@1.36.0':
-    resolution: {integrity: sha512-f4S31aVi5G6U1phMKTaNqpik+sfsU1Z25QW3sGyCjtzNj1/0SnCEfWU0Gyq0iR4pjCsaqeeZtSfzHYW3OcEWUQ==}
+  '@google/genai@1.37.0':
+    resolution: {integrity: sha512-of85LwNqretPhBHHEljUY05OSsQVUPyw5n1RdNkUpKR36kgHq7CVVEGY4GplVbFaqbdT3DXfLSv5B/Avbe5vXw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.24.0
+      '@modelcontextprotocol/sdk': ^1.25.2
     peerDependenciesMeta:
       '@modelcontextprotocol/sdk':
         optional: true
@@ -4322,7 +4322,7 @@ snapshots:
       - supports-color
     optional: true
 
-  '@google/genai@1.36.0':
+  '@google/genai@1.37.0':
     dependencies:
       google-auth-library: 10.5.0
       protobufjs: 7.5.4
