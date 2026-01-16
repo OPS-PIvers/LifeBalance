@@ -1,5 +1,5 @@
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetBuckets from './BudgetBuckets';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -29,6 +29,16 @@ vi.mock('../modals/BucketFormModal', () => ({
 
 vi.mock('../modals/EditTransactionModal', () => ({
   default: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div data-testid="edit-transaction-modal">Edit Transaction Modal</div> : null
+}));
+
+// Mock shared UI Modal
+vi.mock('../ui/Modal', () => ({
+  Modal: ({ isOpen, children, ariaLabelledBy }: { isOpen: boolean; children: React.ReactNode; ariaLabelledBy?: string }) =>
+    isOpen ? (
+      <div role="dialog" aria-labelledby={ariaLabelledBy}>
+        {children}
+      </div>
+    ) : null
 }));
 
 describe('BudgetBuckets', () => {
@@ -90,6 +100,7 @@ describe('BudgetBuckets', () => {
     // Check if Modal content appears
     expect(screen.getByText('Fix Overspending')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-labelledby', 'reallocate-title');
   });
 
   it('has accessible edit limit inputs', () => {
