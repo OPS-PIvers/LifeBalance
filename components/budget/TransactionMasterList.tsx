@@ -107,6 +107,9 @@ const TransactionItem = memo(({ transaction: tx, onEdit, onDelete }: Transaction
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
     p.autoCategorized === n.autoCategorized &&
+    p.payPeriodId === n.payPeriodId &&
+    // Shallow check for relatedHabitIds since they are typically replaced not mutated in Firestore
+    p.relatedHabitIds === n.relatedHabitIds &&
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete
   );
