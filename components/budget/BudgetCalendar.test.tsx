@@ -30,7 +30,7 @@ describe('BudgetCalendar', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
       addCalendarItem: mockAddCalendarItem,
       updateCalendarItem: mockUpdateCalendarItem,
@@ -97,8 +97,7 @@ describe('BudgetCalendar', () => {
 
     // Find the submit button inside the modal
     // The modal has a title "Add Calendar Item" or "Edit Event"
-    const modalTitle = screen.getByText('Add Calendar Item');
-    const modalContainer = modalTitle.closest('div.bg-white'); // Finding the modal container
+    screen.getByText('Add Calendar Item');
 
     // Within the modal, find the "Add Event" button
     // It's the submit button at the bottom
