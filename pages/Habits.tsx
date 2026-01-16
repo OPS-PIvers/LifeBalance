@@ -9,6 +9,7 @@ import { Settings, Database, ArrowRight, Download } from 'lucide-react';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
 
 const Habits: React.FC = () => {
   const navigate = useNavigate();
@@ -38,12 +39,13 @@ const Habits: React.FC = () => {
         'Title': habit.title,
         'Category': habit.category,
         'Type': habit.type === 'positive' ? 'Positive' : 'Negative',
+        'Period': habit.period === 'daily' ? 'Daily' : 'Weekly',
         'Current Count': habit.count,
         'Target Count': habit.targetCount,
         'Streak Days': habit.streakDays,
         'Lifetime Count': habit.totalCount,
         'Total Completions (Days)': habit.completedDates.length,
-        'Last Updated': habit.lastUpdated ? new Date(habit.lastUpdated).toLocaleDateString() : 'N/A',
+        'Last Updated': habit.lastUpdated ? format(new Date(habit.lastUpdated), 'yyyy-MM-dd') : 'N/A',
         'Scoring Type': habit.scoringType,
         'Base Points': habit.basePoints
       }));
@@ -77,6 +79,7 @@ const Habits: React.FC = () => {
             disabled={habits.length === 0}
             className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Export habits to CSV"
+            aria-label="Export habits to CSV"
           >
             <Download size={16} />
             <span className="hidden sm:inline">Export</span>
