@@ -447,7 +447,6 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-4xl"
-      className="sm:max-h-[85vh] rounded-3xl"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white z-10">
