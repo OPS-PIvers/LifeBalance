@@ -138,7 +138,7 @@ const ToDosPage: React.FC = () => {
         };
       });
 
-      // Sort by Due Date then Priority
+      // Sort by Due Date
       exportData.sort((a, b) => {
         if (a['Due Date'] !== b['Due Date']) {
           return a['Due Date'].localeCompare(b['Due Date']);
