@@ -30,6 +30,10 @@ vi.mock('lucide-react', () => ({
   FileText: () => <div data-testid="file-text-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
   Download: () => <div data-testid="download-icon" />,
+  Layers: () => <div data-testid="layers-icon" />,
+  CheckSquare: () => <div data-testid="check-square-icon" />,
+  Tag: () => <div data-testid="tag-icon" />,
+  Check: () => <div data-testid="check-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
@@ -78,6 +82,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -95,6 +100,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -109,6 +115,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -120,6 +127,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -142,6 +150,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -159,6 +168,7 @@ describe('TransactionMasterList', () => {
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
