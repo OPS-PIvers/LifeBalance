@@ -8,6 +8,7 @@ import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
+import { Modal } from '../ui/Modal';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -85,23 +86,21 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
   const totalBucketLiability = bucketBreakdown.reduce((sum, b) => sum + b.remaining, 0);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="max-w-sm"
+      backdropColor="bg-slate-900/80"
     >
-      <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={onClose} />
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50 shrink-0">
+        <h2 className="text-lg font-bold text-brand-800">Safe to Spend Breakdown</h2>
+        <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-100 rounded-full">
+          <X size={20} />
+        </button>
+      </div>
 
-      <div className="relative w-full max-w-sm max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50 shrink-0">
-          <h2 className="text-lg font-bold text-brand-800">Safe to Spend Breakdown</h2>
-          <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-100 rounded-full">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
           
           {/* Top Line: Checking Balance */}
           <div className="flex items-center justify-between">
@@ -215,9 +214,8 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
             This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
 
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 
