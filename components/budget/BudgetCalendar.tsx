@@ -5,6 +5,7 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInte
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 
 const BudgetCalendar: React.FC = () => {
@@ -144,8 +145,8 @@ const BudgetCalendar: React.FC = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-7 mb-2">
-          {weekDays.map(d => (
-            <div key={d} className="text-center text-xs font-bold text-brand-300 py-2">
+          {weekDays.map((d, i) => (
+            <div key={`${d}-${i}`} className="text-center text-xs font-bold text-brand-300 py-2">
               {d}
             </div>
           ))}
@@ -254,98 +255,100 @@ const BudgetCalendar: React.FC = () => {
       </div>
 
       {/* Add/Edit Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-brand-800">
-                {editingItem ? 'Edit Event' : 'Add Calendar Item'}
-              </h3>
-              <button onClick={() => setIsAddModalOpen(false)}><X size={20} className="text-brand-400" /></button>
-            </div>
-            
-            <div className="space-y-4">
-               {/* Type Toggle */}
-               <div className="flex bg-brand-50 p-1 rounded-xl">
-                 <button 
-                   onClick={() => setType('expense')} 
-                   className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'expense' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'}`}
-                 >Expense</button>
-                 <button 
-                   onClick={() => setType('income')} 
-                   className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'income' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'}`}
-                 >Income</button>
-               </div>
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        maxWidth="max-w-sm"
+      >
+        <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-lg text-brand-800">
+              {editingItem ? 'Edit Event' : 'Add Calendar Item'}
+            </h3>
+            <button onClick={() => setIsAddModalOpen(false)}><X size={20} className="text-brand-400" /></button>
+          </div>
 
-               <input 
-                 type="text" 
-                 placeholder="Title (e.g. Rent)"
-                 value={title}
-                 onChange={e => setTitle(e.target.value)}
+          <div className="space-y-4">
+             {/* Type Toggle */}
+             <div className="flex bg-brand-50 p-1 rounded-xl">
+               <button
+                 onClick={() => setType('expense')}
+                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'expense' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'}`}
+               >Expense</button>
+               <button
+                 onClick={() => setType('income')}
+                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'income' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'}`}
+               >Income</button>
+             </div>
+
+             <input
+               type="text"
+               placeholder="Title (e.g. Rent)"
+               value={title}
+               onChange={e => setTitle(e.target.value)}
+               className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
+             />
+
+             <input
+               type="number"
+               placeholder="Amount"
+               value={amount}
+               onChange={e => setAmount(e.target.value)}
+               className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
+             />
+
+             <div>
+               <label className="text-xs font-bold text-brand-400 uppercase ml-1 mb-1 block">Date</label>
+               <input
+                 type="date"
+                 value={date}
+                 onChange={e => setDate(e.target.value)}
+                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-medium"
+               />
+             </div>
+
+             <div className="flex items-center justify-between">
+               <label className="text-sm font-bold text-brand-600">Recurring?</label>
+               <button
+                onClick={() => setIsRecurring(!isRecurring)}
+                className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-brand-800' : 'bg-brand-200'}`}
+               >
+                 <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : ''}`} />
+               </button>
+             </div>
+
+             {isRecurring && (
+               <select
+                 value={frequency}
+                 onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
                  className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
-               />
-               
-               <input 
-                 type="number" 
-                 placeholder="Amount"
-                 value={amount}
-                 onChange={e => setAmount(e.target.value)}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
-               />
+               >
+                 <option value="monthly">Monthly</option>
+                 <option value="bi-weekly">Bi-Weekly</option>
+                 <option value="weekly">Weekly</option>
+               </select>
+             )}
 
-               <div>
-                 <label className="text-xs font-bold text-brand-400 uppercase ml-1 mb-1 block">Date</label>
-                 <input
-                   type="date"
-                   value={date}
-                   onChange={e => setDate(e.target.value)}
-                   className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-medium"
-                 />
-               </div>
-
-               <div className="flex items-center justify-between">
-                 <label className="text-sm font-bold text-brand-600">Recurring?</label>
-                 <button 
-                  onClick={() => setIsRecurring(!isRecurring)}
-                  className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-brand-800' : 'bg-brand-200'}`}
-                 >
-                   <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : ''}`} />
-                 </button>
-               </div>
-
-               {isRecurring && (
-                 <select 
-                   value={frequency} 
-                   onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
-                   className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
-                 >
-                   <option value="monthly">Monthly</option>
-                   <option value="bi-weekly">Bi-Weekly</option>
-                   <option value="weekly">Weekly</option>
-                 </select>
-               )}
-
-               <div className="flex gap-2 mt-2">
-                 {editingItem && (
-                   <button
-                     onClick={handleDuplicate}
-                     className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
-                   >
-                     <Copy size={18} />
-                     Duplicate
-                   </button>
-                 )}
+             <div className="flex gap-2 mt-2">
+               {editingItem && (
                  <button
-                   onClick={handleSave}
-                   className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+                   onClick={handleDuplicate}
+                   className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
                  >
-                   {editingItem ? 'Save Changes' : 'Add Event'}
+                   <Copy size={18} />
+                   Duplicate
                  </button>
-               </div>
-            </div>
+               )}
+               <button
+                 onClick={handleSave}
+                 className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+               >
+                 {editingItem ? 'Save Changes' : 'Add Event'}
+               </button>
+             </div>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };
