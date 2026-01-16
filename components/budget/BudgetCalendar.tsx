@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, startOfToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
@@ -9,8 +9,8 @@ import toast from 'react-hot-toast';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem } = useHousehold();
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(startOfToday());
+  const [selectedDate, setSelectedDate] = useState(startOfToday());
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -42,6 +42,21 @@ const BudgetCalendar: React.FC = () => {
   const selectedItems = expandedCalendarItems.filter(item =>
     isSameDay(parseISO(item.date), selectedDate)
   );
+
+  const handlePrevMonth = () => {
+    const newDate = subMonths(currentDate, 1);
+    setCurrentDate(newDate);
+    // Also update selected date to keep it in view (same day of month, or clipped to end)
+    // subMonths handles day-of-month clipping automatically (e.g. Mar 31 -> Feb 28)
+    setSelectedDate(newDate);
+  };
+
+  const handleNextMonth = () => {
+    const newDate = addMonths(currentDate, 1);
+    setCurrentDate(newDate);
+    // Also update selected date to keep it in view
+    setSelectedDate(newDate);
+  };
 
   const openAddModal = () => {
     setTitle('');
@@ -133,10 +148,10 @@ const BudgetCalendar: React.FC = () => {
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-brand-50 rounded-lg">
+            <button onClick={handlePrevMonth} className="p-1 hover:bg-brand-50 rounded-lg">
               <ChevronLeft size={20} className="text-brand-400" />
             </button>
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-brand-50 rounded-lg">
+            <button onClick={handleNextMonth} className="p-1 hover:bg-brand-50 rounded-lg">
               <ChevronRight size={20} className="text-brand-400" />
             </button>
           </div>
