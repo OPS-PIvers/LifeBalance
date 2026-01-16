@@ -379,7 +379,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           // Check if migration is needed
           if (needsFreezeBankMigration(data.freezeBank)) {
             try {
-
               await migrateFreezeBankToEnhanced(householdId, data.freezeBank as any);
               // Migration will trigger a new snapshot with updated data
             } catch (error) {
@@ -647,7 +646,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     runPaycheckMigration();
-
   }, [householdId, householdSettings]);
 
   // Migrate orphaned preset habits to custom habits
@@ -1640,7 +1638,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const isLastForDate = submissionsSnap.size === 1;
 
       // Step 3: Update habit's completedDates if removing last submission for date
-
       const updates: any = {
         count: Math.max(0, habit.count - submission.count),
         totalCount: Math.max(0, habit.totalCount - submission.count),
@@ -1661,7 +1658,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // Step 5: Reverse points
       const today = format(new Date(), 'yyyy-MM-dd');
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
-
 
       const pointUpdates: any = {
         'points.total': increment(-submission.pointsEarned),
@@ -1741,7 +1737,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const today = format(new Date(), 'yyyy-MM-dd');
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-
         const pointUpdates: any = {
           'points.total': increment(pointsDelta),
         };
@@ -1773,7 +1768,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // Calculate currentValue from linked habits
     const linkedHabits = habits.filter(h => challenge.relatedHabitIds.includes(h.id));
-
     const { currentValue, progress } = calculateChallengeProgress(challenge, linkedHabits);
 
     // Build update object, filtering out undefined values (Firestore rejects undefined)
@@ -1791,7 +1785,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
     } else {
       // Remove placeholder ID if it exists
-
       const { id, ...newChallengeData } = updatedChallenge;
 
       await addDoc(collection(db, `households/${householdId}/challenges`), {
@@ -1903,7 +1896,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // Check if yearly goal is achieved
     const isAchieved = updatedMonths.length >= goal.requiredMonths;
-
 
     const updates: any = {
       successfulMonths: updatedMonths,
@@ -2751,7 +2743,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (freezeBank.lastRolloverMonth !== currentMonth) {
       await rolloverFreezeBankTokens();
     }
-
   }, [householdId, freezeBank]);
 
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts

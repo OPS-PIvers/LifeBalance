@@ -457,7 +457,6 @@ const MealPlanTab: React.FC = () => {
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             // Filter all meals for this day
-
             const planItems = mealPlan ? mealPlan.filter((i: any) => i.date === dateStr) : [];
 
             return (
@@ -591,7 +590,6 @@ const MealPlanTab: React.FC = () => {
                                           key={type}
                                           role="radio"
                                           aria-checked={mealType === type}
-
                                           onClick={() => setMealType(type as any)}
                                           className={`flex-1 py-2 px-1 rounded-lg text-sm font-medium capitalize transition-all ${
                                               mealType === type

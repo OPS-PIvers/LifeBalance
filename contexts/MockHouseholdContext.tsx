@@ -315,7 +315,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // No-op functions for features not critical to testing
-
   const noOp = useCallback(async <T,>(..._args: any[]): Promise<T | void> => {
     // toast.info doesn't exist, use toast with custom styling instead
     toast('Mock: Operation not implemented in test mode', {
@@ -325,7 +324,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Special no-op that returns empty array (for getHabitSubmissions)
-
   const getHabitSubmissions = useCallback(async (_habitId: string, _startDate?: string, _endDate?: string): Promise<HabitSubmission[]> => {
     return [];
   }, []);
@@ -353,7 +351,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     coreTemplates: { expenses: [], buckets: [] },
     stores: stores,
     groceryCategories: groceryCategories
-
   } as any;
   const currentPeriodId = '2024-01-01';
   const bucketSpentMap = new Map();

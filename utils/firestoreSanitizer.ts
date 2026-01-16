@@ -15,7 +15,6 @@ export const MAX_FIRESTORE_STRING_LENGTH = 10000;
  * @param obj The object to sanitize
  * @returns A new object with undefined values removed, strings trimmed and truncated
  */
-
 export const sanitizeFirestoreData = (obj: any): any => {
   if (obj === undefined) {
     return null;
