@@ -9,3 +9,5 @@
 ## 2025-02-18 - [AnalyticsModal Standardization] **Drift:** `AnalyticsModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) instead of the shared `Modal` component. **Fix:** Refactored `AnalyticsModal` to use the shared `Modal` component, ensuring consistency in z-index, backdrop, and behavior.
 
 ## 2025-02-18 - [HabitSubmissionLogModal Standardization] **Drift:** `HabitSubmissionLogModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) with manual mobile safe area padding. **Fix:** Refactored to use the shared `Modal` component, ensuring consistent z-index, backdrop behavior, and layout.
+
+## 2025-02-18 - [BudgetCalendar Modal Standardization] **Drift:** `BudgetCalendar` utilized a legacy custom `div` overlay (`fixed inset-0 z-50...`) for its event creation modal, lacking standard features like backdrop click-to-close, escape key handling, and consistent z-index. **Fix:** Refactored to use the standardized `Modal` component, enabling keyboard accessibility and visual consistency while resolving a duplicate key warning in the calendar grid.
