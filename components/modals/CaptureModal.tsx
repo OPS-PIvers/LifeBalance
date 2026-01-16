@@ -335,12 +335,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.error("Please select a date");
       return;
     }
-    const selectedDate = new Date(transactionDate);
-    const today = new Date(getLocalDateString());
-    if (selectedDate > today) {
-      toast.error("Date cannot be in the future");
-      return;
-    }
+    // Future dates are allowed - logic sets status to pending_review if future
+    const isFuture = transactionDate > getLocalDateString();
+
     if (!category || !dynamicCategories.includes(category)) {
       toast.error("Please select a valid category");
       return;
@@ -352,7 +349,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       merchant,
       category,
       date: transactionDate,
-      status: 'verified',
+      status: isFuture ? 'pending_review' : 'verified',
       isRecurring,
       source: 'manual',
       autoCategorized: false
@@ -753,7 +750,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       type="date"
                       value={transactionDate}
                       onChange={(e) => setTransactionDate(e.target.value)}
-                      max={getLocalDateString()}
                       className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
                     />
                   </div>

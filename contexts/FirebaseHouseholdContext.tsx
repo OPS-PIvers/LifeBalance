@@ -885,8 +885,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addCalendarItem = async (item: CalendarItem) => {
     if (!householdId || !user) return;
+    const sanitizedItem = sanitizeFirestoreData(item);
     await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-      ...item,
+      ...sanitizedItem,
       createdBy: user.uid,
     });
     toast.success('Event added');
@@ -894,7 +895,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const updateCalendarItem = async (item: CalendarItem) => {
     if (!householdId) return;
-    await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), {
+    const updates = {
       title: item.title,
       amount: item.amount,
       date: item.date,
@@ -902,7 +903,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       isPaid: item.isPaid,
       isRecurring: item.isRecurring,
       frequency: item.frequency,
-    });
+    };
+    const sanitizedUpdates = sanitizeFirestoreData(updates);
+    await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
     toast.success('Event updated');
   };
 
