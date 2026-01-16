@@ -1,5 +1,5 @@
 /* eslint-disable */
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode, useCallback } from 'react';
 import {
   collection,
   query,
@@ -57,6 +57,7 @@ import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
 import { migrateFreezeBankToEnhanced, needsFreezeBankMigration } from '@/utils/migrations/freezeBankMigration';
+import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/habitMigration';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
@@ -648,6 +649,32 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runPaycheckMigration();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId, householdSettings]);
+
+  // Migrate orphaned preset habits to custom habits
+  const hasAttemptedHabitMigration = useRef(false);
+
+  useEffect(() => {
+    if (!householdId || !habits.length) return;
+    if (hasAttemptedHabitMigration.current) return;
+
+    const runHabitMigration = async () => {
+      if (needsHabitMigration(habits)) {
+        // Mark as attempted before running to prevent race conditions/loops
+        hasAttemptedHabitMigration.current = true;
+
+        console.log('[Migration] Starting habit migration...');
+        try {
+          await migrateOrphanedHabits(householdId, habits);
+        } catch (error) {
+          console.error('[Migration] Failed to migrate habits:', error);
+          // Allow retrying on next session/reload if it failed
+          // But kept true for this session to avoid loop spamming
+        }
+      }
+    };
+
+    runHabitMigration();
+  }, [householdId, habits]);
 
   // Sync daily/weekly/total points from actual habit completions
   // This ensures points accurately reflect completed habits, fixing any desync issues
