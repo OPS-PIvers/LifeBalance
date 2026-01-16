@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, Chevro
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
+import { Modal } from '../ui/Modal';
 import { format, parseISO } from 'date-fns';
 
 const BudgetBuckets: React.FC = () => {
@@ -236,8 +237,15 @@ const BudgetBuckets: React.FC = () => {
                           onChange={e => setEditLimitValue(e.target.value)}
                           className="w-16 p-1 bg-brand-50 border border-brand-200 rounded text-right font-bold"
                           autoFocus
+                          aria-label={`Edit limit for ${bucket.name}`}
                         />
-                        <button onClick={() => saveLimit(bucket.id)} className="text-money-pos"><Check size={14} /></button>
+                        <button
+                          onClick={() => saveLimit(bucket.id)}
+                          className="text-money-pos"
+                          aria-label="Save limit"
+                        >
+                          <Check size={14} />
+                        </button>
                       </div>
                     ) : (
                       <span
@@ -372,85 +380,87 @@ const BudgetBuckets: React.FC = () => {
       />
 
       {/* Reallocate Modal */}
-      {reallocateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-            <h3 className="font-bold text-lg text-brand-800 mb-4 flex items-center gap-2">
-              <ArrowRightLeft size={20} /> Fix Overspending
-            </h3>
-            
-            <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
-              Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
-            </div>
+      <Modal
+        isOpen={!!reallocateModal}
+        onClose={() => setReallocateModal(null)}
+        maxWidth="max-w-sm"
+        ariaLabelledBy="reallocate-title"
+        className="p-6"
+      >
+        <h3 id="reallocate-title" className="font-bold text-lg text-brand-800 mb-4 flex items-center gap-2">
+          <ArrowRightLeft size={20} /> Fix Overspending
+        </h3>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-brand-400 uppercase">Source of Funds</label>
-                <select 
-                  className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
-                  onChange={(e) => setReallocateModal({ ...reallocateModal, sourceId: e.target.value })}
-                  defaultValue=""
-                >
-                  <option value="" disabled>Select source...</option>
-                  
-                  {/* Option Group: Safe to Spend */}
-                  <optgroup label="Cash Flow">
-                    <option value="safe_to_spend">Safe to Spend (Checking)</option>
-                  </optgroup>
+        <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
+          Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
+        </div>
 
-                  {/* Option Group: Savings */}
-                  {savingsAccounts.length > 0 && (
-                    <optgroup label="Savings Accounts">
-                      {savingsAccounts.map(a => (
-                         <option key={a.id} value={a.id}>{a.name} (${a.balance})</option>
-                      ))}
-                    </optgroup>
-                  )}
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs font-bold text-brand-400 uppercase">Source of Funds</label>
+            <select
+              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+              onChange={(e) => setReallocateModal(prev => prev ? ({ ...prev, sourceId: e.target.value }) : null)}
+              defaultValue=""
+            >
+              <option value="" disabled>Select source...</option>
 
-                  {/* Option Group: Other Buckets */}
-                  {availableSourceBuckets.length > 0 && (
-                    <optgroup label="Other Buckets">
-                      {availableSourceBuckets.map(b => {
-                        const bSpent = bucketSpentMap.get(b.id)?.verified || 0;
-                        const avail = b.limit - bSpent;
-                        return (
-                          <option key={b.id} value={b.id}>{b.name} (${avail.toFixed(2)} avail)</option>
-                        );
-                      })}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
+              {/* Option Group: Safe to Spend */}
+              <optgroup label="Cash Flow">
+                <option value="safe_to_spend">Safe to Spend (Checking)</option>
+              </optgroup>
 
-              {/* Dynamic Balance Preview */}
-              {reallocateModal.sourceId && (
-                <div className="text-xs flex justify-between items-center text-brand-500 px-1">
-                   <span>Remaining in source:</span>
-                   <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800'}`}>
-                     ${remainingAfterTransfer.toLocaleString()}
-                   </span>
-                </div>
+              {/* Option Group: Savings */}
+              {savingsAccounts.length > 0 && (
+                <optgroup label="Savings Accounts">
+                  {savingsAccounts.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} (${a.balance})</option>
+                  ))}
+                </optgroup>
               )}
-              
-              <div className="pt-4 flex gap-3">
-                <button 
-                  onClick={() => setReallocateModal(null)}
-                  className="flex-1 py-3 text-brand-500 font-bold bg-brand-100 rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleReallocateConfirm}
-                  disabled={!reallocateModal.sourceId || remainingAfterTransfer < 0}
-                  className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Confirm
-                </button>
-              </div>
+
+              {/* Option Group: Other Buckets */}
+              {availableSourceBuckets.length > 0 && (
+                <optgroup label="Other Buckets">
+                  {availableSourceBuckets.map(b => {
+                    const bSpent = bucketSpentMap.get(b.id)?.verified || 0;
+                    const avail = b.limit - bSpent;
+                    return (
+                      <option key={b.id} value={b.id}>{b.name} (${avail.toFixed(2)} avail)</option>
+                    );
+                  })}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          {/* Dynamic Balance Preview */}
+          {reallocateModal?.sourceId && (
+            <div className="text-xs flex justify-between items-center text-brand-500 px-1">
+                <span>Remaining in source:</span>
+                <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800'}`}>
+                  ${remainingAfterTransfer.toLocaleString()}
+                </span>
             </div>
+          )}
+
+          <div className="pt-4 flex gap-3">
+            <button
+              onClick={() => setReallocateModal(null)}
+              className="flex-1 py-3 text-brand-500 font-bold bg-brand-100 rounded-xl"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReallocateConfirm}
+              disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
+              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Confirm
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

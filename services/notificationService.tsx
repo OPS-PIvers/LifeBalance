@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React from 'react';
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';

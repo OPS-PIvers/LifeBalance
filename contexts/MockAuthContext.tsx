@@ -42,6 +42,7 @@ const createMockUser = (): User => {
       signInProvider: 'google.com',
       signInSecondFactor: null,
       claims: { email: 'test@example.com' }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any),
     reload: async () => Promise.resolve(),
     toJSON: () => ({ uid: 'test-user-id', email: 'test@example.com' }),

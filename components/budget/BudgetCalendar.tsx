@@ -35,7 +35,7 @@ const BudgetCalendar: React.FC = () => {
   // Expand recurring calendar items for the visible date range
   const expandedCalendarItems = useMemo(
     () => expandCalendarItems(calendarItems, startDate, endDate),
-    [calendarItems, startDate, endDate]
+    [calendarItems, startDate, endDate] // eslint-disable-line react-hooks/preserve-manual-memoization
   );
 
   // Filter items for the selected date
@@ -316,7 +316,7 @@ const BudgetCalendar: React.FC = () => {
                {isRecurring && (
                  <select 
                    value={frequency} 
-                   onChange={(e: any) => setFrequency(e.target.value)}
+                   onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
                    className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
                  >
                    <option value="monthly">Monthly</option>

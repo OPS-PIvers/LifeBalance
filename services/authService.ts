@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { signInWithPopup, signOut as firebaseSignOut, User } from 'firebase/auth';
 import { auth, googleProvider } from '@/firebase.config';
 

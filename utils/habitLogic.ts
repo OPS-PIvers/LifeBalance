@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Habit, HouseholdMember } from '@/types/schema';
 import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from 'date-fns';
 

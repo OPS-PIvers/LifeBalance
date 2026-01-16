@@ -33,11 +33,17 @@ vi.mock('recharts', async () => {
   const Original = await vi.importActual('recharts');
   return {
     ...Original,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ResponsiveContainer: ({ children }: any) => <div className="recharts-responsive-container">{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     PieChart: ({ children }: any) => <div data-testid="pie-chart">{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     AreaChart: ({ children }: any) => <div data-testid="area-chart">{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     RadarChart: ({ children }: any) => <div data-testid="radar-chart">{children}</div>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ComposedChart: ({ children }: any) => <div data-testid="composed-chart">{children}</div>,
     // Mock child components that expect context
     XAxis: () => <div data-testid="x-axis" />,

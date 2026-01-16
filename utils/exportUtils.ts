@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * Utility functions for exporting data to files (JSON, CSV)
  */

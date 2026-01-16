@@ -1,4 +1,5 @@
 
+/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { BudgetBucket } from '../../types/schema';

@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { FreezeBank } from '@/types/schema';

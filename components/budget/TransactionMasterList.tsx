@@ -1,19 +1,155 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, memo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2, Download } from 'lucide-react';
+import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2, Download, Layers, CheckSquare, Tag, Check } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
+import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 
+// --- Helper Functions (Moved outside to be stable) ---
+
+const getSourceIcon = (source: string, isRecurring: boolean) => {
+  if (isRecurring) return <History size={12} className="text-purple-500" />;
+  if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-blue-500" />;
+  return null;
+};
+
+const getSanitizedLabel = (name: string, action: string) => {
+  // Replace all non-alphanumeric chars (except spaces) with nothing
+  // Then replace multiple spaces with single space
+  const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+  const truncatedName = sanitizedName.length > 30 ? `${sanitizedName.slice(0, 30)}...` : sanitizedName;
+  return `${action} transaction from ${truncatedName}`;
+};
+
+// --- Memoized Transaction Item Component ---
+
+interface TransactionItemProps {
+  transaction: Transaction;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (tx: Transaction) => void;
+  isSelectionMode: boolean;
+  isSelected: boolean;
+  onToggleSelection: (id: string) => void;
+}
+
+const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+  return (
+    <div
+      onClick={() => isSelectionMode && onToggleSelection(tx.id)}
+      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer ${
+        isSelected
+          ? 'bg-brand-50 border-brand-300'
+          : 'bg-white border-brand-100 hover:border-brand-300'
+      }`}
+    >
+      <div className="flex items-center gap-3 overflow-hidden">
+        {/* Selection Checkbox */}
+        {isSelectionMode && (
+          <div className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
+            {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+          </div>
+        )}
+
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+           tx.category === 'Income' ? 'bg-green-100 text-green-600' : 'bg-brand-100 text-brand-600'
+        }`}>
+          {tx.category === 'Income' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-bold text-brand-800 truncate">{tx.merchant}</p>
+            {getSourceIcon(tx.source, tx.isRecurring)}
+          </div>
+          <p className="text-xs text-brand-500 truncate flex items-center gap-1">
+            {format(parseISO(tx.date), 'MMM d, yyyy')}
+            <span className="w-1 h-1 rounded-full bg-brand-300" />
+            <span className="font-medium text-brand-600">{tx.category}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 pl-2">
+        <div className="text-right">
+          <p className={`font-mono font-bold ${
+            tx.category === 'Income' ? 'text-green-600' : 'text-brand-800'
+          }`}>
+            {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
+          </p>
+          {tx.status === 'pending_review' && (
+            <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
+              Pending
+            </p>
+          )}
+        </div>
+
+        {/* Actions (visible on mobile, enhanced on hover for desktop) - HIDDEN IN SELECTION MODE */}
+        {!isSelectionMode && (
+          <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
+              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
+            >
+              <Edit size={16} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
+              className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
+              aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparator to handle reference instability from Firestore
+  const p = prevProps.transaction;
+  const n = nextProps.transaction;
+
+  return (
+    p.id === n.id &&
+    p.amount === n.amount &&
+    p.merchant === n.merchant &&
+    p.category === n.category &&
+    p.date === n.date &&
+    p.status === n.status &&
+    p.source === n.source &&
+    p.isRecurring === n.isRecurring &&
+    p.autoCategorized === n.autoCategorized &&
+    p.payPeriodId === n.payPeriodId &&
+    // Shallow check for relatedHabitIds since they are typically replaced not mutated in Firestore
+    p.relatedHabitIds === n.relatedHabitIds &&
+    prevProps.onEdit === nextProps.onEdit &&
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.isSelectionMode === nextProps.isSelectionMode &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.onToggleSelection === nextProps.onToggleSelection
+  );
+});
+
+TransactionItem.displayName = 'TransactionItem';
+
+// --- Main Component ---
+
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchCategorizeOpen, setIsBatchCategorizeOpen] = useState(false);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
@@ -24,6 +160,13 @@ const TransactionMasterList: React.FC = () => {
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Clear selection when mode is toggled off
+  React.useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [isSelectionMode]);
 
   // Derived State: Unique Categories
   const categories = useMemo(() => {
@@ -60,11 +203,15 @@ const TransactionMasterList: React.FC = () => {
       });
   }, [transactions, searchTerm, categoryFilter, sourceFilter]);
 
-  // Handlers
-  const handleEdit = (tx: Transaction) => {
+  // Handlers (Memoized for stable references)
+  const handleEdit = useCallback((tx: Transaction) => {
     setEditingTransaction(tx);
     setIsEditModalOpen(true);
-  };
+  }, []);
+
+  const handleDeleteClick = useCallback((tx: Transaction) => {
+    setTransactionToDelete(tx);
+  }, []);
 
   const confirmDelete = async () => {
     if (!transactionToDelete || isDeleting) return;
@@ -87,6 +234,108 @@ const TransactionMasterList: React.FC = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setSourceFilter('all');
+  };
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredTransactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredTransactions.map(t => t.id)));
+    }
+  };
+
+  const handleBatchCategorize = async (category: string) => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id =>
+        updateTransaction(id, { category, status: 'verified' })
+      );
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        console.error('Batch categorize failures:', failed);
+        toast.error(`Updated ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Updated ${selectedIds.size} transactions`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch categorize failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchVerify = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Mark ${selectedIds.size} transactions as Verified?`)) return;
+
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id =>
+        updateTransaction(id, { status: 'verified' })
+      );
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        console.error('Batch verify failures:', failed);
+        toast.error(`Verified ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Verified ${selectedIds.size} transactions`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch verify failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => deleteTransaction(id));
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        console.error('Batch delete failures:', failed);
+        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Deleted ${selectedIds.size} transactions`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchDeleteConfirm(false);
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
   };
 
   const handleExport = () => {
@@ -115,20 +364,6 @@ const TransactionMasterList: React.FC = () => {
       console.error('Export failed:', error);
       toast.error('Failed to export transactions');
     }
-  };
-
-  const getSourceIcon = (source: string, isRecurring: boolean) => {
-    if (isRecurring) return <History size={12} className="text-purple-500" />;
-    if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-blue-500" />;
-    return null;
-  };
-
-  const getSanitizedLabel = (name: string, action: string) => {
-    // Replace all non-alphanumeric chars (except spaces) with nothing
-    // Then replace multiple spaces with single space
-    const sanitizedName = name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-    const truncatedName = sanitizedName.length > 30 ? `${sanitizedName.slice(0, 30)}...` : sanitizedName;
-    return `${action} transaction from ${truncatedName}`;
   };
 
   return (
@@ -189,11 +424,27 @@ const TransactionMasterList: React.FC = () => {
             </button>
           )}
 
+          {/* Select Mode Toggle */}
+          <button
+            onClick={() => setIsSelectionMode(!isSelectionMode)}
+            className={`ml-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+              isSelectionMode
+                ? 'bg-brand-600 text-white hover:bg-brand-700'
+                : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
+            }`}
+            title="Toggle selection mode"
+          >
+            <Layers size={16} />
+            <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>
+          </button>
+
           {/* Export Button */}
           <button
             onClick={handleExport}
-            disabled={filteredTransactions.length === 0}
-            className="ml-auto px-3 py-2 bg-brand-800 text-white rounded-lg text-sm font-medium hover:bg-brand-900 transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={filteredTransactions.length === 0 || isSelectionMode}
+            className={`px-3 py-2 bg-brand-800 text-white rounded-lg text-sm font-medium hover:bg-brand-900 transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isSelectionMode ? 'hidden sm:flex' : ''
+            }`}
             title="Export filtered transactions to CSV"
             aria-label="Export filtered transactions to CSV"
           >
@@ -203,8 +454,22 @@ const TransactionMasterList: React.FC = () => {
         </div>
       </div>
 
+      {/* Select All Bar */}
+      {isSelectionMode && (
+        <div className="flex items-center justify-between px-2 text-sm text-brand-600">
+          <button
+            onClick={handleSelectAll}
+            className="flex items-center gap-2 font-bold hover:text-brand-800"
+          >
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+            Select All ({filteredTransactions.length})
+          </button>
+          <span className="text-xs">{selectedIds.size} selected</span>
+        </div>
+      )}
+
       {/* Transaction List */}
-      <div className="space-y-2">
+      <div className="space-y-2 pb-24">
         {filteredTransactions.length === 0 ? (
           <div className="text-center py-10 text-brand-400">
             <Filter className="w-12 h-12 mx-auto mb-3 opacity-20" />
@@ -215,66 +480,102 @@ const TransactionMasterList: React.FC = () => {
           </div>
         ) : (
           filteredTransactions.map(tx => (
-            <div
+            <TransactionItem
               key={tx.id}
-              className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm flex items-center justify-between hover:border-brand-300 transition-colors group"
-            >
-              <div className="flex items-center gap-3 overflow-hidden">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                   tx.category === 'Income' ? 'bg-green-100 text-green-600' : 'bg-brand-100 text-brand-600'
-                }`}>
-                  {tx.category === 'Income' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
-                </div>
-
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-brand-800 truncate">{tx.merchant}</p>
-                    {getSourceIcon(tx.source, tx.isRecurring)}
-                  </div>
-                  <p className="text-xs text-brand-500 truncate flex items-center gap-1">
-                    {format(parseISO(tx.date), 'MMM d, yyyy')}
-                    <span className="w-1 h-1 rounded-full bg-brand-300" />
-                    <span className="font-medium text-brand-600">{tx.category}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 pl-2">
-                <div className="text-right">
-                  <p className={`font-mono font-bold ${
-                    tx.category === 'Income' ? 'text-green-600' : 'text-brand-800'
-                  }`}>
-                    {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
-                  </p>
-                  {tx.status === 'pending_review' && (
-                    <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
-                      Pending
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions (visible on mobile, enhanced on hover for desktop) */}
-                <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleEdit(tx)}
-                    className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                    aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
-                  >
-                    <Edit size={16} />
-                  </button>
-                  <button
-                    onClick={() => setTransactionToDelete(tx)}
-                    className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
-                    aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
+              transaction={tx}
+              onEdit={handleEdit}
+              onDelete={handleDeleteClick}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(tx.id)}
+              onToggleSelection={toggleSelection}
+            />
           ))
         )}
       </div>
+
+      {/* Floating Action Bar (FAB) for Batch Actions */}
+      {isSelectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-20 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+            <div className="px-3 font-bold text-sm border-r border-brand-700">
+              {selectedIds.size} selected
+            </div>
+
+            <button
+              onClick={() => setIsBatchCategorizeOpen(true)}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Tag size={18} />
+              <span className="text-[10px] font-medium">Categorize</span>
+            </button>
+
+            <button
+              onClick={handleBatchVerify}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Check size={18} />
+              <span className="text-[10px] font-medium">Verify</span>
+            </button>
+
+            <button
+              onClick={() => setShowBatchDeleteConfirm(true)}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={18} />
+              <span className="text-[10px] font-medium">Delete</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Categorize Modal */}
+      <BatchCategorizeModal
+        isOpen={isBatchCategorizeOpen}
+        onClose={() => setIsBatchCategorizeOpen(false)}
+        onConfirm={handleBatchCategorize}
+        count={selectedIds.size}
+        categories={categories}
+      />
+
+      {/* Batch Delete Confirmation */}
+      {showBatchDeleteConfirm && (
+        <Modal
+          isOpen={true}
+          onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
+          disableBackdropClose={isBatchProcessing}
+        >
+          <div className="p-4 space-y-4">
+            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
+            <p className="text-brand-600">
+              Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
+            </p>
+            <p className="text-sm text-money-neg font-bold">
+              This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowBatchDeleteConfirm(false)}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                <span>Delete All</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Edit Modal - Conditionally Rendered */}
       {editingTransaction && (

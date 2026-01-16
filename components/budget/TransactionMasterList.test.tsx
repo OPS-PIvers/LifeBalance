@@ -30,6 +30,10 @@ vi.mock('lucide-react', () => ({
   FileText: () => <div data-testid="file-text-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
   Download: () => <div data-testid="download-icon" />,
+  Layers: () => <div data-testid="layers-icon" />,
+  CheckSquare: () => <div data-testid="check-square-icon" />,
+  Tag: () => <div data-testid="tag-icon" />,
+  Check: () => <div data-testid="check-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
@@ -74,9 +78,11 @@ describe('TransactionMasterList', () => {
   ];
 
   it('renders transactions sorted by date descending', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -90,9 +96,11 @@ describe('TransactionMasterList', () => {
   });
 
   it('renders all transactions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -103,9 +111,11 @@ describe('TransactionMasterList', () => {
   });
 
   it('renders the export button', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -113,9 +123,11 @@ describe('TransactionMasterList', () => {
   });
 
   it('calls generateCsvExport when export button is clicked', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -134,9 +146,11 @@ describe('TransactionMasterList', () => {
   });
 
   it('disables export button when no transactions match filter', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -150,9 +164,11 @@ describe('TransactionMasterList', () => {
   });
 
   it('exports only filtered transactions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (useHousehold as any).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
+      updateTransaction: vi.fn(),
     });
 
     render(<TransactionMasterList />);
@@ -167,6 +183,7 @@ describe('TransactionMasterList', () => {
     // Ensure export called exactly once and only includes 'Later Date'
     expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [exportedTransactions] = (generateCsvExport as any).mock.calls[0];
     expect(exportedTransactions).toHaveLength(1);
     expect(exportedTransactions[0]).toEqual(
