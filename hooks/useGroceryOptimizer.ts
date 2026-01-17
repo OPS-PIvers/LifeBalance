@@ -5,6 +5,7 @@ import { optimizeGroceryList, OptimizableItem } from '@/services/geminiService';
 import { normalizeValue } from '@/utils/stringNormalizer';
 
 interface UseGroceryOptimizerConfig<T> {
+  householdId: string | null;
   items: T[];
   updateItem: (item: T) => Promise<void>;
   mapToOptimizable: (item: T) => OptimizableItem;
@@ -23,6 +24,7 @@ interface UseGroceryOptimizerConfig<T> {
  * @returns Object with handleOptimize function and isOptimizing state
  */
 export const useGroceryOptimizer = <T extends { id: string }>({
+  householdId,
   items,
   updateItem,
   mapToOptimizable,
@@ -34,6 +36,10 @@ export const useGroceryOptimizer = <T extends { id: string }>({
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   const handleOptimize = async () => {
+    if (!householdId) {
+      toast.error("Household ID missing");
+      return;
+    }
     if (items.length === 0) {
       toast.error(emptyMessage);
       return;
@@ -47,6 +53,7 @@ export const useGroceryOptimizer = <T extends { id: string }>({
 
       // Call AI optimization
       const optimizedItems = await optimizeGroceryList(
+        householdId,
         optimizableItems,
         availableCategories
       );

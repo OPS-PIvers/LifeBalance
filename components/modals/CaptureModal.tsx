@@ -2,7 +2,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown
+  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown, Shield
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -44,7 +44,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const {
     addTransaction, buckets, habits,
     addToDo, members, currentUser,
-    addShoppingItem
+    addShoppingItem, householdId
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
@@ -194,7 +194,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setView('processing');
       setProcessingMessage('Scanning receipt...');
       try {
-        const data: ReceiptData = await analyzeReceipt(base64Image, dynamicCategories, habitTitles);
+        if (!householdId) throw new Error("Household ID not found");
+        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles);
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
           amount: data.amount,
@@ -248,10 +249,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
     setProcessingMessage('Extracting transactions...');
     try {
-      const transactions = await parseBankStatement(base64, dynamicCategories, habitTitles);
+      if (!householdId) throw new Error("Household ID not found");
+      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');
-        const receipt = await analyzeReceipt(base64, dynamicCategories, habitTitles);
+        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles);
         setParsedTransactions([{
           id: crypto.randomUUID(),
           merchant: receipt.merchant,
@@ -517,6 +519,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
               {/* Menu View */}
               {view === 'menu' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-3">
+                    <Shield size={16} className="text-blue-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-700">
+                      <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
+                    </p>
+                  </div>
+
                   <button
                     onClick={startCamera}
                     className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"

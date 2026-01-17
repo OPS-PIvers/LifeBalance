@@ -18,7 +18,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const PantryTab: React.FC = () => {
-  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories } = useHousehold();
+  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories, householdId } = useHousehold();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
 
@@ -41,6 +41,7 @@ const PantryTab: React.FC = () => {
 
   // Use the shared grocery optimizer hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    householdId,
     items: pantry,
     updateItem: updatePantryItem,
     mapToOptimizable: (item: PantryItem): OptimizableItem => ({
@@ -114,9 +115,10 @@ const PantryTab: React.FC = () => {
     if (!file) return;
 
     try {
+      if (!householdId) throw new Error("Household ID not found");
       setIsProcessingImage(true);
       const base64 = await fileToBase64(file);
-      const items = await analyzePantryImage(base64, availableCategories);
+      const items = await analyzePantryImage(householdId, base64, availableCategories);
 
       // Add all found items concurrently, handling partial failures
       const results = await Promise.allSettled(items.map(item => addPantryItem(item)));

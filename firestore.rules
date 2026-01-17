@@ -26,10 +26,11 @@ service cloud.firestore {
       // Only members can read the household document.
       // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
       // This aligns with the list rule below.
-      allow get: if isAuthenticated() && request.auth.uid in resource.data.memberUids;
+      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || request.auth.uid == "REPLACE_WITH_ADMIN_UID";
 
       // Allow listing only if user is a member (prevents enumeration of all households)
-      allow list: if request.auth.uid in resource.data.memberUids;
+      // Admin can list all households for the AI Meter
+      allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "REPLACE_WITH_ADMIN_UID";
 
       allow create: if isAuthenticated();
       // Allow update if member (but cannot modify immutable fields).
@@ -132,6 +133,30 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
                     get(/databases/$(database)/documents/households/$(request.resource.data.householdId)).data.createdBy == request.auth.uid;
       allow update, delete: if false; // Invite codes shouldn't be modified or deleted
+    }
+
+    // Global App Config (Kill Switch)
+    match /app_config/global {
+      allow read: if true;
+      allow write: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+    }
+
+    // Beta Testers
+    match /beta_testers/{email} {
+      allow read: if isAuthenticated();
+      allow write: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+    }
+
+    // Feedback Reports
+    match /feedback/{reportId} {
+      allow create: if isAuthenticated();
+      allow read, delete: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+    }
+
+    // AI Usage Logs
+    match /logs/ai_usage/requests/{requestId} {
+      allow create: if isAuthenticated();
+      allow read: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
     }
   }
 }

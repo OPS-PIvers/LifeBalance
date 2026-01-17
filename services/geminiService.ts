@@ -1,6 +1,8 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
-import { PantryItem, Meal, Transaction, Habit, InsightAction } from "@/types/schema";
+import { PantryItem, Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
+import { db } from "@/firebase.config";
+import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
@@ -18,6 +20,95 @@ const ai = new GoogleGenAI({ apiKey });
 const validateApiKey = () => {
   if (!apiKey) {
     throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your environment.");
+  }
+};
+
+/**
+ * Checks if the household is allowed to make AI requests
+ * Implements circuit breaker and quota limits
+ */
+const checkAiAvailability = async (householdId: string) => {
+  // 1. Check Global Kill Switch
+  try {
+    const globalConfigRef = doc(db, 'app_config', 'global');
+    const globalConfigSnap = await getDoc(globalConfigRef);
+    if (globalConfigSnap.exists()) {
+      const data = globalConfigSnap.data();
+      if (data.aiEnabled === false) {
+        throw new Error("AI features are temporarily disabled.");
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("temporarily disabled")) {
+        throw error;
+    }
+    // Fail open if config fetch fails (don't block users due to config db error)
+    console.warn("Failed to check global AI config:", error);
+  }
+
+  // 2. Check Household Quota
+  const householdRef = doc(db, 'households', householdId);
+  const householdSnap = await getDoc(householdRef);
+
+  if (!householdSnap.exists()) {
+      // Should not happen for authenticated users with valid householdId
+      throw new Error("Household not found");
+  }
+
+  const householdData = householdSnap.data() as Household;
+  const today = new Date().toISOString().split('T')[0];
+
+  const usage = householdData.aiUsage || { dailyCount: 0, lastResetDate: today };
+
+  // If date changed, effectively count is 0
+  const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
+
+  // Limit: 20 requests per day for Alpha
+  if (currentCount >= 20) {
+    throw new Error("Daily AI quota exceeded (20 requests/day). Try again tomorrow.");
+  }
+};
+
+/**
+ * Increments AI usage counter and logs request
+ */
+const incrementAiUsage = async (householdId: string, modelName: string) => {
+  const today = new Date().toISOString().split('T')[0];
+  const householdRef = doc(db, 'households', householdId);
+
+  try {
+    // We need to read-modify-write or use smart updates to handle day reset
+    const householdSnap = await getDoc(householdRef);
+    if (householdSnap.exists()) {
+        const data = householdSnap.data() as Household;
+        const currentUsage = data.aiUsage || { dailyCount: 0, lastResetDate: today };
+
+        if (currentUsage.lastResetDate !== today) {
+            // New day, reset to 1
+            await updateDoc(householdRef, {
+                aiUsage: {
+                    dailyCount: 1,
+                    lastResetDate: today
+                }
+            });
+        } else {
+            // Same day, increment
+            await updateDoc(householdRef, {
+                'aiUsage.dailyCount': increment(1)
+            });
+        }
+    }
+
+    // Log for auditing
+    await addDoc(collection(db, 'logs/ai_usage/requests'), {
+      householdId,
+      model: modelName,
+      timestamp: serverTimestamp()
+    });
+
+  } catch (error) {
+    console.error("Failed to track AI usage:", error);
+    // We don't throw here to avoid failing the user's successful operation just because logging failed
   }
 };
 
@@ -135,41 +226,56 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
  * Generic helper to generate JSON content from Gemini
  */
 async function generateJsonContent<T>(
+  householdId: string,
   promptOrParts: string | Part[],
   schema: Schema,
   _aiClient?: Pick<typeof ai, 'models'>,
   modelName: string = 'gemini-3-flash-preview'
 ): Promise<T> {
   validateApiKey();
+
+  // 1. Check Circuit Breaker & Quota
+  await checkAiAvailability(householdId);
+
   const client = _aiClient || ai;
 
   const contents = typeof promptOrParts === 'string'
     ? { parts: [{ text: promptOrParts }] }
     : { parts: promptOrParts };
 
-  const response = await client.models.generateContent({
-    model: modelName,
-    contents,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: schema
-    }
-  });
+  try {
+    const response = await client.models.generateContent({
+      model: modelName,
+      contents,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema
+      }
+    });
 
-  const text = response.text;
-  if (!text) throw new Error("No data returned from Gemini");
+    const text = response.text;
+    if (!text) throw new Error("No data returned from Gemini");
 
-  return JSON.parse(text) as T;
+    // 2. Log Success & Increment Quota
+    await incrementAiUsage(householdId, modelName);
+
+    return JSON.parse(text) as T;
+  } catch (error) {
+      console.error("Gemini API Error:", error);
+      throw error;
+  }
 }
 
 /**
  * Analyzes a receipt image and extracts transaction data
+ * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available budget categories for smart matching
  * @param availableHabits - List of available habits for smart matching
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const analyzeReceipt = async (
+  householdId: string,
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
@@ -187,6 +293,7 @@ export const analyzeReceipt = async (
     const prompt = `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''} Return JSON.`;
 
     return await generateJsonContent<ReceiptData>(
+      householdId,
       prepareImageContent(base64Image, prompt),
       {
         type: Type.OBJECT,
@@ -203,18 +310,21 @@ export const analyzeReceipt = async (
     );
   } catch (error) {
     console.error("Gemini OCR Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to analyze receipt. Please try manual entry.");
   }
 };
 
 /**
  * Analyzes a bank statement screenshot and extracts multiple transactions
+ * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded image of bank statement/transaction list
  * @param availableCategories - List of available budget categories for smart matching
  * @param availableHabits - List of available habits for smart matching
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseBankStatement = async (
+  householdId: string,
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
@@ -240,6 +350,7 @@ Only include expense transactions (debits/withdrawals). Skip any credits, deposi
 Return a JSON array of transactions.`;
 
     const transactions = await generateJsonContent<BankTransactionData[]>(
+      householdId,
       prepareImageContent(base64Image, prompt),
       {
         type: Type.ARRAY,
@@ -266,17 +377,20 @@ Return a JSON array of transactions.`;
 
   } catch (error) {
     console.error("Gemini Bank Statement Parse Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to parse bank statement. Please try again or enter transactions manually.");
   }
 };
 
 /**
  * Analyzes a pantry image and extracts food items
+ * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded image data
  * @param availableCategories - List of available categories for smart matching
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const analyzePantryImage = async (
+  householdId: string,
   base64Image: string,
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
@@ -294,6 +408,7 @@ export const analyzePantryImage = async (
                 Return a JSON array of these items.`;
 
     return await generateJsonContent<Omit<PantryItem, 'id'>[]>(
+      householdId,
       prepareImageContent(base64Image, prompt),
       {
         type: Type.ARRAY,
@@ -312,6 +427,7 @@ export const analyzePantryImage = async (
     );
   } catch (error) {
     console.error("Gemini Pantry Analysis Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to analyze pantry image. Please try manual entry.");
   }
 };
@@ -337,10 +453,12 @@ export interface MealSuggestionResponse {
 
 /**
  * Suggests a meal based on preferences and pantry
+ * @param householdId - The household ID for quota tracking
  * @param options - Options for meal suggestion
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const suggestMeal = async (
+  householdId: string,
   options: MealSuggestionRequest,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<MealSuggestionResponse> => {
@@ -367,6 +485,7 @@ export const suggestMeal = async (
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
     return await generateJsonContent<MealSuggestionResponse>(
+      householdId,
       prompt,
       {
         type: Type.OBJECT,
@@ -397,17 +516,20 @@ export const suggestMeal = async (
 
   } catch (error) {
     console.error("Gemini Meal Suggestion Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to suggest meal.");
   }
 };
 
 /**
  * Parses a grocery receipt to extract items
+ * @param householdId - The household ID for quota tracking
  * @param base64Image - Base64 encoded image
  * @param availableCategories - List of available categories for smart matching
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseGroceryReceipt = async (
+  householdId: string,
   base64Image: string,
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
@@ -426,6 +548,7 @@ export const parseGroceryReceipt = async (
                 Return a JSON array of items.`;
 
     return await generateJsonContent<GroceryItem[]>(
+      householdId,
       prepareImageContent(base64Image, prompt),
       {
         type: Type.ARRAY,
@@ -444,17 +567,20 @@ export const parseGroceryReceipt = async (
     );
   } catch (error) {
     console.error("Gemini Grocery Receipt Parse Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to parse grocery receipt.");
   }
 };
 
 /**
  * Optimizes a list of grocery/pantry items by normalizing names and categories
+ * @param householdId - The household ID for quota tracking
  * @param items - List of items to optimize
  * @param availableCategories - List of valid categories (defaults to GROCERY_CATEGORIES)
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const optimizeGroceryList = async (
+  householdId: string,
   items: OptimizableItem[],
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
@@ -497,6 +623,7 @@ export const optimizeGroceryList = async (
     `;
 
     return await generateJsonContent<OptimizableItem[]>(
+      householdId,
       prompt,
       {
         type: Type.ARRAY,
@@ -520,6 +647,7 @@ export const optimizeGroceryList = async (
       error instanceof Error && error.message
         ? error.message
         : "Unknown error";
+    if (errorMessage.includes("quota")) throw error;
     throw new Error(`Failed to optimize list: ${errorMessage}`);
   }
 };
@@ -534,6 +662,7 @@ export const optimizeGroceryList = async (
  * Habit titles are always included in the analysis. Users should avoid using
  * sensitive or identifying information in habit titles if privacy is a concern.
  * 
+ * @param householdId - The household ID for quota tracking
  * @param transactions - List of recent transactions
  * @param habits - List of habits with completion data
  * @param options - Optional configuration for insight generation
@@ -541,6 +670,7 @@ export const optimizeGroceryList = async (
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const generateInsight = async (
+  householdId: string,
   transactions: Transaction[],
   habits: Habit[],
   options?: { includeMerchantNames?: boolean },
@@ -569,6 +699,7 @@ export const generateInsight = async (
     );
 
     return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(
+      householdId,
       prompt,
       {
         type: Type.OBJECT,
@@ -606,6 +737,7 @@ export const generateInsight = async (
 
   } catch (error) {
     console.error("Gemini Insight Generation Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to generate insight.");
   }
 };

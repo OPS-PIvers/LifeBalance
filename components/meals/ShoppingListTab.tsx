@@ -31,7 +31,8 @@ const ShoppingListTab: React.FC = () => {
     addPantryItem,
     clearPurchasedShoppingItems,
     stores,
-    groceryCategories
+    groceryCategories,
+    householdId
   } = useHousehold();
 
   // Combine default and custom categories
@@ -58,6 +59,7 @@ const ShoppingListTab: React.FC = () => {
 
   // Use the shared grocery optimizer hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
+    householdId,
     items: shoppingList,
     updateItem: updateShoppingItem,
     mapToOptimizable: (item: ShoppingItem): OptimizableItem => ({
@@ -101,9 +103,10 @@ const ShoppingListTab: React.FC = () => {
       if (!file) return;
 
       try {
+        if (!householdId) throw new Error("Household ID not found");
         setIsProcessingReceipt(true);
         const base64 = await fileToBase64(file);
-        const items = await parseGroceryReceipt(base64, categories);
+        const items = await parseGroceryReceipt(householdId, base64, categories);
 
         // Add all found items concurrently for better performance
         const results = await Promise.allSettled(items.map(item =>
