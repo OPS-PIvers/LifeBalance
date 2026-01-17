@@ -635,7 +635,7 @@ export const analyzeHabitPoints = async (
     const habitStats = habits.map(h => {
       return {
         id: h.id,
-        title: h.title, // User requested anonymized, but titles are needed for context. "Anonymized" usually means no PII.
+        title: h.title, // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
         basePoints: h.basePoints,
         period: h.period,
         streakDays: h.streakDays,
@@ -667,7 +667,7 @@ export const analyzeHabitPoints = async (
       - reasoning: (string) brief, encouraging explanation for the change (e.g., "You're crushing this! Dropping points slightly to balance the economy." or "Struggling here? Let's bump the reward to get you back on track!")
     `;
 
-    return await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
+    const rawSuggestions = await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
       prompt,
       {
         type: Type.ARRAY,
@@ -685,6 +685,22 @@ export const analyzeHabitPoints = async (
       },
       _aiClient
     );
+
+    // 2. Validate and Post-process Results
+    return rawSuggestions
+      .filter(suggestion => {
+        // Validate habit exists
+        const habit = habits.find(h => h.id === suggestion.habitId);
+        return !!habit;
+      })
+      .map(suggestion => ({
+        ...suggestion,
+        // Clamp points to 1-100
+        suggestedPoints: Math.max(1, Math.min(100, Math.round(suggestion.suggestedPoints))),
+        // Sanitize and limit reasoning length
+        reasoning: sanitizeForPrompt(suggestion.reasoning).slice(0, 200)
+      }))
+      .slice(0, 10); // Limit to max 10 suggestions
 
   } catch (error) {
     console.error("Gemini Habit Analysis Error:", error);

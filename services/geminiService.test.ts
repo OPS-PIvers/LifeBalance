@@ -127,4 +127,38 @@ describe('geminiService', () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual(mockSuggestions[0]);
   });
+
+  it('analyzeHabitPoints handles empty input', async () => {
+    const { analyzeHabitPoints } = await import('./geminiService');
+    const result = await analyzeHabitPoints([]);
+    expect(result).toEqual([]);
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it('analyzeHabitPoints handles invalid habit ID from AI', async () => {
+    const { analyzeHabitPoints } = await import('./geminiService');
+
+    const mockSuggestions = [
+      {
+        habitId: 'non-existent-id',
+        habitTitle: 'Run',
+        currentPoints: 10,
+        suggestedPoints: 15,
+        reasoning: 'Increase motivation.'
+      }
+    ];
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockSuggestions)
+    });
+
+    const habits = [{
+      id: '1',
+      title: 'Run',
+      basePoints: 10,
+    }] as unknown as Habit[];
+
+    const result = await analyzeHabitPoints(habits);
+    expect(result).toHaveLength(0); // Should be filtered out
+  });
 });

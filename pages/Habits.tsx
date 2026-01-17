@@ -88,7 +88,8 @@ const Habits: React.FC = () => {
           </button>
           <button
             onClick={() => setIsSmartAdjustOpen(true)}
-            className="bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 hover:bg-purple-700 border border-purple-500"
+            disabled={habits.length === 0}
+            className="bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 hover:bg-purple-700 border border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             title="Smart Adjust"
           >
             <Sparkles size={16} />

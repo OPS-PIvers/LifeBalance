@@ -40,12 +40,16 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       setIsLoading(false);
       setError(null);
     }
-  }, [isOpen, habits]);
+    // Intentionally omitting habits from dependency array to avoid loop
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleAccept = async (suggestion: HabitPointAdjustmentSuggestion) => {
     const habit = habits.find(h => h.id === suggestion.habitId);
     if (!habit) {
       toast.error("Habit not found");
+      // Remove from list if not found to prevent repeated errors
+      setSuggestions(prev => prev.filter(s => s.habitId !== suggestion.habitId));
       return;
     }
 
