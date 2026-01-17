@@ -84,4 +84,35 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('Test Task')).toBeInTheDocument();
     expect(screen.getByText('Task')).toBeInTheDocument();
   });
+
+  it('calls completeToDo when complete button is clicked', () => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const mockCompleteToDo = vi.fn().mockResolvedValue(undefined);
+
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      calendarItems: [],
+      addCalendarItem: vi.fn(),
+      updateCalendarItem: vi.fn(),
+      deleteCalendarItem: vi.fn(),
+      todos: [
+        {
+          id: 'todo-1',
+          text: 'Test Task',
+          completeByDate: todayStr,
+          isCompleted: false,
+          assignedTo: 'user1'
+        }
+      ],
+      completeToDo: mockCompleteToDo,
+    });
+
+    render(<BudgetCalendar />);
+
+    // Find and click the complete button
+    const completeButton = screen.getByText('Complete');
+    fireEvent.click(completeButton);
+
+    expect(mockCompleteToDo).toHaveBeenCalledWith('todo-1');
+  });
 });

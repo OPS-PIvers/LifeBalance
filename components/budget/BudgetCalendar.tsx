@@ -229,7 +229,15 @@ const BudgetCalendar: React.FC = () => {
 
                 <div className="flex items-center">
                   <button
-                    onClick={() => completeToDo(todo.id)}
+                    onClick={async () => {
+                      try {
+                        await completeToDo(todo.id);
+                        toast.success('Task completed!');
+                      } catch (error) {
+                        console.error('Failed to complete task:', error);
+                        toast.error('Failed to complete task');
+                      }
+                    }}
                     className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
                   >
                     Complete
