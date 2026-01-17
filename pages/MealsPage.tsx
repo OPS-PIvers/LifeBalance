@@ -11,7 +11,7 @@ const MealsPage: React.FC = () => {
   const tabs = [
     { id: 'pantry', label: 'Pantry', icon: ChefHat },
     { id: 'meal-plan', label: 'Meal Plan', icon: Calendar },
-    { id: 'shopping-list', label: 'Shopping List', icon: ShoppingCart },
+    { id: 'shopping-list', label: 'Shopping List', shortLabel: 'Shop', icon: ShoppingCart },
   ];
 
   return (
@@ -37,7 +37,7 @@ const MealsPage: React.FC = () => {
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-brand-600' : 'text-gray-400'}`} />
               <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden text-xs">{tab.label === 'Shopping List' ? 'Shop' : tab.label}</span>
+              <span className="sm:hidden text-xs">{tab.shortLabel || tab.label}</span>
             </button>
           );
         })}

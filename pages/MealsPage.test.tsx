@@ -22,8 +22,6 @@ describe('MealsPage', () => {
     // Check for Tab Buttons
     expect(screen.getByRole('tab', { name: /pantry/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /meal plan/i })).toBeInTheDocument();
-
-    // This assertion is expected to FAIL initially
     expect(screen.getByRole('tab', { name: /shopping list/i })).toBeInTheDocument();
   });
 
@@ -33,17 +31,18 @@ describe('MealsPage', () => {
     // Default should be Pantry
     expect(screen.getByTestId('pantry-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('meal-plan-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shopping-list-tab')).not.toBeInTheDocument();
 
     // Click Meal Plan
     fireEvent.click(screen.getByRole('tab', { name: /meal plan/i }));
     expect(screen.getByTestId('meal-plan-tab')).toBeInTheDocument();
     expect(screen.queryByTestId('pantry-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('shopping-list-tab')).not.toBeInTheDocument();
 
-    // Click Shopping List (will fail if tab doesn't exist)
-    const shoppingTab = screen.queryByRole('tab', { name: /shopping list/i });
-    if (shoppingTab) {
-        fireEvent.click(shoppingTab);
-        expect(screen.getByTestId('shopping-list-tab')).toBeInTheDocument();
-    }
+    // Click Shopping List
+    fireEvent.click(screen.getByRole('tab', { name: /shopping list/i }));
+    expect(screen.getByTestId('shopping-list-tab')).toBeInTheDocument();
+    expect(screen.queryByTestId('pantry-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('meal-plan-tab')).not.toBeInTheDocument();
   });
 });
