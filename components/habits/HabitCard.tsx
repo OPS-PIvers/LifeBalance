@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Copy } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -17,7 +17,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, addHabit, activeChallenge } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -60,8 +60,29 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleDuplicate = async () => {
+    // Create a copy and reset tracking fields
+    const newHabit = { ...habit };
+    newHabit.title = `${newHabit.title} (Copy)`;
+    newHabit.count = 0;
+    newHabit.totalCount = 0;
+    newHabit.completedDates = [];
+    newHabit.streakDays = 0;
+
+    // Remove ID and submission tracking so new ones are generated/reset
+    delete (newHabit as any).id;
+    delete (newHabit as any).hasSubmissionTracking;
+
+    try {
+      await addHabit(newHabit);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Failed to duplicate habit:', error);
+    }
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = 4; // Edit, Duplicate, View Log, Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -84,9 +105,11 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
           setIsEditModalOpen(true);
           setIsMenuOpen(false);
         } else if (focusedMenuIndex === 1) {
+          handleDuplicate();
+        } else if (focusedMenuIndex === 2) {
           setIsLogModalOpen(true);
           setIsMenuOpen(false);
-        } else if (focusedMenuIndex === 2) {
+        } else if (focusedMenuIndex === 3) {
           deleteHabit(habit.id);
           setIsMenuOpen(false);
         }
@@ -253,12 +276,26 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleDuplicate();
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 1 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
+              >
+                <Copy size={14} /> Duplicate
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   setIsLogModalOpen(true);
                   setIsMenuOpen(false);
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 1 && "bg-brand-50"
+                  focusedMenuIndex === 2 && "bg-brand-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -273,7 +310,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === 3 && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
