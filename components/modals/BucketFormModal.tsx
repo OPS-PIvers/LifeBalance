@@ -69,37 +69,51 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         <h2 id="bucket-form-modal-title" className="text-lg font-bold text-brand-800">
           {editingBucket ? 'Edit Bucket' : 'New Bucket'}
         </h2>
-        <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-50 rounded-full">
+        <button
+          onClick={onClose}
+          aria-label="Close modal"
+          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-500"
+        >
           <X size={20} />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        <input
+        <div>
+          <label htmlFor="bucket-name" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Bucket Name</label>
+          <input
+            id="bucket-name"
             type="text"
-            placeholder="Name (e.g. Coffee)"
+            placeholder="e.g. Coffee"
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none"
             autoFocus={!editingBucket}
-        />
-
-        <input
-            type="number"
-            placeholder="Monthly Limit"
-            value={limit}
-            onChange={e => setLimit(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
-        />
+          />
+        </div>
 
         <div>
-          <label className="text-xs font-bold text-brand-400">Color</label>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <label htmlFor="bucket-limit" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">Monthly Limit</label>
+          <input
+            id="bucket-limit"
+            type="number"
+            placeholder="0.00"
+            value={limit}
+            onChange={e => setLimit(e.target.value)}
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono focus:ring-2 focus:ring-brand-500 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-2">Color</label>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Select color">
             {COLORS.map(c => (
               <button
                 key={c}
                 onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-full ${c} ${color === c ? 'ring-2 ring-brand-800 ring-offset-2' : ''}`}
+                aria-label={`Select color ${c.replace('bg-', '')}`}
+                aria-pressed={color === c}
+                className={`w-8 h-8 rounded-full ${c} ${color === c ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2`}
               />
             ))}
           </div>

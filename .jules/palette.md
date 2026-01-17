@@ -7,3 +7,7 @@
 ## 2024-05-25 - Standardizing Modals for Accessibility
 **Learning:** Custom implementations of modals (using fixed divs with overlays) often miss critical accessibility features like `role="dialog"`, focus trapping, and Escape key handling.
 **Action:** Replace custom modal implementations with the shared `<Modal>` component which handles these a11y requirements centrally, ensuring a consistent and accessible experience for all dialogs.
+
+## 2024-05-26 - Testing Overlapping ARIA Labels
+**Learning:** When a container (e.g., `role="radiogroup"`) and its children share similar `aria-label` text, generic label selectors in tests (like `getByLabelText`) return all matching elements.
+**Action:** Use distinct role filtering or `exact: true` in tests to disambiguate between container and children labels.
