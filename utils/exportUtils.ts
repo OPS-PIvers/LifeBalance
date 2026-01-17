@@ -45,7 +45,17 @@ export const convertToCSV = (data: Record<string, any>[]): string => {
   for (const row of data) {
     const values = headers.map(header => {
       const val = row[header];
-      const escaped = ('' + (val ?? '')).replace(/"/g, '""'); // Escape double quotes
+      let strVal = '' + (val ?? '');
+
+      // 🛡️ Sentinel Security Fix: Prevent CSV Injection
+      // If value starts with =, +, -, @, or | (optionally preceded by whitespace),
+      // prepend a single quote to force text interpretation.
+      // Matches DDE attacks (starting with |) and standard formula injection.
+      if (/^\s*[=+\-@|]/.test(strVal)) {
+        strVal = "'" + strVal;
+      }
+
+      const escaped = strVal.replace(/"/g, '""'); // Escape double quotes
       return `"${escaped}"`; // Wrap in quotes
     });
     csvRows.push(values.join(','));
