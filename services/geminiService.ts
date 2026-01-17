@@ -609,3 +609,96 @@ export const generateInsight = async (
     throw new Error("Failed to generate insight.");
   }
 };
+
+export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'unknown';
+
+export interface MagicActionResponse {
+  type: MagicActionType;
+  confidence: number;
+  data: {
+    // Transaction fields
+    merchant?: string;
+    amount?: number;
+    category?: string;
+    date?: string;
+
+    // Todo fields
+    text?: string;
+    completeByDate?: string;
+
+    // Shopping fields
+    item?: string;
+    quantity?: string;
+    store?: string;
+  };
+}
+
+/**
+ * Parses a natural language input to determine intent and extract data.
+ * @param input - The user's natural language string (e.g., "Spent 50 at Shell")
+ * @param context - Context for better matching (categories, date)
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseMagicAction = async (
+  input: string,
+  context: {
+    categories: string[] | readonly string[];
+    groceryCategories: string[] | readonly string[];
+    todayDate: string;
+  },
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<MagicActionResponse> => {
+  try {
+    const sanitizedInput = sanitizeForPrompt(input);
+    const categoryList = context.categories.join(', ');
+    const groceryCategoryList = context.groceryCategories.join(', ');
+
+    const prompt = `
+      Analyze this user input: "${sanitizedInput}".
+      Determine the intent: 'transaction', 'todo', or 'shopping'.
+      Today's date is ${context.todayDate}.
+
+      1. Transaction: User spent money or wants to log an expense.
+         Extract: merchant, amount (number), category (match one of: ${categoryList}), date (YYYY-MM-DD).
+      2. Todo: User wants to remember a task.
+         Extract: text (task description), completeByDate (YYYY-MM-DD, default to today if not specified or "tomorrow" logic).
+      3. Shopping: User wants to buy something later.
+         Extract: item (name), quantity (string), category (match one of: ${groceryCategoryList}), store (optional).
+
+      If unsure, default to 'unknown'.
+
+      Return JSON.
+    `;
+
+    return await generateJsonContent<MagicActionResponse>(
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'unknown'] },
+          confidence: { type: Type.NUMBER },
+          data: {
+            type: Type.OBJECT,
+            properties: {
+              merchant: { type: Type.STRING },
+              amount: { type: Type.NUMBER },
+              category: { type: Type.STRING },
+              date: { type: Type.STRING },
+              text: { type: Type.STRING },
+              completeByDate: { type: Type.STRING },
+              item: { type: Type.STRING },
+              quantity: { type: Type.STRING },
+              store: { type: Type.STRING }
+            }
+          }
+        },
+        required: ["type", "confidence", "data"]
+      },
+      _aiClient
+    );
+  } catch (error) {
+    console.error("Gemini Magic Action Parse Error:", error);
+    // Fallback or rethrow? Let's return unknown to be safe.
+    return { type: 'unknown', confidence: 0, data: {} };
+  }
+};

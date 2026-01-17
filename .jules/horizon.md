@@ -1,0 +1,3 @@
+# Horizon's Journal 🌅
+
+## 2025-02-18 - The Magic Command Center **Insight:** Users currently have to translate their intent ("I bought coffee") into a UI decision ("Open Transaction Tab -> Enter Amount -> Select Category"). This is cognitive friction. **Concept:** A "Magic Input" that accepts natural language and automatically routes to the correct action (Transaction, Todo, or Shopping), pre-filling all data. "Don't make me think; just let me say it."

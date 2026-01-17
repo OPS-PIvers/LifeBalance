@@ -87,4 +87,61 @@ describe('geminiService', () => {
     expect(result.text).toBe(mockInsightData.text);
     expect(result.actions).toEqual([]);
   });
+
+  it('parseMagicAction correctly parses transaction', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+
+    const mockResponse = {
+      type: 'transaction',
+      confidence: 0.95,
+      data: {
+        merchant: 'Target',
+        amount: 45.20,
+        category: 'Shopping',
+        date: '2025-02-18'
+      }
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseMagicAction('Spent 45.20 at Target', {
+      categories: ['Shopping', 'Dining'],
+      groceryCategories: ['Food'],
+      todayDate: '2025-02-18'
+    });
+
+    expect(result.type).toBe('transaction');
+    expect(result.data.merchant).toBe('Target');
+    expect(result.data.amount).toBe(45.20);
+    expect(result.data.category).toBe('Shopping');
+  });
+
+  it('parseMagicAction correctly parses todo', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+
+    const mockResponse = {
+      type: 'todo',
+      confidence: 0.9,
+      data: {
+        text: 'Pay electricity bill',
+        completeByDate: '2025-02-19'
+      }
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseMagicAction('Remind me to pay electricity bill tomorrow', {
+      categories: [],
+      groceryCategories: [],
+      todayDate: '2025-02-18'
+    });
+
+    expect(result.type).toBe('todo');
+    expect(result.data.text).toBe('Pay electricity bill');
+    expect(result.data.completeByDate).toBe('2025-02-19');
+  });
 });
