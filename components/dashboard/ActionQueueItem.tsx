@@ -19,6 +19,16 @@ interface ActionQueueItemProps {
   setPayModalItemId: (id: string | null) => void;
 }
 
+const areActionQueueItemPropsEqual = (
+  prev: ActionQueueItemProps,
+  next: ActionQueueItemProps
+): boolean => (
+  prev.item.id === next.item.id
+  && prev.isExpanded === next.isExpanded
+  && prev.setExpandedId === next.setExpandedId
+  && prev.setPayModalItemId === next.setPayModalItemId
+);
+
 // Optimization: Memoized to prevent re-renders of unexpanded items when one item is expanded/collapsed.
 // We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
 export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
@@ -324,6 +334,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       )}
     </div>
   );
-});
+}, areActionQueueItemPropsEqual);
 
 ActionQueueItemCard.displayName = 'ActionQueueItemCard';
