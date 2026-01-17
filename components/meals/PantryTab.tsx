@@ -66,7 +66,7 @@ const PantryTab: React.FC = () => {
     setNewQuantity('');
     setNewCategory('Pantry');
     setNewExpiry('');
-    setNewPurchaseDate('');
+    setNewPurchaseDate(new Date().toISOString().split('T')[0]);
     setEditingItem(null);
   };
 
