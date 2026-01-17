@@ -15,6 +15,13 @@ vi.mock('@/components/meals/ShoppingListTab', () => ({
   default: () => <div data-testid="shopping-list-tab">Shopping List Content</div>
 }));
 
+// Mock Lucide icons
+vi.mock('lucide-react', () => ({
+  ChefHat: () => <div data-testid="chef-hat-icon" />,
+  Calendar: () => <div data-testid="calendar-icon" />,
+  ShoppingCart: () => <div data-testid="shopping-cart-icon" />,
+}));
+
 describe('MealsPage', () => {
   it('renders all three tabs: Pantry, Meal Plan, and Shopping List', () => {
     render(<MealsPage />);
