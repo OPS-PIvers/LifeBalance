@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { GoogleGenAI } from '@google/genai';
 
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {

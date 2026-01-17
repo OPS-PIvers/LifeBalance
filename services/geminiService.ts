@@ -32,7 +32,7 @@ Keep the 'text' under 30 words.
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
 - 'update_bucket': If spending consistently exceeds limits. Payload: { "bucketName": "CategoryName", "newLimit": number }
-- 'create_habit': If a new habit would help. Payload: { "title": "Habit Title", "category": "Health/Finance", "type": "positive", "period": "daily" }
+- 'create_habit': If a new habit would help. Payload: { "title": "Habit Title", "category": "one of the existing habit categories (reuse an exact category from the Habits list if possible)", "type": "positive", "period": "daily" }
 - 'create_todo': If a specific one-off task is needed. Payload: { "text": "Task description", "completeByDate": "YYYY-MM-DD" }
 
 Transactions (last 50): ${transactions}
@@ -581,7 +581,19 @@ export const generateInsight = async (
               properties: {
                 type: { type: Type.STRING, enum: ['update_bucket', 'create_habit', 'create_todo'] },
                 label: { type: Type.STRING },
-                payload: { type: Type.OBJECT }
+                payload: {
+                  type: Type.OBJECT,
+                  properties: {
+                    bucketName: { type: Type.STRING },
+                    newLimit: { type: Type.NUMBER },
+                    title: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    type: { type: Type.STRING, enum: ['positive', 'negative'] },
+                    period: { type: Type.STRING, enum: ['daily', 'weekly'] },
+                    text: { type: Type.STRING },
+                    completeByDate: { type: Type.STRING }
+                  }
+                }
               },
               required: ['type', 'label', 'payload']
             }

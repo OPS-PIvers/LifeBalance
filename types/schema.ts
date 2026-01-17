@@ -354,11 +354,39 @@ export interface ToDo {
   createdAt: string; // ISO timestamp
 }
 
-export interface InsightAction {
-  type: 'update_bucket' | 'create_habit' | 'create_todo';
-  label: string;
-  payload: any;
+export interface UpdateBucketPayload {
+  bucketName: string;
+  newLimit: number;
 }
+
+export interface CreateHabitPayload {
+  title: string;
+  category: string;
+  type?: 'positive' | 'negative';
+  period?: 'daily' | 'weekly';
+}
+
+export interface CreateTodoPayload {
+  text: string;
+  completeByDate: string;
+}
+
+export type InsightAction =
+  | {
+      type: 'update_bucket';
+      label: string;
+      payload: UpdateBucketPayload;
+    }
+  | {
+      type: 'create_habit';
+      label: string;
+      payload: CreateHabitPayload;
+    }
+  | {
+      type: 'create_todo';
+      label: string;
+      payload: CreateTodoPayload;
+    };
 
 export interface Insight {
   id: string;
