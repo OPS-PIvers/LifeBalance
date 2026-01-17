@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, Leaf } from 'lucide-react';
 import { suggestMeal } from '@/services/geminiService';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
@@ -113,6 +113,7 @@ const MealPlanTab: React.FC = () => {
   // AI Options
   const [aiOptions, setAiOptions] = useState({
     usePantry: true,
+    prioritizeExpiring: false,
     cheap: false,
     quick: false,
     new: false,
@@ -384,6 +385,7 @@ const MealPlanTab: React.FC = () => {
     try {
         const suggestion = await suggestMeal({
             usePantry: aiOptions.usePantry,
+            prioritizeExpiring: aiOptions.prioritizeExpiring,
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
@@ -928,6 +930,22 @@ const MealPlanTab: React.FC = () => {
                           <div>
                               <div className="font-medium">Use Pantry Items</div>
                               <div className="text-xs text-gray-500">Prioritize ingredients you have</div>
+                          </div>
+                      </label>
+
+                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                          <input
+                              type="checkbox"
+                              checked={aiOptions.prioritizeExpiring}
+                              onChange={e => setAiOptions({...aiOptions, prioritizeExpiring: e.target.checked})}
+                              disabled={!aiOptions.usePantry}
+                              className="rounded text-purple-600 focus:ring-purple-500 disabled:opacity-50"
+                          />
+                          <div className={!aiOptions.usePantry ? 'opacity-50' : ''}>
+                              <div className="font-medium flex items-center gap-2">
+                                  Reduce Waste <Leaf className="w-4 h-4 text-green-500" />
+                              </div>
+                              <div className="text-xs text-gray-500">Use expiring items first</div>
                           </div>
                       </label>
 

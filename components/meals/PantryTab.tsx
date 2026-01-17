@@ -6,6 +6,7 @@ import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
+import { differenceInDays, parseISO } from 'date-fns';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -109,6 +110,15 @@ const PantryTab: React.FC = () => {
     setIsAddModalOpen(true);
   };
 
+  const getExpiryStatus = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const days = differenceInDays(parseISO(dateStr), new Date());
+
+    if (days < 0) return { label: 'Expired', color: 'text-red-700 bg-red-50 border-red-200', icon: '⚠️' };
+    if (days <= 3) return { label: 'Expiring Soon', color: 'text-orange-700 bg-orange-50 border-orange-200', icon: '⏰' };
+    return null;
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -193,9 +203,19 @@ const PantryTab: React.FC = () => {
               <div key={item.id} className="p-4 flex justify-between items-center hover:bg-gray-50">
                 <div>
                   <div className="font-medium text-gray-900">{item.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {item.quantity}
-                    {item.expiryDate && <span className="ml-2 text-orange-600 text-xs">Exp: {item.expiryDate}</span>}
+                  <div className="text-sm text-gray-500 flex items-center gap-2 mt-0.5">
+                    <span>{item.quantity}</span>
+                    {item.expiryDate && (() => {
+                        const status = getExpiryStatus(item.expiryDate);
+                        if (status) {
+                            return (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex items-center gap-1 font-medium ${status.color}`}>
+                                    {status.icon} {status.label} ({item.expiryDate})
+                                </span>
+                            );
+                        }
+                        return <span className="text-xs text-gray-400">Exp: {item.expiryDate}</span>;
+                    })()}
                   </div>
                 </div>
                 <div className="flex gap-2">
