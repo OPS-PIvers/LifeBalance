@@ -4,8 +4,9 @@ import BudgetCalendar from '../components/budget/BudgetCalendar';
 import BudgetBuckets from '../components/budget/BudgetBuckets';
 import BudgetAccounts from '../components/budget/BudgetAccounts';
 import TransactionMasterList from '../components/budget/TransactionMasterList';
+import BudgetForecast from '../components/budget/BudgetForecast';
 
-type Tab = 'calendar' | 'buckets' | 'accounts' | 'history';
+type Tab = 'calendar' | 'buckets' | 'accounts' | 'history' | 'forecast';
 
 const Budget: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('calendar');
@@ -22,6 +23,14 @@ const Budget: React.FC = () => {
             }`}
           >
             Calendar
+          </button>
+          <button
+            onClick={() => setActiveTab('forecast')}
+            className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'forecast' ? 'bg-white text-brand-800 shadow-sm' : 'text-brand-500 hover:text-brand-700'
+            }`}
+          >
+            Forecast
           </button>
           <button
             onClick={() => setActiveTab('buckets')}
@@ -52,6 +61,7 @@ const Budget: React.FC = () => {
         {/* View Container */}
         <div className="animate-in fade-in duration-300">
           {activeTab === 'calendar' && <BudgetCalendar />}
+          {activeTab === 'forecast' && <BudgetForecast />}
           {activeTab === 'buckets' && <BudgetBuckets />}
           {activeTab === 'accounts' && <BudgetAccounts />}
           {activeTab === 'history' && <TransactionMasterList />}
