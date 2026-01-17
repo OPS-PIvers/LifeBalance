@@ -1,5 +1,5 @@
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SmartHabitAdjustModal from './SmartHabitAdjustModal';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
@@ -25,7 +25,7 @@ describe('SmartHabitAdjustModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    (useHousehold as Mock).mockReturnValue({
       habits: mockHabits,
       updateHabit: mockUpdateHabit,
     });
@@ -37,7 +37,7 @@ describe('SmartHabitAdjustModal', () => {
   });
 
   it('renders loading state initially', async () => {
-    (analyzeHabitPoints as any).mockReturnValue(new Promise(() => {})); // Never resolves
+    (analyzeHabitPoints as Mock).mockReturnValue(new Promise(() => {})); // Never resolves
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
     expect(screen.getByText('Analyzing your habits...')).toBeInTheDocument();
   });
@@ -52,7 +52,7 @@ describe('SmartHabitAdjustModal', () => {
         reasoning: 'Motivation boost',
       },
     ];
-    (analyzeHabitPoints as any).mockResolvedValue(mockSuggestions);
+    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -66,7 +66,7 @@ describe('SmartHabitAdjustModal', () => {
   });
 
   it('renders empty state when no suggestions returned', async () => {
-    (analyzeHabitPoints as any).mockResolvedValue([]);
+    (analyzeHabitPoints as Mock).mockResolvedValue([]);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -76,7 +76,7 @@ describe('SmartHabitAdjustModal', () => {
   });
 
   it('renders error state on failure', async () => {
-    (analyzeHabitPoints as any).mockRejectedValue(new Error('API Error'));
+    (analyzeHabitPoints as Mock).mockRejectedValue(new Error('API Error'));
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -95,7 +95,7 @@ describe('SmartHabitAdjustModal', () => {
         reasoning: 'Motivation boost',
       },
     ];
-    (analyzeHabitPoints as any).mockResolvedValue(mockSuggestions);
+    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
@@ -123,7 +123,7 @@ describe('SmartHabitAdjustModal', () => {
         reasoning: 'Motivation boost',
       },
     ];
-    (analyzeHabitPoints as any).mockResolvedValue(mockSuggestions);
+    (analyzeHabitPoints as Mock).mockResolvedValue(mockSuggestions);
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
