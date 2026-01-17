@@ -2,14 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem } = useHousehold();
+  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo } = useHousehold();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -42,6 +42,11 @@ const BudgetCalendar: React.FC = () => {
   // Filter items for the selected date
   const selectedItems = expandedCalendarItems.filter(item =>
     isSameDay(parseISO(item.date), selectedDate)
+  );
+
+  // Filter todos for the selected date
+  const selectedTodos = todos.filter(todo =>
+    isSameDay(parseISO(todo.completeByDate), selectedDate) && !todo.isCompleted
   );
 
   const openAddModal = () => {
@@ -159,6 +164,7 @@ const BudgetCalendar: React.FC = () => {
             const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
             const hasIncome = dateItems.some(i => i.type === 'income');
             const hasExpense = dateItems.some(i => i.type === 'expense');
+            const hasTodo = todos.some(t => isSameDay(parseISO(t.completeByDate), day) && !t.isCompleted);
             const isSelected = isSameDay(day, selectedDate);
 
             return (
@@ -178,6 +184,7 @@ const BudgetCalendar: React.FC = () => {
                 <div className="absolute bottom-1 flex gap-0.5">
                   {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
                   {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
+                  {hasTodo && <div className="w-1 h-1 rounded-full bg-blue-500"></div>}
                 </div>
               </div>
             );
@@ -199,12 +206,47 @@ const BudgetCalendar: React.FC = () => {
           </button>
         </div>
 
-        {selectedItems.length === 0 ? (
+        {selectedItems.length === 0 && selectedTodos.length === 0 ? (
           <div className="text-center py-8 bg-white border border-dashed border-brand-200 rounded-2xl text-brand-400 text-sm">
-            No events scheduled.
+            No events or tasks scheduled.
           </div>
         ) : (
           <div className="space-y-3">
+            {/* ToDos Section */}
+            {selectedTodos.map(todo => (
+              <div key={todo.id} className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg bg-blue-50 text-blue-600">
+                    <CheckSquare size={20} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-brand-800 text-sm">{todo.text}</p>
+                    <p className="text-xs text-brand-400">
+                      Task
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center">
+                  <button
+                    onClick={async () => {
+                      try {
+                        await completeToDo(todo.id);
+                        toast.success('Task completed!');
+                      } catch (error) {
+                        console.error('Failed to complete task:', error);
+                        toast.error('Failed to complete task');
+                      }
+                    }}
+                    className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                  >
+                    Complete
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Financial Items Section */}
             {selectedItems.map(item => (
               <div key={item.id} className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm flex items-center justify-between group">
                 <div className="flex items-center gap-3">

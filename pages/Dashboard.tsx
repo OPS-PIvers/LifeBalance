@@ -64,7 +64,7 @@ const Dashboard: React.FC = () => {
                 <ActionQueueItemCard
                   key={item.id}
                   item={item}
-                  expandedId={expandedId}
+                  isExpanded={expandedId === item.id}
                   setExpandedId={setExpandedId}
                   setPayModalItemId={setPayModalItemId}
                 />

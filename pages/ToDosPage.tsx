@@ -6,6 +6,7 @@ import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
+import { Modal } from '../components/ui/Modal';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -48,20 +49,6 @@ const ToDosPage: React.FC = () => {
       }
     };
   }, []); // Run once on mount to initiate recurring midnight checks
-
-  // Handle Escape key to close modal (only when open)
-  useEffect(() => {
-    if (!isAddModalOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsAddModalOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isAddModalOpen]);
 
   // Form State
   const [text, setText] = useState('');
@@ -319,128 +306,108 @@ const ToDosPage: React.FC = () => {
       />
 
       {/* Add/Edit Modal */}
-      {isAddModalOpen && (
-        <div 
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
-          style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-          onClick={(e) => {
-            // Close modal when clicking backdrop
-            if (e.target === e.currentTarget) {
-              setIsAddModalOpen(false);
-            }
-          }}
-          onKeyDown={(e) => {
-            // Close modal when pressing Enter or Space on backdrop
-            if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-              setIsAddModalOpen(false);
-            }
-          }}
-          role="dialog"
-          aria-modal="true"
-          tabIndex={0}
-        >
-          <div
-            className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        className="p-6"
+      >
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold text-brand-800">
+            {editingId ? 'Edit Task' : 'New Task'}
+          </h2>
+          <button
+            onClick={() => setIsAddModalOpen(false)}
+            className="p-2 hover:bg-brand-50 rounded-full transition-colors"
+            aria-label="Close dialog"
           >
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-brand-800">
-                {editingId ? 'Edit Task' : 'New Task'}
-              </h2>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                className="p-2 hover:bg-brand-50 rounded-full transition-colors"
-                aria-label="Close dialog"
-              >
-                <X size={20} className="text-brand-400" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                  Task
-                </label>
-                <input
-                  id="task-input"
-                  type="text"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Enter task description"
-                  className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                  Due Date
-                </label>
-                <div className="relative w-full">
-                  <input
-                    id="due-date-input"
-                    type="date"
-                    value={completeByDate}
-                    onChange={(e) => setCompleteByDate(e.target.value)}
-                    className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
-                    style={{ WebkitAppearance: 'none' }}
-                  />
-                  <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <fieldset>
-                <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                  Assign To
-                </legend>
-                {members.length === 0 ? (
-                  <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
-                    <AlertCircle size={16} className="flex-shrink-0" />
-                    <span>No household members available to assign this task.</span>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
-                    {members.map(member => (
-                      <button
-                        key={member.uid}
-                        type="button"
-                        onClick={() => setAssignedTo(member.uid)}
-                        aria-label={`Assign to ${member.displayName || 'User'}`}
-                        aria-pressed={assignedTo === member.uid}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
-                          assignedTo === member.uid
-                            ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
-                        }`}
-                      >
-                        {member.photoURL ? (
-                          <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
-                        ) : (
-                          <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
-                            {member.displayName?.charAt(0) ?? 'U'}
-                          </div>
-                        )}
-                        <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </fieldset>
-
-              <button
-                type="submit"
-                disabled={members.length === 0}
-                className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-                  members.length === 0
-                    ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:bg-brand-900 active:scale-[0.98]'
-                }`}
-              >
-                {editingId ? 'Save Changes' : 'Create Task'}
-              </button>
-            </form>
-          </div>
+            <X size={20} className="text-brand-400" />
+          </button>
         </div>
-      )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+              Task
+            </label>
+            <input
+              id="task-input"
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Enter task description"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+              Due Date
+            </label>
+            <div className="relative w-full">
+              <input
+                id="due-date-input"
+                type="date"
+                value={completeByDate}
+                onChange={(e) => setCompleteByDate(e.target.value)}
+                className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
+                style={{ WebkitAppearance: 'none' }}
+              />
+              <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <fieldset>
+            <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+              Assign To
+            </legend>
+            {members.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
+                <AlertCircle size={16} className="flex-shrink-0" />
+                <span>No household members available to assign this task.</span>
+              </div>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
+                {members.map(member => (
+                  <button
+                    key={member.uid}
+                    type="button"
+                    onClick={() => setAssignedTo(member.uid)}
+                    aria-label={`Assign to ${member.displayName || 'User'}`}
+                    aria-pressed={assignedTo === member.uid}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
+                      assignedTo === member.uid
+                        ? 'bg-brand-800 text-white border-brand-800 shadow-md'
+                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
+                    }`}
+                  >
+                    {member.photoURL ? (
+                      <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
+                        {member.displayName?.charAt(0) ?? 'U'}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </fieldset>
+
+          <button
+            type="submit"
+            disabled={members.length === 0}
+            className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
+              members.length === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : 'hover:bg-brand-900 active:scale-[0.98]'
+            }`}
+          >
+            {editingId ? 'Save Changes' : 'Create Task'}
+          </button>
+        </form>
+      </Modal>
 
     </div>
   );

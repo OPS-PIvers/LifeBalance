@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
-import { PantryItem, Meal, Transaction, Habit } from "@/types/schema";
+import { PantryItem, Meal, Transaction, Habit, InsightAction } from "@/types/schema";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 
 // Initialize Gemini Client
@@ -28,12 +28,17 @@ const validateApiKey = () => {
 const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
-Keep it under 30 words.
+Keep the 'text' under 30 words.
+
+Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
+- 'update_bucket': If spending consistently exceeds limits. Payload: { "bucketName": "CategoryName", "newLimit": number }
+- 'create_habit': If a new habit would help. Payload: { "title": "Habit Title", "category": "one of the existing habit categories (reuse an exact category from the Habits list if possible)", "type": "positive", "period": "daily" }
+- 'create_todo': If a specific one-off task is needed. Payload: { "text": "Task description", "completeByDate": "YYYY-MM-DD" }
 
 Transactions (last 50): ${transactions}
 Habits: ${habits}
 
-Return ONLY the insight text, no JSON.`;
+Return a JSON object with 'text' and 'actions'.`;
 
 export interface ReceiptData {
   merchant: string;
@@ -540,23 +545,14 @@ export const generateInsight = async (
   habits: Habit[],
   options?: { includeMerchantNames?: boolean },
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<string> => {
-  // Note: This function performs free-text generation and does not use the
-  // JSON-focused `generateJsonContent` helper, so it validates the API key
-  // directly before calling the Gemini client.
-  validateApiKey();
-
-  const client = _aiClient || ai;
-
-  const includeMerchantNames = options?.includeMerchantNames !== false; // Default to true for backward compatibility
-
+): Promise<{ text: string, actions?: InsightAction[] }> => {
   try {
     // Anonymize and simplify data
     const simplifiedTransactions = transactions.slice(0, 50).map(t => ({
       amount: t.amount,
       category: t.category,
       date: t.date,
-      ...(includeMerchantNames ? { merchant: t.merchant } : {})
+      ...(options?.includeMerchantNames !== false ? { merchant: t.merchant } : {})
     }));
 
     const simplifiedHabits = habits.map(h => ({
@@ -572,17 +568,41 @@ export const generateInsight = async (
       JSON.stringify(simplifiedHabits)
     );
 
-    const response = await client.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: {
-        parts: [{ text: prompt }]
-      }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No data returned from Gemini");
-
-    return text.trim().replace(/^"|"$/g, ''); // Remove quotes if present
+    return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          text: { type: Type.STRING },
+          actions: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING, enum: ['update_bucket', 'create_habit', 'create_todo'] },
+                label: { type: Type.STRING },
+                payload: {
+                  type: Type.OBJECT,
+                  properties: {
+                    bucketName: { type: Type.STRING },
+                    newLimit: { type: Type.NUMBER },
+                    title: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    type: { type: Type.STRING, enum: ['positive', 'negative'] },
+                    period: { type: Type.STRING, enum: ['daily', 'weekly'] },
+                    text: { type: Type.STRING },
+                    completeByDate: { type: Type.STRING }
+                  }
+                }
+              },
+              required: ['type', 'label', 'payload']
+            }
+          }
+        },
+        required: ['text']
+      },
+      _aiClient
+    );
 
   } catch (error) {
     console.error("Gemini Insight Generation Error:", error);
