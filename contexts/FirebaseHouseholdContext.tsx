@@ -249,8 +249,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
   const primaryYearlyGoal = activeYearlyGoals[0] || null;
   const safeToSpend = useMemo(
-    () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions, currentPeriodId),
-    [accounts, calendarItems, buckets, transactions, currentPeriodId]
+    () => calculateSafeToSpend(accounts, calendarItems, buckets, currentPeriodId),
+    [accounts, calendarItems, buckets, currentPeriodId]
   );
   const dailyPoints = householdSettings?.points?.daily || 0;
   const weeklyPoints = householdSettings?.points?.weekly || 0;
