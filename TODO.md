@@ -5,7 +5,7 @@ This document lists all known missing features, incomplete functionalities, and 
 ## 1. Immediate Priority (Critical for Core Usage)
 
 - [ ] **Fix `AnalyticsModal.tsx`**: Currently uses hardcoded mock data. Connect it to real `habits` and `transactions` data from `FirebaseHouseholdContext`.
-- [ ] **Implement `Meals` Page**: The `/meals` route currently renders `PlaceholderPage.tsx`. Needs a functional implementation (meal planning, grocery list, etc.) or removal from navigation if not part of MVP.
+- [x] **Implement `Meals` Page**: The `/meals` route currently renders `PlaceholderPage.tsx`. Needs a functional implementation (meal planning, grocery list, etc.) or removal from navigation if not part of MVP.
 - [ ] **Add "All Transactions" View**: Create a dedicated page or modal to view the master list of all transactions (historical and current). Currently, transactions are only visible within buckets or in the "Review" queue.
 - [ ] **Setup Testing Framework**: No test files or framework (Vitest/Playwright) exist. Setup basic testing infrastructure and write critical path tests (e.g., `safeToSpend` calculation).
 
