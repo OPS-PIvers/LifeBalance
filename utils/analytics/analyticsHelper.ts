@@ -15,6 +15,11 @@ export const HEATMAP_COLORS = {
 
 export const CHART_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
 
+// Helper to check negative habit safely
+const isNegativeHabit = (h: Habit): boolean => {
+  return h.type === 'negative';
+};
+
 // --- View 1: Pulse (Overview) ---
 
 export const calculatePulseData = (habits: Habit[], transactions: Transaction[], daysToLookBack: number = 14) => {
@@ -29,9 +34,7 @@ export const calculatePulseData = (habits: Habit[], transactions: Transaction[],
     let points = 0;
     habits.forEach(h => {
       if (h.completedDates?.includes(dateStr)) {
-         // Handle negative habits
-         const isNegative = h.type === 'negative';
-         if (isNegative) {
+         if (isNegativeHabit(h)) {
             points -= h.basePoints;
          } else {
             points += h.basePoints;
@@ -77,12 +80,10 @@ export const calculateWeeklyComparison = (habits: Habit[]) => {
 
     habits.forEach(h => {
       if (h.completedDates?.includes(currentDateStr)) {
-         const isNegative = h.type === 'negative';
-         currentPoints += isNegative ? -h.basePoints : h.basePoints;
+         currentPoints += isNegativeHabit(h) ? -h.basePoints : h.basePoints;
       }
       if (h.completedDates?.includes(lastDateStr)) {
-         const isNegative = h.type === 'negative';
-         lastPoints += isNegative ? -h.basePoints : h.basePoints;
+         lastPoints += isNegativeHabit(h) ? -h.basePoints : h.basePoints;
       }
     });
 
@@ -112,8 +113,6 @@ export const calculateHabitConsistency = (habits: Habit[]) => {
     categoryStats.set(habit.category, (categoryStats.get(habit.category) || 0) + points);
   });
 
-  // Normalize: In a real app we might want to normalize against "max potential points"
-  // For now we just return raw points like existing implementation, but sorted
   return Array.from(categoryStats.entries())
     .map(([subject, points]) => ({ subject, points, fullMark: 100 })) // fullMark for RadarChart
     .sort((a, b) => b.points - a.points)
@@ -167,25 +166,32 @@ export const calculateHeatmapData = (habits: Habit[]) => {
 // --- View 3: Wallet (Finance) ---
 
 export const calculateNetFlowData = (transactions: Transaction[]) => {
+  const buckets = new Map<string, { income: number; expense: number }>();
+
+  // Initialize last 6 months
   const months = Array.from({ length: 6 }, (_, i) => {
     const d = subMonths(new Date(), 5 - i);
-    return format(d, 'yyyy-MM');
+    const key = format(d, 'yyyy-MM');
+    buckets.set(key, { income: 0, expense: 0 });
+    return key;
+  });
+
+  // Single pass through transactions
+  const sixMonthsAgo = months[0];
+  transactions.forEach(t => {
+    const monthKey = t.date.substring(0, 7); // YYYY-MM
+    if (monthKey >= sixMonthsAgo && buckets.has(monthKey)) {
+      const bucket = buckets.get(monthKey)!;
+      if (t.category === 'Income') {
+        bucket.income += t.amount;
+      } else if (t.category === 'Expense') {
+        bucket.expense += t.amount;
+      }
+    }
   });
 
   return months.map(monthKey => {
-    let income = 0;
-    let expense = 0;
-
-    transactions
-      .filter(t => t.date.startsWith(monthKey))
-      .forEach(t => {
-        if (t.category === 'Income') {
-          income += t.amount;
-        } else if (t.category === 'Expense') {
-          expense += t.amount;
-        }
-      });
-
+    const { income, expense } = buckets.get(monthKey)!;
     return {
       month: format(parseISO(monthKey + '-01'), 'MMM'),
       Income: Math.round(income),
@@ -241,29 +247,45 @@ export const calculateSpendingCategories = (transactions: Transaction[]) => {
 };
 
 export const calculateCategoryTrend = (transactions: Transaction[]) => {
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(new Date(), 5 - i);
-    return format(d, 'yyyy-MM');
-  });
-
-  // 1. Identify top 5 categories overall in the last 6 months
-  const sixMonthsAgo = months[0] + '-01';
+  // Initialize buckets for each month
+  const monthBuckets = new Map<string, Map<string, number>>();
   const categoryTotals = new Map<string, number>();
 
-  transactions
-    .filter(t => t.date >= sixMonthsAgo && t.category !== 'Income')
-    .forEach(t => {
-      categoryTotals.set(t.category, (categoryTotals.get(t.category) || 0) + t.amount);
-    });
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = subMonths(new Date(), 5 - i);
+    const key = format(d, 'yyyy-MM');
+    monthBuckets.set(key, new Map());
+    return key;
+  });
 
+  const sixMonthsAgo = months[0];
+
+  // Single pass to aggregate both total per category (for ranking) and per month (for chart)
+  transactions.forEach(t => {
+    const monthKey = t.date.substring(0, 7);
+    if (monthKey >= sixMonthsAgo && t.category !== 'Income') {
+      // Aggregate for ranking
+      categoryTotals.set(t.category, (categoryTotals.get(t.category) || 0) + t.amount);
+
+      // Aggregate for month bucket
+      if (monthBuckets.has(monthKey)) {
+        const bucket = monthBuckets.get(monthKey)!;
+        bucket.set(t.category, (bucket.get(t.category) || 0) + t.amount);
+      }
+    }
+  });
+
+  // Identify top categories
   const topCategories = Array.from(categoryTotals.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(entry => entry[0]);
 
-  // 2. Build data for Stacked Area Chart
+  // Build final data structure
   const data = months.map(monthKey => {
-    const monthData: Record<string, number | string> = { month: format(parseISO(monthKey + '-01'), 'MMM') };
+    const monthData: Record<string, number | string> = {
+      month: format(parseISO(monthKey + '-01'), 'MMM')
+    };
 
     // Initialize defaults
     topCategories.forEach(cat => {
@@ -271,15 +293,17 @@ export const calculateCategoryTrend = (transactions: Transaction[]) => {
     });
     monthData['Other'] = 0;
 
-    transactions
-      .filter(t => t.date.startsWith(monthKey) && t.category !== 'Income')
-      .forEach(t => {
-        if (topCategories.includes(t.category)) {
-          monthData[t.category] = (monthData[t.category] as number) + t.amount;
+    // Fill from pre-aggregated buckets
+    const bucket = monthBuckets.get(monthKey);
+    if (bucket) {
+      bucket.forEach((amount, category) => {
+        if (topCategories.includes(category)) {
+          monthData[category] = (monthData[category] as number) + amount;
         } else {
-          monthData['Other'] = (monthData['Other'] as number) + t.amount;
+          monthData['Other'] = (monthData['Other'] as number) + amount;
         }
       });
+    }
 
     return monthData;
   });

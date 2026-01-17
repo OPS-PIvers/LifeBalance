@@ -155,7 +155,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     // Note: detailed budget logic might be more complex (income based), but bucket limits is a good proxy for "Planned Spend"
     const totalBudget = buckets.reduce((sum, b) => sum + b.limit, 0);
 
-    return calculateBurnDown(transactions, start, end, totalBudget || 1); // Avoid 0 budget
+    // If there is no budget, return an empty dataset instead of using a fake $1 budget
+    if (totalBudget <= 0) {
+      return [];
+    }
+
+    return calculateBurnDown(transactions, start, end, totalBudget);
   }, [transactions, currentPeriodId, buckets]);
 
   // Chart F: Variable Expense Trend
@@ -292,7 +297,19 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                       <XAxis dataKey="date" {...CHART_STYLES.xAxis} />
                       <YAxis yAxisId="left" orientation="left" hide />
                       <YAxis yAxisId="right" orientation="right" hide />
-                      <Tooltip content={<CustomTooltip />} {...CHART_STYLES.tooltip} />
+                      <YAxis
+                        yAxisId="left"
+                        orientation="left"
+                        label={{ value: 'Points', angle: -90, position: 'insideLeft' }}
+                        hide
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        label={{ value: 'Spent', angle: 90, position: 'insideRight' }}
+                        hide
+                      />
+                      <Tooltip content={<CustomTooltip suffix=" pts" />} {...CHART_STYLES.tooltip} />
 
                       {/* Points Bar (Left Axis) */}
                       <Bar
@@ -331,7 +348,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                     <BarChart data={weeklyComparisonData}>
                       <CartesianGrid {...CHART_STYLES.cartesianGrid} />
                       <XAxis dataKey="day" {...CHART_STYLES.xAxis} />
-                      <Tooltip content={<CustomTooltip />} {...CHART_STYLES.tooltip} />
+                      <Tooltip content={<CustomTooltip suffix=" pts" />} {...CHART_STYLES.tooltip} />
                       <Legend iconType="circle" wrapperStyle={{paddingTop: 10}} />
                       <Bar dataKey="Last Week" fill="#cbd5e1" radius={[4, 4, 4, 4]} />
                       <Bar dataKey="This Week" fill="#3b82f6" radius={[4, 4, 4, 4]} />
@@ -364,7 +381,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                         fill="#8b5cf6"
                         fillOpacity={0.4}
                       />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={<CustomTooltip suffix=" pts" />} />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
