@@ -321,6 +321,7 @@ export interface MealSuggestionRequest {
   cheap: boolean;
   quick: boolean;
   new: boolean;
+  prioritizeExpiring?: boolean;
   pantryItems: PantryItem[];
   previousMeals: Meal[];
 }
@@ -346,7 +347,9 @@ export const suggestMeal = async (
 ): Promise<MealSuggestionResponse> => {
   try {
     // Include IDs for pantry items so AI can match them
-    const pantryList = options.pantryItems.map(p => `ID:${p.id} - ${p.name} (${p.quantity})`).join(', ');
+    const pantryList = options.pantryItems.map(p =>
+      `ID:${p.id} - ${p.name} (${p.quantity})${p.expiryDate ? ` [Exp: ${p.expiryDate}]` : ''}`
+    ).join(', ');
     const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
@@ -354,6 +357,7 @@ export const suggestMeal = async (
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
+    if (options.prioritizeExpiring) prompt += `- MUST prioritize using items that are expiring soon (marked with [Exp: YYYY-MM-DD]). Current Date: ${new Date().toISOString().split('T')[0]}\n`;
 
     prompt += `\nAvailable Pantry Items (with IDs): ${pantryList || "None provided"}\n`;
 

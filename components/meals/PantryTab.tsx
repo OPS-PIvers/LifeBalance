@@ -6,6 +6,7 @@ import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import toast from 'react-hot-toast';
+import { differenceInDays, parseISO } from 'date-fns';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -149,6 +150,14 @@ const PantryTab: React.FC = () => {
     return acc;
   }, {} as Record<string, PantryItem[]>);
 
+  const getExpiryStatus = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const days = differenceInDays(parseISO(dateStr), new Date());
+    if (days < 0) return { label: 'Expired', color: 'bg-red-100 text-red-700' };
+    if (days <= 3) return { label: 'Expiring Soon', color: 'bg-orange-100 text-orange-700' };
+    return null;
+  };
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex justify-between items-center">
@@ -193,9 +202,20 @@ const PantryTab: React.FC = () => {
               <div key={item.id} className="p-4 flex justify-between items-center hover:bg-gray-50">
                 <div>
                   <div className="font-medium text-gray-900">{item.name}</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 flex items-center flex-wrap gap-2">
                     {item.quantity}
-                    {item.expiryDate && <span className="ml-2 text-orange-600 text-xs">Exp: {item.expiryDate}</span>}
+                    {item.expiryDate && (
+                      (() => {
+                        const status = getExpiryStatus(item.expiryDate);
+                        return status ? (
+                           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${status.color}`}>
+                             {status.label} ({item.expiryDate})
+                           </span>
+                        ) : (
+                           <span className="text-gray-400 text-xs">Exp: {item.expiryDate}</span>
+                        );
+                      })()
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
