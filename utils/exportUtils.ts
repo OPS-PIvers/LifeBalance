@@ -48,8 +48,10 @@ export const convertToCSV = (data: Record<string, any>[]): string => {
       let strVal = '' + (val ?? '');
 
       // 🛡️ Sentinel Security Fix: Prevent CSV Injection
-      // If value starts with =, +, -, or @, prepend a single quote to force text interpretation
-      if (/^[=+\-@]/.test(strVal)) {
+      // If value starts with =, +, -, @, or | (optionally preceded by whitespace),
+      // prepend a single quote to force text interpretation.
+      // Matches DDE attacks (starting with |) and standard formula injection.
+      if (/^\s*[=+\-@|]/.test(strVal)) {
         strVal = "'" + strVal;
       }
 

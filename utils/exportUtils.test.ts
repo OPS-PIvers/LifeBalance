@@ -34,6 +34,7 @@ describe('exportUtils', () => {
       const data = [
         { formula: '=1+1', malicious: '+cmd|' },
         { formula: '@SUM(1,1)', malicious: '-dangerous' },
+        { formula: ' =1+1', malicious: '|DDE' }, // Leading whitespace and pipe
       ];
       const csv = convertToCSV(data);
 
@@ -44,6 +45,29 @@ describe('exportUtils', () => {
       // For formula starting with =, we expect prepended '
       expect(csv).toContain('"' + "'=1+1" + '"');
       expect(csv).toContain('"' + "'@SUM(1,1)" + '"');
+
+      // Whitespace and DDE protection
+      expect(csv).toContain('"' + "' =1+1" + '"');
+      expect(csv).toContain('"' + "'|DDE" + '"');
+    });
+
+    it('should sanitize edge cases for CSV injection', () => {
+      const data = [
+        { char: '=' },
+        { char: '+' },
+        { char: '-' },
+        { char: '@' },
+        { char: '|' },
+        { char: '   @' },
+      ];
+      const csv = convertToCSV(data);
+
+      expect(csv).toContain('"' + "'=" + '"');
+      expect(csv).toContain('"' + "'+" + '"');
+      expect(csv).toContain('"' + "'-" + '"');
+      expect(csv).toContain('"' + "'@" + '"');
+      expect(csv).toContain('"' + "'|" + '"');
+      expect(csv).toContain('"' + "'   @" + '"');
     });
   });
 });
