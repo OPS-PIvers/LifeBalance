@@ -37,6 +37,11 @@ describe('geminiService - Meal Suggestion', () => {
     vi.clearAllMocks();
   });
 
+  // Calculate a future date for robust testing
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + 30);
+  const futureDateStr = futureDate.toISOString().split('T')[0];
+
   it('suggestMeal includes expiry date in prompt and respects prioritizeExpiring flag', async () => {
     const { suggestMeal } = await import('./geminiService');
 
@@ -61,7 +66,7 @@ describe('geminiService - Meal Suggestion', () => {
       new: false,
       prioritizeExpiring: true,
       pantryItems: [
-        { id: '1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: '2025-05-25' },
+        { id: '1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: futureDateStr },
         { id: '2', name: 'Flour', quantity: '1 kg', category: 'Pantry' } // No expiry
       ],
       previousMeals: []
@@ -74,7 +79,7 @@ describe('geminiService - Meal Suggestion', () => {
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify pantry item formatting
-    expect(promptText).toContain('ID:1 - Milk (1 gallon) [Exp: 2025-05-25]');
+    expect(promptText).toContain(`ID:1 - Milk (1 gallon) [Exp: ${futureDateStr}]`);
     expect(promptText).toContain('ID:2 - Flour (1 kg)');
 
     // Verify instruction
@@ -105,7 +110,7 @@ describe('geminiService - Meal Suggestion', () => {
       new: false,
       prioritizeExpiring: false,
       pantryItems: [
-        { id: '1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: '2025-05-25' }
+        { id: '1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: futureDateStr }
       ],
       previousMeals: []
     };
@@ -116,7 +121,7 @@ describe('geminiService - Meal Suggestion', () => {
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify pantry item formatting still happens
-    expect(promptText).toContain('ID:1 - Milk (1 gallon) [Exp: 2025-05-25]');
+    expect(promptText).toContain(`ID:1 - Milk (1 gallon) [Exp: ${futureDateStr}]`);
 
     // Verify instruction is MISSING
     expect(promptText).not.toContain('- MUST prioritize using items that are expiring soon');
