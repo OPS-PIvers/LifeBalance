@@ -580,6 +580,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <form onSubmit={handleMagicSubmit} className="flex gap-2">
                         <input
                           type="text"
+                          aria-label="Magic action input"
                           value={magicInput}
                           onChange={(e) => setMagicInput(e.target.value)}
                           placeholder="Spent $20 on Pizza..."
@@ -588,6 +589,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                         />
                         <button
                           type="submit"
+                          aria-label="Submit magic action"
                           disabled={!magicInput.trim() || magicLoading}
                           className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
                         >

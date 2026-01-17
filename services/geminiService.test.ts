@@ -144,4 +144,35 @@ describe('geminiService', () => {
     expect(result.data.text).toBe('Pay electricity bill');
     expect(result.data.completeByDate).toBe('2025-02-19');
   });
+
+  it('parseMagicAction correctly parses shopping item', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+
+    const mockResponse = {
+      type: 'shopping',
+      confidence: 0.9,
+      data: {
+        item: 'Milk',
+        quantity: '2 gallons',
+        category: 'Dairy',
+        store: 'Walmart'
+      }
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseMagicAction('Buy 2 gallons of Milk from Walmart', {
+      categories: [],
+      groceryCategories: ['Dairy', 'Produce'],
+      todayDate: '2025-02-18'
+    });
+
+    expect(result.type).toBe('shopping');
+    expect(result.data.item).toBe('Milk');
+    expect(result.data.quantity).toBe('2 gallons');
+    expect(result.data.category).toBe('Dairy');
+    expect(result.data.store).toBe('Walmart');
+  });
 });

@@ -650,7 +650,9 @@ export const parseMagicAction = async (
 ): Promise<MagicActionResponse> => {
   try {
     const sanitizedInput = sanitizeForPrompt(input);
-    const categoryList = context.categories.join(', ');
+    const categoryList = context.categories.length > 0
+      ? context.categories.join(', ')
+      : "No predefined categories";
     const groceryCategoryList = context.groceryCategories.join(', ');
 
     const prompt = `
@@ -661,7 +663,7 @@ export const parseMagicAction = async (
       1. Transaction: User spent money or wants to log an expense.
          Extract: merchant, amount (number), category (match one of: ${categoryList}), date (YYYY-MM-DD).
       2. Todo: User wants to remember a task.
-         Extract: text (task description), completeByDate (YYYY-MM-DD, default to today if not specified or "tomorrow" logic).
+         Extract: text (task description), completeByDate (YYYY-MM-DD). If no date is specified, set completeByDate to today's date. If the user says "tomorrow", set completeByDate to tomorrow's date (today + 1 day).
       3. Shopping: User wants to buy something later.
          Extract: item (name), quantity (string), category (match one of: ${groceryCategoryList}), store (optional).
 
