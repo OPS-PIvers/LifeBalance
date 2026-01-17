@@ -354,9 +354,16 @@ export interface ToDo {
   createdAt: string; // ISO timestamp
 }
 
+export interface InsightAction {
+  type: 'update_bucket' | 'create_habit' | 'create_todo';
+  label: string;
+  payload: any;
+}
+
 export interface Insight {
   id: string;
   text: string;
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
+  actions?: InsightAction[];
 }
