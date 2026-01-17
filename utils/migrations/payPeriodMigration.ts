@@ -1,4 +1,3 @@
-/* eslint-disable */
 import {
   collection,
   query,
@@ -9,7 +8,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { BudgetBucket } from '@/types/schema';
+import { BudgetBucket, Household } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 /**
@@ -34,7 +33,12 @@ export async function migrateBucketsToPeriods(
 
       // Only migrate if missing currentPeriodId
       if (!bucket.currentPeriodId) {
-        const updates: Record<string, any> = {
+        // Use a more specific type for updates
+        const updates: {
+          currentPeriodId: string;
+          lastResetDate: string;
+          spent?: unknown; // Allow FieldValue for deleteField
+        } = {
           currentPeriodId: currentPeriodId,
           lastResetDate: currentPeriodId,
         };
@@ -107,6 +111,6 @@ export async function migrateToPaycheckPeriods(
  * @param householdSettings - The household settings object
  * @returns true if migration is needed
  */
-export function needsPaycheckMigration(householdSettings: any): boolean {
+export function needsPaycheckMigration(householdSettings: Partial<Household>): boolean {
   return !!(householdSettings?.payPeriodSettings?.startDate && !householdSettings?.lastPaycheckDate);
 }
