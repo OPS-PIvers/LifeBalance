@@ -6,6 +6,7 @@ import {
   doc,
   deleteField,
   updateDoc,
+  FieldValue,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { BudgetBucket, Household } from '@/types/schema';
@@ -37,7 +38,7 @@ export async function migrateBucketsToPeriods(
         const updates: {
           currentPeriodId: string;
           lastResetDate: string;
-          spent?: unknown; // Allow FieldValue for deleteField
+          spent?: FieldValue;
         } = {
           currentPeriodId: currentPeriodId,
           lastResetDate: currentPeriodId,

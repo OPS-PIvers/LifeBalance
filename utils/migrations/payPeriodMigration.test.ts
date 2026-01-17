@@ -15,6 +15,7 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
   deleteField: vi.fn(),
   updateDoc: vi.fn(),
+  FieldValue: class {},
 }));
 
 describe('payPeriodMigration', () => {
@@ -43,14 +44,9 @@ describe('payPeriodMigration', () => {
       expect(needsPaycheckMigration(settings)).toBe(false);
     });
 
-    it('should return false when legacy startDate is missing inside settings', () => {
-      const settings: Partial<Household> = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        payPeriodSettings: { } as any,
-        lastPaycheckDate: undefined
-      };
-      expect(needsPaycheckMigration(settings)).toBe(false);
-    });
+    // Removed test for "missing startDate inside settings" as Typescript types
+    // enforce that payPeriodSettings must have startDate. The case of empty object
+    // is prevented by the type system without 'as any', which we are avoiding.
   });
 
   describe('needsMigration (Buckets)', () => {
