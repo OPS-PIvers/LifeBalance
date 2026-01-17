@@ -6,4 +6,6 @@
 
 ## 2025-06-03 - Habits CSV Export **Discovery:** The existing `generateCsvExport` utility in `utils/exportUtils.ts` is robust and easily reusable for other data models like Habits. **Opportunity:** Enabled "Export Habits" feature with <50 lines of code by transforming the `Habit[]` structure to flat objects, providing high user value (data portability) with minimal effort.
 
-## 2025-06-05 - Meals Page Unification **Discovery:** The `MealsPage` lacked the Shopping List tab despite `ShoppingListTab` component being fully implemented and `AGENTS.md` describing it as part of the Meals system. **Opportunity:** Unified the Meals workflow by adding the missing Shopping List tab to `MealsPage`, creating a seamless Pantry -> Meal Plan -> Shopping List loop.
+## 2026-01-17 - Unified Calendar Agenda **Discovery:** The `BudgetCalendar` component is the application's primary temporal view but was restricted to financial data, while `ToDos` lacked any calendar visualization. **Opportunity:** By injecting `todos` into the existing `BudgetCalendar` logic, we unlocked a "Daily Agenda" view that contextualizes tasks alongside financial events without creating a new page or complex component.
+
+## 2026-01-17 - Meals Page Unification **Discovery:** The `MealsPage` lacked the Shopping List tab despite `ShoppingListTab` component being fully implemented and `AGENTS.md` describing it as part of the Meals system. **Opportunity:** Unified the Meals workflow by adding the missing Shopping List tab to `MealsPage`, creating a seamless Pantry -> Meal Plan -> Shopping List loop.

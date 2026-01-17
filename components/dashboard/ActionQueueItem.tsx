@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+/* eslint-disable react/prop-types */
+import React, { useState, useMemo, memo } from 'react';
 import {
   CalendarClock, Receipt, X, Check, Trash2, Clock, ListTodo, AlertCircle
 } from 'lucide-react';
@@ -13,13 +14,25 @@ import { HouseholdMember } from '../../types/schema';
 
 interface ActionQueueItemProps {
   item: ActionQueueItem;
-  expandedId: string | null;
+  isExpanded: boolean;
   setExpandedId: (id: string | null) => void;
   setPayModalItemId: (id: string | null) => void;
 }
 
-export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = ({
-  item, expandedId, setExpandedId, setPayModalItemId
+const areActionQueueItemPropsEqual = (
+  prev: ActionQueueItemProps,
+  next: ActionQueueItemProps
+): boolean => (
+  prev.item.id === next.item.id
+  && prev.isExpanded === next.isExpanded
+  && prev.setExpandedId === next.setExpandedId
+  && prev.setPayModalItemId === next.setPayModalItemId
+);
+
+// Optimization: Memoized to prevent re-renders of unexpanded items when one item is expanded/collapsed.
+// We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
+export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
+  item, isExpanded, setExpandedId, setPayModalItemId
 }) => {
   const {
     buckets,
@@ -34,7 +47,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = ({
   } = useHousehold();
 
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
-  const isExpanded = expandedId === item.id;
 
   // Memoize member lookup Map for O(1) access
   const memberMap = useMemo(() => {
@@ -322,4 +334,6 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = ({
       )}
     </div>
   );
-};
+}, areActionQueueItemPropsEqual);
+
+ActionQueueItemCard.displayName = 'ActionQueueItemCard';
