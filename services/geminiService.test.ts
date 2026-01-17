@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { Habit } from '../types/schema';
 
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {
@@ -86,5 +87,44 @@ describe('geminiService', () => {
 
     expect(result.text).toBe(mockInsightData.text);
     expect(result.actions).toEqual([]);
+  });
+
+  it('analyzeHabitPoints correctly parses suggestions', async () => {
+    const { analyzeHabitPoints } = await import('./geminiService');
+
+    const mockSuggestions = [
+      {
+        habitId: '1',
+        habitTitle: 'Run',
+        currentPoints: 10,
+        suggestedPoints: 15,
+        reasoning: 'Increase motivation.'
+      }
+    ];
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockSuggestions)
+    });
+
+    const habits = [{
+      id: '1',
+      title: 'Run',
+      basePoints: 10,
+      completedDates: [],
+      streakDays: 0,
+      period: 'daily',
+      totalCount: 0,
+      type: 'positive',
+      category: 'Health',
+      scoringType: 'threshold',
+      targetCount: 1,
+      count: 0,
+      lastUpdated: ''
+    }] as unknown as Habit[];
+
+    const result = await analyzeHabitPoints(habits);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(mockSuggestions[0]);
   });
 });

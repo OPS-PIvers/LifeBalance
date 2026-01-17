@@ -5,8 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Settings, Database, ArrowRight, Download } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles } from 'lucide-react';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
+import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -15,6 +16,7 @@ const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useHousehold();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
 
   // Check if there are habits that need migration
   const habitsNeedingMigration = habits.filter(
@@ -85,6 +87,14 @@ const Habits: React.FC = () => {
             <span className="hidden sm:inline">Export</span>
           </button>
           <button
+            onClick={() => setIsSmartAdjustOpen(true)}
+            className="bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 hover:bg-purple-700 border border-purple-500"
+            title="Smart Adjust"
+          >
+            <Sparkles size={16} />
+            <span className="hidden sm:inline">Adjust</span>
+          </button>
+          <button
             onClick={() => setIsWizardOpen(true)}
             className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
           >
@@ -142,6 +152,7 @@ const Habits: React.FC = () => {
       </div>
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
+      <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
     </div>
   );
 };
