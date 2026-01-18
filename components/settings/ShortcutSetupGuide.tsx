@@ -9,7 +9,7 @@ interface ShortcutExample {
   icon: React.ReactNode;
   description: string;
   endpoint: 'habit' | 'expense' | 'shopping';
-  fields: { key: string; value: string; type: 'text' | 'number' | 'variable' }[];
+  fields: { key: string; value: string; valueType: 'Text' | 'Number'; isVariable?: boolean }[];
   preActions?: string[];
   postActions?: string[];
 }
@@ -34,8 +34,8 @@ const ShortcutSetupGuide: React.FC = () => {
       description: 'One-tap habit completion from your Lock Screen',
       endpoint: 'habit',
       fields: [
-        { key: 'habitName', value: 'Morning Exercise', type: 'text' },
-        { key: 'direction', value: 'up', type: 'text' },
+        { key: 'habitName', value: 'Morning Exercise', valueType: 'Text' },
+        { key: 'direction', value: 'up', valueType: 'Text' },
       ],
       postActions: [
         'Search "Show Result" and add it',
@@ -50,9 +50,9 @@ const ShortcutSetupGuide: React.FC = () => {
       description: '"Hey Siri, log expense" to quickly track spending',
       endpoint: 'expense',
       fields: [
-        { key: 'amount', value: 'Amount', type: 'variable' },
-        { key: 'merchant', value: 'Merchant', type: 'variable' },
-        { key: 'category', value: 'Dining', type: 'text' },
+        { key: 'amount', value: 'Amount', valueType: 'Number', isVariable: true },
+        { key: 'merchant', value: 'Merchant', valueType: 'Text', isVariable: true },
+        { key: 'category', value: 'Dining', valueType: 'Text' },
       ],
       preActions: [
         'Search "Ask for Input" - set Type to Number, Prompt to "How much?"',
@@ -73,7 +73,7 @@ const ShortcutSetupGuide: React.FC = () => {
       description: '"Hey Siri, add to shopping list" for quick grocery adds',
       endpoint: 'shopping',
       fields: [
-        { key: 'item', value: 'Item', type: 'variable' },
+        { key: 'item', value: 'Item', valueType: 'Text', isVariable: true },
       ],
       preActions: [
         'Search "Ask for Input" - set Type to Text, Prompt to "What do you need?"',
@@ -229,15 +229,21 @@ const ShortcutSetupGuide: React.FC = () => {
                                 {field.key}
                               </button>
                             </div>
+                            <div className="flex gap-2 text-xs items-center mb-1">
+                              <span className="text-gray-400 w-10">Type:</span>
+                              <span className="bg-gray-200 px-2 py-1 rounded font-medium">
+                                {field.valueType}
+                              </span>
+                            </div>
                             <div className="flex gap-2 text-xs items-center">
-                              <span className="text-gray-400 w-10">Text:</span>
-                              {field.type === 'variable' ? (
+                              <span className="text-gray-400 w-10">Value:</span>
+                              {field.isVariable ? (
                                 <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                  Tap, select Variable, choose {field.value}
+                                  Tap field → Select Variable → {field.value}
                                 </span>
                               ) : (
                                 <button
-                                  onClick={() => copyToClipboard(field.value, 'Text')}
+                                  onClick={() => copyToClipboard(field.value, 'Value')}
                                   className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
                                 >
                                   {field.value}
