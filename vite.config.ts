@@ -26,6 +26,7 @@ export default defineConfig(() => {
             manualChunks: {
               'vendor-react': ['react', 'react-dom', 'react-router-dom'],
               'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage', 'firebase/functions'],
+              'vendor-ai': ['@google/genai'],
               'vendor-charts': ['recharts'],
               'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'lucide-react']
             }

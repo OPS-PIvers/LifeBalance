@@ -48,7 +48,6 @@ import {
   GroceryCatalogItem,
   Store
 } from '@/types/schema';
-import { generateInsight } from '@/services/geminiService';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
@@ -2729,6 +2728,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     try {
       setIsGeneratingInsight(true);
       toast.loading('Generating insight...', { id: 'insight-loading' });
+
+      // Dynamically load Gemini service only when needed
+      const { generateInsight } = await import('@/services/geminiService');
       const { text, actions } = await generateInsight(householdId, transactions, habits);
 
       const newInsight: Omit<Insight, 'id'> = {
