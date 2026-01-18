@@ -423,7 +423,8 @@ export interface FeedbackReport {
 export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
-  receiptScanning: boolean;
+  shoppingList: boolean;
+  receiptScanning: boolean;  // Not yet implemented - see RECEIPT_SCANNING_IMPLEMENTATION.md
 }
 
 export interface HouseholdApiKey {

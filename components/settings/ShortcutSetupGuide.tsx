@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Smartphone, Mic, Camera, ExternalLink } from 'lucide-react';
+import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 
 interface ShortcutExample {
@@ -71,24 +71,27 @@ const ShortcutSetupGuide: React.FC = () => {
       ),
     },
     {
-      id: 'receipt',
-      title: 'Receipt Scanner',
-      icon: <Camera className="w-5 h-5" />,
-      description: 'Snap a photo to log expenses (coming soon)',
+      id: 'shopping',
+      title: 'Voice Shopping List',
+      icon: <ShoppingCart className="w-5 h-5" />,
+      description: '"Hey Siri, add to shopping list" for quick grocery adds',
       steps: [
-        'Create a new shortcut',
-        'Add action: "Take Photo"',
-        'Add action: "Base64 Encode" the photo',
+        'Create a new shortcut named "Add to Shopping List"',
+        'Add action: "Ask for Input" (Text) - "What do you need?"',
+        'Add action: "Set Variable" - name it "item"',
         'Add action: "Get Contents of URL"',
-        `Set URL to: ${getQuickAddEndpointUrl('receipt')}`,
-        'Set Method to: POST, add Authorization header',
-        'Set body: {"image": [Base64 Image], "autoCreate": true}',
-        'Add action: "Show Result"',
+        `Set URL to: ${getQuickAddEndpointUrl('shopping')}`,
+        'Set Method to: POST',
+        'Add Authorization header with your API key',
+        'In JSON body, use: {"item": [item]}',
+        'Add action: "Show Notification" with the result',
+        'In shortcut settings, enable "Show in Siri"',
       ],
       jsonBody: JSON.stringify(
         {
-          image: '[Base64-encoded image data]',
-          autoCreate: true,
+          item: 'Milk',
+          quantity: 2,
+          category: 'Dairy',
         },
         null,
         2

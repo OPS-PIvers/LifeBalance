@@ -29,7 +29,8 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   const [permissions, setPermissions] = useState<ApiKeyPermissions>({
     habits: true,
     expenses: true,
-    receiptScanning: false,
+    shoppingList: true,
+    receiptScanning: false,  // Hidden until implemented
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -200,9 +201,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     Expenses
                   </span>
                 )}
-                {key.permissions.receiptScanning && (
-                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                    Receipts
+                {key.permissions.shoppingList && (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                    Shopping
                   </span>
                 )}
               </div>
@@ -259,18 +260,13 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={permissions.receiptScanning}
+                  checked={permissions.shoppingList}
                   onChange={(e) =>
-                    setPermissions({
-                      ...permissions,
-                      receiptScanning: e.target.checked,
-                    })
+                    setPermissions({ ...permissions, shoppingList: e.target.checked })
                   }
                   className="rounded border-brand-300 text-brand-600 focus:ring-brand-500"
                 />
-                <span className="text-sm text-brand-700">
-                  Receipt Scanning (uses AI quota)
-                </span>
+                <span className="text-sm text-brand-700">Shopping List (add items)</span>
               </label>
             </div>
           </div>
@@ -307,7 +303,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           Use these URLs in your iOS Shortcuts with your API key.
         </p>
         <div className="space-y-1">
-          {(['habit', 'expense', 'receipt'] as const).map((endpoint) => (
+          {(['habit', 'expense', 'shopping'] as const).map((endpoint) => (
             <button
               key={endpoint}
               onClick={() => handleCopyEndpoint(endpoint)}

@@ -7,6 +7,7 @@ const db = admin.firestore();
 export interface ApiKeyPermissions {
   habits: boolean;
   expenses: boolean;
+  shoppingList: boolean;
   receiptScanning: boolean;
 }
 
@@ -35,6 +36,7 @@ export interface ApiKeyValidationResult {
 const RATE_LIMITS = {
   habit: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   expense: { limit: 50, windowMs: 60 * 60 * 1000 }, // 50/hour
+  shopping: { limit: 100, windowMs: 60 * 60 * 1000 }, // 100/hour
   receipt: { limit: 20, windowMs: 24 * 60 * 60 * 1000 }, // 20/day
 };
 
@@ -127,7 +129,7 @@ export async function validateApiKey(
  */
 export async function checkRateLimit(
   householdId: string,
-  endpointType: "habit" | "expense" | "receipt"
+  endpointType: "habit" | "expense" | "shopping" | "receipt"
 ): Promise<{ allowed: boolean; retryAfterMs?: number }> {
   const config = RATE_LIMITS[endpointType];
   const now = Date.now();

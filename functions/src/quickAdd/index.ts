@@ -458,3 +458,141 @@ export const quickAddReceipt = onRequest(
     }
   }
 );
+
+/**
+ * POST /quickAddShoppingItem
+ * Add an item to the shopping list via voice or shortcut
+ */
+export const quickAddShoppingItem = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    // Set CORS headers
+    Object.entries(corsHeaders).forEach(([key, value]) =>
+      res.set(key, value)
+    );
+
+    // Handle preflight
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      errorResponse(res, 405, "Method not allowed", "METHOD_NOT_ALLOWED");
+      return;
+    }
+
+    // 1. Validate API Key
+    const apiKey = extractApiKey(req.headers.authorization);
+    if (!apiKey) {
+      errorResponse(res, 401, "Missing or invalid Authorization header", "UNAUTHORIZED");
+      return;
+    }
+
+    const validation = await validateApiKey(apiKey);
+    if (!validation.valid || !validation.householdId) {
+      errorResponse(res, 401, validation.error || "Invalid API key", "UNAUTHORIZED");
+      return;
+    }
+
+    const { householdId, permissions } = validation;
+
+    // 2. Check permissions
+    if (!permissions?.shoppingList) {
+      errorResponse(res, 403, "API key does not have shoppingList permission", "FORBIDDEN");
+      return;
+    }
+
+    // 3. Check rate limit
+    const rateLimit = await checkRateLimit(householdId, "shopping");
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(Math.ceil((rateLimit.retryAfterMs || 3600000) / 1000)));
+      errorResponse(res, 429, "Rate limit exceeded. Try again later.", "RATE_LIMITED");
+      return;
+    }
+
+    // 4. Parse and validate request body
+    const { item, quantity = 1, category = "Other", store } = req.body || {};
+
+    if (!item || typeof item !== "string") {
+      errorResponse(res, 400, "item name is required", "BAD_REQUEST");
+      return;
+    }
+
+    if (typeof quantity !== "number" || quantity < 1) {
+      errorResponse(res, 400, "quantity must be a positive number", "BAD_REQUEST");
+      return;
+    }
+
+    try {
+      // 5. Check for duplicate items (case-insensitive)
+      const existingItems = await db
+        .collection(`households/${householdId}/shoppingList`)
+        .where("purchased", "==", false)
+        .get();
+
+      const normalizedItem = item.trim().toLowerCase();
+      const duplicate = existingItems.docs.find(
+        (doc) => doc.data().name?.toLowerCase() === normalizedItem
+      );
+
+      if (duplicate) {
+        // Update quantity instead of creating duplicate
+        const currentQty = duplicate.data().quantity || 1;
+        await duplicate.ref.update({
+          quantity: currentQty + quantity,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
+
+        jsonResponse(res, 200, {
+          success: true,
+          message: `Updated "${item}" quantity to ${currentQty + quantity}`,
+          data: {
+            itemId: duplicate.id,
+            name: item,
+            quantity: currentQty + quantity,
+            updated: true,
+          },
+        });
+        return;
+      }
+
+      // 6. Create new shopping list item
+      const shoppingItemData = {
+        name: item.trim(),
+        quantity,
+        category,
+        store: store || null,
+        purchased: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        source: "shortcut",
+      };
+
+      const itemRef = await db
+        .collection(`households/${householdId}/shoppingList`)
+        .add(shoppingItemData);
+
+      // 7. Log API call
+      await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
+
+      // 8. Return success
+      jsonResponse(res, 200, {
+        success: true,
+        message: `Added "${item}" to shopping list`,
+        data: {
+          itemId: itemRef.id,
+          name: item,
+          quantity,
+          category,
+          store: store || null,
+        },
+      });
+    } catch (error) {
+      logger.error("Error in quickAddShoppingItem:", error);
+      await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 500);
+      errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+    }
+  }
+);
