@@ -5,9 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Settings, Database, ArrowRight, Download } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
+import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -16,6 +17,7 @@ const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useHousehold();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
 
   // Check if there are habits that need migration
   const habitsNeedingMigration = habits.filter(
@@ -87,6 +89,16 @@ const Habits: React.FC = () => {
             <span className="hidden sm:inline">Export</span>
           </Button>
           <Button
+            onClick={() => setIsSmartAdjustOpen(true)}
+            disabled={habits.length === 0}
+            variant="secondary"
+            size="sm"
+            leftIcon={<Sparkles size={16} />}
+            title="Smart Adjust"
+          >
+            <span className="hidden sm:inline">Adjust</span>
+          </Button>
+          <Button
             onClick={() => setIsWizardOpen(true)}
             variant="primary"
             size="sm"
@@ -146,6 +158,7 @@ const Habits: React.FC = () => {
       </div>
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
+      <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
     </div>
   );
 };

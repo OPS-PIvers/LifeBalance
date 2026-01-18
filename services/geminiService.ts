@@ -617,3 +617,101 @@ export const generateInsight = async (
     throw new Error("Failed to generate insight.");
   }
 };
+
+export interface HabitPointAdjustmentSuggestion {
+  habitId: string;
+  habitTitle: string;
+  currentPoints: number;
+  suggestedPoints: number;
+  reasoning: string;
+}
+
+/**
+ * Analyzes habits and suggests point adjustments based on performance.
+ * @param habits - List of habits to analyze
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const analyzeHabitPoints = async (
+  habits: Habit[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<HabitPointAdjustmentSuggestion[]> => {
+  if (habits.length === 0) return [];
+
+  try {
+    // 1. Anonymize and Prepare Data
+    // We only send relevant stats, not PII.
+    const habitStats = habits.map(h => {
+      return {
+        id: h.id,
+        title: h.title, // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
+        basePoints: h.basePoints,
+        period: h.period,
+        streakDays: h.streakDays,
+        totalCount: h.totalCount,
+        type: h.type
+      };
+    });
+
+    const habitsJson = JSON.stringify(habitStats);
+
+    const prompt = `
+      You are a habit coach optimization engine. I will provide a list of habits with their current point values and performance stats.
+      Your goal is to suggest point adjustments to make the system more dynamic and effective.
+
+      Principles:
+      1. **Motivation:** If a habit is struggling (low streak/count), maybe increase points slightly to incentivize it.
+      2. **Fairness:** If a habit is "too easy" (very high streak, always done), maybe reduce points if they seem disproportionately high, OR keep them if it's a core consistency habit.
+      3. **Balance:** Points should generally range from 1 to 50 for daily habits.
+      4. **Meaningful Change:** Only suggest changes for 5-10 habits that really need it. Do not suggest changes if the current points seem fine.
+
+      Analyze the following habits:
+      ${habitsJson}
+
+      Return a JSON array of objects with these fields:
+      - habitId: (string) matches input id
+      - habitTitle: (string) matches input title
+      - currentPoints: (number) matches input basePoints
+      - suggestedPoints: (number) the new recommended value
+      - reasoning: (string) brief, encouraging explanation for the change (e.g., "You're crushing this! Dropping points slightly to balance the economy." or "Struggling here? Let's bump the reward to get you back on track!")
+    `;
+
+    const rawSuggestions = await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
+      prompt,
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            habitId: { type: Type.STRING },
+            habitTitle: { type: Type.STRING },
+            currentPoints: { type: Type.NUMBER },
+            suggestedPoints: { type: Type.NUMBER },
+            reasoning: { type: Type.STRING },
+          },
+          required: ["habitId", "habitTitle", "currentPoints", "suggestedPoints", "reasoning"]
+        }
+      },
+      _aiClient
+    );
+
+    // 2. Validate and Post-process Results
+    return rawSuggestions
+      .filter(suggestion => {
+        // Validate habit exists
+        const habit = habits.find(h => h.id === suggestion.habitId);
+        return !!habit;
+      })
+      .map(suggestion => ({
+        ...suggestion,
+        // Clamp points to 1-100
+        suggestedPoints: Math.max(1, Math.min(100, Math.round(suggestion.suggestedPoints))),
+        // Sanitize and limit reasoning length
+        reasoning: sanitizeForPrompt(suggestion.reasoning).slice(0, 200)
+      }))
+      .slice(0, 10); // Limit to max 10 suggestions
+
+  } catch (error) {
+    console.error("Gemini Habit Analysis Error:", error);
+    throw new Error("Failed to analyze habits.");
+  }
+};
