@@ -5,17 +5,21 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Settings, Database, ArrowRight, Download, Sparkles } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
+import { HabitCoach } from '../components/habits/HabitCoach';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
+type Tab = 'track' | 'coach';
+
 const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useHousehold();
+  const [activeTab, setActiveTab] = useState<Tab>('track');
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
 
@@ -71,41 +75,69 @@ const Habits: React.FC = () => {
     <div className="min-h-screen bg-brand-50 pb-28 pt-6">
 
       {/* Page Title & Action */}
-      <div className="px-4 mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-brand-800">Daily Habits</h1>
-          <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
+      <div className="px-4 mb-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-brand-800">Daily Habits</h1>
+            <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleExport}
+              disabled={habits.length === 0}
+              variant="secondary"
+              size="sm"
+              title="Export habits to CSV"
+              aria-label="Export habits to CSV"
+              leftIcon={<Download size={16} />}
+            >
+              <span className="hidden sm:inline">Export</span>
+            </Button>
+            <Button
+              onClick={() => setIsSmartAdjustOpen(true)}
+              disabled={habits.length === 0}
+              variant="secondary"
+              size="sm"
+              leftIcon={<Sparkles size={16} />}
+              title="Smart Adjust"
+            >
+              <span className="hidden sm:inline">Adjust</span>
+            </Button>
+            <Button
+              onClick={() => setIsWizardOpen(true)}
+              variant="primary"
+              size="sm"
+              leftIcon={<Settings size={16} />}
+            >
+              Manage
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleExport}
-            disabled={habits.length === 0}
-            variant="secondary"
-            size="sm"
-            title="Export habits to CSV"
-            aria-label="Export habits to CSV"
-            leftIcon={<Download size={16} />}
+
+        {/* Tab Switcher */}
+        <div className="bg-brand-100 p-1 rounded-xl flex gap-1">
+          <button
+            onClick={() => setActiveTab('track')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'track'
+                ? 'bg-white text-brand-800 shadow-sm'
+                : 'text-brand-500 hover:text-brand-700'
+            }`}
           >
-            <span className="hidden sm:inline">Export</span>
-          </Button>
-          <Button
-            onClick={() => setIsSmartAdjustOpen(true)}
-            disabled={habits.length === 0}
-            variant="secondary"
-            size="sm"
-            leftIcon={<Sparkles size={16} />}
-            title="Smart Adjust"
+            <LayoutList size={16} />
+            Track
+          </button>
+          <button
+            onClick={() => setActiveTab('coach')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'coach'
+                ? 'bg-white text-brand-800 shadow-sm'
+                : 'text-brand-500 hover:text-brand-700'
+            }`}
           >
-            <span className="hidden sm:inline">Adjust</span>
-          </Button>
-          <Button
-            onClick={() => setIsWizardOpen(true)}
-            variant="primary"
-            size="sm"
-            leftIcon={<Settings size={16} />}
-          >
-            Manage
-          </Button>
+            <GraduationCap size={16} />
+            Coach
+          </button>
         </div>
       </div>
 
@@ -134,27 +166,35 @@ const Habits: React.FC = () => {
         </div>
       )}
 
-      {/* Habits List */}
-      <div className="px-4 space-y-6">
-        {categories.length === 0 && (
-          <div className="text-center py-12 border-2 border-dashed border-brand-200 rounded-2xl text-brand-400">
-            <p>No habits yet.</p>
-            <p className="text-xs mt-1">Tap "New" to start tracking.</p>
+      {/* Main Content */}
+      <div className="px-4 pb-6">
+        {activeTab === 'track' ? (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {categories.length === 0 && (
+              <div className="text-center py-12 border-2 border-dashed border-brand-200 rounded-2xl text-brand-400">
+                <p>No habits yet.</p>
+                <p className="text-xs mt-1">Tap "New" to start tracking.</p>
+              </div>
+            )}
+
+            {categories.map(category => (
+              <div key={category}>
+                <h2 className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-3 ml-2">
+                  {category}
+                </h2>
+                <div className="space-y-3">
+                  {groupedHabits[category].map(habit => (
+                    <HabitCard key={habit.id} habit={habit} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="animate-in fade-in duration-300">
+            <HabitCoach />
           </div>
         )}
-
-        {categories.map(category => (
-          <div key={category}>
-            <h2 className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-3 ml-2">
-              {category}
-            </h2>
-            <div className="space-y-3">
-              {groupedHabits[category].map(habit => (
-                <HabitCard key={habit.id} habit={habit} />
-              ))}
-            </div>
-          </div>
-        ))}
       </div>
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
