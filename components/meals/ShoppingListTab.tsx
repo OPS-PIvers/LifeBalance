@@ -110,7 +110,8 @@ const ShoppingListTab: React.FC = () => {
           addPantryItem({
             name: item.name,
             quantity: item.quantity || '1',
-            category: item.category
+            category: item.category,
+            expiryDate: item.expiryDate
           })
         ));
 
