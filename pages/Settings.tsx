@@ -18,12 +18,15 @@ import {
   Download,
   FileJson,
   FileSpreadsheet,
-  ChevronDown
+  ChevronDown,
+  Smartphone
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
+import ApiKeyManager from '@/components/settings/ApiKeyManager';
+import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
@@ -117,7 +120,8 @@ const Settings: React.FC = () => {
     pantry,
     meals,
     shoppingList,
-    calendarItems
+    calendarItems,
+    apiKeys
   } = useHousehold();
   const navigate = useNavigate();
 
@@ -617,6 +621,34 @@ const Settings: React.FC = () => {
                 </div>
                 <Download size={16} className="text-brand-400" />
               </button>
+            </div>
+          </div>
+        </SettingsSection>
+
+        {/* iOS Shortcuts Section */}
+        <SettingsSection
+          id="shortcuts"
+          title="iOS Shortcuts"
+          icon={<Smartphone className="w-5 h-5" />}
+          isOpen={openSection === 'shortcuts'}
+          onToggle={handleToggleSection}
+        >
+          <div className="space-y-6">
+            {/* API Key Management */}
+            <div>
+              <h4 className="text-sm font-bold text-brand-700 mb-3">API Keys</h4>
+              <ApiKeyManager
+                householdId={householdId || ''}
+                userId={user?.uid || ''}
+                apiKeys={apiKeys || []}
+                isAdmin={currentUser?.role === 'admin'}
+              />
+            </div>
+
+            {/* Setup Guide */}
+            <div className="border-t border-brand-100 pt-4">
+              <h4 className="text-sm font-bold text-brand-700 mb-3">Setup Guide</h4>
+              <ShortcutSetupGuide />
             </div>
           </div>
         </SettingsSection>

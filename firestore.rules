@@ -118,6 +118,31 @@ service cloud.firestore {
         }
       }
 
+      // API Keys subcollection - Admin only (for iOS Shortcuts integration)
+      match /apiKeys/{keyId} {
+        // Only admins can read API keys
+        allow read: if isAdminOf(householdId);
+
+        // Only admins can create new API keys
+        allow create: if isAdminOf(householdId) &&
+          request.resource.data.keys().hasAll(['hashedKey', 'keyPrefix', 'name', 'status', 'permissions', 'createdAt', 'createdBy', 'usageCount']);
+
+        // Only admins can update, but cannot modify the hashedKey or keyPrefix (security)
+        allow update: if isAdminOf(householdId) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['hashedKey', 'keyPrefix', 'createdAt', 'createdBy']);
+
+        // Only admins can delete API keys
+        allow delete: if isAdminOf(householdId);
+      }
+
+      // API Usage tracking subcollection (rate limiting)
+      match /apiUsage/{endpoint} {
+        // Members can read their own usage
+        allow read: if isMemberOf(householdId);
+        // Cloud Functions update this via Admin SDK, but allow admin updates for testing
+        allow write: if isAdminOf(householdId);
+      }
+
       // All other subcollections (accounts, buckets, transactions, etc.)
       match /{subcollection}/{document} {
         allow read: if isMemberOf(householdId);

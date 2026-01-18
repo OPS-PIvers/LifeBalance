@@ -418,3 +418,23 @@ export interface FeedbackReport {
   route: string;
   errorContext?: string;
 }
+
+// iOS Shortcuts API Key
+export interface ApiKeyPermissions {
+  habits: boolean;
+  expenses: boolean;
+  receiptScanning: boolean;
+}
+
+export interface HouseholdApiKey {
+  id: string;
+  hashedKey: string;           // SHA-256 hash of the actual key (never store plain text)
+  keyPrefix: string;           // First 16 chars for display (e.g., "lb_abc123_7f4e9a")
+  name: string;                // User-provided name (e.g., "iPhone Shortcut")
+  createdAt: string;           // ISO timestamp
+  createdBy: string;           // uid of creator
+  lastUsedAt?: string;         // ISO timestamp of last API call
+  usageCount: number;          // Total API calls made with this key
+  status: 'active' | 'revoked';
+  permissions: ApiKeyPermissions;
+}

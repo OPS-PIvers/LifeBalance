@@ -46,7 +46,8 @@ import {
   ToDo,
   Insight,
   GroceryCatalogItem,
-  Store
+  Store,
+  HouseholdApiKey
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -96,6 +97,9 @@ export interface HouseholdContextType {
   // Shopping List Settings
   stores: Store[];
   groceryCategories: string[];
+
+  // iOS Shortcuts API Keys
+  apiKeys: HouseholdApiKey[];
 
   // Pay Period Tracking State
   householdId: string | null;
@@ -232,6 +236,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -460,6 +465,28 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           } as ToDo;
         });
         setTodos(data);
+      })
+    );
+
+    // API Keys listener (for iOS Shortcuts)
+    const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`));
+    unsubscribers.push(
+      onSnapshot(apiKeysQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          return {
+            ...d,
+            id: doc.id,
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
+            lastUsedAt: d.lastUsedAt instanceof Timestamp ? d.lastUsedAt.toDate().toISOString() : d.lastUsedAt,
+          } as HouseholdApiKey;
+        });
+        setApiKeys(data);
+      }, (error) => {
+        // Silently ignore permission errors for non-admin users
+        if (error.code !== 'permission-denied') {
+          console.error('Error fetching API keys:', error);
+        }
       })
     );
 
@@ -2804,6 +2831,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         groceryCatalog,
         stores,
         groceryCategories,
+        apiKeys,
         addAccount,
         updateAccountBalance,
         setAccountGoal,
