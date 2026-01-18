@@ -413,104 +413,119 @@ const MealPlanTab: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
-      <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm">
-        <button
-            onClick={() => setSelectedDate(d => addDays(d, -7))}
-            className="p-2 hover:bg-gray-100 rounded-full"
-            aria-label="Previous week"
-        >
-            <ChevronLeft />
-        </button>
-        <div className="text-center flex flex-col items-center">
-            <h2 className="text-lg font-bold text-brand-900">
-                {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
-            </h2>
-            <div className="flex items-center gap-2 mt-1">
-                <span className="text-sm text-gray-500">Weekly Plan</span>
-                <div className="flex gap-2">
-                    <button
-                        onClick={handleCopyLastWeek}
-                        className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition-colors"
-                        title="Copy meals from previous week"
-                    >
-                        <Copy className="w-3 h-3" /> Copy Last Week
-                    </button>
-                    <button
-                        onClick={handleShopForWeek}
-                        className="flex items-center gap-1 text-[10px] uppercase tracking-wide font-bold bg-brand-100 hover:bg-brand-200 text-brand-700 px-2 py-1 rounded-full transition-colors"
-                        title="Add all ingredients to shopping list"
-                    >
-                        <ShoppingCart className="w-3 h-3" /> Shop This Week
-                    </button>
-                </div>
+      <div className="bg-white rounded-2xl shadow-sm p-4 flex flex-col items-center gap-4">
+        <div className="flex items-center justify-between w-full">
+            <button
+                onClick={() => setSelectedDate(d => addDays(d, -7))}
+                className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                aria-label="Previous week"
+            >
+                <ChevronLeft className="w-6 h-6" />
+            </button>
+            <div className="text-center">
+                <h2 className="text-xl font-bold text-brand-900">
+                    {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
+                </h2>
+                <div className="text-xs text-gray-500 font-medium uppercase tracking-wider mt-1">Weekly Plan</div>
             </div>
+            <button
+                onClick={() => setSelectedDate(d => addDays(d, 7))}
+                className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                aria-label="Next week"
+            >
+                <ChevronRight className="w-6 h-6" />
+            </button>
         </div>
-        <button
-            onClick={() => setSelectedDate(d => addDays(d, 7))}
-            className="p-2 hover:bg-gray-100 rounded-full"
-            aria-label="Next week"
-        >
-            <ChevronRight />
-        </button>
+
+        <div className="flex gap-3 w-full sm:w-auto">
+            <button
+                onClick={handleCopyLastWeek}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+            >
+                <Copy className="w-3.5 h-3.5" />
+                Copy Last Week
+            </button>
+            <button
+                onClick={handleShopForWeek}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-brand-100 text-brand-700 border border-brand-200 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-brand-200 transition-all shadow-sm"
+            >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Shop This Week
+            </button>
+        </div>
       </div>
 
       {/* Days Grid */}
       <div className="space-y-4">
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            // Filter all meals for this day
-
             const planItems = mealPlan ? mealPlan.filter((i: any) => i.date === dateStr) : [];
+            const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
 
             return (
-                <div key={dateStr} className="bg-white rounded-xl shadow-sm overflow-hidden border-l-4 border-brand-500">
-                    <div className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                        <div className="min-w-[80px] shrink-0">
-                            <div className="font-bold text-gray-900">{format(day, 'EEEE')}</div>
-                            <div className="text-sm text-gray-500">{format(day, 'MMM d')}</div>
+                <div
+                    key={dateStr}
+                    className={`bg-white rounded-2xl shadow-sm p-5 ring-1 ring-black/5 ${isToday ? 'ring-brand-200 bg-brand-50/30' : ''}`}
+                >
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        {/* Date Column */}
+                        <div className="min-w-[80px] shrink-0 flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
+                            <div>
+                                <div className="text-2xl font-bold text-brand-900 leading-none">{format(day, 'd')}</div>
+                                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mt-1">{format(day, 'EEEE')}</div>
+                            </div>
                             <button
                                 onClick={() => handleAddMealToDate(day)}
-                                className="mt-2 text-xs flex items-center gap-1 text-brand-600 hover:text-brand-700 font-medium"
+                                className="sm:mt-3 flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full transition-colors"
                             >
-                                <Plus className="w-3 h-3" /> Add Meal
+                                <Plus className="w-3.5 h-3.5" /> Add Meal
                             </button>
                         </div>
 
-                        <div className="flex-1 space-y-3">
+                        {/* Meals Column */}
+                        <div className="flex-1 space-y-3 pt-2 sm:pt-0">
                             {planItems.length > 0 ? planItems.map((planItem) => {
                                 const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
                                 const mealName = planItem.mealName || linkedMeal?.name;
 
                                 return (
-                                    <div key={planItem.id} className="bg-brand-50 p-3 rounded-lg flex justify-between items-start">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold uppercase text-brand-400 bg-white px-1 rounded">{planItem.type || 'dinner'}</span>
-                                                <div className="font-semibold text-brand-900">{mealName}</div>
+                                    <div key={planItem.id} className="group bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
+                                                    {planItem.type || 'dinner'}
+                                                </span>
                                             </div>
-                                            {linkedMeal?.description && <div className="text-xs text-brand-700 mt-1">{linkedMeal.description}</div>}
-                                            <div className="flex gap-2 mt-2">
-                                                {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (
-                                                    <button
-                                                        onClick={() => addIngredientsToShoppingList(linkedMeal.ingredients)}
-                                                        className="text-xs flex items-center gap-1 text-brand-600 bg-white px-2 py-1 rounded border border-brand-200 hover:bg-brand-50"
-                                                    >
-                                                        <ShoppingCart className="w-3 h-3" /> Shop Ingredients
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <div className="font-semibold text-gray-900 truncate pr-2">{mealName}</div>
+
+                                            {linkedMeal?.description && (
+                                                <div className="text-xs text-gray-500 mt-1 line-clamp-1">{linkedMeal.description}</div>
+                                            )}
+
+                                            {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        addIngredientsToShoppingList(linkedMeal.ingredients);
+                                                    }}
+                                                    className="mt-2 text-[10px] font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
+                                                >
+                                                    <ShoppingCart className="w-3 h-3" /> Shop Ingredients
+                                                </button>
+                                            )}
                                         </div>
-                                        <div className="flex flex-col gap-2">
+
+                                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                className="text-gray-400 hover:text-brand-500"
+                                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
                                                 aria-label={`Edit ${mealName}`}
                                             >
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
                                                 onClick={() => deleteMealPlanItem(planItem.id)}
-                                                className="text-gray-400 hover:text-red-500"
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                                                 aria-label={`Delete ${mealName}`}
                                             >
                                                 <Trash2 className="w-4 h-4" />
@@ -519,7 +534,12 @@ const MealPlanTab: React.FC = () => {
                                     </div>
                                 );
                             }) : (
-                                <div className="text-sm text-gray-400 italic py-2">No meals planned</div>
+                                <div
+                                    onClick={() => handleAddMealToDate(day)}
+                                    className="border-2 border-dashed border-gray-100 rounded-xl p-4 text-center cursor-pointer hover:border-brand-200 hover:bg-brand-50/50 transition-all group"
+                                >
+                                    <p className="text-sm text-gray-400 group-hover:text-brand-500 font-medium">No meals planned</p>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -531,7 +551,7 @@ const MealPlanTab: React.FC = () => {
       {/* Add Meal Modal */}
       {isAddModalOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
             style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
             onClick={(e) => {
                 if (e.target === e.currentTarget) handleCancel();
@@ -540,62 +560,61 @@ const MealPlanTab: React.FC = () => {
             aria-modal="true"
             aria-labelledby="modal-title"
           >
-              <div className="bg-white rounded-xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden">
-                  <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
-                      <h3 id="modal-title" className="text-lg font-bold">
-                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan Meal for ${targetDate}` : 'Add Meal'}
+              <div className="bg-white rounded-2xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
+                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center shrink-0">
+                      <h3 id="modal-title" className="text-lg font-bold text-gray-900">
+                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
                       </h3>
                       <button
                           onClick={handleCancel}
-                          className="text-gray-400 hover:text-gray-600"
+                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
                           aria-label="Close modal"
                       >
                           <X className="w-5 h-5" />
                       </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
                       {/* Top Actions */}
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-4">
                           <button
                               onClick={() => setIsPreviousMealsModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium text-sm transition-colors"
+                              className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 font-bold text-sm transition-colors border border-blue-100"
                           >
-                              <ChefHat className="w-4 h-4" /> Previous Meals
+                              <ChefHat className="w-4.5 h-4.5" /> Cookbook
                           </button>
                           <button
                               onClick={() => setIsAIModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-2.5 px-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium text-sm transition-colors"
+                              className="flex items-center justify-center gap-2 py-3 px-4 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 font-bold text-sm transition-colors border border-purple-100"
                           >
-                              <Sparkles className="w-4 h-4" /> AI Suggestion
+                              <Sparkles className="w-4.5 h-4.5" /> AI Suggest
                           </button>
                       </div>
 
                       {/* Meal Details */}
-                      <div className="space-y-4">
+                      <div className="space-y-5">
                           <div>
-                              <label htmlFor="meal-name" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Name</label>
+                              <label htmlFor="meal-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meal Name</label>
                               <input
                                   id="meal-name"
                                   type="text"
                                   value={currentMeal.name}
                                   onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
-                                  placeholder="e.g. Spaghetti Bolognese"
+                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none font-medium"
+                                  placeholder="e.g. Adobo Chicken & Rice"
                               />
                           </div>
 
                           <div role="radiogroup" aria-labelledby="meal-type-label">
-                              <label id="meal-type-label" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Meal Type</label>
+                              <label id="meal-type-label" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meal Type</label>
                               <div className="flex p-1 bg-gray-100 rounded-xl">
                                   {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
                                       <button
                                           key={type}
                                           role="radio"
                                           aria-checked={mealType === type}
-
                                           onClick={() => setMealType(type as any)}
-                                          className={`flex-1 py-2 px-1 rounded-lg text-sm font-medium capitalize transition-all ${
+                                          className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-all ${
                                               mealType === type
                                                   ? 'bg-white text-brand-700 shadow-sm'
                                                   : 'text-gray-500 hover:text-gray-700'
@@ -608,19 +627,20 @@ const MealPlanTab: React.FC = () => {
                           </div>
 
                           <div>
-                              <label htmlFor="meal-description" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Description</label>
+                              <label htmlFor="meal-description" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</label>
                               <textarea
                                   id="meal-description"
                                   value={currentMeal.description}
                                   onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
+                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm"
                                   rows={2}
                                   placeholder="Add notes about preparation..."
                               />
                           </div>
 
+                          {/* Collapsible Sections could go here if content gets too long */}
                           <div>
-                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Instructions</label>
+                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Instructions</label>
                               <textarea
                                   id="meal-instructions"
                                   value={currentMeal.instructions?.join('\n') || ''}
@@ -633,30 +653,30 @@ const MealPlanTab: React.FC = () => {
                                               .filter(line => line.length > 0),
                                       })
                                   }
-                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
+                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm font-mono"
                                   rows={4}
                                   placeholder="Step 1...&#10;Step 2..."
                               />
                           </div>
 
                           <div>
-                              <label htmlFor="meal-url" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Recipe URL</label>
+                              <label htmlFor="meal-url" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Recipe URL</label>
                               <input
                                   id="meal-url"
                                   type="url"
                                   value={currentMeal.recipeUrl || ''}
                                   onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                                  className="w-full rounded-xl border-gray-200 focus:border-brand-500 focus:ring-brand-500 transition-colors"
+                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm text-blue-600"
                                   placeholder="https://example.com/recipe"
                               />
                           </div>
 
                           {/* Tags Section */}
                           <div>
-                              <label id="tags-label" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Tags</label>
+                              <label id="tags-label" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Tags</label>
 
                               {/* Common Tags */}
-                              <div className="flex flex-wrap gap-2 mb-3" role="group" aria-labelledby="tags-label">
+                              <div className="flex flex-wrap gap-2 mb-4" role="group" aria-labelledby="tags-label">
                                   {COMMON_TAGS.map(tag => {
                                       const isSelected = currentMeal.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
                                       return (
@@ -669,10 +689,10 @@ const MealPlanTab: React.FC = () => {
                                                       : [...(currentMeal.tags || []), tag];
                                                   setCurrentMeal({...currentMeal, tags: newTags});
                                               }}
-                                              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                                              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
                                                   isSelected
                                                       ? 'bg-brand-100 text-brand-700 border-brand-200'
-                                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
                                               }`}
                                           >
                                               {isSelected ? <span className="mr-1">✓</span> : <span className="mr-1">+</span>}
@@ -685,7 +705,7 @@ const MealPlanTab: React.FC = () => {
                               {/* Selected Custom Tags & Input */}
                               <div className="flex flex-wrap gap-2">
                                   {currentMeal.tags?.filter(t => !COMMON_TAGS.some(ct => ct.toLowerCase() === t.toLowerCase())).map(tag => (
-                                      <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs flex items-center gap-1 border border-brand-100">
+                                      <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 border border-brand-100">
                                           {tag}
                                           <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900 p-0.5 rounded-full hover:bg-brand-100" aria-label={`Remove tag ${tag}`}>
                                               <X className="w-3 h-3" />
@@ -693,20 +713,20 @@ const MealPlanTab: React.FC = () => {
                                       </span>
                                   ))}
 
-                                  <div className="relative flex-1 min-w-[120px]">
+                                  <div className="relative flex-1 min-w-[140px]">
                                       <input
                                           type="text"
                                           value={tagInput}
                                           onChange={e => setTagInput(e.target.value)}
                                           placeholder="Add custom tag..."
                                           aria-label="Add custom tag"
-                                          className="w-full py-1.5 pl-3 pr-8 rounded-full border-gray-200 text-xs focus:border-brand-500 focus:ring-brand-500"
+                                          className="w-full py-1.5 pl-3 pr-8 rounded-full bg-gray-50 border border-gray-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-none"
                                           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                                       />
                                       <button
                                           onClick={handleAddTag}
                                           disabled={!tagInput.trim()}
-                                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-gray-100 rounded-full text-gray-600 disabled:opacity-50 hover:bg-gray-200"
+                                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm rounded-full text-brand-600 disabled:opacity-50 hover:bg-gray-50"
                                           aria-label="Add custom tag"
                                       >
                                           <Plus className="w-3 h-3" />
@@ -717,15 +737,15 @@ const MealPlanTab: React.FC = () => {
 
                       {/* Ingredients Section */}
                       <div>
-                           <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Ingredients</label>
+                           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Ingredients</label>
 
                            {/* Current Ingredients List */}
                            {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
                                <div className="mb-4 flex flex-wrap gap-2">
                                    {currentMeal.ingredients.map((ing, idx) => (
-                                       <div key={idx} className="flex items-center gap-2 px-2 py-1 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                                           <span className="font-medium text-gray-700">{ing.name}</span>
-                                           <span className="text-gray-400 text-xs">{ing.quantity}</span>
+                                       <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm shadow-sm">
+                                           <span className="font-semibold text-gray-700">{ing.name}</span>
+                                           <span className="text-gray-400 text-xs bg-gray-50 px-1.5 py-0.5 rounded">{ing.quantity}</span>
                                            <button
                                                onClick={() => {
                                                    setCurrentMeal(prev => ({
@@ -733,10 +753,10 @@ const MealPlanTab: React.FC = () => {
                                                        ingredients: prev.ingredients?.filter((_, i) => i !== idx)
                                                    }));
                                                }}
-                                               className="text-gray-400 hover:text-red-500"
+                                               className="text-gray-300 hover:text-red-500 ml-1"
                                                aria-label={`Remove ${ing.name}`}
                                            >
-                                               <X className="w-3 h-3" />
+                                               <X className="w-3.5 h-3.5" />
                                            </button>
                                        </div>
                                    ))}
@@ -745,28 +765,28 @@ const MealPlanTab: React.FC = () => {
 
                            <div className="space-y-4">
                                {/* Section 1: From Pantry */}
-                               <div className="border border-gray-200 rounded-xl overflow-hidden">
-                                   <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-                                       <span className="text-xs font-bold text-gray-500 uppercase">From Pantry</span>
-                                       <span className="text-xs text-gray-400">{pantry.length} items</span>
+                               <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                                   <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">From Pantry</span>
+                                       <span className="text-xs text-gray-400 font-medium">{pantry.length} items</span>
                                    </div>
 
-                                   <div className="p-2 border-b border-gray-200">
+                                   <div className="p-2 border-b border-gray-200 bg-white">
                                         <input
                                            type="text"
                                            placeholder="Search pantry..."
                                            aria-label="Search pantry items"
                                            value={pantrySearch}
                                            onChange={(e) => setPantrySearch(e.target.value)}
-                                           className="w-full text-xs py-1.5 px-3 rounded-lg border-gray-200 bg-gray-50 focus:bg-white transition-colors"
+                                           className="w-full text-xs py-2 px-3 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-500 transition-all outline-none"
                                         />
                                    </div>
 
-                                   <div className="max-h-[150px] overflow-y-auto p-2 space-y-1">
+                                   <div className="max-h-[160px] overflow-y-auto p-2 space-y-1 bg-white">
                                        {filteredPantryItems.map(item => {
                                                const isSelected = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === item.name.toLowerCase());
                                                return (
-                                                   <label key={item.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group">
+                                                   <label key={item.id} className={`flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group transition-colors ${isSelected ? 'bg-brand-50' : ''}`}>
                                                        <input
                                                            type="checkbox"
                                                            checked={isSelected}
@@ -785,14 +805,14 @@ const MealPlanTab: React.FC = () => {
                                                                    }));
                                                                }
                                                            }}
-                                                           className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                                           className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-4 h-4"
                                                            aria-label={`Select ${item.name}`}
                                                        />
                                                        <div className="flex-1">
-                                                           <div className="text-sm font-medium text-gray-700">{item.name}</div>
+                                                           <div className={`text-sm font-medium ${isSelected ? 'text-brand-900' : 'text-gray-700'}`}>{item.name}</div>
                                                            <div className="text-xs text-gray-400">{item.quantity} in stock</div>
                                                        </div>
-                                                       {isSelected && <span className="text-xs text-brand-600 font-bold">Added</span>}
+                                                       {isSelected && <span className="text-xs text-brand-600 font-bold bg-brand-100 px-2 py-0.5 rounded-full">Added</span>}
                                                    </label>
                                                );
                                            })
@@ -805,14 +825,14 @@ const MealPlanTab: React.FC = () => {
                                </div>
 
                                {/* Section 2: Manual Entry */}
-                               <div>
-                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Add Missing Item</label>
+                               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Add Missing Item</label>
                                     <div className="flex gap-2">
                                         <input
                                             id="ingredient-name"
                                             type="text"
                                             placeholder="Item name"
-                                            className="flex-1 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
+                                            className="flex-1 rounded-xl border-gray-200 bg-gray-50 text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
                                             value={ingredientName}
                                             onChange={(e) => setIngredientName(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -821,7 +841,7 @@ const MealPlanTab: React.FC = () => {
                                             aria-label="Ingredient quantity"
                                             type="text"
                                             placeholder="Qty"
-                                            className="w-20 rounded-xl border-gray-200 text-sm focus:border-brand-500 focus:ring-brand-500"
+                                            className="w-20 rounded-xl border-gray-200 bg-gray-50 text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
                                             value={ingredientQty}
                                             onChange={(e) => setIngredientQty(e.target.value)}
                                             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -829,13 +849,13 @@ const MealPlanTab: React.FC = () => {
                                         <button
                                             onClick={handleAddIngredient}
                                             disabled={!ingredientName.trim()}
-                                            className="p-2 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600"
+                                            className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors shadow-sm"
                                             aria-label="Add ingredient"
                                         >
                                             <Plus className="w-5 h-5" />
                                         </button>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-1 pl-1">
+                                    <p className="text-[10px] text-gray-400 mt-2 pl-1">
                                         Items not in your pantry will be added to the shopping list when creating a new meal plan.
                                     </p>
                                </div>
@@ -848,13 +868,13 @@ const MealPlanTab: React.FC = () => {
                   <div className="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0">
                       <button
                           onClick={handleCancel}
-                          className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg"
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
                       >
                           Cancel
                       </button>
                       <button
                           onClick={saveMeal}
-                          className="flex-1 py-2 bg-brand-600 text-white rounded-lg"
+                          className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
                       >
                           Save to Plan
                       </button>
@@ -866,7 +886,7 @@ const MealPlanTab: React.FC = () => {
       {/* Previous Meals Modal */}
       {isPreviousMealsModalOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
             }}
@@ -874,9 +894,9 @@ const MealPlanTab: React.FC = () => {
             aria-modal="true"
             aria-labelledby="previous-meals-title"
           >
-               <div className="bg-white rounded-xl w-full max-w-md p-6 max-h-[80vh] flex flex-col">
-                   <h3 id="previous-meals-title" className="text-lg font-bold mb-4">Your Cookbook</h3>
-                   <div className="flex-1 overflow-y-auto space-y-2">
+               <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[80vh] flex flex-col shadow-xl">
+                   <h3 id="previous-meals-title" className="text-xl font-bold text-gray-900 mb-4">Your Cookbook</h3>
+                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                        {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
                            <button
                                 key={meal.id}
@@ -885,17 +905,17 @@ const MealPlanTab: React.FC = () => {
                                     setEditingMealId(meal.id);
                                     setIsPreviousMealsModalOpen(false);
                                 }}
-                                className="w-full text-left p-3 hover:bg-gray-50 rounded-lg border border-gray-100 flex justify-between items-center"
+                                className="w-full text-left p-4 hover:bg-gray-50 rounded-xl border border-gray-100 flex justify-between items-center group transition-colors"
                            >
-                               <span className="font-medium">{meal.name}</span>
-                               <ChevronRight className="w-4 h-4 text-gray-400" />
+                               <span className="font-semibold text-gray-700 group-hover:text-brand-700">{meal.name}</span>
+                               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-400" />
                            </button>
                        ))}
-                       {meals.length === 0 && <p className="text-gray-500 text-center py-4">No saved meals yet.</p>}
+                       {meals.length === 0 && <p className="text-gray-500 text-center py-8">No saved meals yet.</p>}
                    </div>
                    <button
                         onClick={() => setIsPreviousMealsModalOpen(false)}
-                        className="mt-4 w-full py-2 bg-gray-100 rounded-lg"
+                        className="mt-6 w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors"
                    >
                        Close
                    </button>
@@ -906,7 +926,7 @@ const MealPlanTab: React.FC = () => {
       {/* AI Modal */}
       {isAIModalOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget) setIsAIModalOpen(false);
             }}
@@ -914,26 +934,26 @@ const MealPlanTab: React.FC = () => {
             aria-modal="true"
             aria-labelledby="ai-modal-title"
           >
-              <div className="bg-white rounded-xl w-full max-w-sm p-6">
-                  <h3 id="ai-modal-title" className="text-lg font-bold mb-4 flex items-center gap-2">
-                      <Sparkles className="text-purple-600" /> Chef AI
+              <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in zoom-in-95 duration-200">
+                  <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-900">
+                      <Sparkles className="text-purple-600 w-6 h-6" /> Chef AI
                   </h3>
 
-                  <div className="space-y-3 mb-6">
-                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                  <div className="space-y-3 mb-8">
+                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
                           <input
                               type="checkbox"
                               checked={aiOptions.usePantry}
                               onChange={e => setAiOptions({...aiOptions, usePantry: e.target.checked})}
-                              className="rounded text-purple-600 focus:ring-purple-500"
+                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
                           />
                           <div>
-                              <div className="font-medium">Use Pantry Items</div>
-                              <div className="text-xs text-gray-500">Prioritize ingredients you have</div>
+                              <div className="font-bold text-gray-800">Use Pantry Items</div>
+                              <div className="text-xs text-gray-500 mt-0.5">Prioritize ingredients you have</div>
                           </div>
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
                           <input
                               type="checkbox"
                               checked={aiOptions.prioritizeExpiring}
@@ -951,37 +971,37 @@ const MealPlanTab: React.FC = () => {
                               type="checkbox"
                               checked={aiOptions.cheap}
                               onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
-                              className="rounded text-purple-600 focus:ring-purple-500"
+                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
                           />
                           <div>
-                              <div className="font-medium">Budget Friendly</div>
-                              <div className="text-xs text-gray-500">Low cost ingredients</div>
+                              <div className="font-bold text-gray-800">Budget Friendly</div>
+                              <div className="text-xs text-gray-500 mt-0.5">Low cost ingredients</div>
                           </div>
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
                           <input
                               type="checkbox"
                               checked={aiOptions.quick}
                               onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
-                              className="rounded text-purple-600 focus:ring-purple-500"
+                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
                           />
                           <div>
-                              <div className="font-medium">Quick & Easy</div>
-                              <div className="text-xs text-gray-500">Under 30 minutes</div>
+                              <div className="font-bold text-gray-800">Quick & Easy</div>
+                              <div className="text-xs text-gray-500 mt-0.5">Under 30 minutes</div>
                           </div>
                       </label>
 
-                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
                           <input
                               type="checkbox"
                               checked={aiOptions.new}
                               onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
-                              className="rounded text-purple-600 focus:ring-purple-500"
+                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
                           />
                           <div>
-                              <div className="font-medium">Try Something New</div>
-                              <div className="text-xs text-gray-500">Avoid recent meals</div>
+                              <div className="font-bold text-gray-800">Try Something New</div>
+                              <div className="text-xs text-gray-500 mt-0.5">Avoid recent meals</div>
                           </div>
                       </label>
                   </div>
@@ -989,16 +1009,16 @@ const MealPlanTab: React.FC = () => {
                   <button
                       onClick={handleAIRequest}
                       disabled={isGeneratingAI}
-                      className="w-full py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex justify-center items-center gap-2"
+                      className="w-full py-3.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95"
                   >
-                      {isGeneratingAI ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                      {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
                       {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
                   </button>
 
                   <button
                       onClick={() => setIsAIModalOpen(false)}
                       disabled={isGeneratingAI}
-                      className="mt-3 w-full py-2 text-gray-500 hover:bg-gray-50 rounded-lg"
+                      className="mt-3 w-full py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-700 font-bold rounded-xl transition-colors"
                   >
                       Cancel
                   </button>

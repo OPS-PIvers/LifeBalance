@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSafeToSpend, findNextPaycheckDate } from './safeToSpendCalculator';
-import { Account, BudgetBucket, CalendarItem, Transaction } from '@/types/schema';
+import { Account, BudgetBucket, CalendarItem } from '@/types/schema';
 import { addDays, format, subDays } from 'date-fns';
 
 describe('findNextPaycheckDate', () => {
@@ -113,15 +113,11 @@ describe('calculateSafeToSpend', () => {
     { id: 'b1', name: 'Rent', limit: 2000, color: 'red', isVariable: false, isCore: true }
   ];
 
-  // Transactions are currently unused in calculation but required by type
-  const mockTransactions: Transaction[] = [];
-
   it('should return checking balance if no currentPeriodId provided', () => {
     const result = calculateSafeToSpend(
       mockAccounts,
       [],
       [],
-      mockTransactions,
       ''
     );
     expect(result).toBe(5000);
@@ -152,7 +148,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -185,7 +180,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -218,7 +212,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -251,7 +244,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -283,7 +275,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       mockBuckets, // Contains "Rent" bucket
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -328,7 +319,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -361,7 +351,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -399,7 +388,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       startOfMonthDate
     );
 
@@ -432,7 +420,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       mockBuckets, // Contains "Rent" bucket
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -475,7 +462,6 @@ describe('calculateSafeToSpend', () => {
       mockAccounts,
       items,
       [],
-      mockTransactions,
       lastPaycheckDate
     );
 
@@ -494,7 +480,6 @@ describe('calculateSafeToSpend', () => {
       multiAccounts,
       [],
       [],
-      mockTransactions,
       ''
     );
 

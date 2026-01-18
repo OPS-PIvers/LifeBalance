@@ -61,6 +61,7 @@ export interface GroceryItem {
   quantity?: string;
   category: string;
   store?: string;
+  expiryDate?: string;
 }
 
 /**
@@ -426,6 +427,7 @@ export const parseGroceryReceipt = async (
                 2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
                 3. Extract and Standardize 'quantity' if specified (e.g., "2" -> "2 ct", "1 lb" -> "1 lb"), otherwise "1".
                 4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
+                5. Estimate a logical 'expiryDate' (YYYY-MM-DD) based on the item type (e.g., Produce ~1 week, Dairy ~2 weeks, Canned ~2 years) from today.
 
                 Ignore taxes, subtotal, total, and non-product lines.
                 Return a JSON array of items.`;
@@ -440,7 +442,8 @@ export const parseGroceryReceipt = async (
             name: { type: Type.STRING },
             quantity: { type: Type.STRING },
             category: { type: Type.STRING },
-            store: { type: Type.STRING }
+            store: { type: Type.STRING },
+            expiryDate: { type: Type.STRING, nullable: true }
           },
           required: ["name", "quantity", "category"]
         }

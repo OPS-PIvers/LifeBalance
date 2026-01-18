@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
-import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X, Layers, CheckSquare, ShoppingCart } from 'lucide-react';
 import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
+import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 import { differenceInDays, parseISO, startOfDay } from 'date-fns';
 
@@ -19,9 +20,15 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const PantryTab: React.FC = () => {
-  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories } = useHousehold();
+  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories, addShoppingItem } = useHousehold();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
+
+  // Batch Mode State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
 
   // New Item Form State
   const [newName, setNewName] = useState('');
@@ -67,8 +74,90 @@ const PantryTab: React.FC = () => {
     setNewQuantity('');
     setNewCategory('Pantry');
     setNewExpiry('');
-    setNewPurchaseDate('');
+    setNewPurchaseDate(new Date().toISOString().split('T')[0]);
     setEditingItem(null);
+  };
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === pantry.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pantry.map(i => i.id)));
+    }
+  };
+
+  const handleBatchRestock = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => {
+        const item = pantry.find(p => p.id === id);
+        if (!item) return Promise.resolve();
+
+        // Add to shopping list
+        return addShoppingItem({
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          isPurchased: false,
+          addedFromMealId: item.id // Traceability: schema uses addedFromMealId generically for source item IDs (including pantry items)
+        });
+      });
+
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Added ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Added ${selectedIds.size} items to list`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch restock failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => deletePantryItem(id));
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Deleted ${selectedIds.size} items`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchDeleteConfirm(false);
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
   };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
@@ -155,34 +244,63 @@ const PantryTab: React.FC = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-brand-900">My Pantry</h2>
         <div className="flex gap-2">
+           {!isSelectionMode && (
+             <>
+               <button
+                 onClick={handleOptimize}
+                 disabled={isOptimizing || pantry.length === 0}
+                 className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+                 title="Optimize your pantry with AI"
+                 aria-label="AI Optimize List"
+               >
+                 {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
+               </button>
+               <label className="btn-secondary flex items-center gap-2 cursor-pointer">
+                  {isProcessingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Scan Pantry</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    disabled={isProcessingImage}
+                  />
+               </label>
+               <button
+                 onClick={() => { resetForm(); setIsAddModalOpen(true); }}
+                 className="btn-primary flex items-center gap-2"
+               >
+                 <Plus className="w-4 h-4" /> Add Item
+               </button>
+             </>
+           )}
            <button
-             onClick={handleOptimize}
-             disabled={isOptimizing || pantry.length === 0}
-             className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
-             title="Optimize your pantry with AI"
-             aria-label="AI Optimize List"
+             onClick={() => {
+                setIsSelectionMode(!isSelectionMode);
+                if (isSelectionMode) setSelectedIds(new Set()); // Clear on exit
+             }}
+             className={`p-2 rounded-lg transition-colors ${isSelectionMode ? 'bg-brand-800 text-white' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
+             title={isSelectionMode ? "Cancel Selection" : "Select Items"}
+             aria-label={isSelectionMode ? "Cancel Selection" : "Select Items"}
            >
-             {isOptimizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-           </button>
-           <label className="btn-secondary flex items-center gap-2 cursor-pointer">
-              {isProcessingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-              <span className="hidden sm:inline">Scan Pantry</span>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-                disabled={isProcessingImage}
-              />
-           </label>
-           <button
-             onClick={() => { resetForm(); setIsAddModalOpen(true); }}
-             className="btn-primary flex items-center gap-2"
-           >
-             <Plus className="w-4 h-4" /> Add Item
+              {isSelectionMode ? <X className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
            </button>
         </div>
       </div>
+
+      {isSelectionMode && (
+        <div className="flex items-center justify-between px-2 text-sm text-brand-600 mb-2">
+            <button
+                onClick={handleSelectAll}
+                className="flex items-center gap-2 font-bold hover:text-brand-800"
+                aria-label="Toggle select all pantry items"
+            >
+                <CheckSquare size={16} className={selectedIds.size === pantry.length && pantry.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+                Select All ({pantry.length})
+            </button>
+            <span className="text-xs">{selectedIds.size} selected</span>
+        </div>
+      )}
 
       {Object.entries(groupedItems).map(([category, items]) => (
         <div key={category} className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -215,25 +333,51 @@ const PantryTab: React.FC = () => {
                 }
               }
 
+              const isSelected = selectedIds.has(item.id);
               return (
-              <div key={item.id} className="p-4 flex justify-between items-center hover:bg-gray-50">
-                <div>
-                  <div className="font-medium text-gray-900 flex items-center">
-                    {item.name}
-                    {expiryBadge}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {item.quantity}
+              <div
+                key={item.id}
+                className={`p-4 flex justify-between items-center transition-colors ${isSelectionMode ? 'cursor-pointer hover:bg-brand-50' : 'hover:bg-gray-50'} ${isSelected ? 'bg-brand-50' : ''}`}
+                onClick={() => isSelectionMode && toggleSelection(item.id)}
+              >
+                <div className="flex items-center gap-3">
+                  {isSelectionMode && (
+                     <div
+                        className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                           if (e.key === ' ' || e.key === 'Enter') {
+                             e.preventDefault();
+                             toggleSelection(item.id);
+                           }
+                        }}
+                     >
+                       {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+                     </div>
+                  )}
+                  <div>
+                    <div className="font-medium text-gray-900 flex items-center">
+                      {item.name}
+                      {expiryBadge}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {item.quantity}
+                    </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handleEdit(item)} className="p-2 text-gray-400 hover:text-brand-600" aria-label={`Edit ${item.name}`}>
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => deletePantryItem(item.id)} className="p-2 text-gray-400 hover:text-red-600" aria-label={`Delete ${item.name}`}>
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+
+                {!isSelectionMode && (
+                  <div className="flex gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); handleEdit(item); }} className="p-2 text-gray-400 hover:text-brand-600" aria-label={`Edit ${item.name}`}>
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); deletePantryItem(item.id); }} className="p-2 text-gray-400 hover:text-red-600" aria-label={`Delete ${item.name}`}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             );
             })}
@@ -247,6 +391,74 @@ const PantryTab: React.FC = () => {
             <p>Your pantry is empty.</p>
             <p className="text-sm mt-1">Add items manually or snap a photo!</p>
         </div>
+      )}
+
+      {/* Floating Action Bar (FAB) for Batch Actions */}
+      {isSelectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+            <div className="px-3 font-bold text-sm border-r border-brand-700">
+              {selectedIds.size} selected
+            </div>
+
+            <button
+              onClick={handleBatchRestock}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Restock selected items"
+            >
+              <ShoppingCart size={18} />
+              <span className="text-[10px] font-medium">Restock</span>
+            </button>
+
+            <button
+              onClick={() => setShowBatchDeleteConfirm(true)}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Delete selected items"
+            >
+              <Trash2 size={18} />
+              <span className="text-[10px] font-medium">Delete</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirmation */}
+      {showBatchDeleteConfirm && (
+        <Modal
+          isOpen={true}
+          onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
+          disableBackdropClose={isBatchProcessing}
+        >
+          <div className="p-4 space-y-4">
+            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
+            <p className="text-brand-600">
+              Are you sure you want to delete <strong>{selectedIds.size}</strong> items?
+            </p>
+            <p className="text-sm text-money-neg font-bold">
+              This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowBatchDeleteConfirm(false)}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                <span>Delete All</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Add/Edit Modal */}
