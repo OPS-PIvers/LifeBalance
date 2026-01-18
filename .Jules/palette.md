@@ -1,0 +1,1 @@
+## 2024-05-22 - Accessibility Fundamentals\n**Learning:** Many interactive elements were missing visible focus states, making keyboard navigation difficult. Standard UI components (like Button) should enforce these styles globally.\n**Action:** Audit all interactive components for `focus-visible` styles and enforce usage of the standard `Button` component over raw HTML buttons.

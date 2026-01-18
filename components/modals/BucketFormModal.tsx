@@ -5,6 +5,7 @@ import { X, Trash2 } from 'lucide-react';
 import { BudgetBucket } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 
 interface BucketFormModalProps {
   isOpen: boolean;
@@ -105,21 +106,22 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           </div>
         </div>
 
-        <button
-            onClick={handleSave}
-            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl mt-2 active:scale-95 transition-transform"
-          >
-            {editingBucket ? 'Save Changes' : 'Create Bucket'}
-          </button>
+        <Button
+          onClick={handleSave}
+          className="w-full py-3 mt-2"
+        >
+          {editingBucket ? 'Save Changes' : 'Create Bucket'}
+        </Button>
 
-          {editingBucket && (
-            <button
-              onClick={handleDelete}
-              className="w-full py-3 text-money-neg font-bold rounded-xl mt-1 flex items-center justify-center gap-2 hover:bg-money-bgNeg transition-colors"
-            >
-              <Trash2 size={16} /> Delete Bucket
-            </button>
-          )}
+        {editingBucket && (
+          <Button
+            onClick={handleDelete}
+            variant="ghost-danger"
+            className="w-full py-3 mt-1 hover:bg-money-bgNeg"
+          >
+            <Trash2 size={16} /> Delete Bucket
+          </Button>
+        )}
       </div>
     </Modal>
   );
