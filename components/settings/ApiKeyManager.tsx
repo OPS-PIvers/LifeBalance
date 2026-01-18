@@ -80,7 +80,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     }
   };
 
-  const handleCopyEndpoint = async (endpoint: 'habit' | 'expense' | 'receipt') => {
+  const handleCopyEndpoint = async (endpoint: 'habit' | 'expense' | 'shopping') => {
     const url = getQuickAddEndpointUrl(endpoint);
     await navigator.clipboard.writeText(url);
     toast.success('Endpoint URL copied');
