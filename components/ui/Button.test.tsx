@@ -10,11 +10,27 @@ describe('Button', () => {
     expect(screen.getByText('Click me')).toBeInTheDocument();
   });
 
+  // Variants tests
   it('applies primary variant classes by default', () => {
     render(<Button>Primary</Button>);
     const button = screen.getByRole('button', { name: /primary/i });
     expect(button).toHaveClass('bg-brand-800');
     expect(button).toHaveClass('text-white');
+  });
+
+  it('applies secondary variant classes', () => {
+    render(<Button variant="secondary">Secondary</Button>);
+    const button = screen.getByRole('button', { name: /secondary/i });
+    expect(button).toHaveClass('bg-white');
+    expect(button).toHaveClass('text-brand-600');
+    expect(button).toHaveClass('border');
+  });
+
+  it('applies ghost variant classes', () => {
+    render(<Button variant="ghost">Ghost</Button>);
+    const button = screen.getByRole('button', { name: /ghost/i });
+    expect(button).toHaveClass('bg-transparent');
+    expect(button).toHaveClass('text-brand-600');
   });
 
   it('applies danger variant classes', () => {
@@ -24,6 +40,21 @@ describe('Button', () => {
     expect(button).toHaveClass('text-red-700');
   });
 
+  it('applies outline variant classes', () => {
+    render(<Button variant="outline">Outline</Button>);
+    const button = screen.getByRole('button', { name: /outline/i });
+    expect(button).toHaveClass('bg-transparent');
+    expect(button).toHaveClass('border-2');
+    expect(button).toHaveClass('text-brand-600');
+  });
+
+  it('applies subtle variant classes', () => {
+    render(<Button variant="subtle">Subtle</Button>);
+    const button = screen.getByRole('button', { name: /subtle/i });
+    expect(button).toHaveClass('bg-brand-100');
+    expect(button).toHaveClass('text-brand-700');
+  });
+
   it('applies ghost-danger variant classes', () => {
     render(<Button variant="ghost-danger">Ghost Danger</Button>);
     const button = screen.getByRole('button', { name: /ghost danger/i });
@@ -31,19 +62,43 @@ describe('Button', () => {
     expect(button).toHaveClass('text-red-400');
   });
 
+  // Size tests
+  it('applies sm size classes', () => {
+    render(<Button size="sm">Small</Button>);
+    const button = screen.getByRole('button', { name: /small/i });
+    expect(button).toHaveClass('px-3');
+    expect(button).toHaveClass('py-1');
+    expect(button).toHaveClass('text-sm');
+  });
+
+  it('applies md size classes by default', () => {
+    render(<Button>Medium</Button>);
+    const button = screen.getByRole('button', { name: /medium/i });
+    expect(button).toHaveClass('px-4');
+    expect(button).toHaveClass('py-2');
+    expect(button).toHaveClass('text-sm');
+  });
+
+  it('applies lg size classes', () => {
+    render(<Button size="lg">Large</Button>);
+    const button = screen.getByRole('button', { name: /large/i });
+    expect(button).toHaveClass('px-6');
+    expect(button).toHaveClass('py-3');
+    expect(button).toHaveClass('text-base');
+  });
+
+  it('applies icon size classes', () => {
+    render(<Button size="icon">Icon</Button>);
+    const button = screen.getByRole('button', { name: /icon/i });
+    expect(button).toHaveClass('p-2');
+  });
+
+  // State & Icon tests
   it('shows loader and disables button when isLoading is true', () => {
     render(<Button isLoading>Loading</Button>);
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
-    // The loader is an SVG, so we can check for its presence.
-    // Usually it doesn't have a role, but we can check if the text is present or check for the svg class if needed.
-    // In our implementation, children are still rendered?
-    // Looking at Button.tsx: {isLoading && <Loader2 ... />} {children}
-    // So "Loading" text should still be there.
     expect(screen.getByText('Loading')).toBeInTheDocument();
-    // Check for the spinner (it has animate-spin class)
-    // We can't easily query by class with testing-library without setup, but we can query by a container selector if needed.
-    // Or we can assume if it's disabled and has text, it's likely working, but let's be more precise if we can.
   });
 
   it('renders left and right icons', () => {

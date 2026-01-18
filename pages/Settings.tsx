@@ -459,6 +459,7 @@ const Settings: React.FC = () => {
                   variant="subtle"
                   size="icon"
                   title="Add Member"
+                  aria-label="Add Member"
                 >
                   <Plus size={20} />
                 </Button>
@@ -512,7 +513,7 @@ const Settings: React.FC = () => {
                           variant="ghost"
                           size="icon"
                           title="Edit Member"
-                          className="text-brand-400"
+                          aria-label="Edit Member"
                         >
                           <Pencil size={16} />
                         </Button>
@@ -522,7 +523,7 @@ const Settings: React.FC = () => {
                             variant="ghost-danger"
                             size="icon"
                             title="Remove Member"
-                            className="text-red-300 hover:text-red-500"
+                            aria-label="Remove Member"
                           >
                             <Trash2 size={16} />
                           </Button>
