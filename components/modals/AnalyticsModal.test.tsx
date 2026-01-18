@@ -40,30 +40,30 @@ vi.mock('recharts', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ResponsiveContainer: ({ children }: any) => <div className="recharts-responsive-container">{children}</div>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+    BarChart: ({ children }: any) => <svg data-testid="bar-chart">{children}</svg>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    PieChart: ({ children }: any) => <div data-testid="pie-chart">{children}</div>,
+    PieChart: ({ children }: any) => <svg data-testid="pie-chart">{children}</svg>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    AreaChart: ({ children }: any) => <div data-testid="area-chart">{children}</div>,
+    AreaChart: ({ children }: any) => <svg data-testid="area-chart">{children}</svg>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    RadarChart: ({ children }: any) => <div data-testid="radar-chart">{children}</div>,
+    RadarChart: ({ children }: any) => <svg data-testid="radar-chart">{children}</svg>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ComposedChart: ({ children }: any) => <div data-testid="composed-chart">{children}</div>,
+    ComposedChart: ({ children }: any) => <svg data-testid="composed-chart">{children}</svg>,
     // Mock child components that expect context
-    XAxis: () => <div data-testid="x-axis" />,
-    YAxis: () => <div data-testid="y-axis" />,
-    CartesianGrid: () => <div data-testid="cartesian-grid" />,
-    Tooltip: () => <div data-testid="tooltip" />,
-    Legend: () => <div data-testid="legend" />,
-    Bar: () => <div data-testid="bar" />,
-    Area: () => <div data-testid="area" />,
-    Line: () => <div data-testid="line" />,
-    Radar: () => <div data-testid="radar" />,
-    PolarGrid: () => <div data-testid="polar-grid" />,
-    PolarAngleAxis: () => <div data-testid="polar-angle-axis" />,
-    PolarRadiusAxis: () => <div data-testid="polar-radius-axis" />,
-    Pie: () => <div data-testid="pie" />,
-    Cell: () => <div data-testid="cell" />,
+    XAxis: () => <g data-testid="x-axis" />,
+    YAxis: () => <g data-testid="y-axis" />,
+    CartesianGrid: () => <g data-testid="cartesian-grid" />,
+    Tooltip: () => <g data-testid="tooltip" />,
+    Legend: () => <g data-testid="legend" />,
+    Bar: () => <g data-testid="bar" />,
+    Area: () => <g data-testid="area" />,
+    Line: () => <g data-testid="line" />,
+    Radar: () => <g data-testid="radar" />,
+    PolarGrid: () => <g data-testid="polar-grid" />,
+    PolarAngleAxis: () => <g data-testid="polar-angle-axis" />,
+    PolarRadiusAxis: () => <g data-testid="polar-radius-axis" />,
+    Pie: () => <g data-testid="pie" />,
+    Cell: () => <g data-testid="cell" />,
   };
 });
 

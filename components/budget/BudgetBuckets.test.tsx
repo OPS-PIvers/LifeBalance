@@ -11,15 +11,15 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
-  AlertTriangle: () => <div data-testid="alert-triangle" />,
-  ArrowRightLeft: () => <div data-testid="arrow-right-left" />,
-  Plus: () => <div data-testid="plus-icon" />,
-  Pencil: () => <div data-testid="pencil-icon" />,
-  Check: () => <div data-testid="check-icon" />,
-  ChevronDown: () => <div data-testid="chevron-down" />,
-  ChevronUp: () => <div data-testid="chevron-up" />,
-  Edit: () => <div data-testid="edit-icon" />,
-  Trash2: () => <div data-testid="trash-icon" />,
+  AlertTriangle: () => <span data-testid="alert-triangle" />,
+  ArrowRightLeft: () => <span data-testid="arrow-right-left" />,
+  Plus: () => <span data-testid="plus-icon" />,
+  Pencil: () => <span data-testid="pencil-icon" />,
+  Check: () => <span data-testid="check-icon" />,
+  ChevronDown: () => <span data-testid="chevron-down" />,
+  ChevronUp: () => <span data-testid="chevron-up" />,
+  Edit: () => <span data-testid="edit-icon" />,
+  Trash2: () => <span data-testid="trash-icon" />,
 }));
 
 // Mock child modals to avoid complex setup

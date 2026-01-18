@@ -31,15 +31,15 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
-  Pencil: () => <div data-testid="pencil-icon" />,
-  Check: () => <div data-testid="check-icon" />,
-  Plus: () => <div data-testid="plus-icon" />,
-  X: () => <div data-testid="x-icon" />,
-  Target: () => <div data-testid="target-icon" />,
-  Star: () => <div data-testid="star-icon" />,
-  GripVertical: () => <div data-testid="grip-icon" />,
-  Trash2: () => <div data-testid="trash-icon" />,
-  Loader2: () => <div data-testid="loader-icon" />,
+  Pencil: () => <span data-testid="pencil-icon" />,
+  Check: () => <span data-testid="check-icon" />,
+  Plus: () => <span data-testid="plus-icon" />,
+  X: () => <span data-testid="x-icon" />,
+  Target: () => <span data-testid="target-icon" />,
+  Star: () => <span data-testid="star-icon" />,
+  GripVertical: () => <span data-testid="grip-icon" />,
+  Trash2: () => <span data-testid="trash-icon" />,
+  Loader2: () => <span data-testid="loader-icon" />,
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
