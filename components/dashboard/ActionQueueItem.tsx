@@ -151,13 +151,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               <p className="text-xs text-brand-500 mb-3">
                 {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => {
                     setPayModalItemId(item.id);
                     setExpandedId(null);
                   }}
-                  className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <Check size={16} />
                   Approve
@@ -167,7 +167,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     await deferCalendarItem(item.id);
                     setExpandedId(null);
                   }}
-                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <Clock size={16} />
                   Defer
@@ -179,7 +179,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                       setExpandedId(null);
                     }
                   }}
-                  className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                 >
                   <Trash2 size={16} />
                   Delete
@@ -192,7 +192,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                <p className="text-xs text-brand-500 mb-3">
                  Mark this task as complete or delay it:
                </p>
-               <div className="flex gap-2">
+               <div className="flex flex-col sm:flex-row gap-2">
                  <button
                    onClick={async () => {
                      try {
@@ -204,7 +204,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.error('Failed to complete to-do');
                      }
                    }}
-                   className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                  >
                    <Check size={16} />
                    Complete
@@ -245,7 +245,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.error('Failed to defer task. Please try again.');
                      }
                    }}
-                   className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                  >
                    <Clock size={16} />
                    Defer
@@ -258,7 +258,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.success('Task deleted');
                      });
                    }}
-                   className="flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
                  >
                    <Trash2 size={16} />
                    Delete

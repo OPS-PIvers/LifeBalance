@@ -1000,7 +1000,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                      <div>
                         <label htmlFor="item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
                         <div className="relative mt-1">

@@ -134,15 +134,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
             <>
               {activeTab === 'testers' && (
                 <div className="space-y-6">
-                  <div className="flex gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex flex-col sm:flex-row gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <input
                       type="email"
                       placeholder="new@tester.com"
-                      className="flex-1 p-2 border rounded-lg"
+                      className="w-full sm:flex-1 p-2 border rounded-lg"
                       value={newTesterEmail}
                       onChange={e => setNewTesterEmail(e.target.value)}
                     />
-                    <button onClick={handleAddTester} className="bg-brand-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-brand-700">
+                    <button onClick={handleAddTester} className="bg-brand-600 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 hover:bg-brand-700 w-full sm:w-auto">
                       <Plus size={16} /> Add Tester
                     </button>
                   </div>
