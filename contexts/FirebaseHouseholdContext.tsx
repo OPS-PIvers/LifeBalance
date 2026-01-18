@@ -2729,7 +2729,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     try {
       setIsGeneratingInsight(true);
       toast.loading('Generating insight...', { id: 'insight-loading' });
-      const { text, actions } = await generateInsight(transactions, habits);
+      const { text, actions } = await generateInsight(householdId, transactions, habits);
 
       const newInsight: Omit<Insight, 'id'> = {
         text,

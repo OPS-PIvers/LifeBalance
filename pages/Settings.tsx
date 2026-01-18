@@ -32,6 +32,10 @@ import { HouseholdMember, NotificationPreferences } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
+import DeveloperConsole from '@/components/modals/DeveloperConsole';
+import { Terminal } from 'lucide-react';
+
+const APP_VERSION = '0.8.0-alpha';
 
 interface SettingsSectionProps {
   id: string;
@@ -119,10 +123,13 @@ const Settings: React.FC = () => {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
+
+  const isGlobalAdmin = user?.uid === import.meta.env.VITE_ADMIN_UID;
 
   // Section State
   const [openSection, setOpenSection] = useState<string | null>('profile');
@@ -288,6 +295,23 @@ const Settings: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
+
+        {isGlobalAdmin && (
+          <Card className="overflow-hidden border-2 border-indigo-100">
+            <button
+              onClick={() => setIsDevConsoleOpen(true)}
+              className="w-full flex items-center justify-between p-4 bg-indigo-50 hover:bg-indigo-100 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <Terminal className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-lg font-bold text-indigo-900">Developer Console</h3>
+              </div>
+              <span className="text-xs font-bold text-indigo-600 bg-white px-2 py-1 rounded border border-indigo-200 group-hover:border-indigo-300">
+                ADMIN
+              </span>
+            </button>
+          </Card>
+        )}
 
         <SettingsSection
           id="profile"
@@ -614,9 +638,18 @@ const Settings: React.FC = () => {
           >
             Sign Out
           </Button>
+
+          <div className="pt-4 text-center">
+            <p className="text-xs text-brand-300 font-mono">v{APP_VERSION}</p>
+          </div>
         </SettingsSection>
 
       </div>
+
+      <DeveloperConsole
+        isOpen={isDevConsoleOpen}
+        onClose={() => setIsDevConsoleOpen(false)}
+      />
 
       <MemberModal
         isOpen={isModalOpen}

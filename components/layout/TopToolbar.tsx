@@ -1,10 +1,11 @@
 
 import React, { useState, useRef } from 'react';
-import { Star, TrendingUp, User } from 'lucide-react';
+import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useAuth } from '../../contexts/AuthContext';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
+import FeedbackModal from '../modals/FeedbackModal';
 import ProfileMenu from './ProfileMenu';
 
 const TopToolbar: React.FC = () => {
@@ -13,6 +14,7 @@ const TopToolbar: React.FC = () => {
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const isPositive = safeToSpend >= 0;
@@ -40,6 +42,14 @@ const TopToolbar: React.FC = () => {
 
           {/* Right Container: Points Cluster + Profile */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsFeedbackOpen(true)}
+              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
+              aria-label="Send Feedback"
+            >
+              <AlertCircle size={18} />
+            </button>
+
             {/* Points Container - Clickable to open Rewards Modal */}
             <button
               type="button"
@@ -101,6 +111,7 @@ const TopToolbar: React.FC = () => {
 
       <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
       <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
+      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </>
   );
 };

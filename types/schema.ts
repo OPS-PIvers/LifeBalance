@@ -323,6 +323,11 @@ export interface Household {
   location?: { lat: number; lon: number };
   lastPaycheckDate?: string; // YYYY-MM-DD of most recent approved paycheck
 
+  aiUsage?: {
+    dailyCount: number;
+    lastResetDate: string; // YYYY-MM-DD
+  };
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate
@@ -394,4 +399,22 @@ export interface Insight {
   generatedAt: string; // ISO timestamp
   type: 'general' | 'spending' | 'habits';
   actions?: InsightAction[];
+}
+
+export interface BetaTester {
+  email: string;
+  addedAt: string;
+  status: 'active' | 'revoked';
+  usageLimit: number; // Daily AI requests
+}
+
+export interface FeedbackReport {
+  id: string;
+  userId: string;
+  householdId: string;
+  message: string;
+  timestamp: string;
+  version: string;
+  route: string;
+  errorContext?: string;
 }

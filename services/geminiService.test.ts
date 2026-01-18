@@ -6,6 +6,24 @@ const { generateContentMock } = vi.hoisted(() => {
   return { generateContentMock: vi.fn() };
 });
 
+// Mock Firestore dependencies
+vi.mock('@/firebase.config', () => ({
+  db: {}
+}));
+
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn(),
+  getDoc: vi.fn().mockResolvedValue({
+    exists: () => true,
+    data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2024-01-01' } })
+  }),
+  updateDoc: vi.fn(),
+  increment: vi.fn(),
+  collection: vi.fn(),
+  addDoc: vi.fn(),
+  serverTimestamp: vi.fn(),
+}));
+
 // Mock the GoogleGenAI library
 vi.mock('@google/genai', () => {
   return {
@@ -60,7 +78,7 @@ describe('geminiService', () => {
     });
 
     // 3. Call the service
-    const result = await generateInsight([], []);
+    const result = await generateInsight('test-household-id', [], []);
 
     // 4. Assertions
     expect(result).toBeDefined();
@@ -83,7 +101,7 @@ describe('geminiService', () => {
       text: JSON.stringify(mockInsightData)
     });
 
-    const result = await generateInsight([], []);
+    const result = await generateInsight('test-household-id', [], []);
 
     expect(result.text).toBe(mockInsightData.text);
     expect(result.actions).toEqual([]);

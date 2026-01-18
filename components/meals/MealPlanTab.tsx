@@ -21,7 +21,8 @@ const MealPlanTab: React.FC = () => {
     mealPlan,
     addMealPlanItem,
     updateMealPlanItem,
-    deleteMealPlanItem
+    deleteMealPlanItem,
+    householdId
   } = useHousehold();
 
   // Calendar State
@@ -381,9 +382,13 @@ const MealPlanTab: React.FC = () => {
   };
 
   const handleAIRequest = async () => {
+    if (!householdId) {
+        toast.error("Household ID not found");
+        return;
+    }
     setIsGeneratingAI(true);
     try {
-        const suggestion = await suggestMeal({
+        const suggestion = await suggestMeal(householdId, {
             usePantry: aiOptions.usePantry,
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
