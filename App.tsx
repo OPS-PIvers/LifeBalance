@@ -1,22 +1,29 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
-import Login from './pages/Login';
-import HouseholdSetup from './pages/HouseholdSetup';
-import Dashboard from './pages/Dashboard';
-import Budget from './pages/Budget';
-import Habits from './pages/Habits';
-import Settings from './pages/Settings';
-import MigrateSubmissions from './pages/MigrateSubmissions';
-import MealsPage from './pages/MealsPage';
-import ShoppingPage from './pages/ShoppingPage';
-import ToDosPage from './pages/ToDosPage';
-import { setupForegroundNotificationListener } from './services/notificationService';
+
+// Lazy load pages for code splitting and faster initial load
+const Login = React.lazy(() => import('./pages/Login'));
+const HouseholdSetup = React.lazy(() => import('./pages/HouseholdSetup'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Budget = React.lazy(() => import('./pages/Budget'));
+const Habits = React.lazy(() => import('./pages/Habits'));
+const Settings = React.lazy(() => import('./pages/Settings'));
+const MigrateSubmissions = React.lazy(() => import('./pages/MigrateSubmissions'));
+const MealsPage = React.lazy(() => import('./pages/MealsPage'));
+const ShoppingPage = React.lazy(() => import('./pages/ShoppingPage'));
+const ToDosPage = React.lazy(() => import('./pages/ToDosPage'));
+
+const LoadingFallback = () => (
+  <div className="min-h-screen bg-brand-50 flex items-center justify-center">
+    <div className="text-brand-600 font-medium">Loading...</div>
+  </div>
+);
 
 const App: React.FC = () => {
   // Track notification permission state to react to changes
@@ -41,14 +48,27 @@ const App: React.FC = () => {
   // Set up foreground notification listener when permission is granted
   // Background notifications on iOS 16.4+ are handled by the service worker's push event
   useEffect(() => {
+    let cleanupFn: (() => void) | null = null;
+    let isMounted = true;
+
     if (notificationPermission === 'granted') {
-      const unsubscribe = setupForegroundNotificationListener();
-      return () => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
-      };
+      // Dynamic import ensures notification service (and heavy Firebase Messaging)
+      // is only loaded when actually needed/authorized.
+      import('./services/notificationService')
+        .then(({ setupForegroundNotificationListener }) => {
+          if (isMounted) {
+            cleanupFn = setupForegroundNotificationListener();
+          }
+        })
+        .catch(console.error);
     }
+
+    return () => {
+      isMounted = false;
+      if (cleanupFn) {
+        cleanupFn();
+      }
+    };
   }, [notificationPermission]);
 
   // Test mode check - only available in development with explicit flag
@@ -99,94 +119,96 @@ const App: React.FC = () => {
                 🧪 TEST MODE - MOCK DATA (Development Only)
               </div>
             )}
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/setup" element={<HouseholdSetup />} />
+            <Suspense fallback={<LoadingFallback />}>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/setup" element={<HouseholdSetup />} />
 
-              {/* Protected Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Dashboard />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/budget"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Budget />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/habits"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Habits />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/meals"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <MealsPage />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/shopping"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <ShoppingPage />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/todos"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <ToDosPage />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <MainLayout>
-                      <Settings />
-                    </MainLayout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/migrate-submissions"
-                element={
-                  <ProtectedRoute>
-                    <MigrateSubmissions />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Protected Routes */}
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <Dashboard />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/budget"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <Budget />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/habits"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <Habits />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/meals"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <MealsPage />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/shopping"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <ShoppingPage />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/todos"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <ToDosPage />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <MainLayout>
+                        <Settings />
+                      </MainLayout>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/migrate-submissions"
+                  element={
+                    <ProtectedRoute>
+                      <MigrateSubmissions />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Catch all - redirect to home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Catch all - redirect to home */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
 
             <Toaster
               position="top-center"

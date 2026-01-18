@@ -32,7 +32,8 @@ const Login: React.FC = () => {
       sessionStorage.setItem('LIFEBALANCE_TEST_MODE', 'true');
 
       // Navigate to root to reload with mock providers
-      navigate('/', { replace: true });
+      // Force full reload to ensure App.tsx re-initializes with MockProviders
+      window.location.href = '/';
     }
   }, [location, navigate]);
 
