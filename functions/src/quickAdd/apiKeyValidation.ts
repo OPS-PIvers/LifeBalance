@@ -29,6 +29,7 @@ export interface ApiKeyValidationResult {
   householdId?: string;
   permissions?: ApiKeyPermissions;
   keyId?: string;
+  keyCreatedBy?: string;  // uid of the user who created the API key
   error?: string;
 }
 
@@ -117,6 +118,7 @@ export async function validateApiKey(
       householdId,
       permissions: keyData.permissions,
       keyId: keyDoc.id,
+      keyCreatedBy: keyData.createdBy,
     };
   } catch (error) {
     logger.error("Error validating API key:", error);

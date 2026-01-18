@@ -252,7 +252,7 @@ export const quickAddExpense = onRequest(
       return;
     }
 
-    const { householdId, permissions } = validation;
+    const { householdId, permissions, keyCreatedBy } = validation;
 
     // 2. Check permissions
     if (!permissions?.expenses) {
@@ -337,13 +337,30 @@ export const quickAddExpense = onRequest(
         });
       }
 
-      // 8. Log API call
+      // 8. Create todo for review (action queue)
+      const today = format(new Date(), "yyyy-MM-dd");
+      const todoData = {
+        text: `Review expense: $${amount.toFixed(2)} at ${merchant}`,
+        completeByDate: today,
+        assignedTo: keyCreatedBy || "unassigned",
+        isCompleted: false,
+        createdBy: "shortcut-automation",
+        createdAt: new Date().toISOString(),
+        linkedTransactionId: transactionRef.id,
+        source: "shortcut",
+      };
+
+      await db
+        .collection(`households/${householdId}/todos`)
+        .add(todoData);
+
+      // 9. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
 
-      // 9. Return success
+      // 10. Return success
       jsonResponse(res, 200, {
         success: true,
-        message: `Expense added: $${amount.toFixed(2)} at ${merchant}`,
+        message: `Expense added: $${amount.toFixed(2)} at ${merchant} (added to action queue)`,
         data: {
           transactionId: transactionRef.id,
           amount,

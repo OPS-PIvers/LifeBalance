@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink, Copy } from 'lucide-react';
+import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink, Copy, CreditCard } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import toast from 'react-hot-toast';
 
@@ -12,6 +12,8 @@ interface ShortcutExample {
   fields: { key: string; value: string; valueType: 'Text' | 'Number'; isVariable?: boolean }[];
   preActions?: string[];
   postActions?: string[];
+  isAutomation?: boolean;  // True for automations that provide variables automatically
+  automationNote?: string; // Extra note for automations
 }
 
 const ShortcutSetupGuide: React.FC = () => {
@@ -85,6 +87,30 @@ const ShortcutSetupGuide: React.FC = () => {
         'In shortcut settings (i icon), enable "Show in Siri Suggestions"',
       ],
     },
+    {
+      id: 'wallet-auto',
+      title: 'Apple Wallet Auto-Log',
+      icon: <CreditCard className="w-5 h-5" />,
+      description: 'Automatically log expenses when you pay with Apple Pay',
+      endpoint: 'expense',
+      fields: [
+        { key: 'amount', value: 'Amount', valueType: 'Number', isVariable: true },
+        { key: 'merchant', value: 'Name', valueType: 'Text', isVariable: true },
+      ],
+      preActions: [
+        'Open Shortcuts → Automation tab (bottom)',
+        'Tap + → Create Personal Automation',
+        'Scroll down, tap "Transaction"',
+        'Select your card(s) and tap Next',
+      ],
+      postActions: [
+        'Tap Done (no need to rename automations)',
+        'IMPORTANT: Turn OFF "Ask Before Running"',
+        'Expenses auto-log and appear in your Action Queue for review',
+      ],
+      isAutomation: true,
+      automationNote: 'The Transaction trigger automatically provides Amount and Merchant Name as variables - just select them when adding the body fields.',
+    },
   ];
 
   return (
@@ -94,6 +120,9 @@ const ShortcutSetupGuide: React.FC = () => {
         <p className="text-sm text-blue-700">
           iOS Shortcuts sends HTTP requests to your LifeBalance cloud functions.
           Generate an API key above, then follow these step-by-step guides.
+        </p>
+        <p className="text-xs text-blue-600 mt-2">
+          All expenses added via Shortcuts appear in your Action Queue for review.
         </p>
       </div>
 
@@ -134,13 +163,20 @@ const ShortcutSetupGuide: React.FC = () => {
                 {example.preActions && (
                   <div>
                     <p className="text-xs font-semibold text-brand-700 mb-2">
-                      1. First, set up voice input:
+                      1. {example.isAutomation ? 'Create the automation:' : 'First, set up voice input:'}
                     </p>
                     <ol className="text-xs text-brand-600 space-y-1 list-decimal list-inside ml-2">
                       {example.preActions.map((action, i) => (
                         <li key={i}>{action}</li>
                       ))}
                     </ol>
+                  </div>
+                )}
+
+                {/* Automation note */}
+                {example.automationNote && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                    <p className="text-xs text-amber-800">{example.automationNote}</p>
                   </div>
                 )}
 
