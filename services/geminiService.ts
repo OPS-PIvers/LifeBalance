@@ -780,6 +780,7 @@ export interface MagicActionResponse {
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const parseMagicAction = async (
+  householdId: string,
   input: string,
   context: {
     categories: string[] | readonly string[];
@@ -813,6 +814,7 @@ export const parseMagicAction = async (
     `;
 
     return await generateJsonContent<MagicActionResponse>(
+      householdId,
       prompt,
       {
         type: Type.OBJECT,
@@ -842,6 +844,9 @@ export const parseMagicAction = async (
     console.error("Gemini Magic Action Parse Error:", error);
     // Fallback or rethrow? Let's return unknown to be safe.
     return { type: 'unknown', confidence: 0, data: {} };
+  }
+};
+
 export interface HabitPointAdjustmentSuggestion {
   habitId: string;
   habitTitle: string;
@@ -852,10 +857,12 @@ export interface HabitPointAdjustmentSuggestion {
 
 /**
  * Analyzes habits and suggests point adjustments based on performance.
+ * @param householdId - The household ID for quota tracking
  * @param habits - List of habits to analyze
  * @param _aiClient - Optional injected AI client for testing purposes.
  */
 export const analyzeHabitPoints = async (
+  householdId: string,
   habits: Habit[],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<HabitPointAdjustmentSuggestion[]> => {
@@ -900,6 +907,7 @@ export const analyzeHabitPoints = async (
     `;
 
     const rawSuggestions = await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
+      householdId,
       prompt,
       {
         type: Type.ARRAY,

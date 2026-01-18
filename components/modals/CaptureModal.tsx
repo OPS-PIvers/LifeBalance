@@ -2,11 +2,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-
-  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown, Shield, Sparkles, ArrowRight
-
   Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown,
-  Sparkles, ArrowRight
+  Shield, Sparkles, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -93,12 +90,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
     setMagicLoading(true);
     try {
+      if (!householdId) throw new Error("Household ID not found");
       const context = {
         categories: dynamicCategories,
         groceryCategories: GROCERY_CATEGORIES,
         todayDate: getLocalDateString()
       };
-      const result = await parseMagicAction(magicInput, context);
+      const result = await parseMagicAction(householdId, magicInput, context);
 
       if (result.type === 'transaction') {
         setActiveTab('transaction');
@@ -580,7 +578,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     <p className="text-xs text-blue-700">
                       <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
                     </p>
-
+                  </div>
 
                   {/* Magic Input */}
                   <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">

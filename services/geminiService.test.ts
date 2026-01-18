@@ -125,7 +125,7 @@ describe('geminiService', () => {
       text: JSON.stringify(mockResponse)
     });
 
-    const result = await parseMagicAction('Spent 45.20 at Target', {
+    const result = await parseMagicAction('test-household', 'Spent 45.20 at Target', {
       categories: ['Shopping', 'Dining'],
       groceryCategories: ['Food'],
       todayDate: '2025-02-18'
@@ -153,7 +153,7 @@ describe('geminiService', () => {
       text: JSON.stringify(mockResponse)
     });
 
-    const result = await parseMagicAction('Remind me to pay electricity bill tomorrow', {
+    const result = await parseMagicAction('test-household', 'Remind me to pay electricity bill tomorrow', {
       categories: [],
       groceryCategories: [],
       todayDate: '2025-02-18'
@@ -182,7 +182,7 @@ describe('geminiService', () => {
       text: JSON.stringify(mockResponse)
     });
 
-    const result = await parseMagicAction('Buy 2 gallons of Milk from Walmart', {
+    const result = await parseMagicAction('test-household', 'Buy 2 gallons of Milk from Walmart', {
       categories: [],
       groceryCategories: ['Dairy', 'Produce'],
       todayDate: '2025-02-18'
@@ -193,6 +193,8 @@ describe('geminiService', () => {
     expect(result.data.quantity).toBe('2 gallons');
     expect(result.data.category).toBe('Dairy');
     expect(result.data.store).toBe('Walmart');
+  });
+
   it('analyzeHabitPoints correctly parses suggestions', async () => {
     const { analyzeHabitPoints } = await import('./geminiService');
 
@@ -226,7 +228,7 @@ describe('geminiService', () => {
       lastUpdated: ''
     }] as unknown as Habit[];
 
-    const result = await analyzeHabitPoints(habits);
+    const result = await analyzeHabitPoints('test-household', habits);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual(mockSuggestions[0]);
@@ -234,7 +236,7 @@ describe('geminiService', () => {
 
   it('analyzeHabitPoints handles empty input', async () => {
     const { analyzeHabitPoints } = await import('./geminiService');
-    const result = await analyzeHabitPoints([]);
+    const result = await analyzeHabitPoints('test-household', []);
     expect(result).toEqual([]);
     expect(generateContentMock).not.toHaveBeenCalled();
   });
@@ -262,7 +264,7 @@ describe('geminiService', () => {
       basePoints: 10,
     }] as unknown as Habit[];
 
-    const result = await analyzeHabitPoints(habits);
+    const result = await analyzeHabitPoints('test-household', habits);
     expect(result).toHaveLength(0); // Should be filtered out
   });
 });

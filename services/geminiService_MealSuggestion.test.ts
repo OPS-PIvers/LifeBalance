@@ -72,7 +72,7 @@ describe('geminiService - Meal Suggestion', () => {
       previousMeals: []
     };
 
-    await suggestMeal(request);
+    await suggestMeal('test-household', request);
 
     expect(generateContentMock).toHaveBeenCalledTimes(1);
     const callArgs = generateContentMock.mock.calls[0][0];
@@ -115,7 +115,7 @@ describe('geminiService - Meal Suggestion', () => {
       previousMeals: []
     };
 
-    await suggestMeal(request);
+    await suggestMeal('test-household', request);
 
     const callArgs = generateContentMock.mock.calls[0][0];
     const promptText = callArgs.contents.parts[0].text;

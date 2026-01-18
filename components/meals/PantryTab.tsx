@@ -20,10 +20,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 const PantryTab: React.FC = () => {
-
   const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories, householdId, addShoppingItem } = useHousehold();
-
-  const { pantry, addPantryItem, updatePantryItem, deletePantryItem, groceryCategories, addShoppingItem } = useHousehold();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PantryItem | null>(null);
 

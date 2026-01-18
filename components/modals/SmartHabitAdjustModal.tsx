@@ -11,19 +11,19 @@ interface SmartHabitAdjustModalProps {
 }
 
 const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, onClose }) => {
-  const { habits, updateHabit } = useHousehold();
+  const { habits, updateHabit, householdId } = useHousehold();
   const [suggestions, setSuggestions] = useState<HabitPointAdjustmentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Analyze habits when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && householdId) {
       const fetchSuggestions = async () => {
         setIsLoading(true);
         setError(null);
         try {
-          const results = await analyzeHabitPoints(habits);
+          const results = await analyzeHabitPoints(householdId, habits);
           setSuggestions(results);
         } catch (err) {
           console.error("Failed to analyze habits:", err);
