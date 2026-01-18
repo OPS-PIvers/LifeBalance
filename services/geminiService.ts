@@ -947,3 +947,82 @@ export const analyzeHabitPoints = async (
     throw new Error("Failed to analyze habits.");
   }
 };
+
+export interface HabitPatternInsight {
+  title: string;
+  description: string;
+  type: 'praise' | 'critique' | 'suggestion';
+  relatedHabitId?: string;
+}
+
+/**
+ * Analyzes habit completion patterns to provide coaching insights.
+ * @param householdId - The household ID for quota tracking
+ * @param habits - List of habits to analyze
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const analyzeHabitPatterns = async (
+  householdId: string,
+  habits: Habit[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<HabitPatternInsight[]> => {
+  if (habits.length === 0) return [];
+
+  try {
+    // 1. Anonymize and Prepare Data
+    const habitStats = habits.map(h => ({
+      id: h.id,
+      title: h.title,
+      period: h.period,
+      streakDays: h.streakDays,
+      completedDates: (h.completedDates || []).slice(-30) // Last 30 completions
+    }));
+
+    const habitsJson = JSON.stringify(habitStats);
+    const today = new Date().toISOString().split('T')[0];
+
+    const prompt = `
+      You are a wise and supportive habit coach. I will provide a list of habits with their recent completion history.
+      Your goal is to identify patterns and provide 3-5 specific, actionable insights.
+      Today's date is ${today}.
+
+      Look for:
+      - Strong streaks (Praise)
+      - "Weekend warrior" patterns (Suggestion)
+      - Habits that are often skipped together (Observation)
+      - Slumps or dropped streaks (Encouragement)
+
+      Analyze the following habits:
+      ${habitsJson}
+
+      Return a JSON array of insights. Each insight must have:
+      - title: Short, punchy headline (e.g., "Weekend Slump Detected", "On Fire!")
+      - description: 1-2 sentences explaining the insight. Be conversational and supportive.
+      - type: 'praise' (for good streaks), 'critique' (for missing consistency), or 'suggestion' (general advice).
+      - relatedHabitId: (Optional) The ID of the specific habit this insight is about.
+    `;
+
+    return await generateJsonContent<HabitPatternInsight[]>(
+      householdId,
+      prompt,
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            type: { type: Type.STRING, enum: ['praise', 'critique', 'suggestion'] },
+            relatedHabitId: { type: Type.STRING, nullable: true }
+          },
+          required: ["title", "description", "type"]
+        }
+      },
+      _aiClient
+    );
+
+  } catch (error) {
+    console.error("Gemini Habit Pattern Analysis Error:", error);
+    throw new Error("Failed to analyze habit patterns.");
+  }
+};

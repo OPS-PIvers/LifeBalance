@@ -11,3 +11,5 @@
 ## 2026-01-17 - Meals Page Unification **Discovery:** The `MealsPage` lacked the Shopping List tab despite `ShoppingListTab` component being fully implemented and `AGENTS.md` describing it as part of the Meals system. **Opportunity:** Unified the Meals workflow by adding the missing Shopping List tab to `MealsPage`, creating a seamless Pantry -> Meal Plan -> Shopping List loop.
 
 ## 2026-02-18 - Batch Pantry Actions **Discovery:** Users scanning receipts often need to clear multiple items or restock in bulk, but the UI forced one-by-one actions. **Opportunity:** Implemented "Batch Selection Mode" in `PantryTab`, reusing the `Promise.allSettled` pattern from `TransactionMasterList` to enable bulk Delete and Restock operations.
+
+## 2026-01-18 - AI Habit Coaching **Discovery:** The `geminiService` and `Habit` data model (specifically `completedDates`) were fully prepped for advanced pattern analysis, but the UI was missing the "Coach" interface. **Opportunity:** Implemented `HabitCoach` and `analyzeHabitPatterns` to provide actionable insights (streaks, slumps, weekend warrior patterns) without any new database infrastructure.
