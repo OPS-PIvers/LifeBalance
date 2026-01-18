@@ -35,7 +35,7 @@ const Login: React.FC = () => {
       // Force full reload to ensure App.tsx re-initializes with MockProviders
       window.location.href = '/';
     }
-  }, [location, navigate]);
+  }, [location]);
 
   // Redirect if already authenticated
   useEffect(() => {

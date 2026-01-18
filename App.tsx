@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
@@ -60,7 +60,10 @@ const App: React.FC = () => {
             cleanupFn = setupForegroundNotificationListener();
           }
         })
-        .catch(console.error);
+        .catch((error) => {
+          console.error('[App] Failed to load notification service:', error);
+          toast.error('Failed to enable notifications. Please reload the page.');
+        });
     }
 
     return () => {
