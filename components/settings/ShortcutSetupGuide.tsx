@@ -1,18 +1,30 @@
 import React, { useState } from 'react';
-import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink } from 'lucide-react';
+import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink, Copy } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
+import toast from 'react-hot-toast';
 
 interface ShortcutExample {
   id: string;
   title: string;
   icon: React.ReactNode;
   description: string;
-  steps: string[];
-  jsonBody: string;
+  endpoint: 'habit' | 'expense' | 'shopping';
+  fields: { key: string; value: string; type: 'text' | 'number' | 'variable' }[];
+  preActions?: string[];
+  postActions?: string[];
 }
 
 const ShortcutSetupGuide: React.FC = () => {
   const [expandedExample, setExpandedExample] = useState<string | null>(null);
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
 
   const examples: ShortcutExample[] = [
     {
@@ -20,82 +32,58 @@ const ShortcutSetupGuide: React.FC = () => {
       title: 'Quick Habit Toggle',
       icon: <Smartphone className="w-5 h-5" />,
       description: 'One-tap habit completion from your Lock Screen',
-      steps: [
-        'Open the Shortcuts app on your iPhone',
-        'Tap "+" to create a new shortcut',
-        'Add action: "Get Contents of URL"',
-        `Set URL to: ${getQuickAddEndpointUrl('habit')}`,
-        'Set Method to: POST',
-        'Add Header: Authorization with value: Bearer YOUR_API_KEY',
-        'Add Header: Content-Type with value: application/json',
-        'Set Request Body to JSON (see below)',
-        'Add action: "Show Result" to see the response',
-        'Tap the shortcut name and add to Lock Screen',
+      endpoint: 'habit',
+      fields: [
+        { key: 'habitName', value: 'Morning Exercise', type: 'text' },
+        { key: 'direction', value: 'up', type: 'text' },
       ],
-      jsonBody: JSON.stringify(
-        {
-          habitName: 'Morning Exercise',
-          direction: 'up',
-        },
-        null,
-        2
-      ),
+      postActions: [
+        'Search "Show Result" and add it',
+        'Tap the shortcut name at top, rename it (e.g., "Log Exercise")',
+        'Tap "Add to Home Screen" or "Add to Lock Screen" (iOS 18)',
+      ],
     },
     {
       id: 'expense-voice',
       title: 'Voice-Activated Expense',
       icon: <Mic className="w-5 h-5" />,
       description: '"Hey Siri, log expense" to quickly track spending',
-      steps: [
-        'Create a new shortcut named "Log Expense"',
-        'Add action: "Ask for Input" (Number) - "How much did you spend?"',
-        'Add action: "Set Variable" - name it "amount"',
-        'Add action: "Ask for Input" (Text) - "Where?"',
-        'Add action: "Set Variable" - name it "merchant"',
-        'Add action: "Get Contents of URL"',
-        `Set URL to: ${getQuickAddEndpointUrl('expense')}`,
-        'Set Method to: POST',
-        'Add Authorization header with your API key',
-        'In JSON body, use variables: {"amount": [amount], "merchant": [merchant]}',
-        'Add action: "Show Notification" with the result',
-        'In shortcut settings, enable "Show in Siri"',
+      endpoint: 'expense',
+      fields: [
+        { key: 'amount', value: 'Amount', type: 'variable' },
+        { key: 'merchant', value: 'Merchant', type: 'variable' },
+        { key: 'category', value: 'Dining', type: 'text' },
       ],
-      jsonBody: JSON.stringify(
-        {
-          amount: 12.5,
-          merchant: 'Coffee Shop',
-          category: 'Dining',
-        },
-        null,
-        2
-      ),
+      preActions: [
+        'Search "Ask for Input" - set Type to Number, Prompt to "How much?"',
+        'Search "Set Variable" - name it "Amount"',
+        'Search "Ask for Input" again - set Type to Text, Prompt to "Where?"',
+        'Search "Set Variable" - name it "Merchant"',
+      ],
+      postActions: [
+        'Search "Show Notification" and add it',
+        'Tap shortcut name, rename to "Log Expense"',
+        'In shortcut settings (i icon), enable "Show in Siri Suggestions"',
+      ],
     },
     {
       id: 'shopping',
       title: 'Voice Shopping List',
       icon: <ShoppingCart className="w-5 h-5" />,
       description: '"Hey Siri, add to shopping list" for quick grocery adds',
-      steps: [
-        'Create a new shortcut named "Add to Shopping List"',
-        'Add action: "Ask for Input" (Text) - "What do you need?"',
-        'Add action: "Set Variable" - name it "item"',
-        'Add action: "Get Contents of URL"',
-        `Set URL to: ${getQuickAddEndpointUrl('shopping')}`,
-        'Set Method to: POST',
-        'Add Authorization header with your API key',
-        'In JSON body, use: {"item": [item]}',
-        'Add action: "Show Notification" with the result',
-        'In shortcut settings, enable "Show in Siri"',
+      endpoint: 'shopping',
+      fields: [
+        { key: 'item', value: 'Item', type: 'variable' },
       ],
-      jsonBody: JSON.stringify(
-        {
-          item: 'Milk',
-          quantity: 2,
-          category: 'Dairy',
-        },
-        null,
-        2
-      ),
+      preActions: [
+        'Search "Ask for Input" - set Type to Text, Prompt to "What do you need?"',
+        'Search "Set Variable" - name it "Item"',
+      ],
+      postActions: [
+        'Search "Show Notification" and add it',
+        'Tap shortcut name, rename to "Add to Shopping List"',
+        'In shortcut settings (i icon), enable "Show in Siri Suggestions"',
+      ],
     },
   ];
 
@@ -104,27 +92,14 @@ const ShortcutSetupGuide: React.FC = () => {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
         <h4 className="font-semibold text-blue-800 mb-1">How It Works</h4>
         <p className="text-sm text-blue-700">
-          iOS Shortcuts can send HTTP requests to your LifeBalance functions.
-          Generate an API key above, then use these examples to create shortcuts
-          for quick habit tracking and expense logging.
+          iOS Shortcuts sends HTTP requests to your LifeBalance cloud functions.
+          Generate an API key above, then follow these step-by-step guides.
         </p>
-      </div>
-
-      {/* Quick Setup Tips */}
-      <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-brand-700">Quick Setup Tips</h4>
-        <ul className="text-sm text-brand-600 space-y-1 list-disc list-inside">
-          <li>Copy your API key and endpoint URLs from above</li>
-          <li>In Shortcuts, always use POST method</li>
-          <li>Add <code>Bearer </code> before your API key in the Authorization header</li>
-          <li>Set Content-Type to application/json</li>
-          <li>iOS 18: Replace Lock Screen buttons with your shortcuts</li>
-        </ul>
       </div>
 
       {/* Shortcut Examples */}
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-brand-700">Example Shortcuts</h4>
+        <h4 className="text-sm font-semibold text-brand-700">Step-by-Step Guides</h4>
 
         {examples.map((example) => (
           <div
@@ -154,26 +129,111 @@ const ShortcutSetupGuide: React.FC = () => {
             </button>
 
             {expandedExample === example.id && (
-              <div className="p-3 bg-brand-50 border-t border-brand-100 space-y-3">
+              <div className="p-3 bg-brand-50 border-t border-brand-100 space-y-4">
+                {/* Pre-actions for voice shortcuts */}
+                {example.preActions && (
+                  <div>
+                    <p className="text-xs font-semibold text-brand-700 mb-2">
+                      1. First, set up voice input:
+                    </p>
+                    <ol className="text-xs text-brand-600 space-y-1 list-decimal list-inside ml-2">
+                      {example.preActions.map((action, i) => (
+                        <li key={i}>{action}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {/* Main setup */}
                 <div>
-                  <p className="text-xs font-semibold text-brand-700 mb-2">Steps:</p>
-                  <ol className="text-xs text-brand-600 space-y-1 list-decimal list-inside">
-                    {example.steps.map((step, i) => (
-                      <li key={i} className="leading-relaxed">
-                        {step}
-                      </li>
-                    ))}
-                  </ol>
+                  <p className="text-xs font-semibold text-brand-700 mb-2">
+                    {example.preActions ? '2.' : '1.'} Add "Get Contents of URL":
+                  </p>
+                  <div className="bg-white rounded-lg border border-brand-200 p-3 space-y-3">
+                    {/* URL */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">URL (tap to copy):</p>
+                      <button
+                        onClick={() => copyToClipboard(getQuickAddEndpointUrl(example.endpoint), 'URL')}
+                        className="w-full flex items-center justify-between bg-gray-50 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+                      >
+                        <code className="text-xs text-blue-600 break-all">
+                          {getQuickAddEndpointUrl(example.endpoint)}
+                        </code>
+                        <Copy className="w-3 h-3 text-gray-400 flex-shrink-0 ml-2" />
+                      </button>
+                    </div>
+
+                    {/* Method */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Method:</p>
+                      <p className="text-xs font-mono bg-gray-50 rounded px-2 py-1">POST</p>
+                    </div>
+
+                    {/* Headers */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Headers (tap + Add new header):</p>
+                      <div className="space-y-1">
+                        <div className="flex gap-2 text-xs">
+                          <span className="bg-gray-100 px-2 py-1 rounded font-medium">Authorization</span>
+                          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono">
+                            Bearer YOUR_API_KEY
+                          </span>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <span className="bg-gray-100 px-2 py-1 rounded font-medium">Content-Type</span>
+                          <button
+                            onClick={() => copyToClipboard('application/json', 'Content-Type')}
+                            className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono text-left hover:bg-blue-100"
+                          >
+                            application/json
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Request Body */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Request Body: tap "JSON", then "Add new field" for each:</p>
+                      <div className="space-y-1">
+                        {example.fields.map((field, i) => (
+                          <div key={i} className="flex gap-2 text-xs items-center">
+                            <span className="bg-gray-100 px-2 py-1 rounded font-medium min-w-[80px]">
+                              {field.key}
+                            </span>
+                            {field.type === 'variable' ? (
+                              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded flex-1">
+                                [Select Variable: {field.value}]
+                              </span>
+                            ) : field.type === 'number' ? (
+                              <span className="bg-green-50 text-green-700 px-2 py-1 rounded flex-1 font-mono">
+                                {field.value}
+                              </span>
+                            ) : (
+                              <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono">
+                                {field.value}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <p className="text-xs font-semibold text-brand-700 mb-1">
-                    Example JSON Body:
-                  </p>
-                  <pre className="text-xs bg-white p-2 rounded border border-brand-100 overflow-x-auto">
-                    <code>{example.jsonBody}</code>
-                  </pre>
-                </div>
+                {/* Post actions */}
+                {example.postActions && (
+                  <div>
+                    <p className="text-xs font-semibold text-brand-700 mb-2">
+                      {example.preActions ? '3.' : '2.'} Finish setup:
+                    </p>
+                    <ol className="text-xs text-brand-600 space-y-1 list-decimal list-inside ml-2">
+                      {example.postActions.map((action, i) => (
+                        <li key={i}>{action}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -187,9 +247,8 @@ const ShortcutSetupGuide: React.FC = () => {
           <div>
             <h4 className="font-semibold text-purple-800">iOS 18 Lock Screen</h4>
             <p className="text-sm text-purple-700 mt-1">
-              Replace the flashlight or camera button with your LifeBalance
-              shortcut! Long-press your Lock Screen, tap Customize, then swap a
-              button for your Quick Add shortcut.
+              Replace the flashlight or camera button with your shortcut!
+              Long-press Lock Screen → Customize → tap a button to swap it.
             </p>
           </div>
         </div>
