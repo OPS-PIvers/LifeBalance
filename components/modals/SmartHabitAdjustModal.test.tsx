@@ -77,6 +77,9 @@ describe('SmartHabitAdjustModal', () => {
   });
 
   it('renders error state on failure', async () => {
+    // Suppress console.error for expected error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     (analyzeHabitPoints as Mock).mockRejectedValue(new Error('API Error'));
 
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
@@ -84,6 +87,8 @@ describe('SmartHabitAdjustModal', () => {
     await waitFor(() => {
       expect(screen.getByText('Failed to generate suggestions. Please try again later.')).toBeInTheDocument();
     });
+
+    consoleSpy.mockRestore();
   });
 
   it('calls updateHabit when accepting suggestion', async () => {

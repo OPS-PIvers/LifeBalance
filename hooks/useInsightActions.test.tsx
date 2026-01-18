@@ -165,7 +165,10 @@ describe('useInsightActions', () => {
   });
 
   it('should handle execution errors', async () => {
-     (HouseholdContext.useHousehold as Mock).mockReturnValue({
+    // Suppress console.error for this test as we expect it
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    (HouseholdContext.useHousehold as Mock).mockReturnValue({
       updateBucketLimit: mockUpdateBucketLimit,
       addHabit: mockAddHabit,
       addToDo: vi.fn().mockRejectedValue(new Error('Network error')),
@@ -189,5 +192,8 @@ describe('useInsightActions', () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith('Failed to execute action: Network error');
+
+    // Restore console.error
+    consoleSpy.mockRestore();
   });
 });
