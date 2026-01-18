@@ -172,22 +172,44 @@ const ShortcutSetupGuide: React.FC = () => {
 
                     {/* Headers */}
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Headers (tap + Add new header):</p>
-                      <div className="space-y-1">
-                        <div className="flex gap-2 text-xs">
-                          <span className="bg-gray-100 px-2 py-1 rounded font-medium">Authorization</span>
-                          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono">
-                            Bearer YOUR_API_KEY
-                          </span>
+                      <p className="text-xs text-gray-500 mb-1">Headers (tap + Add new header twice):</p>
+                      <div className="space-y-2">
+                        <div className="bg-gray-50 rounded p-2">
+                          <div className="flex gap-2 text-xs items-center mb-1">
+                            <span className="text-gray-400 w-10">Key:</span>
+                            <button
+                              onClick={() => copyToClipboard('Authorization', 'Key')}
+                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                            >
+                              Authorization
+                            </button>
+                          </div>
+                          <div className="flex gap-2 text-xs items-center">
+                            <span className="text-gray-400 w-10">Text:</span>
+                            <span className="bg-white border px-2 py-1 rounded font-mono text-blue-600">
+                              Bearer <span className="text-purple-600">[paste your API key]</span>
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex gap-2 text-xs">
-                          <span className="bg-gray-100 px-2 py-1 rounded font-medium">Content-Type</span>
-                          <button
-                            onClick={() => copyToClipboard('application/json', 'Content-Type')}
-                            className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono text-left hover:bg-blue-100"
-                          >
-                            application/json
-                          </button>
+                        <div className="bg-gray-50 rounded p-2">
+                          <div className="flex gap-2 text-xs items-center mb-1">
+                            <span className="text-gray-400 w-10">Key:</span>
+                            <button
+                              onClick={() => copyToClipboard('Content-Type', 'Key')}
+                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                            >
+                              Content-Type
+                            </button>
+                          </div>
+                          <div className="flex gap-2 text-xs items-center">
+                            <span className="text-gray-400 w-10">Text:</span>
+                            <button
+                              onClick={() => copyToClipboard('application/json', 'Text')}
+                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                            >
+                              application/json
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -195,25 +217,33 @@ const ShortcutSetupGuide: React.FC = () => {
                     {/* Request Body */}
                     <div>
                       <p className="text-xs text-gray-500 mb-1">Request Body: tap JSON, then + Add new field for each:</p>
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         {example.fields.map((field, i) => (
-                          <div key={i} className="flex gap-2 text-xs items-center">
-                            <span className="bg-gray-100 px-2 py-1 rounded font-medium min-w-[80px]">
-                              {field.key}
-                            </span>
-                            {field.type === 'variable' ? (
-                              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded flex-1">
-                                [Select Variable: {field.value}]
-                              </span>
-                            ) : field.type === 'number' ? (
-                              <span className="bg-green-50 text-green-700 px-2 py-1 rounded flex-1 font-mono">
-                                {field.value}
-                              </span>
-                            ) : (
-                              <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded flex-1 font-mono">
-                                {field.value}
-                              </span>
-                            )}
+                          <div key={i} className="bg-gray-50 rounded p-2">
+                            <div className="flex gap-2 text-xs items-center mb-1">
+                              <span className="text-gray-400 w-10">Key:</span>
+                              <button
+                                onClick={() => copyToClipboard(field.key, 'Key')}
+                                className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                              >
+                                {field.key}
+                              </button>
+                            </div>
+                            <div className="flex gap-2 text-xs items-center">
+                              <span className="text-gray-400 w-10">Text:</span>
+                              {field.type === 'variable' ? (
+                                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                  Tap, select Variable, choose {field.value}
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => copyToClipboard(field.value, 'Text')}
+                                  className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                                >
+                                  {field.value}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
