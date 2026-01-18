@@ -2,3 +2,6 @@
 ## 2024-02-13 - Monorepo Workspace Config **Bottleneck:** `functions` directory used `npm` and `package-lock.json` while root used `pnpm`, leading to toolchain fragmentation and broken lint scripts. **Fix:** Created `pnpm-workspace.yaml` to manage both root and `functions`. Standardized `functions/package.json` to use `pnpm` and `tsc` for linting.
 
 ## 2025-02-13 - Config Drift & CI Consistency **Bottleneck:** `vite.config.ts` contained confusing/unsafe `define` blocks for env vars, and `deploy.yml` used outdated actions. **Fix:** Removed unused `define` in Vite config (application uses `import.meta.env`) and updated `deploy.yml` to use `pnpm/action-setup@v4` with strict versioning.
+
+## 2025-02-18 - Bundle Optimization & Code Splitting **Bottleneck:** Main bundle was ~936KB due to eager loading of all pages and AI services. **Fix:** Implemented `React.lazy` for routes and dynamic imports for `geminiService` and `notificationService`. Reduced main bundle to ~371KB.
+## 2025-02-18 - Platform Quirk: Test Mode Reload **Bottleneck:** Enabling Test Mode via `sessionStorage` didn't trigger root provider updates on client-side navigation. **Fix:** Forced full page reload (`window.location.href`) in `Login.tsx` to ensure `App.tsx` re-initializes providers.
