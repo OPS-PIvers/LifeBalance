@@ -38,7 +38,9 @@ vi.mock('firebase/firestore', () => ({
   setDoc: vi.fn(() => Promise.resolve()),
   updateDoc: vi.fn(() => Promise.resolve()),
   increment: vi.fn((n) => n),
-  serverTimestamp: vi.fn()
+  serverTimestamp: vi.fn(),
+  collection: vi.fn(),
+  addDoc: vi.fn(() => Promise.resolve({ id: 'mock-doc-id' }))
 }));
 
 vi.mock('@/firebase.config', () => ({
