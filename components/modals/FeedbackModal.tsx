@@ -6,7 +6,7 @@ import { db } from '@/firebase.config';
 import { collection, addDoc } from 'firebase/firestore';
 import { FeedbackReport } from '@/types/schema';
 import toast from 'react-hot-toast';
-import { Loader2, Send } from 'lucide-react';
+import { Loader2, Send, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 interface FeedbackModalProps {
@@ -55,6 +55,13 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
     <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="feedback-title" maxWidth="max-w-md">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <h2 id="feedback-title" className="text-lg font-bold">Send Feedback</h2>
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+          aria-label="Close modal"
+        >
+          <X size={20} />
+        </button>
       </div>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <div className="space-y-2">
@@ -70,7 +77,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
             required
           />
         </div>
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-end pt-2 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={isSubmitting || !message.trim()}
