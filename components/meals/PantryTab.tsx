@@ -111,7 +111,7 @@ const PantryTab: React.FC = () => {
           category: item.category,
           quantity: item.quantity,
           isPurchased: false,
-          addedFromMealId: item.id // Traceability
+          addedFromMealId: item.id // Traceability: schema uses addedFromMealId generically for source item IDs (including pantry items)
         });
       });
 
@@ -280,6 +280,7 @@ const PantryTab: React.FC = () => {
              }}
              className={`p-2 rounded-lg transition-colors ${isSelectionMode ? 'bg-brand-800 text-white' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
              title={isSelectionMode ? "Cancel Selection" : "Select Items"}
+             aria-label={isSelectionMode ? "Cancel Selection" : "Select Items"}
            >
               {isSelectionMode ? <X className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
            </button>
@@ -288,7 +289,11 @@ const PantryTab: React.FC = () => {
 
       {isSelectionMode && (
         <div className="flex items-center justify-between px-2 text-sm text-brand-600 mb-2">
-            <button onClick={handleSelectAll} className="flex items-center gap-2 font-bold hover:text-brand-800">
+            <button
+                onClick={handleSelectAll}
+                className="flex items-center gap-2 font-bold hover:text-brand-800"
+                aria-label="Toggle select all pantry items"
+            >
                 <CheckSquare size={16} className={selectedIds.size === pantry.length && pantry.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
                 Select All ({pantry.length})
             </button>
@@ -312,7 +317,18 @@ const PantryTab: React.FC = () => {
               >
                 <div className="flex items-center gap-3">
                   {isSelectionMode && (
-                     <div className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
+                     <div
+                        className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}
+                        role="checkbox"
+                        aria-checked={isSelected}
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                           if (e.key === ' ' || e.key === 'Enter') {
+                             e.preventDefault();
+                             toggleSelection(item.id);
+                           }
+                        }}
+                     >
                        {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
                      </div>
                   )}
@@ -361,6 +377,7 @@ const PantryTab: React.FC = () => {
               onClick={handleBatchRestock}
               disabled={isBatchProcessing}
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Restock selected items"
             >
               <ShoppingCart size={18} />
               <span className="text-[10px] font-medium">Restock</span>
@@ -370,6 +387,7 @@ const PantryTab: React.FC = () => {
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Delete selected items"
             >
               <Trash2 size={18} />
               <span className="text-[10px] font-medium">Delete</span>
