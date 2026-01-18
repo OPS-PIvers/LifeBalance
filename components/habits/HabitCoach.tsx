@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { analyzeHabitPatterns, HabitPatternInsight } from '../../services/geminiService';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { analyzeHabitPatterns, HabitPatternInsight } from '@/services/geminiService';
 import { Sparkles, Trophy, TrendingUp, AlertCircle, RefreshCw, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
 

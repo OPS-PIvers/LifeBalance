@@ -26,11 +26,11 @@ service cloud.firestore {
       // Only members can read the household document.
       // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
       // This aligns with the list rule below.
-      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || request.auth.uid == "REPLACE_WITH_ADMIN_UID";
+      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
       // Allow listing only if user is a member (prevents enumeration of all households)
       // Admin can list all households for the AI Meter
-      allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "REPLACE_WITH_ADMIN_UID";
+      allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
       allow create: if isAuthenticated();
       // Allow update if member (but cannot modify immutable fields).
@@ -138,7 +138,7 @@ service cloud.firestore {
     // Global App Config (Kill Switch)
     match /app_config/global {
       allow read: if true;
-      allow write: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+      allow write: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
     }
 
     // Beta Testers
@@ -147,21 +147,21 @@ service cloud.firestore {
       // Only allow reading if the document belongs to the user (via email match) or if user is Admin.
       allow read: if isAuthenticated() && (
         resource.data.email == request.auth.token.email ||
-        request.auth.uid == "REPLACE_WITH_ADMIN_UID"
+        request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"
       );
-      allow write: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+      allow write: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
     }
 
     // Feedback Reports
     match /feedback/{reportId} {
       allow create: if isAuthenticated();
-      allow read, delete: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+      allow read, delete: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
     }
 
     // AI Usage Logs
     match /logs/ai_usage/requests/{requestId} {
       allow create: if isAuthenticated();
-      allow read: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
+      allow read: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
     }
   }
 }
