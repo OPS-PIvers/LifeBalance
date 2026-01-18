@@ -14,3 +14,8 @@
 **Weed:** Entangled logic and magic numbers in `utils/calendarRecurrence.ts`.
 **Root Cause:** "Optimization" logic (jump-to-start) was mixed with generation logic, making the function hard to read and test. Magic numbers like `1` (Monday) and `1000` (max iterations) were hardcoded.
 **Plan:** Extracted `calculateStartDate` and `getNextOccurrence` helper functions. Defined `MONDAY` and `MAX_ITERATIONS` constants. Added comprehensive unit tests in `utils/calendarRecurrence.test.ts`.
+
+### 2026-02-14 - InsightWidget Complexity Trap
+**Weed:** "Complexity Trap" in `components/dashboard/InsightWidget.tsx`.
+**Root Cause:** The component was handling complex action execution logic (bucket updates, habit creation, etc.) alongside UI rendering.
+**Plan:** Extracted `handleAction` logic into a custom hook `hooks/useInsightActions.ts` and added unit tests.
