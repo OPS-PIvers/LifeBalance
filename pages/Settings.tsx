@@ -25,6 +25,7 @@ import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
 import Card from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
@@ -453,13 +454,14 @@ const Settings: React.FC = () => {
                 Household Members
               </h3>
               {currentUser?.role === 'admin' && (
-                <button
+                <Button
                   onClick={handleAddMember}
-                  className="p-2 bg-brand-100 text-brand-700 rounded-xl hover:bg-brand-200 transition-colors"
+                  variant="subtle"
+                  size="icon"
                   title="Add Member"
                 >
                   <Plus size={20} />
-                </button>
+                </Button>
               )}
             </div>
             <div className="space-y-3">
@@ -505,21 +507,25 @@ const Settings: React.FC = () => {
                     {/* Admin Actions */}
                     {currentUser?.role === 'admin' && (
                       <div className="flex items-center gap-1">
-                        <button
+                        <Button
                           onClick={() => handleEditMember(member)}
-                          className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
+                          variant="ghost"
+                          size="icon"
                           title="Edit Member"
+                          className="text-brand-400"
                         >
                           <Pencil size={16} />
-                        </button>
+                        </Button>
                         {member.uid !== currentUser.uid && (
-                          <button
+                          <Button
                             onClick={() => handleRemoveMember(member)}
-                            className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            variant="ghost-danger"
+                            size="icon"
                             title="Remove Member"
+                            className="text-red-300 hover:text-red-500"
                           >
                             <Trash2 size={16} />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     )}
@@ -598,13 +604,15 @@ const Settings: React.FC = () => {
           isOpen={openSection === 'account'}
           onToggle={handleToggleSection}
         >
-          <button
+          <Button
             onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-700 font-semibold py-3 px-4 rounded-xl hover:bg-red-100 active:scale-95 transition-all duration-200 border-2 border-red-200"
+            variant="danger"
+            size="lg"
+            className="w-full"
+            leftIcon={<LogOut size={20} />}
           >
-            <LogOut size={20} />
-            <span>Sign Out</span>
-          </button>
+            Sign Out
+          </Button>
         </SettingsSection>
 
       </div>

@@ -6,6 +6,7 @@ import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
 import { Settings, Database, ArrowRight, Download } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
@@ -74,22 +75,25 @@ const Habits: React.FC = () => {
           <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleExport}
             disabled={habits.length === 0}
-            className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="secondary"
+            size="sm"
             title="Export habits to CSV"
             aria-label="Export habits to CSV"
+            leftIcon={<Download size={16} />}
           >
-            <Download size={16} />
             <span className="hidden sm:inline">Export</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setIsWizardOpen(true)}
-            className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
+            variant="primary"
+            size="sm"
+            leftIcon={<Settings size={16} />}
           >
-            <Settings size={16} /> Manage
-          </button>
+            Manage
+          </Button>
         </div>
       </div>
 
