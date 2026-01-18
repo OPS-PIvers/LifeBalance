@@ -28,6 +28,23 @@ vi.mock('@google/genai', () => {
   };
 });
 
+// Mock Firebase to avoid network calls in tests
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn(),
+  getDoc: vi.fn(() => Promise.resolve({
+    exists: () => true,
+    data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } })
+  })),
+  setDoc: vi.fn(() => Promise.resolve()),
+  updateDoc: vi.fn(() => Promise.resolve()),
+  increment: vi.fn((n) => n),
+  serverTimestamp: vi.fn()
+}));
+
+vi.mock('@/firebase.config', () => ({
+  db: {}
+}));
+
 describe('geminiService - Meal Suggestion', () => {
   beforeAll(() => {
     process.env.VITE_GEMINI_API_KEY = 'test-api-key';

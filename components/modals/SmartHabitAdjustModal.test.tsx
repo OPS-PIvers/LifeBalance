@@ -28,6 +28,7 @@ describe('SmartHabitAdjustModal', () => {
     (useHousehold as Mock).mockReturnValue({
       habits: mockHabits,
       updateHabit: mockUpdateHabit,
+      householdId: 'test-household',
     });
   });
 
