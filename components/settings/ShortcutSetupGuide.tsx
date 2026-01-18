@@ -147,7 +147,7 @@ const ShortcutSetupGuide: React.FC = () => {
                 {/* Main setup */}
                 <div>
                   <p className="text-xs font-semibold text-brand-700 mb-2">
-                    {example.preActions ? '2.' : '1.'} Add "Get Contents of URL":
+                    {example.preActions ? '2.' : '1.'} Add <strong>Get Contents of URL</strong>:
                   </p>
                   <div className="bg-white rounded-lg border border-brand-200 p-3 space-y-3">
                     {/* URL */}
@@ -194,7 +194,7 @@ const ShortcutSetupGuide: React.FC = () => {
 
                     {/* Request Body */}
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Request Body: tap "JSON", then "Add new field" for each:</p>
+                      <p className="text-xs text-gray-500 mb-1">Request Body: tap JSON, then + Add new field for each:</p>
                       <div className="space-y-1">
                         {example.fields.map((field, i) => (
                           <div key={i} className="flex gap-2 text-xs items-center">
