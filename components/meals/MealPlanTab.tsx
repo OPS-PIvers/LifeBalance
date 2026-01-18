@@ -116,6 +116,7 @@ const MealPlanTab: React.FC = () => {
     cheap: false,
     quick: false,
     new: false,
+    prioritizeExpiring: false,
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -387,6 +388,7 @@ const MealPlanTab: React.FC = () => {
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
+            prioritizeExpiring: aiOptions.prioritizeExpiring,
             pantryItems: pantry,
             previousMeals: meals
         });
@@ -952,6 +954,19 @@ const MealPlanTab: React.FC = () => {
                       </label>
 
                       <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
+                          <input
+                              type="checkbox"
+                              checked={aiOptions.prioritizeExpiring}
+                              onChange={e => setAiOptions({...aiOptions, prioritizeExpiring: e.target.checked})}
+                              className="rounded text-purple-600 focus:ring-purple-500"
+                          />
+                          <div>
+                              <div className="font-medium">Reduce Waste</div>
+                              <div className="text-xs text-gray-500">Prioritize expiring items</div>
+                          </div>
+                      </label>
+
+                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                           <input
                               type="checkbox"
                               checked={aiOptions.cheap}

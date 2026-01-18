@@ -7,6 +7,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
+import { differenceInDays, parseISO, startOfDay } from 'date-fns';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -308,6 +309,30 @@ const PantryTab: React.FC = () => {
           </div>
           <div className="divide-y divide-gray-100">
             {(items as PantryItem[]).map(item => {
+              // Expiry Logic
+              let expiryBadge = null;
+              if (item.expiryDate) {
+                const today = startOfDay(new Date());
+                const expiry = parseISO(item.expiryDate);
+                const daysLeft = differenceInDays(expiry, today);
+
+                if (daysLeft < 0) {
+                  expiryBadge = (
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-red-100 text-red-700 border border-red-200">
+                      Expired
+                    </span>
+                  );
+                } else if (daysLeft <= 3) {
+                  expiryBadge = (
+                    <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-orange-100 text-orange-700 border border-orange-200">
+                      Expiring Soon
+                    </span>
+                  );
+                } else {
+                  expiryBadge = <span className="ml-2 text-gray-400 text-xs">Exp: {item.expiryDate}</span>;
+                }
+              }
+
               const isSelected = selectedIds.has(item.id);
               return (
               <div
@@ -333,10 +358,12 @@ const PantryTab: React.FC = () => {
                      </div>
                   )}
                   <div>
-                    <div className="font-medium text-gray-900">{item.name}</div>
+                    <div className="font-medium text-gray-900 flex items-center">
+                      {item.name}
+                      {expiryBadge}
+                    </div>
                     <div className="text-sm text-gray-500">
                       {item.quantity}
-                      {item.expiryDate && <span className="ml-2 text-orange-600 text-xs">Exp: {item.expiryDate}</span>}
                     </div>
                   </div>
                 </div>
@@ -352,7 +379,8 @@ const PantryTab: React.FC = () => {
                   </div>
                 )}
               </div>
-            )})}
+            );
+            })}
           </div>
         </div>
       ))}
