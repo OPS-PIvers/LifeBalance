@@ -9,3 +9,5 @@
 ## 2026-01-17 - Unified Calendar Agenda **Discovery:** The `BudgetCalendar` component is the application's primary temporal view but was restricted to financial data, while `ToDos` lacked any calendar visualization. **Opportunity:** By injecting `todos` into the existing `BudgetCalendar` logic, we unlocked a "Daily Agenda" view that contextualizes tasks alongside financial events without creating a new page or complex component.
 
 ## 2026-01-17 - Meals Page Unification **Discovery:** The `MealsPage` lacked the Shopping List tab despite `ShoppingListTab` component being fully implemented and `AGENTS.md` describing it as part of the Meals system. **Opportunity:** Unified the Meals workflow by adding the missing Shopping List tab to `MealsPage`, creating a seamless Pantry -> Meal Plan -> Shopping List loop.
+
+## 2026-02-18 - Batch Pantry Actions **Discovery:** Users scanning receipts often need to clear multiple items or restock in bulk, but the UI forced one-by-one actions. **Opportunity:** Implemented "Batch Selection Mode" in `PantryTab`, reusing the `Promise.allSettled` pattern from `TransactionMasterList` to enable bulk Delete and Restock operations.

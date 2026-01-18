@@ -25,6 +25,10 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
         date: '2023-01-01',
       }
     ],
+    buckets: [
+      { id: 'b1', limit: 1000, name: 'Groceries' }
+    ],
+    currentPeriodId: '2023-01-01'
   }),
 }));
 
@@ -87,15 +91,15 @@ describe('AnalyticsModal', () => {
   it('switches tabs', () => {
     render(<AnalyticsModal isOpen={true} onClose={() => {}} />);
 
-    // Default is overview
+    // Default is Pulse
     expect(screen.getByText('Points This Week')).toBeInTheDocument();
 
-    // Switch to Habits
-    fireEvent.click(screen.getByText('habits'));
-    expect(screen.getByText('Consistency Heatmap')).toBeInTheDocument();
+    // Switch to Behavior
+    fireEvent.click(screen.getByText('Behavior'));
+    expect(screen.getByText('Consistency Heatmap (90 Days)')).toBeInTheDocument();
 
-    // Switch to Spending
-    fireEvent.click(screen.getByText('spending'));
-    expect(screen.getByText('Income vs Expense (6 Months)')).toBeInTheDocument();
+    // Switch to Wallet
+    fireEvent.click(screen.getByText('Wallet'));
+    expect(screen.getByText('Budget Burn-Down')).toBeInTheDocument();
   });
 });

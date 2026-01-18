@@ -249,8 +249,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
   const primaryYearlyGoal = activeYearlyGoals[0] || null;
   const safeToSpend = useMemo(
-    () => calculateSafeToSpend(accounts, calendarItems, buckets, transactions, currentPeriodId),
-    [accounts, calendarItems, buckets, transactions, currentPeriodId]
+    () => calculateSafeToSpend(accounts, calendarItems, buckets, currentPeriodId),
+    [accounts, calendarItems, buckets, currentPeriodId]
   );
   const dailyPoints = householdSettings?.points?.daily || 0;
   const weeklyPoints = householdSettings?.points?.weekly || 0;
@@ -2117,7 +2117,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const addPantryItem = async (item: Omit<PantryItem, 'id'>) => {
     if (!householdId || !user) return;
     try {
-      const sanitizedItem = sanitizeFirestoreData(item);
+      // Default purchaseDate to today if not present
+      const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
+      const itemWithDate = { ...item, purchaseDate };
+
+      const sanitizedItem = sanitizeFirestoreData(itemWithDate);
       await addDoc(collection(db, `households/${householdId}/pantry`), {
         ...sanitizedItem,
         createdAt: serverTimestamp(),
