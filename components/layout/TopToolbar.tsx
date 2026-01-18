@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
+import { Star, TrendingUp, User, AlertCircle, Sparkles } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useAuth } from '../../contexts/AuthContext';
 import RewardsModal from '../modals/RewardsModal';
@@ -8,7 +8,11 @@ import SafeToSpendModal from '../modals/SafeToSpendModal';
 import FeedbackModal from '../modals/FeedbackModal';
 import ProfileMenu from './ProfileMenu';
 
-const TopToolbar: React.FC = () => {
+interface TopToolbarProps {
+  onOpenHorizon?: () => void;
+}
+
+const TopToolbar: React.FC<TopToolbarProps> = ({ onOpenHorizon }) => {
   const { safeToSpend, dailyPoints, weeklyPoints } = useHousehold();
   const { currentUser } = useAuth();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
@@ -42,6 +46,16 @@ const TopToolbar: React.FC = () => {
 
           {/* Right Container: Points Cluster + Profile */}
           <div className="flex items-center gap-3">
+            {onOpenHorizon && (
+              <button
+                onClick={onOpenHorizon}
+                className="p-1.5 bg-brand-700 text-brand-200 hover:text-white hover:bg-brand-600 rounded-full transition-colors border border-brand-600 shadow-sm"
+                aria-label="Open Horizon Command"
+              >
+                <Sparkles size={16} />
+              </button>
+            )}
+
             <button
               onClick={() => setIsFeedbackOpen(true)}
               className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
