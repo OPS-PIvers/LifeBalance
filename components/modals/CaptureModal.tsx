@@ -2,11 +2,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown
+  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown,
+  Sparkles, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { analyzeReceipt, parseBankStatement, ReceiptData } from '../../services/geminiService';
+import { analyzeReceipt, parseBankStatement, parseMagicAction, ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
@@ -78,6 +79,57 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [shoppingCategory, setShoppingCategory] = useState('Uncategorized');
   const [shoppingQuantity, setShoppingQuantity] = useState('');
   const [shoppingStore, setShoppingStore] = useState('');
+
+  // --- Magic Action State ---
+  const [magicInput, setMagicInput] = useState('');
+  const [magicLoading, setMagicLoading] = useState(false);
+
+  const handleMagicSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!magicInput.trim()) return;
+
+    setMagicLoading(true);
+    try {
+      const context = {
+        categories: dynamicCategories,
+        groceryCategories: GROCERY_CATEGORIES,
+        todayDate: getLocalDateString()
+      };
+      const result = await parseMagicAction(magicInput, context);
+
+      if (result.type === 'transaction') {
+        setActiveTab('transaction');
+        setView('manual');
+        if (result.data.amount) setAmount(result.data.amount.toString());
+        if (result.data.merchant) setMerchant(result.data.merchant);
+        if (result.data.category) setCategory(matchCategory(result.data.category));
+        if (result.data.date) setTransactionDate(result.data.date);
+        toast.success("Transaction details found!");
+      } else if (result.type === 'todo') {
+        setActiveTab('todo');
+        if (result.data.text) setTodoText(result.data.text);
+        if (result.data.completeByDate) setTodoDate(result.data.completeByDate);
+        toast.success("Task details found!");
+      } else if (result.type === 'shopping') {
+        setActiveTab('shopping');
+        if (result.data.item) setShoppingName(result.data.item);
+        if (result.data.quantity) setShoppingQuantity(result.data.quantity);
+        if (result.data.category && (GROCERY_CATEGORIES as readonly string[]).includes(result.data.category)) {
+          setShoppingCategory(result.data.category as any);
+        }
+        if (result.data.store) setShoppingStore(result.data.store);
+        toast.success("Item details found!");
+      } else {
+        toast.error("Couldn't understand that. Try being more specific.");
+      }
+      setMagicInput('');
+    } catch (err) {
+      console.error(err);
+      toast.error("Magic action failed.");
+    } finally {
+      setMagicLoading(false);
+    }
+  };
 
   // Initialize Defaults when modal opens
   useEffect(() => {
@@ -517,6 +569,36 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
               {/* Menu View */}
               {view === 'menu' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+                  {/* Magic Input */}
+                  <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
+                    <div className="bg-white rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles size={16} className="text-violet-600 animate-pulse" />
+                        <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
+                      </div>
+                      <form onSubmit={handleMagicSubmit} className="flex gap-2">
+                        <input
+                          type="text"
+                          aria-label="Magic action input"
+                          value={magicInput}
+                          onChange={(e) => setMagicInput(e.target.value)}
+                          placeholder="Spent $20 on Pizza..."
+                          className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
+                          disabled={magicLoading}
+                        />
+                        <button
+                          type="submit"
+                          aria-label="Submit magic action"
+                          disabled={!magicInput.trim() || magicLoading}
+                          className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                        >
+                          {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
                   <button
                     onClick={startCamera}
                     className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
