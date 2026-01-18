@@ -33,3 +33,8 @@
 **Vulnerability:** User input exported to CSV was not sanitized, allowing special characters (`=`, `+`, `-`, `@`) to be interpreted as formulas by spreadsheet software (Excel, Sheets), potentially leading to command execution or data exfiltration.
 **Learning:** Export functionality often trusts data context (assuming it's just "text"), but receiving applications (like Excel) aggressively interpret cell contents. Quotes `""` alone do not prevent formula execution.
 **Prevention:** Sanitize CSV exports by prepending a single quote `'` to any field starting with dangerous characters (`=`, `+`, `-`, `@`) to force the spreadsheet to treat the cell as a string literal.
+
+## 2026-01-18 - [IDOR] Beta Tester Enumeration
+**Vulnerability:** The `beta_testers` collection allowed `read` access to any authenticated user (`allow read: if isAuthenticated();`). This permitted any user to dump the entire list of beta testers, exposing their emails (Information Disclosure).
+**Learning:** `allow read` (which includes `list`) on a collection without resource-based conditions enables full enumeration. For user-specific data, rules must restrict access to the specific document owner.
+**Prevention:** Use `resource.data.email == request.auth.token.email` (or similar owner check) to enforce row-level security, ensuring users can only read their own data.

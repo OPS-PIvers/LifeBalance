@@ -142,8 +142,13 @@ service cloud.firestore {
     }
 
     // Beta Testers
-    match /beta_testers/{email} {
-      allow read: if isAuthenticated();
+    match /beta_testers/{docId} {
+      // 🛡️ SENTINEL SECURITY FIX: Prevent enumeration of all beta testers
+      // Only allow reading if the document belongs to the user (via email match) or if user is Admin.
+      allow read: if isAuthenticated() && (
+        resource.data.email == request.auth.token.email ||
+        request.auth.uid == "REPLACE_WITH_ADMIN_UID"
+      );
       allow write: if request.auth.uid == "REPLACE_WITH_ADMIN_UID"; // TODO: Replace with actual Admin UID
     }
 
