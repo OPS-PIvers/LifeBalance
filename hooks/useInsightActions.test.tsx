@@ -168,7 +168,7 @@ describe('useInsightActions', () => {
     // Suppress console.error for this test as we expect it
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-     (HouseholdContext.useHousehold as Mock).mockReturnValue({
+    (HouseholdContext.useHousehold as Mock).mockReturnValue({
       updateBucketLimit: mockUpdateBucketLimit,
       addHabit: mockAddHabit,
       addToDo: vi.fn().mockRejectedValue(new Error('Network error')),
