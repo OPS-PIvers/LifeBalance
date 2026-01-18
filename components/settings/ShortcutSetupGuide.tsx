@@ -95,21 +95,21 @@ const ShortcutSetupGuide: React.FC = () => {
       endpoint: 'expense',
       fields: [
         { key: 'amount', value: 'Amount', valueType: 'Number', isVariable: true },
-        { key: 'merchant', value: 'Name', valueType: 'Text', isVariable: true },
+        { key: 'merchant', value: 'Merchant', valueType: 'Text', isVariable: true },
       ],
       preActions: [
-        'Open Shortcuts → Automation tab (bottom)',
-        'Tap + → Create Personal Automation',
-        'Scroll down, tap "Transaction"',
-        'Select your card(s) and tap Next',
+        'Open Shortcuts app → tap Automation tab (bottom center)',
+        'Tap + in the top right corner',
+        'Scroll down and tap Transaction',
+        'Choose your Apple Pay card(s), then tap Next',
       ],
       postActions: [
-        'Tap Done (no need to rename automations)',
-        'IMPORTANT: Turn OFF "Ask Before Running"',
+        'Tap Done in the top right',
+        'IMPORTANT: When prompted, choose "Run Immediately" (not "Ask Before Running")',
         'Expenses auto-log as pending - review them in the Budget tab',
       ],
       isAutomation: true,
-      automationNote: 'The Transaction trigger automatically provides Amount and Merchant Name as variables - just select them when adding the body fields.',
+      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
     },
   ];
 
@@ -128,7 +128,7 @@ const ShortcutSetupGuide: React.FC = () => {
 
       {/* Shortcut Examples */}
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-brand-700">Step-by-Step Guides</h4>
+        <h4 className="text-sm font-semibold text-brand-700">Shortcuts &amp; Automations</h4>
 
         {examples.map((example) => (
           <div
