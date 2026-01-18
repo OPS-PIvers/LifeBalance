@@ -252,7 +252,7 @@ export const quickAddExpense = onRequest(
       return;
     }
 
-    const { householdId, permissions, keyCreatedBy } = validation;
+    const { householdId, permissions } = validation;
 
     // 2. Check permissions
     if (!permissions?.expenses) {
@@ -298,13 +298,13 @@ export const quickAddExpense = onRequest(
       // Calculate pay period (simplified - just use the transaction date)
       const payPeriodId = householdData?.lastPaycheckDate || transactionDate;
 
-      // 6. Create transaction document
+      // 6. Create transaction document as PENDING (for review)
       const transactionData = {
         amount,
         merchant: merchant.trim(),
         category,
         date: transactionDate,
-        status: "verified",
+        status: "pending",  // Pending for review, like receipt scanner
         isRecurring: false,
         source: "shortcut" as const,
         autoCategorized: false,
@@ -317,57 +317,22 @@ export const quickAddExpense = onRequest(
         .collection(`households/${householdId}/transactions`)
         .add(transactionData);
 
-      // 7. Deduct from checking account
-      const accountsSnapshot = await db
-        .collection(`households/${householdId}/accounts`)
-        .where("type", "==", "checking")
-        .limit(1)
-        .get();
+      // Note: Don't deduct from checking yet - that happens when user verifies the transaction
 
-      let newCheckingBalance: number | null = null;
-
-      if (!accountsSnapshot.empty) {
-        const checkingAccount = accountsSnapshot.docs[0];
-        const currentBalance = checkingAccount.data().balance || 0;
-        newCheckingBalance = currentBalance - amount;
-
-        await checkingAccount.ref.update({
-          balance: newCheckingBalance,
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      // 8. Create todo for review (action queue)
-      const today = format(new Date(), "yyyy-MM-dd");
-      const todoData = {
-        text: `Review expense: $${amount.toFixed(2)} at ${merchant}`,
-        completeByDate: today,
-        assignedTo: keyCreatedBy || "unassigned",
-        isCompleted: false,
-        createdBy: "shortcut-automation",
-        createdAt: new Date().toISOString(),
-        linkedTransactionId: transactionRef.id,
-        source: "shortcut",
-      };
-
-      await db
-        .collection(`households/${householdId}/todos`)
-        .add(todoData);
-
-      // 9. Log API call
+      // 7. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
 
-      // 10. Return success
+      // 8. Return success
       jsonResponse(res, 200, {
         success: true,
-        message: `Expense added: $${amount.toFixed(2)} at ${merchant} (added to action queue)`,
+        message: `Expense added: $${amount.toFixed(2)} at ${merchant} (pending review)`,
         data: {
           transactionId: transactionRef.id,
           amount,
           merchant,
           category,
           date: transactionDate,
-          newCheckingBalance,
+          status: "pending",
         },
       });
     } catch (error) {

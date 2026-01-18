@@ -106,7 +106,7 @@ const ShortcutSetupGuide: React.FC = () => {
       postActions: [
         'Tap Done (no need to rename automations)',
         'IMPORTANT: Turn OFF "Ask Before Running"',
-        'Expenses auto-log and appear in your Action Queue for review',
+        'Expenses auto-log as pending - review them in the Budget tab',
       ],
       isAutomation: true,
       automationNote: 'The Transaction trigger automatically provides Amount and Merchant Name as variables - just select them when adding the body fields.',
@@ -122,7 +122,7 @@ const ShortcutSetupGuide: React.FC = () => {
           Generate an API key above, then follow these step-by-step guides.
         </p>
         <p className="text-xs text-blue-600 mt-2">
-          All expenses added via Shortcuts appear in your Action Queue for review.
+          Expenses added via Shortcuts are marked as pending for review in the Budget tab.
         </p>
       </div>
 
