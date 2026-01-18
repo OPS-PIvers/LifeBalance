@@ -61,6 +61,7 @@ export interface GroceryItem {
   quantity?: string;
   category: string;
   store?: string;
+  expiryDate?: string;
 }
 
 /**
@@ -321,6 +322,7 @@ export interface MealSuggestionRequest {
   cheap: boolean;
   quick: boolean;
   new: boolean;
+  prioritizeExpiring?: boolean;
   pantryItems: PantryItem[];
   previousMeals: Meal[];
 }
@@ -346,11 +348,15 @@ export const suggestMeal = async (
 ): Promise<MealSuggestionResponse> => {
   try {
     // Include IDs for pantry items so AI can match them
-    const pantryList = options.pantryItems.map(p => `ID:${p.id} - ${p.name} (${p.quantity})`).join(', ');
+    const pantryList = options.pantryItems.map(p => {
+      const expiry = p.expiryDate ? ` [Exp: ${p.expiryDate}]` : '';
+      return `ID:${p.id} - ${p.name} (${p.quantity})${expiry}`;
+    }).join(', ');
     const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
+    if (options.prioritizeExpiring) prompt += `- MUST prioritize using items that are expiring soon (marked with [Exp: YYYY-MM-DD]).\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
@@ -421,6 +427,7 @@ export const parseGroceryReceipt = async (
                 2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
                 3. Extract and Standardize 'quantity' if specified (e.g., "2" -> "2 ct", "1 lb" -> "1 lb"), otherwise "1".
                 4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
+                5. Estimate a logical 'expiryDate' (YYYY-MM-DD) based on the item type (e.g., Produce ~1 week, Dairy ~2 weeks, Canned ~2 years) from today.
 
                 Ignore taxes, subtotal, total, and non-product lines.
                 Return a JSON array of items.`;
@@ -435,7 +442,8 @@ export const parseGroceryReceipt = async (
             name: { type: Type.STRING },
             quantity: { type: Type.STRING },
             category: { type: Type.STRING },
-            store: { type: Type.STRING }
+            store: { type: Type.STRING },
+            expiryDate: { type: Type.STRING, nullable: true }
           },
           required: ["name", "quantity", "category"]
         }
@@ -702,5 +710,100 @@ export const parseMagicAction = async (
     console.error("Gemini Magic Action Parse Error:", error);
     // Fallback or rethrow? Let's return unknown to be safe.
     return { type: 'unknown', confidence: 0, data: {} };
+export interface HabitPointAdjustmentSuggestion {
+  habitId: string;
+  habitTitle: string;
+  currentPoints: number;
+  suggestedPoints: number;
+  reasoning: string;
+}
+
+/**
+ * Analyzes habits and suggests point adjustments based on performance.
+ * @param habits - List of habits to analyze
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const analyzeHabitPoints = async (
+  habits: Habit[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<HabitPointAdjustmentSuggestion[]> => {
+  if (habits.length === 0) return [];
+
+  try {
+    // 1. Anonymize and Prepare Data
+    // We only send relevant stats, not PII.
+    const habitStats = habits.map(h => {
+      return {
+        id: h.id,
+        title: h.title, // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
+        basePoints: h.basePoints,
+        period: h.period,
+        streakDays: h.streakDays,
+        totalCount: h.totalCount,
+        type: h.type
+      };
+    });
+
+    const habitsJson = JSON.stringify(habitStats);
+
+    const prompt = `
+      You are a habit coach optimization engine. I will provide a list of habits with their current point values and performance stats.
+      Your goal is to suggest point adjustments to make the system more dynamic and effective.
+
+      Principles:
+      1. **Motivation:** If a habit is struggling (low streak/count), maybe increase points slightly to incentivize it.
+      2. **Fairness:** If a habit is "too easy" (very high streak, always done), maybe reduce points if they seem disproportionately high, OR keep them if it's a core consistency habit.
+      3. **Balance:** Points should generally range from 1 to 50 for daily habits.
+      4. **Meaningful Change:** Only suggest changes for 5-10 habits that really need it. Do not suggest changes if the current points seem fine.
+
+      Analyze the following habits:
+      ${habitsJson}
+
+      Return a JSON array of objects with these fields:
+      - habitId: (string) matches input id
+      - habitTitle: (string) matches input title
+      - currentPoints: (number) matches input basePoints
+      - suggestedPoints: (number) the new recommended value
+      - reasoning: (string) brief, encouraging explanation for the change (e.g., "You're crushing this! Dropping points slightly to balance the economy." or "Struggling here? Let's bump the reward to get you back on track!")
+    `;
+
+    const rawSuggestions = await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
+      prompt,
+      {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            habitId: { type: Type.STRING },
+            habitTitle: { type: Type.STRING },
+            currentPoints: { type: Type.NUMBER },
+            suggestedPoints: { type: Type.NUMBER },
+            reasoning: { type: Type.STRING },
+          },
+          required: ["habitId", "habitTitle", "currentPoints", "suggestedPoints", "reasoning"]
+        }
+      },
+      _aiClient
+    );
+
+    // 2. Validate and Post-process Results
+    return rawSuggestions
+      .filter(suggestion => {
+        // Validate habit exists
+        const habit = habits.find(h => h.id === suggestion.habitId);
+        return !!habit;
+      })
+      .map(suggestion => ({
+        ...suggestion,
+        // Clamp points to 1-100
+        suggestedPoints: Math.max(1, Math.min(100, Math.round(suggestion.suggestedPoints))),
+        // Sanitize and limit reasoning length
+        reasoning: sanitizeForPrompt(suggestion.reasoning).slice(0, 200)
+      }))
+      .slice(0, 10); // Limit to max 10 suggestions
+
+  } catch (error) {
+    console.error("Gemini Habit Analysis Error:", error);
+    throw new Error("Failed to analyze habits.");
   }
 };

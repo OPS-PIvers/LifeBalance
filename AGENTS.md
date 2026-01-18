@@ -342,3 +342,7 @@ Before submitting ANY change, you must verify:
 - **❌ Sequential `await` in loops**: Use `Promise.all()` or `Promise.allSettled()` for concurrent operations, especially when adding multiple items from AI analysis.
 - **❌ Writing `id` field to Firestore**: Use object destructuring `const { id, ...data } = item` before spreading in `updateDoc()` calls.
 - **❌ Forgetting duplicate prevention**: When adding items to pantry/shopping list, check for existing items using normalized name/category matching.
+
+## 9. Agent Journals
+
+Regardless of the capitalization in the user's prompt (e.g., .Jules, .jules, Jules), always use the .jules directory for reading and writing agent journals. Consolidate all agent logs there.

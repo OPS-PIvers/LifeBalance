@@ -1,4 +1,4 @@
-import { Account, CalendarItem, BudgetBucket, Transaction } from '@/types/schema';
+import { Account, CalendarItem, BudgetBucket } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
 // import { calculateBucketSpent } from './bucketSpentCalculator';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
@@ -46,7 +46,6 @@ export function findNextPaycheckDate(
  * @param accounts - All household accounts
  * @param calendarItems - All calendar items (bills/income)
  * @param buckets - All budget buckets (for bill matching only)
- * @param transactions - All transactions (unused, kept for compatibility)
  * @param currentPeriodId - Last paycheck date (YYYY-MM-DD), or empty string to return full checking balance
  * @returns The safe-to-spend amount
  */
@@ -54,7 +53,6 @@ export const calculateSafeToSpend = (
   accounts: Account[],
   calendarItems: CalendarItem[],
   buckets: BudgetBucket[],
-  transactions: Transaction[],
   currentPeriodId: string = ''
 ): number => {
   // 1. Available Checking Balance (Assets)
@@ -84,14 +82,20 @@ export const calculateSafeToSpend = (
   // Expand recurring items to ensure all instances in the period are counted
   const expandedItems = expandCalendarItems(calendarItems, paycheckA, rangeEndDate);
 
+  // ⚡ Bolt Optimization: Pre-calculate lowercased bucket names
+  // Prevents calling toLowerCase() N * M times inside the loop
+  const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
+
   const unpaidBills = expandedItems
     .filter(item => {
       const itemDate = parseISO(item.date);
+      const itemTitleLower = item.title.toLowerCase();
 
       // Exclude bills covered by buckets to avoid double-counting
-      const isCoveredByBucket = buckets.some(b =>
-        item.title.toLowerCase().includes(b.name.toLowerCase()) ||
-        b.name.toLowerCase().includes(item.title.toLowerCase())
+      // Optimized check using pre-calculated bucket names
+      const isCoveredByBucket = normalizedBuckets.some(bucketName =>
+        itemTitleLower.includes(bucketName) ||
+        bucketName.includes(itemTitleLower)
       );
 
       return (

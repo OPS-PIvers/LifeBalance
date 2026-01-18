@@ -5,8 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Settings, Database, ArrowRight, Download } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
+import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -15,6 +17,7 @@ const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useHousehold();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
 
   // Check if there are habits that need migration
   const habitsNeedingMigration = habits.filter(
@@ -74,22 +77,35 @@ const Habits: React.FC = () => {
           <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
         </div>
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={handleExport}
             disabled={habits.length === 0}
-            className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="secondary"
+            size="sm"
             title="Export habits to CSV"
             aria-label="Export habits to CSV"
+            leftIcon={<Download size={16} />}
           >
-            <Download size={16} />
             <span className="hidden sm:inline">Export</span>
-          </button>
-          <button
-            onClick={() => setIsWizardOpen(true)}
-            className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
+          </Button>
+          <Button
+            onClick={() => setIsSmartAdjustOpen(true)}
+            disabled={habits.length === 0}
+            variant="secondary"
+            size="sm"
+            leftIcon={<Sparkles size={16} />}
+            title="Smart Adjust"
           >
-            <Settings size={16} /> Manage
-          </button>
+            <span className="hidden sm:inline">Adjust</span>
+          </Button>
+          <Button
+            onClick={() => setIsWizardOpen(true)}
+            variant="primary"
+            size="sm"
+            leftIcon={<Settings size={16} />}
+          >
+            Manage
+          </Button>
         </div>
       </div>
 
@@ -142,6 +158,7 @@ const Habits: React.FC = () => {
       </div>
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
+      <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
     </div>
   );
 };
