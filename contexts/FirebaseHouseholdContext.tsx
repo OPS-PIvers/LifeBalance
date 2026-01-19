@@ -706,12 +706,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // This ensures points accurately reflect completed habits, fixing any desync issues
   // ALWAYS recalculates and updates if values don't match - no complex conditional logic
   useEffect(() => {
-    if (!householdId || !householdSettings || habits.length === 0) return;
+    if (!householdId || !householdSettings?.points || habits.length === 0) return;
 
     const syncHouseholdPoints = async () => {
       const now = new Date();
       const today = format(now, 'yyyy-MM-dd');
-      const currentPoints = householdSettings.points || { daily: 0, weekly: 0, total: 0 };
+      const currentPoints = householdSettings.points;
 
       // Calculate what points SHOULD be based on actual habit completions
       const correctDailyPoints = calculatePointsForDate(habits, today);
@@ -762,8 +762,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     syncHouseholdPoints();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [householdId, householdSettings?.points, habits]); // Only watch points property to avoid unnecessary recalculations
+  }, [householdId, householdSettings?.points, habits]);
 
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
