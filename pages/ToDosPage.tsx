@@ -347,7 +347,7 @@ const ToDosPage: React.FC = () => {
           />
 
           <fieldset>
-            <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+            <legend className="block text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">
               Assign To
             </legend>
             {members.length === 0 ? (
