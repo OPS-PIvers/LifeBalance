@@ -201,15 +201,15 @@ const ShortcutSetupGuide: React.FC = () => {
                     </li>
 
                     <li>
-                      <strong>Tap "Show More"</strong> to reveal advanced options
+                      <strong>Tap &quot;Show More&quot;</strong> to reveal advanced options
                     </li>
 
                     <li>
-                      <strong>Method:</strong> Tap "GET" → select "POST"
+                      <strong>Method:</strong> Tap &quot;GET&quot; → select &quot;POST&quot;
                     </li>
 
                     <li>
-                      <strong>Add Headers</strong> (tap "Add new header" for each):
+                      <strong>Add Headers</strong> (tap &quot;Add new header&quot; for each):
                       <div className="mt-2 space-y-2 ml-4">
                         <div className="bg-gray-50 rounded p-2 border">
                           <div className="grid grid-cols-2 gap-2 text-xs">
@@ -255,7 +255,7 @@ const ShortcutSetupGuide: React.FC = () => {
                     </li>
 
                     <li>
-                      <strong>Request Body:</strong> Tap "JSON" → tap "Add new field" for each field below:
+                      <strong>Request Body:</strong> Tap &quot;JSON&quot; → tap &quot;Add new field&quot; for each field below:
                       <div className="mt-2 space-y-2 ml-4">
                         {example.fields.map((field, i) => (
                           <div key={i} className="bg-gray-50 rounded p-2 border">
@@ -279,7 +279,7 @@ const ShortcutSetupGuide: React.FC = () => {
                                 <span className="text-gray-500">Value:</span>
                                 {field.isVariable ? (
                                   <span className="ml-1 bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
-                                    Tap value field → "Select Variable" → choose <strong>{field.value}</strong> (blue pill)
+                                    Tap value field → &quot;Select Variable&quot; → choose <strong>{field.value}</strong> (blue pill)
                                   </span>
                                 ) : (
                                   <button
@@ -328,7 +328,7 @@ const ShortcutSetupGuide: React.FC = () => {
               Long-press Lock Screen → Customize → tap a button to swap it.
             </p>
             <p className="text-xs text-purple-600 mt-2">
-              With iOS 26's Gemini-powered Siri, voice commands are more accurate—try saying "Add milk and eggs to shopping list" for multi-item adds.
+              With iOS 26&apos;s Gemini-powered Siri, voice commands are more accurate—try saying &quot;Add milk and eggs to shopping list&quot; for multi-item adds.
             </p>
           </div>
         </div>
