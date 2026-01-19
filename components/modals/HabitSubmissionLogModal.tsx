@@ -184,6 +184,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
         <button
           onClick={onClose}
           className="ml-3 text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors flex-shrink-0"
+          aria-label="Close modal"
         >
           <X size={20} />
         </button>
@@ -512,6 +513,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             <button
               onClick={() => setEditingSubmission(null)}
               className="text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors"
+              aria-label="Close edit"
             >
               <X size={20} />
             </button>

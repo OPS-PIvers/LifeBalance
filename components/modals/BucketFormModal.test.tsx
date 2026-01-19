@@ -39,7 +39,7 @@ describe('BucketFormModal', () => {
 
   it('calls onClose when close button is clicked', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
-    const closeButton = screen.getByRole('button', { name: /x/i });
+    const closeButton = screen.getByRole('button', { name: /close modal/i });
     fireEvent.click(closeButton);
     expect(mockOnClose).toHaveBeenCalled();
   });

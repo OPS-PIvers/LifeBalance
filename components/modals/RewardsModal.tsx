@@ -28,6 +28,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
         <button
           onClick={onClose}
           className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors"
+          aria-label="Close modal"
         >
           <X size={20} />
         </button>

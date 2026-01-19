@@ -93,7 +93,11 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50 shrink-0">
         <h2 className="text-lg font-bold text-brand-800">Safe to Spend Breakdown</h2>
-        <button onClick={onClose} className="p-2 text-brand-400 hover:bg-brand-100 rounded-full">
+        <button
+          onClick={onClose}
+          className="p-2 text-brand-400 hover:bg-brand-100 rounded-full"
+          aria-label="Close modal"
+        >
           <X size={20} />
         </button>
       </div>
