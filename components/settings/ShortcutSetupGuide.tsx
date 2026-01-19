@@ -40,9 +40,9 @@ const ShortcutSetupGuide: React.FC = () => {
         { key: 'direction', value: 'up', valueType: 'Text' },
       ],
       postActions: [
-        'Search "Show Result" and add it',
-        'Tap the shortcut name at top, rename it (e.g., "Log Exercise")',
-        'Tap "Add to Home Screen" or "Add to Lock Screen" (iOS 18)',
+        'Add "Show Notification" → notification text will auto-populate from API response',
+        'Tap shortcut name at top → rename to "Log Exercise"',
+        'Tap ⋮ menu → choose "Add to Home Screen" or "Add to Lock Screen"',
       ],
     },
     {
@@ -57,15 +57,16 @@ const ShortcutSetupGuide: React.FC = () => {
         { key: 'category', value: 'Dining', valueType: 'Text' },
       ],
       preActions: [
-        'Search "Ask for Input" - set Type to Number, Prompt to "How much?"',
-        'Search "Set Variable" - name it "Amount"',
-        'Search "Ask for Input" again - set Type to Text, Prompt to "Where?"',
-        'Search "Set Variable" - name it "Merchant"',
+        'Add "Ask for Input" → tap Prompt field → type "How much did you spend?"',
+        'Tap "Text" → change to "Number" → tap Done',
+        'Add "Set Variable" → tap "Variable Name" → type "Amount"',
+        'Add "Ask for Input" again → tap Prompt field → type "Where did you spend it?"',
+        'Add "Set Variable" → tap "Variable Name" → type "Merchant"',
       ],
       postActions: [
-        'Search "Show Notification" and add it',
-        'Tap shortcut name, rename to "Log Expense"',
-        'In shortcut settings (i icon), enable "Show in Siri Suggestions"',
+        'Add "Show Notification" → notification will confirm expense logged',
+        'Tap shortcut name at top → rename to "Log Expense"',
+        'Tap ⓘ icon → toggle ON "Show in Share Sheet" and "Show in App"',
       ],
     },
     {
@@ -78,13 +79,13 @@ const ShortcutSetupGuide: React.FC = () => {
         { key: 'item', value: 'Item', valueType: 'Text', isVariable: true },
       ],
       preActions: [
-        'Search "Ask for Input" - set Type to Text, Prompt to "What do you need?"',
-        'Search "Set Variable" - name it "Item"',
+        'Add "Ask for Input" → tap Prompt field → type "What do you need?"',
+        'Add "Set Variable" → tap "Variable Name" → type "Item"',
       ],
       postActions: [
-        'Search "Show Notification" and add it',
-        'Tap shortcut name, rename to "Add to Shopping List"',
-        'In shortcut settings (i icon), enable "Show in Siri Suggestions"',
+        'Add "Show Notification" → notification will confirm item added',
+        'Tap shortcut name at top → rename to "Add to Shopping List"',
+        'Tap ⓘ icon → toggle ON "Show in Share Sheet" and "Show in App"',
       ],
     },
     {
@@ -183,114 +184,118 @@ const ShortcutSetupGuide: React.FC = () => {
                 {/* Main setup */}
                 <div>
                   <p className="text-xs font-semibold text-brand-700 mb-2">
-                    {example.preActions ? '2.' : '1.'} Add <strong>Get Contents of URL</strong>:
+                    {example.preActions ? '2.' : '1.'} Add <strong>Get Contents of URL</strong> action:
                   </p>
-                  <div className="bg-white rounded-lg border border-brand-200 p-3 space-y-3">
-                    {/* URL */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">URL (tap to copy):</p>
+                  <ol className="text-xs text-brand-600 space-y-3 list-decimal list-inside ml-2">
+                    <li>
+                      <strong>Paste the URL:</strong>
                       <button
                         onClick={() => copyToClipboard(getQuickAddEndpointUrl(example.endpoint), 'URL')}
-                        className="w-full flex items-center justify-between bg-gray-50 rounded px-2 py-1.5 text-left hover:bg-gray-100"
+                        className="mt-1 w-full flex items-center justify-between bg-gray-50 rounded px-2 py-1.5 text-left hover:bg-gray-100 border"
                       >
                         <code className="text-xs text-blue-600 break-all">
                           {getQuickAddEndpointUrl(example.endpoint)}
                         </code>
                         <Copy className="w-3 h-3 text-gray-400 flex-shrink-0 ml-2" />
                       </button>
-                    </div>
+                    </li>
 
-                    {/* Method */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Method:</p>
-                      <p className="text-xs font-mono bg-gray-50 rounded px-2 py-1">POST</p>
-                    </div>
+                    <li>
+                      <strong>Tap "Show More"</strong> to reveal advanced options
+                    </li>
 
-                    {/* Headers */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Headers (tap + Add new header twice):</p>
-                      <div className="space-y-2">
-                        <div className="bg-gray-50 rounded p-2">
-                          <div className="flex gap-2 text-xs items-center mb-1">
-                            <span className="text-gray-400 w-10">Key:</span>
-                            <button
-                              onClick={() => copyToClipboard('Authorization', 'Key')}
-                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
-                            >
-                              Authorization
-                            </button>
+                    <li>
+                      <strong>Method:</strong> Tap "GET" → select "POST"
+                    </li>
+
+                    <li>
+                      <strong>Add Headers</strong> (tap "Add new header" for each):
+                      <div className="mt-2 space-y-2 ml-4">
+                        <div className="bg-gray-50 rounded p-2 border">
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-500">Key:</span>
+                              <button
+                                onClick={() => copyToClipboard('Authorization', 'Key')}
+                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                              >
+                                Authorization
+                              </button>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Value:</span>
+                              <span className="ml-1 text-blue-600 font-mono">Bearer [API_KEY]</span>
+                            </div>
                           </div>
-                          <div className="flex gap-2 text-xs items-center">
-                            <span className="text-gray-400 w-10">Text:</span>
-                            <span className="bg-white border px-2 py-1 rounded font-mono text-blue-600">
-                              Bearer <span className="text-purple-600">[paste your API key]</span>
-                            </span>
-                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Replace [API_KEY] with your actual key from above</p>
                         </div>
-                        <div className="bg-gray-50 rounded p-2">
-                          <div className="flex gap-2 text-xs items-center mb-1">
-                            <span className="text-gray-400 w-10">Key:</span>
-                            <button
-                              onClick={() => copyToClipboard('Content-Type', 'Key')}
-                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
-                            >
-                              Content-Type
-                            </button>
-                          </div>
-                          <div className="flex gap-2 text-xs items-center">
-                            <span className="text-gray-400 w-10">Text:</span>
-                            <button
-                              onClick={() => copyToClipboard('application/json', 'Text')}
-                              className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
-                            >
-                              application/json
-                            </button>
+                        <div className="bg-gray-50 rounded p-2 border">
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-500">Key:</span>
+                              <button
+                                onClick={() => copyToClipboard('Content-Type', 'Key')}
+                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                              >
+                                Content-Type
+                              </button>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Value:</span>
+                              <button
+                                onClick={() => copyToClipboard('application/json', 'Value')}
+                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                              >
+                                application/json
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </li>
 
-                    {/* Request Body */}
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Request Body: tap JSON, then + Add new field for each:</p>
-                      <div className="space-y-2">
+                    <li>
+                      <strong>Request Body:</strong> Tap "JSON" → tap "Add new field" for each field below:
+                      <div className="mt-2 space-y-2 ml-4">
                         {example.fields.map((field, i) => (
-                          <div key={i} className="bg-gray-50 rounded p-2">
-                            <div className="flex gap-2 text-xs items-center mb-1">
-                              <span className="text-gray-400 w-10">Key:</span>
-                              <button
-                                onClick={() => copyToClipboard(field.key, 'Key')}
-                                className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
-                              >
-                                {field.key}
-                              </button>
-                            </div>
-                            <div className="flex gap-2 text-xs items-center mb-1">
-                              <span className="text-gray-400 w-10">Type:</span>
-                              <span className="bg-gray-200 px-2 py-1 rounded font-medium">
-                                {field.valueType}
-                              </span>
-                            </div>
-                            <div className="flex gap-2 text-xs items-center">
-                              <span className="text-gray-400 w-10">Value:</span>
-                              {field.isVariable ? (
-                                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                  Tap field → Select Variable → {field.value}
-                                </span>
-                              ) : (
+                          <div key={i} className="bg-gray-50 rounded p-2 border">
+                            <div className="text-xs space-y-1">
+                              <div>
+                                <span className="text-gray-500">Key:</span>
                                 <button
-                                  onClick={() => copyToClipboard(field.value, 'Value')}
-                                  className="bg-white border px-2 py-1 rounded font-mono hover:bg-gray-100"
+                                  onClick={() => copyToClipboard(field.key, 'Key')}
+                                  className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
                                 >
-                                  {field.value}
+                                  {field.key}
                                 </button>
-                              )}
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Type:</span>
+                                <span className="ml-1 bg-gray-200 px-2 py-0.5 rounded font-medium">
+                                  {field.valueType}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Value:</span>
+                                {field.isVariable ? (
+                                  <span className="ml-1 bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                                    Tap value field → "Select Variable" → choose <strong>{field.value}</strong> (blue pill)
+                                  </span>
+                                ) : (
+                                  <button
+                                    onClick={() => copyToClipboard(field.value, 'Value')}
+                                    className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                  >
+                                    {field.value}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </div>
-                  </div>
+                    </li>
+                  </ol>
                 </div>
 
                 {/* Post actions */}
@@ -312,15 +317,18 @@ const ShortcutSetupGuide: React.FC = () => {
         ))}
       </div>
 
-      {/* iOS 18 Lock Screen Feature */}
+      {/* iOS Lock Screen Feature */}
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-3">
         <div className="flex items-start gap-2">
           <Smartphone className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
           <div>
-            <h4 className="font-semibold text-purple-800">iOS 18 Lock Screen</h4>
+            <h4 className="font-semibold text-purple-800">iOS Lock Screen Shortcuts</h4>
             <p className="text-sm text-purple-700 mt-1">
               Replace the flashlight or camera button with your shortcut!
               Long-press Lock Screen → Customize → tap a button to swap it.
+            </p>
+            <p className="text-xs text-purple-600 mt-2">
+              With iOS 26's Gemini-powered Siri, voice commands are more accurate—try saying "Add milk and eggs to shopping list" for multi-item adds.
             </p>
           </div>
         </div>
