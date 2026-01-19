@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare } from 'lucide-react';
 import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
+import { Modal } from '@/components/ui/Modal';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import toast from 'react-hot-toast';
 
@@ -55,7 +56,20 @@ const ShoppingListTab: React.FC = () => {
   // Filter State
   const [filterStoreId, setFilterStoreId] = useState<string>('all');
 
+  // Batch Mode State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
+
+  // Clear selection when mode is toggled off
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [isSelectionMode]);
 
   // Use the shared grocery optimizer hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -210,13 +224,92 @@ const ShoppingListTab: React.FC = () => {
   // Sort categories alphabetically or custom order
   const sortedCategories = Object.keys(groupedItems).sort();
 
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    // Only select filtered items
+    const filteredIds = filteredItems.map(i => i.id);
+    if (selectedIds.size === filteredIds.length && filteredIds.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredIds));
+    }
+  };
+
+  const handleBatchPurchase = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      // Filter for items that are NOT yet purchased, to avoid un-purchasing them if we naively toggle
+      // However, toggleShoppingItemPurchased logic is a toggle.
+      // So we must check the current state of each item.
+      const promises = Array.from(selectedIds).map(async (id) => {
+        const item = shoppingList.find(i => i.id === id);
+        if (item && !item.isPurchased) {
+            return toggleShoppingItemPurchased(id);
+        }
+        return Promise.resolve();
+      });
+
+      const results = await Promise.allSettled(promises);
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+
+      if (successful > 0) {
+        toast.success(`Marked ${successful} items as purchased`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch purchase failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => deleteShoppingItem(id));
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Deleted ${selectedIds.size} items`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchDeleteConfirm(false);
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-20">
         <div className="flex justify-between items-center">
              {/* Filter Bar */}
-            {stores.length > 0 && (
+            {!isSelectionMode && stores.length > 0 && (
                 <div
-                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[85%] no-scrollbar"
+                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[70%] no-scrollbar"
                     role="group"
                     aria-label="Filter by store"
                 >
@@ -250,17 +343,44 @@ const ShoppingListTab: React.FC = () => {
                 </div>
             )}
 
-            {/* Settings Button */}
-            <div className={`flex justify-end ${stores.length === 0 ? 'w-full' : ''}`}>
+            {/* Title when selection mode is active and no stores, or just spacer */}
+            {isSelectionMode && <div className="font-bold text-brand-800">Select Items</div>}
+
+            {/* Actions: Settings & Selection Toggle */}
+            <div className={`flex justify-end gap-2 ${stores.length === 0 && !isSelectionMode ? 'w-full' : 'ml-auto'}`}>
+                 {!isSelectionMode && (
+                    <button
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                        aria-label="Shopping List Settings"
+                    >
+                        <Settings className="w-5 h-5" />
+                    </button>
+                 )}
                  <button
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
-                    aria-label="Shopping List Settings"
-                >
-                    <Settings className="w-5 h-5" />
-                </button>
+                    onClick={() => setIsSelectionMode(!isSelectionMode)}
+                    className={`p-2 rounded-lg transition-colors ${isSelectionMode ? 'bg-brand-800 text-white' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
+                    title={isSelectionMode ? "Cancel Selection" : "Select Items"}
+                    aria-label={isSelectionMode ? "Cancel Selection" : "Select Items"}
+                 >
+                    {isSelectionMode ? <X className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+                 </button>
             </div>
         </div>
+
+        {/* Selection Stats */}
+        {isSelectionMode && (
+            <div className="flex items-center justify-between px-2 text-sm text-brand-600">
+                <button
+                    onClick={handleSelectAll}
+                    className="flex items-center gap-2 font-bold hover:text-brand-800"
+                >
+                    <CheckSquare size={16} className={selectedIds.size === filteredItems.length && filteredItems.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+                    Select All ({filteredItems.length})
+                </button>
+                <span className="text-xs">{selectedIds.size} selected</span>
+            </div>
+        )}
 
         {/* Quick Add Form */}
         <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
@@ -364,7 +484,7 @@ const ShoppingListTab: React.FC = () => {
         </label>
 
         {/* Actions Row */}
-        {shoppingList.some(i => i.isPurchased) && (
+        {!isSelectionMode && shoppingList.some(i => i.isPurchased) && (
             <div className="flex justify-end">
                 <button
                     onClick={() => {
@@ -397,18 +517,30 @@ const ShoppingListTab: React.FC = () => {
                             </span>
                         </div>
                         <div className="divide-y divide-gray-100">
-    {groupedItems[category].map(item => (
-                                <div key={item.id} className={`p-3 flex items-center gap-3 hover:bg-gray-50 ${item.isPurchased ? 'bg-gray-50' : ''}`}>
-                                    <button
-                                        onClick={() => toggleShoppingItemPurchased(item.id)}
-                                        className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors shrink-0
-                                            ${item.isPurchased
-                                                ? 'bg-green-500 border-green-500 text-white'
-                                                : 'border-gray-300 hover:border-brand-500 text-transparent'}`}
-                                        aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-                                    >
-                                        <Check className="w-4 h-4" />
-                                    </button>
+    {groupedItems[category].map(item => {
+                                const isSelected = selectedIds.has(item.id);
+                                return (
+                                <div
+                                    key={item.id}
+                                    className={`p-3 flex items-center gap-3 transition-colors ${item.isPurchased ? 'bg-gray-50' : ''} ${isSelectionMode ? 'cursor-pointer hover:bg-brand-50' : 'hover:bg-gray-50'} ${isSelected ? 'bg-brand-50' : ''}`}
+                                    onClick={() => isSelectionMode && toggleSelection(item.id)}
+                                >
+                                    {isSelectionMode ? (
+                                        <div className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
+                                            {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => toggleShoppingItemPurchased(item.id)}
+                                            className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors shrink-0
+                                                ${item.isPurchased
+                                                    ? 'bg-green-500 border-green-500 text-white'
+                                                    : 'border-gray-300 hover:border-brand-500 text-transparent'}`}
+                                            aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
+                                        >
+                                            <Check className="w-4 h-4" />
+                                        </button>
+                                    )}
 
                                     <div className="flex-1 group min-w-0">
                                         <div className={`font-medium truncate ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
@@ -424,28 +556,99 @@ const ShoppingListTab: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={() => setEditingItem(item)}
-                                            className="p-2 text-gray-400 hover:text-brand-500 rounded-full hover:bg-brand-50"
-                                            aria-label={`Edit ${item.name}`}
-                                        >
-                                            <Edit2 className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => deleteShoppingItem(item.id)}
-                                            className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
-                                            aria-label={`Delete ${item.name}`}
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                    {!isSelectionMode && (
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}
+                                                className="p-2 text-gray-400 hover:text-brand-500 rounded-full hover:bg-brand-50"
+                                                aria-label={`Edit ${item.name}`}
+                                            >
+                                                <Edit2 className="w-4 h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); deleteShoppingItem(item.id); }}
+                                                className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
+                                                aria-label={`Delete ${item.name}`}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-                            ))}
+                            );
+    })}
                         </div>
                     </div>
                 ))}
             </div>
+        )}
+
+        {/* Floating Action Bar (FAB) for Batch Actions */}
+        {isSelectionMode && selectedIds.size > 0 && (
+            <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+            <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+                <div className="px-3 font-bold text-sm border-r border-brand-700">
+                {selectedIds.size} selected
+                </div>
+
+                <button
+                onClick={handleBatchPurchase}
+                disabled={isBatchProcessing}
+                className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+                aria-label="Mark selected as purchased"
+                >
+                <Check size={18} />
+                <span className="text-[10px] font-medium">Purchased</span>
+                </button>
+
+                <button
+                onClick={() => setShowBatchDeleteConfirm(true)}
+                disabled={isBatchProcessing}
+                className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+                aria-label="Delete selected items"
+                >
+                <Trash2 size={18} />
+                <span className="text-[10px] font-medium">Delete</span>
+                </button>
+            </div>
+            </div>
+        )}
+
+        {/* Batch Delete Confirmation */}
+        {showBatchDeleteConfirm && (
+            <Modal
+            isOpen={true}
+            onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
+            disableBackdropClose={isBatchProcessing}
+            >
+            <div className="p-4 space-y-4">
+                <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
+                <p className="text-brand-600">
+                Are you sure you want to delete <strong>{selectedIds.size}</strong> items?
+                </p>
+                <p className="text-sm text-money-neg font-bold">
+                This action cannot be undone.
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                <button
+                    onClick={() => setShowBatchDeleteConfirm(false)}
+                    disabled={isBatchProcessing}
+                    className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={handleBatchDelete}
+                    disabled={isBatchProcessing}
+                    className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                    {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                    <span>Delete All</span>
+                </button>
+                </div>
+            </div>
+            </Modal>
         )}
 
         <GroceryCatalogModal
