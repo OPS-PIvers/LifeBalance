@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useMemo, useState } from 'react';
 import { X, Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
@@ -189,7 +188,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
         // Update household points
         if (pointsChange !== 0) {
-            const updates: any = {
+            const updates: Record<string, unknown> = {
                 'points.total': increment(pointsChange)
             };
 

@@ -1,5 +1,3 @@
-
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { BudgetBucket } from '../../types/schema';
@@ -23,16 +21,20 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   const [color, setColor] = useState(COLORS[0]);
 
   useEffect(() => {
-    if (editingBucket) {
-      setName(editingBucket.name);
-      setLimit(editingBucket.limit.toString());
-      setColor(editingBucket.color);
-    } else {
-      setName('');
-      setLimit('');
-      setColor(COLORS[0]);
+    if (isOpen) {
+      if (editingBucket) {
+        // Reset form state when modal opens or editing item changes
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setName(editingBucket.name);
+        setLimit(editingBucket.limit.toString());
+        setColor(editingBucket.color);
+      } else {
+        setName('');
+        setLimit('');
+        setColor(COLORS[0]);
+      }
     }
-  }, [editingBucket, isOpen]);
+  }, [isOpen, editingBucket]);
 
   const handleSave = () => {
     if (!name || !limit) return;

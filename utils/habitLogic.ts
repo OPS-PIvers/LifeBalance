@@ -1,5 +1,4 @@
-/* eslint-disable */
-import { Habit, HouseholdMember } from '@/types/schema';
+import { Habit } from '@/types/schema';
 import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from 'date-fns';
 
 /**
@@ -16,19 +15,29 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
     const now = new Date();
 
     let lastUpdate: Date | null = null;
-    const rawLastUpdated = habit.lastUpdated as any;
+    const rawLastUpdated = habit.lastUpdated as unknown;
 
     // 2. Normalize date from various possible inputs (string, Date, Firestore Timestamp)
     if (rawLastUpdated instanceof Date) {
       lastUpdate = rawLastUpdated;
     } else if (typeof rawLastUpdated === 'string') {
       lastUpdate = parseISO(rawLastUpdated);
-    } else if (rawLastUpdated && typeof rawLastUpdated.toDate === 'function') {
+    } else if (
+      rawLastUpdated &&
+      typeof rawLastUpdated === 'object' &&
+      'toDate' in rawLastUpdated &&
+      typeof (rawLastUpdated as { toDate: () => Date }).toDate === 'function'
+    ) {
       // Firestore Timestamp
-      lastUpdate = rawLastUpdated.toDate();
-    } else if (rawLastUpdated && typeof rawLastUpdated.seconds === 'number') {
+      lastUpdate = (rawLastUpdated as { toDate: () => Date }).toDate();
+    } else if (
+      rawLastUpdated &&
+      typeof rawLastUpdated === 'object' &&
+      'seconds' in rawLastUpdated &&
+      typeof (rawLastUpdated as { seconds: number }).seconds === 'number'
+    ) {
       // Plain object representation of Timestamp
-      lastUpdate = new Date(rawLastUpdated.seconds * 1000);
+      lastUpdate = new Date((rawLastUpdated as { seconds: number }).seconds * 1000);
     }
 
     // 3. Validate parsed date
@@ -107,13 +116,11 @@ export interface ToggleHabitResult {
  *
  * @param habit - The habit being toggled
  * @param direction - Whether to increment ('up') or decrement ('down')
- * @param currentUser - The current user (for validation, not modified)
  * @returns Object containing updated habit state and points change, or null if invalid
  */
 export const processToggleHabit = (
   habit: Habit,
-  direction: 'up' | 'down',
-  currentUser: HouseholdMember
+  direction: 'up' | 'down'
 ): ToggleHabitResult | null => {
   const today = format(new Date(), 'yyyy-MM-dd');
 

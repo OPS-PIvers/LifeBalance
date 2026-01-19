@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { optimizeGroceryList, OptimizableItem } from '@/services/geminiService';
@@ -14,6 +13,35 @@ interface UseGroceryOptimizerConfig<T> {
   emptyMessage?: string;
   errorMessage?: string;
 }
+
+/**
+ * Generic comparison function to check if two objects have differences.
+ * Compares all enumerable properties using normalized string values.
+ */
+const hasChanges = <T extends object>(original: T, updated: T): boolean => {
+  const keys = Object.keys(updated) as (keyof T)[];
+
+  for (const key of keys) {
+    // Skip id field as it never changes
+    if (key === 'id') continue;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const origVal = normalizeValue(String((original as any)[key] ?? ''));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const newVal = normalizeValue(String((updated as any)[key] ?? ''));
+
+    // If values differ and at least one is non-empty, there's a change
+    if (origVal !== newVal) {
+      // Skip update if both are empty (avoid redundant writes)
+      if (origVal === '' && newVal === '') {
+        continue;
+      }
+      return true;
+    }
+  }
+
+  return false;
+};
 
 /**
  * Custom hook for optimizing grocery/pantry lists with AI.
@@ -125,31 +153,4 @@ export const useGroceryOptimizer = <T extends { id: string }>({
   };
 
   return { handleOptimize, isOptimizing };
-};
-
-/**
- * Generic comparison function to check if two objects have differences.
- * Compares all enumerable properties using normalized string values.
- */
-const hasChanges = <T extends Record<string, any>>(original: T, updated: T): boolean => {
-  const keys = Object.keys(updated) as (keyof T)[];
-  
-  for (const key of keys) {
-    // Skip id field as it never changes
-    if (key === 'id') continue;
-
-    const origVal = normalizeValue(String(original[key] ?? ''));
-    const newVal = normalizeValue(String(updated[key] ?? ''));
-
-    // If values differ and at least one is non-empty, there's a change
-    if (origVal !== newVal) {
-      // Skip update if both are empty (avoid redundant writes)
-      if (origVal === '' && newVal === '') {
-        continue;
-      }
-      return true;
-    }
-  }
-
-  return false;
 };

@@ -1,9 +1,7 @@
-/* eslint-disable */
-
-import React, { useState } from 'react';
-import { X, Wallet, Receipt, CreditCard, ChevronDown, ChevronUp } from 'lucide-react';
+import React from 'react';
+import { X, Wallet, Receipt, CreditCard } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { startOfToday, endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
+import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
