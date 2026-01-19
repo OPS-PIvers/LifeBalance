@@ -68,7 +68,28 @@ export const calculateSafeToSpend = (
   }
 
   const paycheckA = parseISO(currentPeriodId); // lastPaycheckDate
-  const paycheckBDate = findNextPaycheckDate(calendarItems, currentPeriodId);
+
+  // ⚡ Bolt Optimization: Expand items ONCE for a 60-day window
+  // This covers the search for the next paycheck (Paycheck B) AND the bills in between.
+  // Previously, this function called `findNextPaycheckDate` (which expanded for 60 days)
+  // and then called `expandCalendarItems` AGAIN for the determined range.
+  // This approach reduces the expensive expansion operation from 2x to 1x.
+  const searchWindowEnd = addMonths(paycheckA, 2);
+  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+
+  // Find next paycheck (Paycheck B) from the already expanded list
+  const upcomingPaychecks = allExpandedItems
+    .filter(item => {
+      const itemDate = parseISO(item.date);
+      return (
+        item.type === 'income' &&
+        !item.isPaid &&
+        isAfter(itemDate, paycheckA)
+      );
+    })
+    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+
+  const paycheckBDate = upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
 
   let rangeEndDate: Date;
   if (paycheckBDate) {
@@ -79,14 +100,13 @@ export const calculateSafeToSpend = (
   }
 
   // 3. Calculate unpaid bills in the range (AFTER paycheck A, up to and including range end)
-  // Expand recurring items to ensure all instances in the period are counted
-  const expandedItems = expandCalendarItems(calendarItems, paycheckA, rangeEndDate);
+  // Reuse allExpandedItems, filtering by date range
 
   // ⚡ Bolt Optimization: Pre-calculate lowercased bucket names
   // Prevents calling toLowerCase() N * M times inside the loop
   const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
 
-  const unpaidBills = expandedItems
+  const unpaidBills = allExpandedItems
     .filter(item => {
       const itemDate = parseISO(item.date);
       const itemTitleLower = item.title.toLowerCase();

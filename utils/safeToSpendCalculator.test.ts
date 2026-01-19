@@ -219,6 +219,42 @@ describe('calculateSafeToSpend', () => {
     expect(result).toBe(5000);
   });
 
+  // NEW TEST CASE: Verify boundary of searchWindow vs rangeEndDate
+  it('should ignore bills after the next paycheck but within the search window', () => {
+    // nextPaycheck is day 14. searchWindow extends to day 60.
+    // Bill at day 30 should be ignored.
+    const wayFutureBillDate = formatIso(addDays(today, 30));
+
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Way Future Bill',
+        amount: 150,
+        date: wayFutureBillDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [],
+      lastPaycheckDate
+    );
+
+    // 5000 - 0 = 5000 (Should ignore the 150 bill)
+    expect(result).toBe(5000);
+  });
+
   it('should ignore paid bills', () => {
     const billDate = formatIso(addDays(today, 5));
     const items: CalendarItem[] = [
