@@ -156,7 +156,7 @@ Safe-to-Spend = (Checking Account Balance)
 **Location**: `pages/MealsPage.tsx` with tabs for Pantry, Meal Plan, and Shopping List.
 
 **Data Models** (in `types/schema.ts`):
-- `PantryItem`: Food inventory (name, quantity, category, expiryDate, purchaseDate)
+- `PantryItem`: Food inventory (name, quantity, category, purchaseDate)
 - `Meal`: Recipes (name, description, ingredients[], tags[], rating, createdBy)
 - `MealPlanItem`: Calendar entries (date, mealName, mealId, type, isCooked)
 - `ShoppingItem`: Grocery list (name, category, quantity, isPurchased, addedFromMealId)

@@ -242,7 +242,6 @@ export interface PantryItem {
   quantity: string; // "2 boxes", "500g"
   category: string; // "Produce", "Pantry", etc.
   purchaseDate?: string; // YYYY-MM-DD
-  expiryDate?: string; // YYYY-MM-DD
   notes?: string;
   location?: string; // "Fridge", "Freezer", "Pantry"
 }

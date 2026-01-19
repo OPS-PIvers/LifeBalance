@@ -2337,6 +2337,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
                 name: item.name,
                 category: item.category,
                 quantity: item.quantity || '1',
+                purchaseDate: new Date().toISOString().split('T')[0],
                 createdAt: serverTimestamp(),
             });
             toast.success('Added to Pantry');
