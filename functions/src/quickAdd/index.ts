@@ -114,6 +114,17 @@ export const quickAddHabit = onRequest(
       return;
     }
 
+    // Security: Input validation
+    if (habitId && (typeof habitId !== "string" || habitId.length > 100)) {
+      errorResponse(res, 400, "habitId must be a string (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (habitName && (typeof habitName !== "string" || habitName.length > 100)) {
+      errorResponse(res, 400, "habitName too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
     if (direction !== "up" && direction !== "down") {
       errorResponse(res, 400, "direction must be 'up' or 'down'", "BAD_REQUEST");
       return;
@@ -276,9 +287,29 @@ export const quickAddExpense = onRequest(
       return;
     }
 
+    // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
       errorResponse(res, 400, "merchant is required", "BAD_REQUEST");
       return;
+    }
+
+    if (merchant.length > 100) {
+      errorResponse(res, 400, "merchant name too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (category !== undefined && category !== null) {
+      if (typeof category !== "string" || category.length > 50) {
+        errorResponse(res, 400, "category must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    if (notes !== undefined && notes !== null) {
+      if (typeof notes !== "string" || notes.length > 500) {
+        errorResponse(res, 400, "notes must be a string (max 500 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
     const transactionDate = date || format(new Date(), "yyyy-MM-dd");
@@ -499,6 +530,26 @@ export const quickAddShoppingItem = onRequest(
     if (!item || typeof item !== "string") {
       errorResponse(res, 400, "item name is required", "BAD_REQUEST");
       return;
+    }
+
+    // Security: Input validation
+    if (item.length > 100) {
+      errorResponse(res, 400, "item name too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (category !== undefined && category !== null) {
+      if (typeof category !== "string" || category.length > 50) {
+        errorResponse(res, 400, "category must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    if (store !== undefined && store !== null) {
+      if (typeof store !== "string" || store.length > 50) {
+        errorResponse(res, 400, "store name must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
     if (typeof quantity !== "number" || quantity < 1) {
