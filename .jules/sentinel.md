@@ -38,3 +38,8 @@
 **Vulnerability:** The `beta_testers` collection allowed `read` access to any authenticated user (`allow read: if isAuthenticated();`). This permitted any user to dump the entire list of beta testers, exposing their emails (Information Disclosure).
 **Learning:** `allow read` (which includes `list`) on a collection without resource-based conditions enables full enumeration. For user-specific data, rules must restrict access to the specific document owner.
 **Prevention:** Use `resource.data.email == request.auth.token.email` (or similar owner check) to enforce row-level security, ensuring users can only read their own data.
+
+## 2025-05-18 - [DoS/Validation] Public Cloud Function Input
+**Vulnerability:** Publicly accessible (but API key protected) Cloud Functions (`quickAdd*`) lacked input length validation, potentially allowing DoS, storage exhaustion, or cost spikes via massive strings in `merchant`, `notes`, or `category` fields.
+**Learning:** Even authenticated endpoints need rigorous input validation, especially when they serve as "public" entry points (like iOS Shortcuts) where client-side validation can be bypassed or doesn't exist.
+**Prevention:** Added explicit length checks and type validation for all string inputs in `functions/src/quickAdd` endpoints to reject oversized payloads before processing.

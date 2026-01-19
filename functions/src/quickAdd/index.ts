@@ -114,6 +114,12 @@ export const quickAddHabit = onRequest(
       return;
     }
 
+    // Security: Input validation
+    if (habitName && (typeof habitName !== "string" || habitName.length > 100)) {
+      errorResponse(res, 400, "habitName too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
     if (direction !== "up" && direction !== "down") {
       errorResponse(res, 400, "direction must be 'up' or 'down'", "BAD_REQUEST");
       return;
@@ -276,8 +282,24 @@ export const quickAddExpense = onRequest(
       return;
     }
 
+    // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
       errorResponse(res, 400, "merchant is required", "BAD_REQUEST");
+      return;
+    }
+
+    if (merchant.length > 100) {
+      errorResponse(res, 400, "merchant name too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (category && (typeof category !== "string" || category.length > 50)) {
+      errorResponse(res, 400, "category too long (max 50 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (notes && (typeof notes !== "string" || notes.length > 500)) {
+      errorResponse(res, 400, "notes too long (max 500 chars)", "BAD_REQUEST");
       return;
     }
 
@@ -498,6 +520,22 @@ export const quickAddShoppingItem = onRequest(
 
     if (!item || typeof item !== "string") {
       errorResponse(res, 400, "item name is required", "BAD_REQUEST");
+      return;
+    }
+
+    // Security: Input validation
+    if (item.length > 100) {
+      errorResponse(res, 400, "item name too long (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (category && (typeof category !== "string" || category.length > 50)) {
+      errorResponse(res, 400, "category too long (max 50 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (store && (typeof store !== "string" || store.length > 50)) {
+      errorResponse(res, 400, "store name too long (max 50 chars)", "BAD_REQUEST");
       return;
     }
 
