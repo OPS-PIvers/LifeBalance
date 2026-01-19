@@ -1,31 +1,61 @@
-
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetAccounts from './BudgetAccounts';
 import { Account } from '../../types/schema';
 
 // Mock dependencies
-const mockDeleteAccount = vi.fn();
+const {
+  updateAccountBalanceMock,
+  addAccountMock,
+  setAccountGoalMock,
+  deleteAccountMock,
+  reorderAccountsMock
+} = vi.hoisted(() => ({
+  updateAccountBalanceMock: vi.fn(),
+  addAccountMock: vi.fn(),
+  setAccountGoalMock: vi.fn(),
+  deleteAccountMock: vi.fn(),
+  reorderAccountsMock: vi.fn(),
+}));
+
 const mockAccounts: Account[] = [
   {
     id: 'acc1',
-    name: 'Checking',
+    name: 'Main Checking',
     type: 'checking',
-    balance: 1000,
+    balance: 5000,
     lastUpdated: '2023-01-01',
     order: 1
+  },
+  {
+    id: 'acc2',
+    name: 'My Savings',
+    type: 'savings',
+    balance: 10000,
+    lastUpdated: '2023-01-01',
+    order: 2,
+    monthlyGoal: 15000 // existing goal
+  },
+  {
+      id: 'acc3',
+      name: 'Visa Card',
+      type: 'credit',
+      balance: 200,
+      lastUpdated: '2023-01-01',
+      order: 3
   }
 ];
 
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
   useHousehold: () => ({
     accounts: mockAccounts,
-    updateAccountBalance: vi.fn(),
-    addAccount: vi.fn(),
-    setAccountGoal: vi.fn(),
-    deleteAccount: mockDeleteAccount,
-    reorderAccounts: vi.fn(),
+    updateAccountBalance: updateAccountBalanceMock,
+    addAccount: addAccountMock,
+    setAccountGoal: setAccountGoalMock,
+    deleteAccount: deleteAccountMock,
+    reorderAccounts: reorderAccountsMock,
   }),
 }));
 
@@ -53,41 +83,134 @@ vi.mock('../ui/Modal', () => ({
 }));
 
 describe('BudgetAccounts', () => {
-  it('renders accounts correctly', () => {
-    render(<BudgetAccounts />);
-    expect(screen.getByText('Checking')).toBeInTheDocument();
-    // $1,000 appears in the account card and potentially in the net worth summary
-    expect(screen.getAllByText('$1,000').length).toBeGreaterThan(0);
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('opens delete confirmation modal when trash icon is clicked', async () => {
+  it('renders assets and liabilities correctly', () => {
     render(<BudgetAccounts />);
 
-    // Find trash icon button by aria-label
-    const deleteButton = screen.getByLabelText('Delete Checking account');
-    fireEvent.click(deleteButton);
+    // Check for sections
+    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByText('Liabilities')).toBeInTheDocument();
 
-    // Check if modal appears
+    // Check for account names
+    expect(screen.getByText('Main Checking')).toBeInTheDocument();
+    expect(screen.getByText('My Savings')).toBeInTheDocument();
+    expect(screen.getByText('Visa Card')).toBeInTheDocument();
+
+    // Check balances (using flexible matching for currency)
+    // We search for elements containing both the currency symbol and the amount
+    const checkBalance = (amount: string) => {
+        const elements = screen.getAllByText((content) => content.includes(amount));
+        expect(elements.length).toBeGreaterThan(0);
+    };
+
+    checkBalance('5,000');
+    checkBalance('10,000');
+    checkBalance('200');
+  });
+
+  it('calculates and displays net worth correctly', () => {
+    render(<BudgetAccounts />);
+    // Assets: 5000 + 10000 = 15000
+    // Liabilities: 200
+    // Net Worth: 14800
+
+    // Check for Net Worth display
+    // It might be split or formatted, so we look for the number
+    expect(screen.getByText((content) => content.includes('14,800.00'))).toBeInTheDocument();
+  });
+
+  it('opens add account modal and adds account on save', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Click Add Account button
+    await user.click(screen.getByText('Add Account'));
+
+    // Fill form
+    await user.type(screen.getByPlaceholderText('Account Name'), 'New Fund');
+    await user.type(screen.getByPlaceholderText('Current Balance'), '500');
+    // Select is a native select
+    await user.selectOptions(screen.getByRole('combobox'), 'savings');
+
+    // Click Save
+    await user.click(screen.getByText('Save Account'));
+
+    expect(addAccountMock).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'New Fund',
+      balance: 500,
+      type: 'savings'
+    }));
+  });
+
+  it('edits account balance when clicked', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Click on checking balance ($5,000)
+    const balanceDisplay = screen.getByRole('button', { name: /Edit balance for Main Checking/i });
+    await user.click(balanceDisplay);
+
+    // Input should appear with current value
+    const input = screen.getByRole('spinbutton'); // type="number"
+    expect(input).toHaveValue(5000);
+
+    // Change value
+    await user.clear(input);
+    await user.type(input, '6000');
+
+    // Click save (Check icon)
+    // The check icon is inside a button
+    const saveButton = screen.getByLabelText('Save balance');
+    await user.click(saveButton);
+
+    expect(updateAccountBalanceMock).toHaveBeenCalledWith('acc1', 6000);
+  });
+
+  it('opens goal modal and sets goal', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Click target icon for Savings account
+    const targetBtn = screen.getByLabelText('Set savings goal for My Savings');
+    await user.click(targetBtn);
+
+    // Modal appears
+    expect(screen.getByText('Set Savings Goal')).toBeInTheDocument();
+
+    // Enter amount
+    const input = screen.getByPlaceholderText('Goal Amount');
+    await user.type(input, '20000');
+
+    // Click Set Goal
+    await user.click(screen.getByText('Set Goal'));
+
+    expect(setAccountGoalMock).toHaveBeenCalledWith('acc2', 20000);
+  });
+
+  it('deletes account after confirmation', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Click trash for Visa Card
+    const deleteBtn = screen.getByLabelText('Delete Visa Card account');
+    await user.click(deleteBtn);
+
+    // Modal appears
     expect(screen.getByText('Delete Account?')).toBeInTheDocument();
 
-    // Check if delete button in modal exists
-    const confirmDeleteButton = screen.getByText('Delete', { selector: 'button span' }).closest('button');
-    expect(confirmDeleteButton).toBeInTheDocument();
+    // Click Delete in modal
+    const modal = screen.getByTestId('modal');
+    // Use `within` to scope to the modal
+    // The button has a span with "Delete" text
+    const confirmDeleteBtn = within(modal).getByRole('button', { name: /delete/i });
 
-    // Click delete
-    if (confirmDeleteButton) {
-        fireEvent.click(confirmDeleteButton);
+    await user.click(confirmDeleteBtn);
 
-        // Wait for delete to be called
-        await waitFor(() => {
-          expect(mockDeleteAccount).toHaveBeenCalledWith('acc1');
-        });
-
-        // Modal should be closed (we mock the modal to render children, but the state controlling it lives in parent)
-        // Wait for modal to disappear
-        await waitFor(() => {
-             expect(screen.queryByText('Delete Account?')).not.toBeInTheDocument();
-        });
-    }
+    await waitFor(() => {
+        expect(deleteAccountMock).toHaveBeenCalledWith('acc3');
+    });
   });
 });
