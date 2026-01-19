@@ -43,3 +43,8 @@
 **Vulnerability:** Publicly accessible (but API key protected) Cloud Functions (`quickAdd*`) lacked input length validation, potentially allowing DoS, storage exhaustion, or cost spikes via massive strings in `merchant`, `notes`, or `category` fields.
 **Learning:** Even authenticated endpoints need rigorous input validation, especially when they serve as "public" entry points (like iOS Shortcuts) where client-side validation can be bypassed or doesn't exist.
 **Prevention:** Added explicit length checks and type validation for all string inputs in `functions/src/quickAdd` endpoints to reject oversized payloads before processing.
+
+## 2026-01-20 - [DoS/Storage Exhaustion] Batch Endpoint Validation Bypass
+**Vulnerability:** The `quickAddShoppingItem` batch endpoint validated the main `item` name but skipped validation for optional fields (`category`, `store`) within the batch array. An attacker could bypass the single-item checks and send massive payloads (e.g., 1MB strings) via the batch array, causing storage exhaustion or cost spikes.
+**Learning:** Validating the top-level object or a single item is not enough. When processing arrays/batches, *every* field of *every* item must be rigorously validated against the same constraints as single-item endpoints.
+**Prevention:** Applied strict length (max 50 chars) and type checks to `category` and `store` fields inside the batch processing loop, mirroring the single-item validation logic.
