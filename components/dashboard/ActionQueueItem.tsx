@@ -1,7 +1,7 @@
 /* eslint-disable react/prop-types */
 import React, { useState, useMemo, memo } from 'react';
 import {
-  CalendarClock, Receipt, X, Check, Trash2, Clock, ListTodo, AlertCircle
+  CalendarClock, Receipt, X, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles
 } from 'lucide-react';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ import {
   ActionQueueItem, isCalendarQueueItem, isTodoQueueItem, isTransactionQueueItem
 } from '../../hooks/useActionQueue';
 import { HouseholdMember } from '../../types/schema';
+import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
 
 interface ActionQueueItemProps {
   item: ActionQueueItem;
@@ -37,6 +38,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   const {
     buckets,
     habits,
+    transactions,
     updateTransactionCategory,
     updateToDo,
     deleteToDo,
@@ -47,6 +49,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   } = useHousehold();
 
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
 
   // Memoize member lookup Map for O(1) access
   const memberMap = useMemo(() => {
@@ -74,12 +77,27 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
   const handleExpand = () => {
     setExpandedId(item.id);
-    if (isTransactionQueueItem(item) && item.relatedHabitIds) {
-      setSelectedHabitIds(item.relatedHabitIds);
+    if (isTransactionQueueItem(item)) {
+      // Initialize with existing habit associations
+      setSelectedHabitIds(item.relatedHabitIds || []);
+      // Initialize with current category
+      setSelectedCategory(item.category || '');
     } else {
       setSelectedHabitIds([]);
+      setSelectedCategory('');
     }
   };
+
+  // Smart habit suggestions for transactions
+  const suggestedHabits = useMemo(() => {
+    if (!isTransactionQueueItem(item)) return [];
+    return suggestHabitsForTransaction(
+      item.merchant,
+      habits,
+      transactions,
+      5 // Show top 5 suggestions
+    );
+  }, [item, habits, transactions]);
 
   return (
     <div className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
@@ -266,68 +284,155 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                </div>
             </div>
           ) : (
-            /* Transaction Category Selector */
+            /* Transaction Category & Habit Selector */
             <div className="space-y-3">
-              {/* Habits Section */}
+              {/* Habits Section - Smart Suggestions */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
-                {habits.length === 0 && <p className="text-xs text-brand-400 italic">No habits found. Create some in Habits tab.</p>}
-                <div className="flex flex-wrap gap-2">
-                  {habits.map(habit => {
-                    const isSelected = selectedHabitIds.includes(habit.id);
-                    return (
-                      <button
-                        key={habit.id}
-                        onClick={() => {
-                          setSelectedHabitIds(prev =>
-                            isSelected
-                              ? prev.filter(id => id !== habit.id)
-                              : [...prev, habit.id]
-                          );
-                        }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 ${
-                          isSelected
-                            ? 'bg-habit-green text-white shadow-sm'
-                            : 'bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100'
-                        }`}
-                      >
-                        {isSelected && <Check size={12} strokeWidth={3} />}
-                        {habit.title}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
+                  {suggestedHabits.some(s => s.confidence !== 'low') && (
+                    <Sparkles size={10} className="text-violet-500" />
+                  )}
                 </div>
+                {habits.length === 0 && <p className="text-xs text-brand-400 italic">No habits found. Create some in Habits tab.</p>}
+
+                {habits.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* Show suggested habits first */}
+                    {suggestedHabits
+                      .filter(s => s.confidence === 'high' || s.confidence === 'medium')
+                      .map(({ habit, confidence }) => {
+                        const isSelected = selectedHabitIds.includes(habit.id);
+                        return (
+                          <button
+                            key={habit.id}
+                            onClick={() => {
+                              setSelectedHabitIds(prev =>
+                                isSelected
+                                  ? prev.filter(id => id !== habit.id)
+                                  : [...prev, habit.id]
+                              );
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
+                              isSelected
+                                ? 'bg-habit-green text-white shadow-sm'
+                                : confidence === 'high'
+                                ? 'bg-violet-50 border-2 border-violet-300 text-violet-700 hover:bg-violet-100'
+                                : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100'
+                            }`}
+                          >
+                            {isSelected && <Check size={12} strokeWidth={3} />}
+                            {habit.title}
+                            {!isSelected && confidence === 'high' && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+                            )}
+                          </button>
+                        );
+                      })}
+
+                    {/* Show other habits (collapsed by default) */}
+                    {suggestedHabits
+                      .filter(s => s.confidence === 'low')
+                      .map(({ habit }) => {
+                        const isSelected = selectedHabitIds.includes(habit.id);
+                        if (!isSelected) return null; // Only show if selected
+                        return (
+                          <button
+                            key={habit.id}
+                            onClick={() => {
+                              setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-sm"
+                          >
+                            <Check size={12} strokeWidth={3} />
+                            {habit.title}
+                          </button>
+                        );
+                      })}
+
+                    {/* "More" button to show all habits */}
+                    {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
+                      <details className="inline">
+                        <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100 cursor-pointer inline-flex items-center gap-1">
+                          + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
+                        </summary>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {suggestedHabits
+                            .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
+                            .map(({ habit }) => (
+                              <button
+                                key={habit.id}
+                                onClick={() => {
+                                  setSelectedHabitIds(prev => [...prev, habit.id]);
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100"
+                              >
+                                {habit.title}
+                              </button>
+                            ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Categories Section */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Select Category to Confirm</p>
+                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Budget Category</p>
                 <div className="flex flex-wrap gap-2">
                   {buckets.map(bucket => (
                     <button
                       key={bucket.id}
-                      onClick={() => {
-                        updateTransactionCategory(item.id, bucket.name, selectedHabitIds);
-                        setExpandedId(null);
-                        setSelectedHabitIds([]); // Reset
-                      }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 hover:bg-brand-100 active:bg-brand-200 transition-colors"
+                      onClick={() => setSelectedCategory(bucket.name)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        selectedCategory === bucket.name
+                          ? 'bg-brand-800 text-white shadow-sm'
+                          : 'bg-brand-50 border border-brand-200 text-brand-600 hover:bg-brand-100'
+                      }`}
                     >
+                      {selectedCategory === bucket.name && <Check size={12} strokeWidth={3} className="inline mr-1" />}
                       {bucket.name}
                     </button>
                   ))}
                   <button
-                      onClick={() => {
-                        updateTransactionCategory(item.id, 'Budgeted in Calendar', selectedHabitIds);
-                        setExpandedId(null);
-                        setSelectedHabitIds([]); // Reset
-                      }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 active:bg-indigo-200 transition-colors"
-                    >
-                      Budgeted in Calendar
+                    onClick={() => setSelectedCategory('Budgeted in Calendar')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      selectedCategory === 'Budgeted in Calendar'
+                        ? 'bg-indigo-700 text-white shadow-sm'
+                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {selectedCategory === 'Budgeted in Calendar' && <Check size={12} strokeWidth={3} className="inline mr-1" />}
+                    Budgeted in Calendar
                   </button>
                 </div>
               </div>
+
+              {/* Approve Button */}
+              <button
+                onClick={async () => {
+                  if (!selectedCategory) {
+                    toast.error('Please select a category');
+                    return;
+                  }
+                  try {
+                    await updateTransactionCategory(item.id, selectedCategory, selectedHabitIds);
+                    toast.success('Transaction approved!');
+                    setExpandedId(null);
+                    setSelectedHabitIds([]);
+                    setSelectedCategory('');
+                  } catch (error) {
+                    console.error('Failed to approve transaction:', error);
+                    toast.error('Failed to approve transaction');
+                  }
+                }}
+                disabled={!selectedCategory}
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-brand-200 disabled:cursor-not-allowed text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
+              >
+                <Check size={18} strokeWidth={3} />
+                Approve Transaction
+              </button>
             </div>
           )}
         </div>

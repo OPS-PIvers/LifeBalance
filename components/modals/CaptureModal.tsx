@@ -1,5 +1,5 @@
 /* eslint-disable */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
   Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown,
@@ -11,6 +11,7 @@ import { analyzeReceipt, parseBankStatement, parseMagicAction, ReceiptData } fro
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
+import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -43,7 +44,7 @@ const getLocalDateString = (): string => {
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const {
-    addTransaction, buckets, habits,
+    addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
     addShoppingItem, householdId
   } = useHousehold();
@@ -59,6 +60,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [transactionDate, setTransactionDate] = useState('');
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -68,6 +70,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // Dynamic Categories from buckets (Transaction)
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
   const habitTitles = habits.map(h => h.title);
+
+  // Smart habit suggestions for manual entry (based on merchant name)
+  const suggestedHabits = useMemo(() => {
+    if (!merchant.trim() || habits.length === 0) return [];
+    return suggestHabitsForTransaction(merchant, habits, transactions, 5);
+  }, [merchant, habits, transactions]);
 
   // --- To-Do State ---
   const [todoText, setTodoText] = useState('');
@@ -167,6 +175,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setIsRecurring(false);
     setTransactionDate('');
     setParsedTransactions([]);
+    setSelectedHabitIds([]);
 
     // Reset To-Do State
     setTodoText('');
@@ -407,7 +416,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       status: isFuture ? 'pending_review' : 'verified',
       isRecurring,
       source: 'manual',
-      autoCategorized: false
+      autoCategorized: false,
+      relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined
     };
 
     try {
@@ -869,6 +879,96 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Habit Tagging Section */}
+                  {habits.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider">
+                          Connect Habits (Optional)
+                        </label>
+                        {suggestedHabits.some(s => s.confidence !== 'low') && (
+                          <Sparkles size={12} className="text-violet-500" />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {/* Show suggested habits first */}
+                        {suggestedHabits
+                          .filter(s => s.confidence === 'high' || s.confidence === 'medium')
+                          .map(({ habit, confidence }) => {
+                            const isSelected = selectedHabitIds.includes(habit.id);
+                            return (
+                              <button
+                                key={habit.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedHabitIds(prev =>
+                                    isSelected
+                                      ? prev.filter(id => id !== habit.id)
+                                      : [...prev, habit.id]
+                                  );
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
+                                  isSelected
+                                    ? 'bg-habit-green text-white shadow-sm'
+                                    : confidence === 'high'
+                                    ? 'bg-violet-50 border-2 border-violet-300 text-violet-700 hover:bg-violet-100'
+                                    : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100'
+                                }`}
+                              >
+                                {isSelected && <Check size={12} strokeWidth={3} />}
+                                {habit.title}
+                                {!isSelected && confidence === 'high' && (
+                                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+                                )}
+                              </button>
+                            );
+                          })}
+
+                        {/* Show selected non-suggested habits */}
+                        {suggestedHabits
+                          .filter(s => s.confidence === 'low' && selectedHabitIds.includes(s.habit.id))
+                          .map(({ habit }) => (
+                            <button
+                              key={habit.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-sm"
+                            >
+                              <Check size={12} strokeWidth={3} />
+                              {habit.title}
+                            </button>
+                          ))}
+
+                        {/* "More" button to show all habits */}
+                        {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
+                          <details className="inline">
+                            <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100 cursor-pointer inline-flex items-center gap-1">
+                              + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
+                            </summary>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {suggestedHabits
+                                .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
+                                .map(({ habit }) => (
+                                  <button
+                                    key={habit.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedHabitIds(prev => [...prev, habit.id]);
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100"
+                                  >
+                                    {habit.title}
+                                  </button>
+                                ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between p-4 bg-brand-50 rounded-xl border border-brand-100">
                     <span id="recurring-label" className="text-sm font-medium text-brand-700">Recurring Transaction</span>
