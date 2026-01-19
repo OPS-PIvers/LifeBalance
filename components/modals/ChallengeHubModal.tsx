@@ -1,11 +1,10 @@
-/* eslint-disable */
+
 import React, { useState, useEffect } from 'react';
-import { X, Check, Plus, Calendar } from 'lucide-react';
-import { Challenge, Habit } from '@/types/schema';
+import { X, Check, Plus } from 'lucide-react';
+import { Challenge } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
-import { getMissedHabitDates } from '@/utils/freezeBankValidator';
 
 interface ChallengeHubModalProps {
   isOpen: boolean;
@@ -22,7 +21,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
     yearlyGoals,
     activeYearlyGoals,
     freezeBank,
-    useFreezeBankToken,
+    useFreezeBankToken: consumeFreezeBankToken,
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<TabType>('challenge');
@@ -91,7 +90,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
     if (!selectedDate || !selectedHabitForFreeze) return;
 
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    await useFreezeBankToken(selectedHabitForFreeze, dateStr);
+    await consumeFreezeBankToken(selectedHabitForFreeze, dateStr);
 
     // Reset selections
     setSelectedDate(null);

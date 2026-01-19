@@ -122,8 +122,6 @@ describe('habitLogic', () => {
   });
 
   describe('processToggleHabit', () => {
-    const mockUser: HouseholdMember = { id: 'u1', name: 'Test User' } as any;
-
     const baseHabit: Habit = {
       id: 'h1',
       title: 'Test Habit',
@@ -144,7 +142,7 @@ describe('habitLogic', () => {
 
     describe('Incremental Scoring', () => {
       it('increments count and adds points', () => {
-        const result = processToggleHabit(baseHabit, 'up', mockUser);
+        const result = processToggleHabit(baseHabit, 'up');
         expect(result).not.toBeNull();
         expect(result?.updatedHabit.count).toBe(1);
         expect(result?.pointsChange).toBe(10); // 10 * 1.0
@@ -153,7 +151,7 @@ describe('habitLogic', () => {
 
       it('decrements count and removes points', () => {
         const habit = { ...baseHabit, count: 1, totalCount: 1, completedDates: [today] };
-        const result = processToggleHabit(habit, 'down', mockUser);
+        const result = processToggleHabit(habit, 'down');
 
         expect(result).not.toBeNull();
         expect(result?.updatedHabit.count).toBe(0);
@@ -181,7 +179,7 @@ describe('habitLogic', () => {
         // Wait: < 7 is 1.5. >= 7 is 2.0.
         // 6 days streak => 1.5x
 
-        const result = processToggleHabit(habit, 'up', mockUser);
+        const result = processToggleHabit(habit, 'up');
         expect(result?.multiplier).toBe(1.5);
         expect(result?.pointsChange).toBe(15); // 10 * 1.5
       });
@@ -197,7 +195,7 @@ describe('habitLogic', () => {
 
       it('does not award points before threshold', () => {
         const habit = { ...thresholdHabit, count: 1 };
-        const result = processToggleHabit(habit, 'up', mockUser);
+        const result = processToggleHabit(habit, 'up');
 
         expect(result?.updatedHabit.count).toBe(2);
         expect(result?.pointsChange).toBe(0);
@@ -206,7 +204,7 @@ describe('habitLogic', () => {
 
       it('awards points when threshold is reached', () => {
         const habit = { ...thresholdHabit, count: 2 };
-        const result = processToggleHabit(habit, 'up', mockUser);
+        const result = processToggleHabit(habit, 'up');
 
         expect(result?.updatedHabit.count).toBe(3);
         expect(result?.pointsChange).toBe(50);
@@ -219,7 +217,7 @@ describe('habitLogic', () => {
           count: 3,
           completedDates: [today]
         };
-        const result = processToggleHabit(habit, 'down', mockUser);
+        const result = processToggleHabit(habit, 'down');
 
         expect(result?.updatedHabit.count).toBe(2);
         expect(result?.pointsChange).toBe(-50);
@@ -232,7 +230,7 @@ describe('habitLogic', () => {
           count: 4,
           completedDates: [today]
         };
-        const result = processToggleHabit(habit, 'down', mockUser);
+        const result = processToggleHabit(habit, 'down');
 
         expect(result?.updatedHabit.count).toBe(3);
         expect(result?.pointsChange).toBe(0);

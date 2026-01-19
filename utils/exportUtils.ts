@@ -1,4 +1,3 @@
-/* eslint-disable */
 /**
  * Utility functions for exporting data to files (JSON, CSV)
  */
@@ -25,7 +24,7 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
 /**
  * Exports a full data object as a JSON file
  */
-export const generateJsonBackup = (data: Record<string, any>, filenamePrefix: string = 'lifebalance-backup') => {
+export const generateJsonBackup = (data: Record<string, unknown>, filenamePrefix: string = 'lifebalance-backup') => {
   const dateStr = new Date().toISOString().split('T')[0];
   const filename = `${filenamePrefix}-${dateStr}.json`;
   const content = JSON.stringify(data, null, 2);
@@ -36,7 +35,7 @@ export const generateJsonBackup = (data: Record<string, any>, filenamePrefix: st
  * Converts an array of flat objects to CSV format
  * Wraps all values in quotes for safety and escapes embedded quotes
  */
-export const convertToCSV = (data: Record<string, any>[]): string => {
+export const convertToCSV = (data: Record<string, unknown>[]): string => {
   if (data.length === 0) return '';
 
   const headers = Object.keys(data[0]);
@@ -45,7 +44,7 @@ export const convertToCSV = (data: Record<string, any>[]): string => {
   for (const row of data) {
     const values = headers.map(header => {
       const val = row[header];
-      let strVal = '' + (val ?? '');
+      let strVal = String(val ?? '');
 
       // 🛡️ Sentinel Security Fix: Prevent CSV Injection
       // If value starts with =, +, -, @, or | (optionally preceded by whitespace),
@@ -67,7 +66,7 @@ export const convertToCSV = (data: Record<string, any>[]): string => {
 /**
  * Exports an array of objects as a CSV file
  */
-export const generateCsvExport = (data: Record<string, any>[], filenamePrefix: string = 'export') => {
+export const generateCsvExport = (data: Record<string, unknown>[], filenamePrefix: string = 'export') => {
   const dateStr = new Date().toISOString().split('T')[0];
   const filename = `${filenamePrefix}-${dateStr}.csv`;
   const content = convertToCSV(data);

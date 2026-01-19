@@ -35,15 +35,15 @@ These are the **WORST** offenders - blanket disabling all linting for entire fil
 - [x] `contexts/MockHouseholdContext.tsx` - **NEEDS FIXING**
 
 #### Utils
-- [x] `utils/exportUtils.ts` - **NEEDS FIXING**
-- [x] `utils/habitLogic.ts` - **NEEDS FIXING**
-- [x] `utils/firestoreSanitizer.ts` - **NEEDS FIXING**
+- [x] `utils/exportUtils.ts` - **FIXED**
+- [x] `utils/habitLogic.ts` - **FIXED**
+- [x] `utils/firestoreSanitizer.ts` - **FIXED**
 - [x] `utils/freezeBankValidator.ts` - **NEEDS FIXING**
 - [x] `utils/migrations/challengeMigration.ts` - **NEEDS FIXING**
 - [x] `utils/migrations/freezeBankMigration.ts` - **NEEDS FIXING**
 
 #### Hooks
-- [x] `hooks/useGroceryOptimizer.ts` - **NEEDS FIXING**
+- [x] `hooks/useGroceryOptimizer.ts` - **FIXED**
 
 #### Components - Meals
 - [x] `components/meals/ShoppingSettingsModal.tsx` - **NEEDS FIXING**
@@ -57,14 +57,14 @@ These are the **WORST** offenders - blanket disabling all linting for entire fil
 - [x] `components/dashboard/ActionQueueItem.tsx` - `/* eslint-disable react/prop-types */` - **NEEDS FIXING**
 
 #### Components - Modals
-- [x] `components/modals/BucketFormModal.tsx` - **NEEDS FIXING**
-- [x] `components/modals/ChallengeHubModal.tsx` - **NEEDS FIXING**
-- [x] `components/modals/PointsBreakdownModal.tsx` - **NEEDS FIXING**
-- [x] `components/modals/RewardsModal.tsx` - **NEEDS FIXING**
+- [x] `components/modals/BucketFormModal.tsx` - **FIXED**
+- [x] `components/modals/ChallengeHubModal.tsx` - **FIXED**
+- [x] `components/modals/PointsBreakdownModal.tsx` - **FIXED**
+- [x] `components/modals/RewardsModal.tsx` - **FIXED**
 - [x] `components/modals/HabitFormModal.tsx` - **NEEDS FIXING**
-- [x] `components/modals/SafeToSpendModal.tsx` - **NEEDS FIXING**
+- [x] `components/modals/SafeToSpendModal.tsx` - **FIXED**
 - [x] `components/modals/AnalyticsModal.tsx` - **NEEDS FIXING**
-- [x] `components/modals/HabitSubmissionLogModal.tsx` - **NEEDS FIXING**
+- [x] `components/modals/HabitSubmissionLogModal.tsx` - **FIXED**
 - [x] `components/modals/CaptureModal.tsx` - **NEEDS FIXING**
 - [x] `components/modals/HabitCreatorWizard.tsx` - **NEEDS FIXING**
 - [x] `components/modals/GroceryCatalogModal.tsx` - **NEEDS FIXING**

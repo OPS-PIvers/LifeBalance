@@ -1,5 +1,3 @@
-/* eslint-disable */
-
 /**
  * Maximum allowed string length for Firestore fields to prevent DoS via large payloads.
  * 10,000 characters is approximately 10KB-40KB depending on encoding, well below the 1MB document limit,
@@ -15,8 +13,8 @@ export const MAX_FIRESTORE_STRING_LENGTH = 10000;
  * @param obj The object to sanitize
  * @returns A new object with undefined values removed, strings trimmed and truncated
  */
-
-export const sanitizeFirestoreData = (obj: any): any => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const sanitizeFirestoreData = (obj: unknown): any => {
   if (obj === undefined) {
     return null;
   }
@@ -44,14 +42,22 @@ export const sanitizeFirestoreData = (obj: any): any => {
   }
 
   if (typeof obj === 'object') {
-    // Handle Dates and Firestore Timestamps (pass them through)
-    if (obj instanceof Date || (obj.seconds !== undefined && obj.nanoseconds !== undefined)) {
+    // Handle Dates
+    if (obj instanceof Date) {
       return obj;
     }
 
-    const newObj: any = {};
-    Object.keys(obj).forEach(key => {
-      const value = sanitizeFirestoreData(obj[key]);
+    // Handle Firestore Timestamps (duck typing)
+    if ('seconds' in obj && 'nanoseconds' in obj) {
+      return obj;
+    }
+
+    const newObj: Record<string, unknown> = {};
+    // Safe because we checked typeof obj === 'object' and !isArray and !null (above)
+    const record = obj as Record<string, unknown>;
+
+    Object.keys(record).forEach(key => {
+      const value = sanitizeFirestoreData(record[key]);
       if (value !== undefined) {
         newObj[key] = value;
       }

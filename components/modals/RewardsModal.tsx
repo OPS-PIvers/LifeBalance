@@ -1,6 +1,5 @@
-/* eslint-disable */
 import React from 'react';
-import { X, Lock } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
 

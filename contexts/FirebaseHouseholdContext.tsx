@@ -1350,7 +1350,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const habit = habits.find(h => h.id === habitId);
         if (habit) {
           // Use extracted business logic
-          const result = processToggleHabit(habit, 'up', currentUser);
+          const result = processToggleHabit(habit, 'up');
           if (result) {
             // Update habit doc
             await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
@@ -1593,7 +1593,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     // Use extracted business logic
-    const result = processToggleHabit(effectiveHabit, direction, currentUser);
+    const result = processToggleHabit(effectiveHabit, direction);
     if (!result) return;
 
     // Update habit in Firestore

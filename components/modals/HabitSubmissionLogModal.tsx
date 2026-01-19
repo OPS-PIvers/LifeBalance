@@ -1,5 +1,4 @@
-/* eslint-disable */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
@@ -31,14 +30,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [formTime, setFormTime] = useState('');
   const [formCount, setFormCount] = useState('1');
 
-  // Load submissions when modal opens
-  useEffect(() => {
-    if (isOpen && habit.id) {
-      loadSubmissions();
-    }
-  }, [isOpen, habit.id]);
-
-  const loadSubmissions = async () => {
+  const loadSubmissions = useCallback(async () => {
     setIsLoading(true);
     try {
       const subs = await getHabitSubmissions(habit.id);
@@ -49,7 +41,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getHabitSubmissions, habit.id]);
+
+  // Load submissions when modal opens
+  useEffect(() => {
+    if (isOpen && habit.id) {
+      loadSubmissions();
+    }
+  }, [isOpen, habit.id, loadSubmissions]);
 
   const handleAdd = async () => {
     if (!formDate || !formTime) {
@@ -422,7 +421,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 <div className="text-center py-12 text-brand-400 border-2 border-dashed border-brand-200 rounded-xl">
                   <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p className="font-bold">No submissions yet</p>
-                  <p className="text-xs mt-1">Click "Add Submission" to get started</p>
+                  <p className="text-xs mt-1">Click &quot;Add Submission&quot; to get started</p>
                 </div>
               ) : (
                 (Object.entries(groupedSubmissions) as [string, HabitSubmission[]][]).map(([date, subs]) => {
@@ -443,7 +442,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
                           </span>
                           <span className="text-[10px] text-brand-400 font-bold">
-                            {subs.length} log{subs.length !== 1 ? 's' : ''}
+                            {dayCount} log{dayCount !== 1 ? 's' : ''}
                           </span>
                         </div>
                       </div>
