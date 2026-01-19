@@ -468,9 +468,12 @@ export const suggestMeal = async (
     // Include IDs for pantry items so AI can match them
     const pantryList = options.pantryItems.map(p => {
       const expiry = p.expiryDate ? ` [Exp: ${p.expiryDate}]` : '';
-      return `ID:${p.id} - ${p.name} (${p.quantity})${expiry}`;
+      // Sanitize inputs to prevent prompt injection
+      const safeName = sanitizeForPrompt(p.name);
+      const safeQuantity = p.quantity ? sanitizeForPrompt(p.quantity) : '';
+      return `ID:${p.id} - ${safeName} (${safeQuantity})${expiry}`;
     }).join(', ');
-    const previousMealsList = options.previousMeals.map(m => m.name).join(', ');
+    const previousMealsList = options.previousMeals.map(m => sanitizeForPrompt(m.name)).join(', ');
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
