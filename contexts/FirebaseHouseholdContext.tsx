@@ -209,6 +209,7 @@ export interface HouseholdContextType {
   completeToDo: (id: string) => Promise<void>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
 
 export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -761,7 +762,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     syncHouseholdPoints();
-  }, [householdId, householdSettings?.points, habits]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId, householdSettings?.points, habits]); // Only watch points property to avoid unnecessary recalculations
 
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
@@ -2910,6 +2912,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useHousehold = () => {
   const context = useContext(FirebaseHouseholdContext);
   if (!context) {
