@@ -239,6 +239,7 @@ describe('TransactionMasterList', () => {
           source: 'manual',
           isRecurring: false,
           status: 'verified',
+          autoCategorized: false,
           date: new Date().toISOString().split('T')[0]
         }));
       });

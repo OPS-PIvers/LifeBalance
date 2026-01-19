@@ -227,13 +227,13 @@ const TransactionMasterList: React.FC = () => {
       await addTransaction({
         ...tx,
         date: new Date().toISOString().split('T')[0], // Default to today
-        id: undefined as unknown as string, // Let Firestore generate ID
         status: 'verified',
         isRecurring: false,
         source: 'manual',
+        autoCategorized: false,
         payPeriodId: undefined, // Let context logic handle pay period assignment
         relatedHabitIds: [], // Don't carry over habit links
-      });
+      } as unknown as Transaction);
       toast.success('Transaction duplicated');
     } catch (error) {
       console.error('Failed to duplicate transaction:', error);
