@@ -118,4 +118,13 @@ describe('Button', () => {
     expect(screen.queryByTestId('left-icon')).not.toBeInTheDocument();
     expect(screen.getByText('Loading Button')).toBeInTheDocument();
   });
+
+  it('applies focus-visible styles', () => {
+    render(<Button>Focus Me</Button>);
+    const button = screen.getByRole('button', { name: /focus me/i });
+    expect(button).toHaveClass('focus:outline-none');
+    expect(button).toHaveClass('focus-visible:ring-2');
+    expect(button).toHaveClass('focus-visible:ring-brand-500');
+    expect(button).toHaveClass('focus-visible:ring-offset-2');
+  });
 });
