@@ -39,12 +39,12 @@ const mockAccounts: Account[] = [
     monthlyGoal: 15000 // existing goal
   },
   {
-      id: 'acc3',
-      name: 'Visa Card',
-      type: 'credit',
-      balance: 200,
-      lastUpdated: '2023-01-01',
-      order: 3
+    id: 'acc3',
+    name: 'Visa Card',
+    type: 'credit',
+    balance: 200,
+    lastUpdated: '2023-01-01',
+    order: 3
   }
 ];
 
