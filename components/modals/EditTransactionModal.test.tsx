@@ -47,6 +47,7 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <div data-testid="icon-trash" />,
   Loader2: () => <div data-testid="icon-loader" />,
   Copy: () => <div data-testid="icon-copy" />,
+  ChevronDown: () => <div data-testid="icon-chevron-down" />,
 }));
 
 // Mock Modal component

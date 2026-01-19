@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
+import Input from '../components/ui/Input';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -325,40 +326,28 @@ const ToDosPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-              Task
-            </label>
-            <input
-              id="task-input"
-              type="text"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Enter task description"
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
-              autoFocus
-            />
-          </div>
+          <Input
+            id="task-input"
+            label="Task"
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Enter task description"
+            autoFocus
+          />
 
-          <div>
-            <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-              Due Date
-            </label>
-            <div className="relative w-full">
-              <input
-                id="due-date-input"
-                type="date"
-                value={completeByDate}
-                onChange={(e) => setCompleteByDate(e.target.value)}
-                className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
-                style={{ WebkitAppearance: 'none' }}
-              />
-              <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
-            </div>
-          </div>
+          <Input
+            id="due-date-input"
+            label="Due Date"
+            type="date"
+            value={completeByDate}
+            onChange={(e) => setCompleteByDate(e.target.value)}
+            icon={<Calendar size={18} />}
+            style={{ WebkitAppearance: 'none' }}
+          />
 
           <fieldset>
-            <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+            <legend className="block text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">
               Assign To
             </legend>
             {members.length === 0 ? (
