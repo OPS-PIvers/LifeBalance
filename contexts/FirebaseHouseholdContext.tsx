@@ -51,7 +51,7 @@ import {
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { calculateSafeToSpend } from '@/utils/safeToSpendCalculator';
+import { calculateSafeToSpendFromExpanded } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculateResetPoints, calculateStreak, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, getMultiplier } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -61,10 +61,11 @@ import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/h
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
+import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
 
 export interface HouseholdContextType {
   // State
@@ -260,9 +261,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const activeChallenge = challenges.find(c => c.status === 'active') || null;
   const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
   const primaryYearlyGoal = activeYearlyGoals[0] || null;
+
+  // Memoize expanded calendar items separately to prevent expensive re-calculation
+  // when only accounts/balance changes (which happens frequently)
+  const expandedCalendarItemsForSafeToSpend = useMemo(() => {
+    if (!currentPeriodId) return [];
+    const paycheckA = parseISO(currentPeriodId);
+    // Expand for 60 days (same window as original calculateSafeToSpend)
+    const searchWindowEnd = addMonths(paycheckA, 2);
+    return expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+  }, [calendarItems, currentPeriodId]);
+
   const safeToSpend = useMemo(
-    () => calculateSafeToSpend(accounts, calendarItems, buckets, currentPeriodId),
-    [accounts, calendarItems, buckets, currentPeriodId]
+    () => calculateSafeToSpendFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId),
+    [accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId]
   );
   const dailyPoints = householdSettings?.points?.daily || 0;
   const weeklyPoints = householdSettings?.points?.weekly || 0;
