@@ -117,7 +117,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           <Button
             onClick={handleDelete}
             variant="ghost-danger"
-            className="w-full py-3 mt-1 hover:bg-money-bgNeg"
+            className="w-full py-3 mt-1"
           >
             <Trash2 size={16} /> Delete Bucket
           </Button>
