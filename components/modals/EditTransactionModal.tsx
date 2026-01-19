@@ -4,6 +4,8 @@ import { X, Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -167,93 +169,61 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
 
       {/* Form */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Amount */}
-        <div>
-          <label htmlFor="edit-amount" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-            Amount
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400">$</span>
-            <input
-              id="edit-amount"
-              type="number"
-              step="0.01"
-              disabled={isSaving}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full pl-7 pr-3 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-              placeholder="0.00"
-            />
-          </div>
-        </div>
+        <Input
+          id="edit-amount"
+          label="Amount"
+          type="number"
+          step="0.01"
+          disabled={isSaving}
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0.00"
+          icon={<span>$</span>}
+        />
 
-        {/* Merchant */}
-        <div>
-          <label htmlFor="edit-merchant" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-            Merchant
-          </label>
-          <input
-            id="edit-merchant"
-            type="text"
-            disabled={isSaving}
-            value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-            placeholder="Store name"
-          />
-        </div>
+        <Input
+          id="edit-merchant"
+          label="Merchant"
+          type="text"
+          disabled={isSaving}
+          value={merchant}
+          onChange={(e) => setMerchant(e.target.value)}
+          placeholder="Store name"
+        />
 
-        {/* Category */}
-        <div>
-          <label htmlFor="edit-category" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-            Category
-          </label>
-          <select
-            id="edit-category"
-            disabled={isSaving}
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-          >
-            {dynamicCategories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select
+          id="edit-category"
+          label="Category"
+          disabled={isSaving}
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+        >
+          {dynamicCategories.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </Select>
 
-        {/* Date */}
-        <div>
-          <label htmlFor="edit-date" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-            Date
-          </label>
-          <input
-            id="edit-date"
-            type="date"
-            disabled={isSaving}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-          />
-        </div>
+        <Input
+          id="edit-date"
+          label="Date"
+          type="date"
+          disabled={isSaving}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
 
-        {/* Status */}
-        <div>
-          <label htmlFor="edit-status" className="text-xs font-bold text-brand-400 uppercase block mb-1">
-            Status
-          </label>
-          <select
-            id="edit-status"
-            disabled={isSaving}
-            value={status}
-            onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100"
-          >
-            <option value="verified">Verified</option>
-            <option value="pending_review">Pending Review</option>
-          </select>
-        </div>
+        <Select
+          id="edit-status"
+          label="Status"
+          disabled={isSaving}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as 'verified' | 'pending_review')}
+        >
+          <option value="verified">Verified</option>
+          <option value="pending_review">Pending Review</option>
+        </Select>
       </div>
 
       {/* Actions */}
