@@ -43,6 +43,7 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
+  PendingItem,
   Insight,
   GroceryCatalogItem,
   Store,
@@ -60,6 +61,8 @@ import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/h
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
+import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
+import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek } from 'date-fns';
 
@@ -92,6 +95,9 @@ export interface HouseholdContextType {
   mealPlan: MealPlanItem[];
   todos: ToDo[];
   groceryCatalog: GroceryCatalogItem[];
+
+  // Natural Language Processing
+  pendingItemsCount: number;
 
   // Shopping List Settings
   stores: Store[];
@@ -237,6 +243,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [todos, setTodos] = useState<ToDo[]>([]);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
+  const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -467,6 +474,148 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         setTodos(data);
       })
     );
+
+    // Pending Items listener (for natural language voice commands)
+    const pendingItemsQuery = query(
+      collection(db, `households/${householdId}/pendingItems`),
+      where('processed', '==', false)
+    );
+    unsubscribers.push(
+      onSnapshot(pendingItemsQuery, async (snapshot) => {
+        setPendingItemsCount(snapshot.size);
+
+        if (snapshot.size > 0) {
+          // Auto-process pending items
+          for (const docSnapshot of snapshot.docs) {
+            const item = { ...docSnapshot.data(), id: docSnapshot.id } as PendingItem;
+
+            try {
+              // Get available categories for parsing
+              const expenseCategories = buckets.map(b => b.name);
+
+              // Parse with Gemini
+              const parsed = await parseNaturalLanguageCommand(
+                householdId,
+                item.text,
+                item.type || 'unknown',
+                {
+                  shopping: GROCERY_CATEGORIES,
+                  expense: expenseCategories
+                }
+              );
+
+              // Route to appropriate handler
+              if (item.type === 'shopping' && 'items' in parsed) {
+                await handleShoppingItems(parsed as ParsedShoppingList);
+                toast.success(`Added ${parsed.items.length} item(s) from voice command`);
+              } else if (item.type === 'todo' && 'tasks' in parsed) {
+                await handleTodoItems(parsed as ParsedTodoList);
+                toast.success(`Added ${parsed.tasks.length} task(s) from voice command`);
+              } else if (item.type === 'expense' && 'amount' in parsed) {
+                const expenseData = parsed as ParsedExpense;
+                if (expenseData.error) {
+                  throw new Error(expenseData.error);
+                }
+                await handleExpense(expenseData);
+                toast.success(`Added expense: $${expenseData.amount?.toFixed(2) || '0.00'} at ${expenseData.merchant || 'Unknown'}`);
+              }
+
+              // Mark as processed
+              await updateDoc(doc(db, `households/${householdId}/pendingItems`, docSnapshot.id), {
+                processed: true,
+                processedAt: serverTimestamp()
+              });
+
+            } catch (error) {
+              console.error('Failed to process pending item:', error);
+
+              // Mark as processed with error
+              await updateDoc(doc(db, `households/${householdId}/pendingItems`, docSnapshot.id), {
+                processed: true,
+                processedAt: serverTimestamp(),
+                error: error instanceof Error ? error.message : 'Unknown error'
+              });
+
+              toast.error(`Failed to process: ${item.text.substring(0, 30)}...`);
+            }
+          }
+        }
+      })
+    );
+
+    // Helper: Handle shopping items from parsed voice command
+    async function handleShoppingItems(parsed: ParsedShoppingList) {
+      const shoppingRef = collection(db, `households/${householdId}/shoppingList`);
+
+      for (const item of parsed.items) {
+        // Check for duplicates (same logic as quickAddShoppingItem)
+        const existingQuery = query(
+          shoppingRef,
+          where('name', '==', item.item),
+          where('purchased', '==', false)
+        );
+        const existing = await getDocs(existingQuery);
+
+        if (!existing.empty) {
+          // Increment quantity
+          const existingDoc = existing.docs[0];
+          await updateDoc(existingDoc.ref, {
+            quantity: increment(item.quantity),
+            lastUpdated: serverTimestamp()
+          });
+        } else {
+          // Add new item
+          await addDoc(shoppingRef, {
+            name: item.item,
+            quantity: item.quantity,
+            category: item.category,
+            purchased: false,
+            source: 'voice',
+            createdAt: serverTimestamp()
+          });
+        }
+      }
+    }
+
+    // Helper: Handle todo items from parsed voice command
+    async function handleTodoItems(parsed: ParsedTodoList) {
+      const todosRef = collection(db, `households/${householdId}/todos`);
+
+      for (const item of parsed.tasks) {
+        await addDoc(todosRef, {
+          text: item.task,
+          isCompleted: false,
+          priority: item.priority || 'medium',
+          source: 'voice',
+          completeByDate: new Date().toISOString().split('T')[0], // Default to today
+          assignedTo: user?.uid || '',
+          createdAt: serverTimestamp(),
+          createdBy: user?.uid || ''
+        });
+      }
+    }
+
+    // Helper: Handle expense from parsed voice command
+    async function handleExpense(data: ParsedExpense) {
+      if (!data.amount) {
+        throw new Error('Expense must include an amount');
+      }
+
+      const transactionsRef = collection(db, `households/${householdId}/transactions`);
+
+      await addDoc(transactionsRef, {
+        amount: data.amount,
+        merchant: data.merchant || 'Unknown',
+        category: data.category || 'Uncategorized',
+        status: 'pending_review',
+        notes: data.notes || '',
+        date: new Date().toISOString().split('T')[0],
+        source: 'voice',
+        isRecurring: false,
+        autoCategorized: false,
+        createdAt: serverTimestamp()
+      });
+    }
 
     // API Keys listener (for iOS Shortcuts)
     const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`));
@@ -2834,6 +2983,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         mealPlan,
         todos,
         groceryCatalog,
+        pendingItemsCount,
         stores,
         groceryCategories,
         apiKeys,

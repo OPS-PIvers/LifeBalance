@@ -16,6 +16,7 @@ const Dashboard: React.FC = () => {
     currentUser,
     payCalendarItem,
     accounts,
+    pendingItemsCount,
   } = useHousehold();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -48,6 +49,23 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="px-4 space-y-6">
+
+        {/* Pending Voice Commands Banner */}
+        {pendingItemsCount > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-blue-800">
+                  Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
+                </h3>
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Widget A: Action Queue */}
         {actionQueue.length > 0 && (

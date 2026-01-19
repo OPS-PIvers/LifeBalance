@@ -1022,3 +1022,220 @@ export const analyzeHabitPatterns = async (
     throw new Error("Failed to analyze habit patterns.");
   }
 };
+
+// Natural Language Command Parsing Types
+
+export interface ParsedShoppingList {
+  items: Array<{
+    item: string;
+    quantity: number;
+    category: string;
+  }>;
+}
+
+export interface ParsedTodoList {
+  tasks: Array<{
+    task: string;
+    priority: 'low' | 'medium' | 'high';
+  }>;
+}
+
+export interface ParsedExpense {
+  amount?: number;
+  merchant?: string;
+  category?: string;
+  notes?: string;
+  error?: string;
+}
+
+/**
+ * Parses natural language commands for iOS Shortcuts into structured data.
+ * Supports shopping lists, to-do lists, and expense tracking.
+ *
+ * @param householdId - The household ID for quota tracking
+ * @param text - Raw natural language input from voice command
+ * @param type - Detected command type (shopping, todo, expense, unknown)
+ * @param availableCategories - Context-specific categories for smart matching
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseNaturalLanguageCommand = async (
+  householdId: string,
+  text: string,
+  type: 'shopping' | 'todo' | 'expense' | 'unknown',
+  availableCategories?: {
+    shopping?: string[];
+    expense?: string[];
+  },
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<ParsedShoppingList | ParsedTodoList | ParsedExpense | { detectedType: string; confidence: number }> => {
+  try {
+    const sanitizedText = sanitizeForPrompt(text);
+
+    // Shopping List
+    if (type === 'shopping') {
+      const categoriesStr = availableCategories?.shopping?.join(', ') || GROCERY_CATEGORIES.join(', ');
+
+      const prompt = `Parse this shopping list command into JSON:
+"${sanitizedText}"
+
+Extract all items mentioned. For each item:
+- item: The item name (normalized, singular form)
+- quantity: Numeric quantity (default 1 if not specified)
+- category: Most appropriate category from: ${categoriesStr}
+
+Return ONLY a JSON object with this structure (no markdown, no explanation):
+{
+  "items": [
+    { "item": "Milk", "quantity": 1, "category": "Dairy" },
+    { "item": "Eggs", "quantity": 12, "category": "Dairy" }
+  ]
+}
+
+If no items found, return {"items": []}`;
+
+      return await generateJsonContent<ParsedShoppingList>(
+        householdId,
+        prompt,
+        {
+          type: Type.OBJECT,
+          properties: {
+            items: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  item: { type: Type.STRING },
+                  quantity: { type: Type.NUMBER },
+                  category: { type: Type.STRING }
+                },
+                required: ["item", "quantity", "category"]
+              }
+            }
+          },
+          required: ["items"]
+        },
+        _aiClient,
+        'gemini-2.0-flash-exp' // Fast, cheap model for simple parsing
+      );
+    }
+
+    // To-Do List
+    if (type === 'todo') {
+      const prompt = `Parse this task command into JSON:
+"${sanitizedText}"
+
+Extract all distinct tasks. For each task:
+- task: Clear, concise task description
+- priority: Infer priority level (high, medium, low) - default to 'medium'
+
+Return ONLY a JSON object:
+{
+  "tasks": [
+    { "task": "Fix the sink", "priority": "medium" },
+    { "task": "Call the dentist", "priority": "high" }
+  ]
+}
+
+If no tasks found, return {"tasks": []}`;
+
+      return await generateJsonContent<ParsedTodoList>(
+        householdId,
+        prompt,
+        {
+          type: Type.OBJECT,
+          properties: {
+            tasks: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  task: { type: Type.STRING },
+                  priority: { type: Type.STRING, enum: ['low', 'medium', 'high'] }
+                },
+                required: ["task", "priority"]
+              }
+            }
+          },
+          required: ["tasks"]
+        },
+        _aiClient,
+        'gemini-2.0-flash-exp'
+      );
+    }
+
+    // Expense
+    if (type === 'expense') {
+      const categoriesStr = availableCategories?.expense?.join(', ') || 'Groceries, Dining, Entertainment, Utilities, Gas, Healthcare, Shopping, Other';
+
+      const prompt = `Parse this expense command into JSON:
+"${sanitizedText}"
+
+Extract:
+- amount: The dollar amount (required, as a number)
+- merchant: The merchant/store name
+- category: Most appropriate category from: ${categoriesStr}
+- notes: Any additional details mentioned
+
+Return ONLY a JSON object:
+{
+  "amount": 45.00,
+  "merchant": "Target",
+  "category": "Household",
+  "notes": "household items"
+}
+
+If no amount found, return { "error": "No amount found" }`;
+
+      return await generateJsonContent<ParsedExpense>(
+        householdId,
+        prompt,
+        {
+          type: Type.OBJECT,
+          properties: {
+            amount: { type: Type.NUMBER },
+            merchant: { type: Type.STRING },
+            category: { type: Type.STRING },
+            notes: { type: Type.STRING },
+            error: { type: Type.STRING }
+          }
+        },
+        _aiClient,
+        'gemini-2.0-flash-exp'
+      );
+    }
+
+    // Unknown - detect type
+    const prompt = `Analyze this command: "${sanitizedText}"
+
+Determine if this is:
+- 'shopping': Adding items to a shopping list (e.g., "add milk and eggs", "buy bread")
+- 'todo': Creating a task/reminder (e.g., "remind me to call", "need to fix")
+- 'expense': Logging spending (e.g., "spent $20 at", "paid 50 for")
+
+Return JSON with detectedType and confidence (0-1):
+{
+  "detectedType": "shopping",
+  "confidence": 0.9
+}`;
+
+    return await generateJsonContent<{ detectedType: string; confidence: number }>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          detectedType: { type: Type.STRING, enum: ['shopping', 'todo', 'expense', 'unclear'] },
+          confidence: { type: Type.NUMBER }
+        },
+        required: ["detectedType", "confidence"]
+      },
+      _aiClient,
+      'gemini-2.0-flash-exp'
+    );
+
+  } catch (error) {
+    console.error("Gemini Natural Language Parse Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
+    throw new Error("Failed to parse command. Please try again.");
+  }
+};

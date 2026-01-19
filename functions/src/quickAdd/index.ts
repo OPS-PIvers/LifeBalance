@@ -539,8 +539,117 @@ export const quickAddShoppingItem = onRequest(
     }
 
     // 4. Parse and validate request body
-    const { item, quantity = 1, category = "Other", store } = req.body || {};
+    // Support both single item and batch items for flexibility
+    const { item, items, quantity = 1, category = "Other", store } = req.body || {};
 
+    // Batch mode: items array provided
+    if (items && Array.isArray(items)) {
+      if (items.length === 0) {
+        errorResponse(res, 400, "items array cannot be empty", "BAD_REQUEST");
+        return;
+      }
+
+      if (items.length > 20) {
+        errorResponse(res, 400, "Maximum 20 items per batch request", "BAD_REQUEST");
+        return;
+      }
+
+      // Validate all items first
+      for (const itemObj of items) {
+        if (!itemObj.item || typeof itemObj.item !== "string") {
+          errorResponse(res, 400, "Each item must have a 'item' (name) field", "BAD_REQUEST");
+          return;
+        }
+        if (itemObj.item.length > 100) {
+          errorResponse(res, 400, `Item name too long: ${itemObj.item} (max 100 chars)`, "BAD_REQUEST");
+          return;
+        }
+      }
+
+      try {
+        // 5. Fetch existing items once for duplicate checking
+        const existingItems = await db
+          .collection(`households/${householdId}/shoppingList`)
+          .where("purchased", "==", false)
+          .get();
+
+        const results = [];
+
+        // 6. Process each item
+        for (const itemObj of items) {
+          const itemName = itemObj.item.trim();
+          const itemQuantity = itemObj.quantity || 1;
+          const itemCategory = itemObj.category || category;
+          const itemStore = itemObj.store || store || null;
+
+          const normalizedItem = itemName.toLowerCase();
+          const duplicate = existingItems.docs.find(
+            (doc) => doc.data().name?.toLowerCase() === normalizedItem
+          );
+
+          if (duplicate) {
+            // Update quantity of existing item
+            const currentQty = duplicate.data().quantity || 1;
+            await duplicate.ref.update({
+              quantity: currentQty + itemQuantity,
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+            });
+
+            results.push({
+              itemId: duplicate.id,
+              name: itemName,
+              quantity: currentQty + itemQuantity,
+              updated: true,
+            });
+          } else {
+            // Create new item
+            const shoppingItemData = {
+              name: itemName,
+              quantity: itemQuantity,
+              category: itemCategory,
+              store: itemStore,
+              purchased: false,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              source: "shortcut",
+            };
+
+            const itemRef = await db
+              .collection(`households/${householdId}/shoppingList`)
+              .add(shoppingItemData);
+
+            results.push({
+              itemId: itemRef.id,
+              name: itemName,
+              quantity: itemQuantity,
+              category: itemCategory,
+              store: itemStore,
+              created: true,
+            });
+          }
+        }
+
+        // 7. Log API call
+        await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
+
+        // 8. Return success with all results
+        jsonResponse(res, 200, {
+          success: true,
+          message: `Added ${results.length} item(s) to shopping list`,
+          data: {
+            items: results,
+            count: results.length,
+          },
+        });
+        return;
+      } catch (error) {
+        logger.error("Error in quickAddShoppingItem (batch):", error);
+        await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 500);
+        errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+        return;
+      }
+    }
+
+    // Single item mode (backwards compatible)
     if (!item || typeof item !== "string") {
       errorResponse(res, 400, "item name is required", "BAD_REQUEST");
       return;
@@ -639,6 +748,163 @@ export const quickAddShoppingItem = onRequest(
     } catch (error) {
       logger.error("Error in quickAddShoppingItem:", error);
       await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 500);
+      errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
+    }
+  }
+);
+
+/**
+ * Helper: Detects command type from text using keyword matching
+ */
+function detectCommandType(text: string): 'shopping' | 'todo' | 'expense' | 'unknown' {
+  const lowerText = text.toLowerCase();
+
+  // Shopping keywords
+  if (lowerText.includes('shopping list') ||
+      lowerText.includes('shopping') ||
+      lowerText.includes('grocery') ||
+      lowerText.includes('groceries') ||
+      lowerText.includes('add to list') ||
+      lowerText.includes('buy') ||
+      lowerText.includes('get milk') ||
+      lowerText.includes('get eggs') ||
+      lowerText.includes('pick up')) {
+    return 'shopping';
+  }
+
+  // Todo keywords
+  if (lowerText.includes('remind me') ||
+      lowerText.includes('to do') ||
+      lowerText.includes('todo') ||
+      lowerText.includes('task') ||
+      lowerText.includes('need to') ||
+      lowerText.includes('remember to') ||
+      lowerText.includes('don\'t forget')) {
+    return 'todo';
+  }
+
+  // Expense keywords
+  if (lowerText.includes('spent') ||
+      lowerText.includes('paid') ||
+      lowerText.includes('cost') ||
+      lowerText.includes('bought') ||
+      lowerText.includes('expense') ||
+      lowerText.includes('$') ||
+      /\d+\s*(dollar|bucks|usd)/.test(lowerText)) {
+    return 'expense';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * POST /quickAddNaturalLanguage
+ * Accepts natural language text from iOS Shortcuts and queues it for processing
+ */
+export const quickAddNaturalLanguage = onRequest(
+  { cors: true, region: "us-central1" },
+  async (req, res) => {
+    // Set CORS headers
+    Object.entries(corsHeaders).forEach(([key, value]) =>
+      res.set(key, value)
+    );
+
+    // Handle preflight
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+
+    if (req.method !== "POST") {
+      errorResponse(res, 405, "Method not allowed", "METHOD_NOT_ALLOWED");
+      return;
+    }
+
+    // 1. Validate API Key
+    const apiKey = extractApiKey(req.headers.authorization);
+    if (!apiKey) {
+      errorResponse(res, 401, "Missing or invalid Authorization header", "UNAUTHORIZED");
+      return;
+    }
+
+    const validation = await validateApiKey(apiKey);
+    if (!validation.valid || !validation.householdId) {
+      errorResponse(res, 401, validation.error || "Invalid API key", "UNAUTHORIZED");
+      return;
+    }
+
+    const { householdId, permissions } = validation;
+
+    // 2. Check permissions (require at least one permission)
+    if (!permissions?.shoppingList && !permissions?.expenses && !permissions?.habits) {
+      errorResponse(res, 403, "API key does not have required permissions", "FORBIDDEN");
+      return;
+    }
+
+    // 3. Check rate limit
+    const rateLimit = await checkRateLimit(householdId, "shopping");
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(Math.ceil((rateLimit.retryAfterMs || 3600000) / 1000)));
+      errorResponse(res, 429, "Rate limit exceeded. Try again later.", "RATE_LIMITED");
+      return;
+    }
+
+    // 4. Validate request body
+    const { text } = req.body;
+
+    if (!text || typeof text !== "string") {
+      errorResponse(res, 400, "Missing required field: text", "BAD_REQUEST");
+      return;
+    }
+
+    const trimmedText = text.trim();
+
+    if (trimmedText.length === 0) {
+      errorResponse(res, 400, "Text cannot be empty", "BAD_REQUEST");
+      return;
+    }
+
+    if (trimmedText.length > 500) {
+      errorResponse(res, 400, "Text too long (max 500 characters)", "BAD_REQUEST");
+      return;
+    }
+
+    // 5. Detect command type
+    const commandType = detectCommandType(trimmedText);
+
+    try {
+
+      // 6. Write to pendingItems collection
+      const pendingItemData = {
+        text: trimmedText,
+        type: commandType,
+        source: "shortcut",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        processed: false,
+      };
+
+      const pendingRef = await db
+        .collection(`households/${householdId}/pendingItems`)
+        .add(pendingItemData);
+
+      // 7. Log API call
+      await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
+
+      // 8. Return success
+      jsonResponse(res, 200, {
+        success: true,
+        message: "Command queued. Open app to process.",
+        data: {
+          itemId: pendingRef.id,
+          type: commandType,
+          text: trimmedText,
+        },
+      });
+    } catch (error) {
+      logger.error("Error in quickAddNaturalLanguage:", error);
+      if (householdId && apiKey) {
+        await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 500);
+      }
       errorResponse(res, 500, "Internal server error", "INTERNAL_ERROR");
     }
   }

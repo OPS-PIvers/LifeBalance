@@ -340,8 +340,25 @@ export interface Household {
 }
 
 /**
+ * PendingItem Interface
+ *
+ * Stores raw voice commands from iOS Shortcuts for processing when app loads.
+ * After Gemini parses the text, items are added to appropriate lists and marked processed.
+ */
+export interface PendingItem {
+  id: string;
+  text: string; // Raw voice input
+  type?: 'shopping' | 'todo' | 'expense' | 'unknown'; // Detected from keywords
+  source: 'shortcut';
+  createdAt: string; // ISO timestamp
+  processed: boolean; // False until app processes it
+  processedAt?: string; // ISO timestamp
+  error?: string; // If Gemini parsing fails
+}
+
+/**
  * ToDo Interface
- * 
+ *
  * Date Field Conventions:
  * - completeByDate: Uses YYYY-MM-DD (date-only) format for scheduling and due date grouping
  * - completedAt: Uses ISO timestamp (with time) to record the exact moment of completion
@@ -356,6 +373,11 @@ export interface ToDo {
   completedAt?: string; // ISO timestamp
   createdBy: string; // uid
   createdAt: string; // ISO timestamp
+
+  // New fields for natural language support
+  priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
+  notes?: string; // Additional task details
+  source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
 }
 
 export interface UpdateBucketPayload {

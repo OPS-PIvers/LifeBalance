@@ -8,7 +8,7 @@ import { formatInTimeZone } from "date-fns-tz";
 admin.initializeApp();
 
 // Export Quick Add HTTP functions for iOS Shortcuts
-export { quickAddHabit, quickAddExpense, quickAddReceipt, quickAddShoppingItem } from "./quickAdd";
+export { quickAddHabit, quickAddExpense, quickAddReceipt, quickAddShoppingItem, quickAddNaturalLanguage } from "./quickAdd";
 
 const db = admin.firestore();
 const messaging = admin.messaging();

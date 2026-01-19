@@ -8,12 +8,13 @@ interface ShortcutExample {
   title: string;
   icon: React.ReactNode;
   description: string;
-  endpoint: 'habit' | 'expense' | 'shopping';
+  endpoint: 'habit' | 'expense' | 'shopping' | 'naturalLanguage';
   fields: { key: string; value: string; valueType: 'Text' | 'Number'; isVariable?: boolean }[];
   preActions?: string[];
   postActions?: string[];
   isAutomation?: boolean;  // True for automations that provide variables automatically
   automationNote?: string; // Extra note for automations
+  isRecommended?: boolean; // True to highlight as recommended approach
 }
 
 const ShortcutSetupGuide: React.FC = () => {
@@ -29,6 +30,29 @@ const ShortcutSetupGuide: React.FC = () => {
   };
 
   const examples: ShortcutExample[] = [
+    {
+      id: 'natural-language',
+      title: 'Natural Language Quick Add',
+      icon: <Mic className="w-5 h-5" />,
+      description: '🌟 RECOMMENDED: Speak naturally to add shopping items, todos, or expenses - no counting needed!',
+      endpoint: 'naturalLanguage',
+      isRecommended: true,
+      fields: [
+        { key: 'text', value: 'Text Input', valueType: 'Text', isVariable: true },
+      ],
+      preActions: [
+        'Add "Ask for Input" → tap Prompt field → type "What would you like to add?"',
+        'Tap "Text" (keep as Text) → toggle ON "Allow Speech Input"',
+        'Add "Set Variable" → tap "Variable Name" → type "Text Input"',
+      ],
+      postActions: [
+        'Add "Show Notification" → notification will confirm items queued',
+        'Open LifeBalance app to see processed items',
+        'Tap shortcut name at top → rename to "Quick Add to LifeBalance"',
+        'Tap ⓘ icon → toggle ON "Show in Share Sheet" and "Show in App"',
+        'Say: "Hey Siri, add milk, eggs, and bread to shopping list" or "Remind me to fix the sink and call dentist"',
+      ],
+    },
     {
       id: 'habit',
       title: 'Quick Habit Toggle',

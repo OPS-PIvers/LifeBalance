@@ -397,6 +397,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores,
     groceryCategories,
     apiKeys: [], // iOS Shortcuts - empty in test mode
+    pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
     // Operations
     addAccount,
