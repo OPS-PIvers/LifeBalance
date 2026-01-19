@@ -15,7 +15,7 @@ const { analyzeHabitPatternsMock, mockHouseholdContext } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/services/geminiService', () => ({
-  analyzeHabitPatterns: (...args: any[]) => analyzeHabitPatternsMock(...args),
+  analyzeHabitPatterns: (...args: unknown[]) => analyzeHabitPatternsMock(...args),
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
