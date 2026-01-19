@@ -3,7 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
-import { Loader2, Plus, Trash2, Copy } from 'lucide-react';
+import { Loader2, Plus, Trash2, Copy, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface DeveloperConsoleProps {
@@ -94,6 +94,13 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
       <div className="flex flex-col h-[70vh]">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 id="dev-console-title" className="text-xl font-bold">Developer Console</h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors"
+              aria-label="Close"
+            >
+              <X size={20} />
+            </button>
         </div>
 
         {/* Tabs */}
