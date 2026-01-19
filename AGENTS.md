@@ -50,7 +50,186 @@
 
 ---
 
-## 3. File Structure & Purpose
+## 3. Code Quality & Error Suppression Policy
+
+### 🚨 CRITICAL RULE: ZERO TOLERANCE FOR ERROR SUPPRESSIONS
+
+**IT IS NEVER ACCEPTABLE TO SUPPRESS LINT OR TYPE ERRORS IF THERE IS ANY OTHER WAY TO FIX THE ACTUAL ISSUE.**
+
+This is a **top priority rule** that supersedes convenience or speed.
+
+### 3.1. Forbidden Suppressions
+
+**NEVER add these without explicit written approval from the repository owner:**
+
+```typescript
+/* eslint-disable */                           // ❌ FORBIDDEN - Blanket file-level disable
+// @ts-ignore                                  // ❌ FORBIDDEN - Hides type errors
+// @ts-expect-error                            // ❌ FORBIDDEN - Hides type errors
+// @ts-nocheck                                 // ❌ FORBIDDEN - Disables all type checking
+// eslint-disable-next-line [any-rule]         // ⚠️  REQUIRES DETAILED JUSTIFICATION
+```
+
+### 3.2. Why This Matters
+
+Suppressions hide real issues:
+- **Type errors**: Can cause runtime crashes, data corruption, security vulnerabilities
+- **Unused variables**: Often indicate dead code or logic errors
+- **Missing dependencies**: Cause stale closures, subtle bugs, and race conditions
+- **Exhaustive deps**: Lead to effects not re-running when they should, causing UI desync
+
+### 3.3. When Suppressions Are Acceptable (Rare Exceptions Only)
+
+1. **React Context/Hook Exports** (standard pattern):
+   ```typescript
+   // ✅ ACCEPTABLE - Context files legitimately export non-components
+   // eslint-disable-next-line react-refresh/only-export-components
+   export const useMyContext = () => { ... }
+   ```
+
+2. **Third-party Library Type Issues** (beyond our control):
+   ```typescript
+   // ✅ ACCEPTABLE IF:
+   // - Includes link to upstream issue/PR
+   // - Includes TODO to remove when fixed
+   // - Documented in LINT_SUPPRESSIONS.md
+   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   const chartData: any = externalLib.getData(); // TODO: Remove when https://github.com/lib/issue/123 is fixed
+   ```
+
+3. **Temporary Workarounds** (extremely rare, requires approval):
+   - Must include detailed comment explaining WHY the proper fix isn't possible
+   - Must include TODO with owner and timeline
+   - Must be tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md)
+   - Will be reviewed in next PR
+
+### 3.4. How to Fix Instead of Suppress
+
+**For `@typescript-eslint/no-explicit-any`:**
+```typescript
+// ❌ BAD - Suppressing
+// @ts-ignore
+const data: any = await fetchData();
+
+// ✅ GOOD - Proper typing
+interface FirestoreDocument {
+  id: string;
+  name: string;
+  createdAt: Timestamp;
+}
+const data = await fetchData() as FirestoreDocument;
+
+// ✅ ALSO GOOD - Using generics
+async function fetchData<T>(): Promise<T> { ... }
+const data = await fetchData<UserData>();
+```
+
+**For `react-hooks/exhaustive-deps`:**
+```typescript
+// ❌ BAD - Suppressing dependency warning
+useEffect(() => {
+  calculateTotal(items, settings);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [items]); // Missing settings!
+
+// ✅ GOOD - Add the dependency
+useEffect(() => {
+  calculateTotal(items, settings);
+}, [items, settings]);
+
+// ✅ ALSO GOOD - Use ref if intentionally static
+const settingsRef = useRef(settings);
+useEffect(() => {
+  calculateTotal(items, settingsRef.current);
+}, [items]);
+```
+
+**For `@typescript-eslint/no-unused-vars`:**
+```typescript
+// ❌ BAD - Suppressing unused var
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const unusedVar = getData();
+
+// ✅ GOOD - Remove it entirely
+// (Just delete the line)
+
+// ✅ ALSO GOOD - Prefix with _ if required by signature
+function handler(_event: Event, data: Data) {
+  // _event is required by signature but not used
+  process(data);
+}
+```
+
+**For blanket `/* eslint-disable */`:**
+```typescript
+// ❌ BAD - Hiding all errors in entire file
+/* eslint-disable */
+
+// ✅ GOOD - Remove and fix each error individually
+// (No suppression needed if code is written correctly)
+```
+
+### 3.5. Current Technical Debt
+
+**This codebase currently has 38 files with blanket `/* eslint-disable */` suppressions.**
+
+See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
+- Complete audit of all suppressions
+- Status of each (acceptable vs. needs fixing)
+- Action plan for eliminating technical debt
+
+**Your Responsibility as an Agent:**
+- ✅ **NEVER** add new suppressions
+- ✅ **ALWAYS** fix errors properly
+- ✅ **REMOVE** suppressions when touching files that have them
+- ✅ **DOCUMENT** if you must add a suppression (rare)
+
+### 3.6. Verification
+
+Before submitting code:
+```bash
+# 1. Must pass type checking
+npx tsc --noEmit
+
+# 2. Must pass linting
+npm run lint
+
+# 3. Must build successfully
+npm run build
+```
+
+If any of these fail, fix the actual issue. **Do not suppress.**
+
+### 3.7. Example: Recent Fix
+
+**Bad approach (suppressing):**
+```typescript
+// ❌ This was done incorrectly
+useEffect(() => {
+  syncPoints();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [householdId, householdSettings?.points]); // Missing householdSettings in usage!
+```
+
+**Good approach (fixing properly):**
+```typescript
+// ✅ This was the correct fix
+useEffect(() => {
+  if (!householdSettings?.points) return;
+  const currentPoints = householdSettings.points; // Now directly using what we're watching
+  syncPoints(currentPoints);
+}, [householdId, householdSettings?.points]); // Deps match usage
+```
+
+**Result:**
+- No stale closures
+- No false sense of security
+- Code is more maintainable
+- Linter helps catch future bugs
+
+---
+
+## 4. File Structure & Purpose
 
 ```text
 /
@@ -95,9 +274,9 @@
 
 ---
 
-## 4. Architecture & Core Logic
+## 5. Architecture & Core Logic
 
-### 4.1. The "Brain": `FirebaseHouseholdContext`
+### 5.1. The "Brain": `FirebaseHouseholdContext`
 This context syncs all Firestore collections in real-time. It exposes:
 - **Data**: `accounts`, `buckets`, `transactions`, `habits`, `pantry`, `meals`, `mealPlan`, `shoppingList`, `safeToSpend`, etc.
 - **Actions**: `addTransaction`, `toggleHabit`, `payCalendarItem`, `addPantryItem`, `addMeal`, `addMealPlanItem`, `addShoppingItem`, etc.
@@ -107,7 +286,7 @@ This context syncs all Firestore collections in real-time. It exposes:
 - **Derived State**: Calculates `safeToSpend`, `dailyPoints` on the fly.
 - **Migration**: Automatically runs data migrations (e.g., `migrateToPaycheckPeriods`).
 
-### 4.2. Financial Logic
+### 5.2. Financial Logic
 **Safe-to-Spend Formula (`utils/safeToSpendCalculator.ts`):**
 ```
 Safe-to-Spend = (Checking Account Balance)
@@ -125,7 +304,7 @@ Safe-to-Spend = (Checking Account Balance)
     2. Buckets are "reset" (limits restored, spend clears).
     3. `currentPeriodId` updates.
 
-### 4.3. Habit & Gamification Logic
+### 5.3. Habit & Gamification Logic
 **Scoring Types (`utils/habitLogic.ts`):**
 1.  **Threshold**: Points awarded ONLY when `targetCount` is reached (e.g., "Drink 8 glasses of water").
 2.  **Incremental**: Points awarded PER action (e.g., "Do 1 pushup").
@@ -141,7 +320,7 @@ Safe-to-Spend = (Checking Account Balance)
 - **Tokens**: Earned monthly (max 3).
 - Logic in `utils/freezeBankValidator.ts`.
 
-### 4.4. AI Integration (Gemini)
+### 5.4. AI Integration (Gemini)
 - Located in `services/geminiService.ts`.
 - **Receipt Scanning**: Extracts merchant, amount, category from expense receipts (model: `gemini-3-flash-preview`).
 - **Statement Parsing**: Parses full bank statement screenshots into transaction lists.
@@ -152,7 +331,7 @@ Safe-to-Spend = (Checking Account Balance)
 
 **Performance Note**: All AI image processing functions use `Promise.allSettled()` for concurrent item creation to handle partial failures gracefully.
 
-### 4.5. Meals & Nutrition System
+### 5.5. Meals & Nutrition System
 **Location**: `pages/MealsPage.tsx` with tabs for Pantry, Meal Plan, and Shopping List.
 
 **Data Models** (in `types/schema.ts`):
@@ -194,11 +373,11 @@ households/{householdId}/
 
 ---
 
-## 5. AI Agent Test Mode (Auth Bypass)
+## 6. AI Agent Test Mode (Auth Bypass)
 
 **LifeBalance includes a secure test mode specifically designed for AI coding agents to explore and test the application without requiring Firebase authentication.**
 
-### 5.1. How to Activate Test Mode
+### 6.1. How to Activate Test Mode
 
 **Requirements:**
 1. Running in development mode (`npm run dev`)
@@ -219,7 +398,7 @@ npm run dev
 # 4. Application loads with mock data, no login required
 ```
 
-### 5.2. Security Features
+### 6.2. Security Features
 
 Test mode has **triple-layer protection** to prevent accidental production usage:
 
@@ -232,7 +411,7 @@ Test mode has **triple-layer protection** to prevent accidental production usage
 - Vite's tree-shaking removes all test mode code during `npm run build`
 - Multiple build checks confirm zero production bundle impact
 
-### 5.3. What Test Mode Provides
+### 6.3. What Test Mode Provides
 
 **Mock Authentication:**
 - Pre-authenticated as "Test User" (test@example.com)
@@ -257,7 +436,7 @@ All context methods are fully implemented with **in-memory persistence**:
 - ✅ Toggle habits, update balances, manage grocery categories
 - ✅ All operations show toast notifications
 
-### 5.4. Implementation Details
+### 6.4. Implementation Details
 
 **Key Files:**
 - `contexts/MockAuthContext.tsx` - Mock Firebase authentication provider
@@ -271,7 +450,7 @@ All context methods are fully implemented with **in-memory persistence**:
 - All state kept in-memory (React `useState`) - zero Firebase calls
 - Mock code automatically **tree-shaken** from production builds
 
-### 5.5. Using Test Mode as an AI Agent
+### 6.5. Using Test Mode as an AI Agent
 
 When test mode is active:
 - Orange banner displays: "🧪 TEST MODE - MOCK DATA (Development Only)"
@@ -291,7 +470,7 @@ sessionStorage.removeItem('LIFEBALANCE_TEST_MODE');
 window.location.reload();
 ```
 
-### 5.6. Verification
+### 6.6. Verification
 
 To verify test mode is properly excluded from production:
 ```bash
@@ -307,7 +486,7 @@ grep -r "TEST MODE" dist/
 
 ---
 
-## 6. Deployment & Environment
+## 7. Deployment & Environment
 
 - **Hosting**: Firebase Hosting.
 - **Build Command**: `npm run build` (uses Vite).
@@ -319,7 +498,7 @@ grep -r "TEST MODE" dist/
 
 ---
 
-## 7. Verification Steps (How to Test)
+## 8. Verification Steps (How to Test)
 
 Before submitting ANY change, you must verify:
 
@@ -330,10 +509,10 @@ Before submitting ANY change, you must verify:
     - Check the browser console for errors.
     - Verify strict adherence to the Tailwind theme (colors, fonts).
 4.  **Test Mode Check** (for AI agents):
-    - If you don't have Firebase credentials, use test mode (see Section 5).
+    - If you don't have Firebase credentials, use test mode (see Section 6).
     - Verify your changes work with mock data before submitting.
 
-## 8. Common Pitfalls to AVOID
+## 9. Common Pitfalls to AVOID
 
 - **❌ Importing from `src/`**: It will fail. Import from root or use `@/`.
 - **❌ Modifying `tailwind.config.js`**: It doesn't exist. Edit `index.html`.
@@ -343,6 +522,6 @@ Before submitting ANY change, you must verify:
 - **❌ Writing `id` field to Firestore**: Use object destructuring `const { id, ...data } = item` before spreading in `updateDoc()` calls.
 - **❌ Forgetting duplicate prevention**: When adding items to pantry/shopping list, check for existing items using normalized name/category matching.
 
-## 9. Agent Journals
+## 10. Agent Journals
 
 Regardless of the capitalization in the user's prompt (e.g., .Jules, .jules, Jules), always use the .jules directory for reading and writing agent journals. Consolidate all agent logs there.

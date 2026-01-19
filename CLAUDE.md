@@ -229,6 +229,121 @@ The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensi
   - AI meal suggestions based on available ingredients, budget, and time
   - Dashboard insights (currently randomized, expandable for future AI integration)
 
+## Code Quality Standards
+
+### 🚨 CRITICAL: Zero Tolerance for Error Suppressions
+
+**IT IS NEVER ACCEPTABLE TO SUPPRESS LINT OR TYPE ERRORS IF THERE IS ANY OTHER WAY TO FIX THE ACTUAL ISSUE.**
+
+This is the **#1 most important rule** for maintaining code quality in this project.
+
+#### Forbidden Suppressions
+
+**NEVER add these without explicit approval:**
+
+```typescript
+/* eslint-disable */                           // ❌ FORBIDDEN - Blanket file-level disable
+// @ts-ignore                                  // ❌ FORBIDDEN - Hides type errors
+// @ts-expect-error                            // ❌ FORBIDDEN - Hides type errors
+// @ts-nocheck                                 // ❌ FORBIDDEN - Disables all type checking
+// eslint-disable-next-line [rule]             // ⚠️  REQUIRES JUSTIFICATION
+```
+
+#### When Suppressions Are Acceptable
+
+Suppressions are **ONLY** acceptable for:
+
+1. **React Context/Hook Exports** (legitimate pattern):
+   ```typescript
+   // eslint-disable-next-line react-refresh/only-export-components
+   export const useMyContext = () => { ... }
+   ```
+
+2. **Third-party Library Issues** (beyond our control):
+   - Must include a comment with link to upstream issue
+   - Must include a TODO to remove when fixed upstream
+
+3. **Temporary Workarounds** (rare, requires approval):
+   - Must include a detailed comment explaining WHY
+   - Must include a TODO with assigned owner and timeline
+   - Must be tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md)
+
+#### How to Fix Common Suppressions
+
+**Instead of `/* eslint-disable */`:**
+1. Remove the suppression
+2. Run `npm run lint` to see actual errors
+3. Fix each error individually
+4. If truly needed, use granular `eslint-disable-next-line` with justification
+
+**Instead of `@typescript-eslint/no-explicit-any`:**
+1. Define proper TypeScript interfaces/types
+2. Use generics where appropriate
+3. Import types from third-party libraries
+4. Use `unknown` instead of `any`, then narrow with type guards
+
+**Instead of `react-hooks/exhaustive-deps`:**
+1. Add the missing dependencies to the array
+2. If the effect intentionally shouldn't re-run, restructure the code:
+   - Use refs for values that shouldn't trigger re-runs
+   - Move logic outside the component
+   - Split into multiple effects
+3. **NEVER suppress without understanding the implications** - this causes stale closure bugs
+
+**Instead of `@typescript-eslint/no-unused-vars`:**
+1. Remove the unused variable
+2. If required by a function signature, prefix with `_` (e.g., `_unusedParam`)
+3. If it's dead code, delete it
+
+#### Current Technical Debt
+
+See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
+- Complete audit of all suppressions in the codebase
+- Status of each suppression (acceptable vs. needs fixing)
+- Action items for eliminating technical debt
+
+**Current stats:**
+- 38 files with blanket `/* eslint-disable */` - **ALL NEED FIXING**
+- 20+ inline suppressions - **MOST NEED REVIEW**
+
+#### Enforcement
+
+- All new code **MUST** pass linting without suppressions
+- Pull requests with new suppressions will be rejected unless justified
+- Existing suppressions should be removed as files are touched
+- Goal: Zero suppressions except for legitimate exceptions
+
+#### Examples of Good vs. Bad Practices
+
+**❌ BAD - Suppressing instead of fixing:**
+```typescript
+useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [householdId]); // Missing householdSettings dependency!
+```
+
+**✅ GOOD - Actually fixing the issue:**
+```typescript
+useEffect(() => {
+  // Now includes all dependencies
+}, [householdId, householdSettings]);
+```
+
+**❌ BAD - Using any:**
+```typescript
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const data: any = await fetchData();
+```
+
+**✅ GOOD - Proper typing:**
+```typescript
+interface UserData {
+  id: string;
+  name: string;
+}
+const data: UserData = await fetchData();
+```
+
 ## Test Mode for AI Coding Agents
 
 LifeBalance includes a **secure test mode** specifically designed for AI coding agents to explore and test the application without requiring Firebase authentication or a real backend.
