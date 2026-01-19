@@ -176,7 +176,7 @@ export interface HouseholdContextType {
   removeMember: (memberId: string) => Promise<void>;
 
   // Pantry Actions
-  addPantryItem: (item: Omit<PantryItem, 'id'>) => Promise<void>;
+  addPantryItem: (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => Promise<void>;
   updatePantryItem: (item: PantryItem) => Promise<void>;
   deletePantryItem: (id: string) => Promise<void>;
 
@@ -2290,7 +2290,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: PANTRY ---
 
-  const addPantryItem = async (item: Omit<PantryItem, 'id'>) => {
+  const addPantryItem = async (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => {
     if (!householdId || !user) return;
     try {
       // Default purchaseDate to today if not present
@@ -2302,7 +2302,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         ...sanitizedItem,
         createdAt: serverTimestamp(),
       });
-      toast.success('Added to pantry');
+      if (!options?.suppressToast) {
+        toast.success('Added to pantry');
+      }
     } catch (error) {
       console.error('[addPantryItem] Failed:', error);
       toast.error('Failed to add item');

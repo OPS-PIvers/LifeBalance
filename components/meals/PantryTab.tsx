@@ -205,7 +205,7 @@ const PantryTab: React.FC = () => {
       const items = await analyzePantryImage(householdId, base64, availableCategories);
 
       // Add all found items concurrently, handling partial failures
-      const results = await Promise.allSettled(items.map(item => addPantryItem(item)));
+      const results = await Promise.allSettled(items.map(item => addPantryItem(item, { suppressToast: true })));
       const successCount = results.filter(result => result.status === 'fulfilled').length;
       const failureCount = results.length - successCount;
 
