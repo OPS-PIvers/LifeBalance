@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2, Download, Layers, CheckSquare, Tag, Check } from 'lucide-react';
+import { Search, Filter, X, Edit, Trash2, History, ArrowUpRight, ArrowDownLeft, FileText, Loader2, Download, Layers, CheckSquare, Tag, Check, Copy } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -32,12 +32,13 @@ interface TransactionItemProps {
   transaction: Transaction;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
+  onDuplicate: (tx: Transaction) => void;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
 }
 
-const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -99,6 +100,13 @@ const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, isSelectionMo
               <Edit size={16} />
             </button>
             <button
+              onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
+              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
+            >
+              <Copy size={16} />
+            </button>
+            <button
               onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
               className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
               aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
@@ -130,6 +138,7 @@ const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, isSelectionMo
     p.relatedHabitIds === n.relatedHabitIds &&
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onDuplicate === nextProps.onDuplicate &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onToggleSelection === nextProps.onToggleSelection
@@ -141,7 +150,7 @@ TransactionItem.displayName = 'TransactionItem';
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -212,6 +221,25 @@ const TransactionMasterList: React.FC = () => {
   const handleDeleteClick = useCallback((tx: Transaction) => {
     setTransactionToDelete(tx);
   }, []);
+
+  const handleDuplicate = useCallback(async (tx: Transaction) => {
+    try {
+      await addTransaction({
+        ...tx,
+        date: new Date().toISOString().split('T')[0], // Default to today
+        id: undefined as unknown as string, // Let Firestore generate ID
+        status: 'verified',
+        isRecurring: false,
+        source: 'manual',
+        payPeriodId: undefined, // Let context logic handle pay period assignment
+        relatedHabitIds: [], // Don't carry over habit links
+      });
+      toast.success('Transaction duplicated');
+    } catch (error) {
+      console.error('Failed to duplicate transaction:', error);
+      toast.error('Failed to duplicate transaction');
+    }
+  }, [addTransaction]);
 
   const confirmDelete = async () => {
     if (!transactionToDelete || isDeleting) return;
@@ -485,6 +513,7 @@ const TransactionMasterList: React.FC = () => {
               transaction={tx}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
+              onDuplicate={handleDuplicate}
               isSelectionMode={isSelectionMode}
               isSelected={selectedIds.has(tx.id)}
               onToggleSelection={toggleSelection}

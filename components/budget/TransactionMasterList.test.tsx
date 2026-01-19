@@ -64,11 +64,13 @@ vi.mock('lucide-react', () => ({
   CheckSquare: () => <div data-testid="check-square-icon" />,
   Tag: () => <div data-testid="tag-icon" />,
   Check: () => <div data-testid="check-icon" />,
+  Copy: () => <div data-testid="copy-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
   const mockDeleteTransaction = vi.fn();
   const mockUpdateTransaction = vi.fn();
+  const mockAddTransaction = vi.fn();
 
   const mockTransactions = [
     {
@@ -112,6 +114,7 @@ describe('TransactionMasterList', () => {
       transactions: mockTransactions,
       deleteTransaction: mockDeleteTransaction,
       updateTransaction: mockUpdateTransaction,
+      addTransaction: mockAddTransaction,
     } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm
@@ -220,6 +223,25 @@ describe('TransactionMasterList', () => {
       fireEvent.click(editButtons[0]); // Click first one
 
       expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    });
+
+    it('duplicates a transaction', async () => {
+      render(<TransactionMasterList />);
+
+      const duplicateButtons = screen.getAllByLabelText(/Duplicate transaction from/);
+      fireEvent.click(duplicateButtons[0]); // Click first one (Bus Ticket)
+
+      await waitFor(() => {
+        expect(mockAddTransaction).toHaveBeenCalledWith(expect.objectContaining({
+          merchant: 'Bus Ticket',
+          amount: 5,
+          category: 'Transport',
+          source: 'manual',
+          isRecurring: false,
+          status: 'verified',
+          date: new Date().toISOString().split('T')[0]
+        }));
+      });
     });
   });
 
