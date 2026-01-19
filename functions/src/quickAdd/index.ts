@@ -115,6 +115,11 @@ export const quickAddHabit = onRequest(
     }
 
     // Security: Input validation
+    if (habitId && (typeof habitId !== "string" || habitId.length > 100)) {
+      errorResponse(res, 400, "habitId must be a string (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
     if (habitName && (typeof habitName !== "string" || habitName.length > 100)) {
       errorResponse(res, 400, "habitName too long (max 100 chars)", "BAD_REQUEST");
       return;
@@ -293,14 +298,18 @@ export const quickAddExpense = onRequest(
       return;
     }
 
-    if (category && (typeof category !== "string" || category.length > 50)) {
-      errorResponse(res, 400, "category too long (max 50 chars)", "BAD_REQUEST");
-      return;
+    if (category !== undefined && category !== null) {
+      if (typeof category !== "string" || category.length > 50) {
+        errorResponse(res, 400, "category must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
-    if (notes && (typeof notes !== "string" || notes.length > 500)) {
-      errorResponse(res, 400, "notes too long (max 500 chars)", "BAD_REQUEST");
-      return;
+    if (notes !== undefined && notes !== null) {
+      if (typeof notes !== "string" || notes.length > 500) {
+        errorResponse(res, 400, "notes must be a string (max 500 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
     const transactionDate = date || format(new Date(), "yyyy-MM-dd");
@@ -529,14 +538,18 @@ export const quickAddShoppingItem = onRequest(
       return;
     }
 
-    if (category && (typeof category !== "string" || category.length > 50)) {
-      errorResponse(res, 400, "category too long (max 50 chars)", "BAD_REQUEST");
-      return;
+    if (category !== undefined && category !== null) {
+      if (typeof category !== "string" || category.length > 50) {
+        errorResponse(res, 400, "category must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
-    if (store && (typeof store !== "string" || store.length > 50)) {
-      errorResponse(res, 400, "store name too long (max 50 chars)", "BAD_REQUEST");
-      return;
+    if (store !== undefined && store !== null) {
+      if (typeof store !== "string" || store.length > 50) {
+        errorResponse(res, 400, "store name must be a string (max 50 chars)", "BAD_REQUEST");
+        return;
+      }
     }
 
     if (typeof quantity !== "number" || quantity < 1) {
