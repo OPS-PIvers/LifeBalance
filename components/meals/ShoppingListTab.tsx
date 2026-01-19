@@ -250,22 +250,33 @@ const ShoppingListTab: React.FC = () => {
     if (selectedIds.size === 0) return;
     setIsBatchProcessing(true);
     try {
-      // Filter for items that are NOT yet purchased, to avoid un-purchasing them if we naively toggle
-      // However, toggleShoppingItemPurchased logic is a toggle.
-      // So we must check the current state of each item.
-      const promises = Array.from(selectedIds).map(async (id) => {
+      // 1. Identify items that actually need to be purchased
+      const itemsToPurchase = Array.from(selectedIds).filter(id => {
         const item = shoppingList.find(i => i.id === id);
-        if (item && !item.isPurchased) {
-            return toggleShoppingItemPurchased(id);
-        }
-        return Promise.resolve();
+        return item && !item.isPurchased;
       });
+
+      if (itemsToPurchase.length === 0) {
+        toast('All selected items are already marked as purchased', { icon: 'ℹ️' });
+        setSelectedIds(new Set());
+        setIsSelectionMode(false);
+        setIsBatchProcessing(false);
+        return;
+      }
+
+      // 2. Perform actions only on those items
+      const promises = itemsToPurchase.map(id => toggleShoppingItemPurchased(id));
 
       const results = await Promise.allSettled(promises);
       const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
 
       if (successful > 0) {
         toast.success(`Marked ${successful} items as purchased`);
+      }
+
+      if (failed > 0) {
+        toast.error(`Failed to update ${failed} items`);
       }
 
       setSelectedIds(new Set());
