@@ -499,7 +499,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
                 item.text,
                 item.type || 'unknown',
                 {
-                  shopping: GROCERY_CATEGORIES,
+                  shopping: [...GROCERY_CATEGORIES],
                   expense: expenseCategories
                 }
               );
