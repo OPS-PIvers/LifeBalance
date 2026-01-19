@@ -673,7 +673,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runPaycheckMigration();
 
-  }, [householdId, householdSettings, buckets]);
+  }, [householdId, householdSettings]);
 
   // Migrate orphaned preset habits to custom habits
   const hasAttemptedHabitMigration = useRef(false);
@@ -2017,7 +2017,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
   };
 
-  const rolloverFreezeBankTokens = async () => {
+  const rolloverFreezeBankTokens = useCallback(async () => {
     if (!householdId || !freezeBank) return;
 
     const now = new Date();
@@ -2055,7 +2055,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     toast.success(`❄️ Freeze Bank rollover: ${tokensAdded} tokens added!`);
-  };
+  }, [householdId, freezeBank]);
 
   // --- ACTIONS: MEMBER MANAGEMENT ---
 
@@ -2788,8 +2788,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (freezeBank.lastRolloverMonth !== currentMonth) {
       await rolloverFreezeBankTokens();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [householdId, freezeBank]);
+  }, [householdId, freezeBank, rolloverFreezeBankTokens]);
 
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
