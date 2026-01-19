@@ -82,7 +82,7 @@ const SEED_STORES: Store[] = [
 ];
 
 const SEED_PANTRY: PantryItem[] = [
-  { id: 'p1', name: 'Milk', quantity: '1 gallon', category: 'Dairy', expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+  { id: 'p1', name: 'Milk', quantity: '1 gallon', category: 'Dairy' },
   { id: 'p2', name: 'Eggs', quantity: '12 count', category: 'Protein' },
 ];
 

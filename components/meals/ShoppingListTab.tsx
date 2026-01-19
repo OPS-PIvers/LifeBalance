@@ -114,7 +114,7 @@ const ShoppingListTab: React.FC = () => {
             name: item.name,
             quantity: item.quantity || '1',
             category: item.category,
-            expiryDate: item.expiryDate
+            purchaseDate: new Date().toISOString().split('T')[0],
           })
         ));
 

@@ -152,7 +152,6 @@ export interface GroceryItem {
   quantity?: string;
   category: string;
   store?: string;
-  expiryDate?: string;
 }
 
 /**
@@ -404,7 +403,6 @@ export const analyzePantryImage = async (
                 1. Provide a clear, concise 'name' (normalized, user-friendly, fix typos).
                 2. Estimate 'quantity' visible (e.g., "1 box", "approx 500g", "half full").
                 3. Assign the most appropriate 'category' from this list: ${categoriesStr}.
-                4. 'expiryDate': (Optional) If an expiry date is clearly visible, provide in YYYY-MM-DD. Otherwise null.
 
                 Return a JSON array of these items.`;
 
@@ -419,7 +417,6 @@ export const analyzePantryImage = async (
             name: { type: Type.STRING },
             quantity: { type: Type.STRING },
             category: { type: Type.STRING },
-            expiryDate: { type: Type.STRING, nullable: true },
           },
           required: ["name", "quantity", "category"]
         }
@@ -467,17 +464,15 @@ export const suggestMeal = async (
   try {
     // Include IDs for pantry items so AI can match them
     const pantryList = options.pantryItems.map(p => {
-      const expiry = p.expiryDate ? ` [Exp: ${p.expiryDate}]` : '';
       // Sanitize inputs to prevent prompt injection
       const safeName = sanitizeForPrompt(p.name);
       const safeQuantity = p.quantity ? sanitizeForPrompt(p.quantity) : '';
-      return `ID:${p.id} - ${safeName} (${safeQuantity})${expiry}`;
+      return `ID:${p.id} - ${safeName} (${safeQuantity})`;
     }).join(', ');
     const previousMealsList = options.previousMeals.map(m => sanitizeForPrompt(m.name)).join(', ');
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
-    if (options.prioritizeExpiring) prompt += `- MUST prioritize using items that are expiring soon (marked with [Exp: YYYY-MM-DD]).\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
@@ -552,7 +547,6 @@ export const parseGroceryReceipt = async (
                 2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
                 3. Extract and Standardize 'quantity' if specified (e.g., "2" -> "2 ct", "1 lb" -> "1 lb"), otherwise "1".
                 4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
-                5. Estimate a logical 'expiryDate' (YYYY-MM-DD) based on the item type (e.g., Produce ~1 week, Dairy ~2 weeks, Canned ~2 years) from today.
 
                 Ignore taxes, subtotal, total, and non-product lines.
                 Return a JSON array of items.`;
@@ -568,8 +562,7 @@ export const parseGroceryReceipt = async (
             name: { type: Type.STRING },
             quantity: { type: Type.STRING },
             category: { type: Type.STRING },
-            store: { type: Type.STRING },
-            expiryDate: { type: Type.STRING, nullable: true }
+            store: { type: Type.STRING }
           },
           required: ["name", "quantity", "category"]
         }
