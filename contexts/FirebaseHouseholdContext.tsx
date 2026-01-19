@@ -2311,14 +2311,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           });
         } else {
           // Add new catalog item
-          await addDoc(collection(db, `households/${householdId}/groceryCatalog`), {
+          const newCatalogItem = {
             name: item.name,
             category: item.category,
             defaultQuantity: item.quantity,
             defaultStore: item.store,
             lastPurchased: new Date().toISOString(),
             purchaseCount: 1
-          });
+          };
+          await addDoc(collection(db, `households/${householdId}/groceryCatalog`), sanitizeFirestoreData(newCatalogItem));
         }
 
         // 2. Add to pantry if not already exists (robust check by normalized name/category)
@@ -2333,11 +2334,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const alreadyInPantry = pantryKeySet.has(itemKey);
 
         if (!alreadyInPantry) {
-            await addDoc(collection(db, `households/${householdId}/pantry`), {
+            const newPantryItem = {
                 name: item.name,
                 category: item.category,
                 quantity: item.quantity || '1',
                 purchaseDate: new Date().toISOString().split('T')[0],
+            };
+            await addDoc(collection(db, `households/${householdId}/pantry`), {
+                ...sanitizeFirestoreData(newPantryItem),
                 createdAt: serverTimestamp(),
             });
             toast.success('Added to Pantry');
