@@ -85,16 +85,16 @@ describe('HabitCoach', () => {
   });
 
   it('handles analysis error', async () => {
-     const user = userEvent.setup();
-     analyzeHabitPatternsMock.mockRejectedValue(new Error('API Error'));
-     const toast = (await import('react-hot-toast')).default;
+    const user = userEvent.setup();
+    analyzeHabitPatternsMock.mockRejectedValue(new Error('API Error'));
+    const toast = (await import('react-hot-toast')).default;
 
-     render(<HabitCoach />);
+    render(<HabitCoach />);
 
-     await user.click(screen.getByRole('button', { name: /Analyze My Habits/i }));
+    await user.click(screen.getByRole('button', { name: /Analyze My Habits/i }));
 
-     await waitFor(() => {
-         expect(toast.error).toHaveBeenCalledWith('API Error');
-     });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('API Error');
+    });
   });
 });
