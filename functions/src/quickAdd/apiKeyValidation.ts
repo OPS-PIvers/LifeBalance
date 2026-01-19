@@ -67,6 +67,18 @@ export function extractApiKey(authHeader: string | undefined): string | null {
 }
 
 /**
+ * Extract household prefix from API key
+ * Format: lb_{householdPrefix}_{randomPart}
+ */
+function extractHouseholdPrefix(key: string): string | null {
+  const parts = key.split("_");
+  if (parts.length !== 3 || parts[0] !== "lb") {
+    return null;
+  }
+  return parts[1]; // The 6-character household prefix
+}
+
+/**
  * Validate an API key and return household info
  */
 export async function validateApiKey(
@@ -78,48 +90,70 @@ export async function validateApiKey(
     return { valid: false, error: "Invalid API key format" };
   }
 
-  // 2. Hash the provided key
+  // 2. Extract household prefix from key
+  const householdPrefix = extractHouseholdPrefix(providedKey);
+  if (!householdPrefix) {
+    logger.warn("Could not extract household prefix from key");
+    return { valid: false, error: "Invalid API key format" };
+  }
+
+  // 3. Hash the provided key
   const hashedKey = hashApiKey(providedKey);
 
-  // 3. Query all households for matching key using collectionGroup
+  // 4. Query households that match the prefix
+  // Since we don't have the full household ID, we need to search
+  // We'll use a range query to find households starting with this prefix
   try {
-    const keysSnapshot = await db
-      .collectionGroup("apiKeys")
-      .where("hashedKey", "==", hashedKey)
-      .where("status", "==", "active")
-      .limit(1)
+    const householdsSnapshot = await db
+      .collection("households")
+      .where(admin.firestore.FieldPath.documentId(), ">=", householdPrefix)
+      .where(
+        admin.firestore.FieldPath.documentId(),
+        "<=",
+        householdPrefix + "\uf8ff"
+      )
+      .limit(10) // Shouldn't be more than a few households with same prefix
       .get();
 
-    if (keysSnapshot.empty) {
-      logger.warn("API key not found or revoked");
+    if (householdsSnapshot.empty) {
+      logger.warn("No households found matching prefix");
       return { valid: false, error: "Invalid or revoked API key" };
     }
 
-    const keyDoc = keysSnapshot.docs[0];
-    const keyData = keyDoc.data() as HouseholdApiKey;
-    const householdId = keyDoc.ref.parent.parent?.id;
+    // 5. Check each household's apiKeys subcollection for matching hashed key
+    for (const householdDoc of householdsSnapshot.docs) {
+      const apiKeysSnapshot = await db
+        .collection(`households/${householdDoc.id}/apiKeys`)
+        .where("hashedKey", "==", hashedKey)
+        .where("status", "==", "active")
+        .limit(1)
+        .get();
 
-    if (!householdId) {
-      logger.error("Could not determine household ID from key document");
-      return { valid: false, error: "Internal error" };
+      if (!apiKeysSnapshot.empty) {
+        const keyDoc = apiKeysSnapshot.docs[0];
+        const keyData = keyDoc.data() as HouseholdApiKey;
+
+        // Update usage tracking (fire-and-forget)
+        keyDoc.ref
+          .update({
+            lastUsedAt: new Date().toISOString(),
+            usageCount: admin.firestore.FieldValue.increment(1),
+          })
+          .catch((err) => logger.error("Failed to update key usage:", err));
+
+        logger.info(`API key validated for household: ${householdDoc.id}`);
+        return {
+          valid: true,
+          householdId: householdDoc.id,
+          permissions: keyData.permissions,
+          keyId: keyDoc.id,
+          keyCreatedBy: keyData.createdBy,
+        };
+      }
     }
 
-    // 4. Update usage tracking (fire-and-forget)
-    keyDoc.ref
-      .update({
-        lastUsedAt: new Date().toISOString(),
-        usageCount: admin.firestore.FieldValue.increment(1),
-      })
-      .catch((err) => logger.error("Failed to update key usage:", err));
-
-    logger.info(`API key validated for household: ${householdId}`);
-    return {
-      valid: true,
-      householdId,
-      permissions: keyData.permissions,
-      keyId: keyDoc.id,
-      keyCreatedBy: keyData.createdBy,
-    };
+    logger.warn("API key not found or revoked");
+    return { valid: false, error: "Invalid or revoked API key" };
   } catch (error) {
     logger.error("Error validating API key:", error);
     return { valid: false, error: "Internal error" };

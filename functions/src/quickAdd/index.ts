@@ -280,10 +280,24 @@ export const quickAddExpense = onRequest(
     }
 
     // 4. Parse and validate request body
-    const { amount, merchant, category = "Uncategorized", date, notes } = req.body || {};
+    const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
-    if (typeof amount !== "number" || amount <= 0) {
-      errorResponse(res, 400, "amount must be a positive number", "BAD_REQUEST");
+    // Convert amount to number (iOS Shortcuts often sends numbers as strings)
+    let amount = typeof rawAmount === "string" ? parseFloat(rawAmount) : rawAmount;
+
+    // Round to 2 decimal places to avoid floating-point precision issues
+    if (typeof amount === "number" && !isNaN(amount)) {
+      amount = Math.round(amount * 100) / 100;
+    }
+
+    if (typeof amount !== "number" || isNaN(amount) || amount <= 0) {
+      logger.warn(`Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount })}`);
+      errorResponse(
+        res,
+        400,
+        `amount must be a positive number (received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)})`,
+        "BAD_REQUEST"
+      );
       return;
     }
 
