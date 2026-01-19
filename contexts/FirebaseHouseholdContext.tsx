@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode, useCallback } from 'react';
 import {
   collection,
@@ -383,7 +382,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           // Check if migration is needed
           if (needsFreezeBankMigration(data.freezeBank)) {
             try {
-
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
               await migrateFreezeBankToEnhanced(householdId, data.freezeBank as any);
               // Migration will trigger a new snapshot with updated data
             } catch (error) {
@@ -674,7 +673,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runPaycheckMigration();
 
-  }, [householdId, householdSettings]);
+  }, [householdId, householdSettings, buckets]);
 
   // Migrate orphaned preset habits to custom habits
   const hasAttemptedHabitMigration = useRef(false);
@@ -1670,6 +1669,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Step 3: Update habit's completedDates if removing last submission for date
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updates: any = {
         count: Math.max(0, habit.count - submission.count),
         totalCount: Math.max(0, habit.totalCount - submission.count),
@@ -1691,7 +1691,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const today = format(new Date(), 'yyyy-MM-dd');
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pointUpdates: any = {
         'points.total': increment(-submission.pointsEarned),
       };
@@ -1770,7 +1770,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const today = format(new Date(), 'yyyy-MM-dd');
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const pointUpdates: any = {
           'points.total': increment(pointsDelta),
         };
@@ -1803,7 +1803,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Calculate currentValue from linked habits
     const linkedHabits = habits.filter(h => challenge.relatedHabitIds.includes(h.id));
 
-    const { currentValue, progress } = calculateChallengeProgress(challenge, linkedHabits);
+    const { currentValue } = calculateChallengeProgress(challenge, linkedHabits);
 
     // Build update object, filtering out undefined values (Firestore rejects undefined)
     const updatedChallenge = Object.fromEntries(
@@ -1821,6 +1821,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } else {
       // Remove placeholder ID if it exists
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, ...newChallengeData } = updatedChallenge;
 
       await addDoc(collection(db, `households/${householdId}/challenges`), {
@@ -1933,14 +1934,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Check if yearly goal is achieved
     const isAchieved = updatedMonths.length >= goal.requiredMonths;
 
-
-    const updates: any = {
+    const updates: Partial<YearlyGoal> = {
       successfulMonths: updatedMonths,
     };
 
     if (isAchieved && goal.status !== 'achieved') {
       updates.status = 'achieved';
-      updates.achievedAt = serverTimestamp();
+      updates.achievedAt = serverTimestamp() as unknown as string;
     }
 
     await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
@@ -2788,7 +2788,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (freezeBank.lastRolloverMonth !== currentMonth) {
       await rolloverFreezeBankTokens();
     }
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId, freezeBank]);
 
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts

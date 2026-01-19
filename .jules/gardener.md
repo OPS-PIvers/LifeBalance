@@ -19,3 +19,8 @@
 **Weed:** "Complexity Trap" in `components/dashboard/InsightWidget.tsx`.
 **Root Cause:** The component was handling complex action execution logic (bucket updates, habit creation, etc.) alongside UI rendering.
 **Plan:** Extracted `handleAction` logic into a custom hook `hooks/useInsightActions.ts` and added unit tests.
+
+### 2026-02-26 - FirebaseHouseholdContext Linting Bypass
+**Weed:** "Rot Pattern" - Blanket `/* eslint-disable */` in `contexts/FirebaseHouseholdContext.tsx`.
+**Root Cause:** Rapid development and legacy migration logic (using `any`) led to disabling all lint checks to suppress errors, hiding potential bugs and unused variables.
+**Plan:** Removed the blanket disable. Fixed unused variables (`progress`, `id`). Added `householdSettings` and `buckets` to `useEffect` dependency arrays to prevent stale closures. Used granular `eslint-disable-next-line` for legacy migration functions involving `any`.
