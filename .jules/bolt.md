@@ -11,3 +11,7 @@
 ## 2026-01-16 - Memoizing Lists with Active State
 **Learning:** When rendering a list where only one item can be active (expanded) at a time, passing the `activeId` to every child causes the entire list to re-render when the selection changes.
 **Action:** Calculate the boolean `isActive` state in the parent's map loop (e.g., `isExpanded={expandedId === item.id}`) and pass that boolean to the memoized child. This ensures that only the two affected items (previous active and new active) re-render, while the rest of the list remains referentially stable.
+
+## 2026-01-28 - [Context Action Circular Dependencies]
+**Learning:** When memoizing context actions with `useCallback`, functions calling other internal functions (e.g., `payCalendarItem` calling `handlePaycheckApproval`) creates a dependency chain. If the callee is defined *after* the caller, strict linting (no-use-before-define) or runtime TDZ (Temporal Dead Zone) issues occur if included in the dependency array.
+**Action:** Reorder function definitions in large context files so that dependencies are defined *before* they are used in `useCallback` dependency arrays. For `FirebaseHouseholdContext`, this meant moving Pay Period actions to the top.
