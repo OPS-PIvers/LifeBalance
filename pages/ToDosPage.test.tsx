@@ -35,6 +35,9 @@ vi.mock('lucide-react', () => ({
   Clock: () => <div data-testid="clock-icon" />,
   User: () => <div data-testid="user-icon" />,
   Download: () => <div data-testid="download-icon" />,
+  Layers: () => <div data-testid="layers-icon" />,
+  CheckSquare: () => <div data-testid="check-square-icon" />,
+  Loader2: () => <div data-testid="loader-icon" />,
 }));
 
 describe('ToDosPage Export', () => {
