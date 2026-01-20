@@ -58,6 +58,7 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
             onClick={onClose}
             disabled={isSaving}
             className="text-brand-400 hover:text-brand-600 p-1 rounded-lg transition-colors disabled:opacity-50"
+            aria-label="Close modal"
           >
             <X size={20} />
           </button>
