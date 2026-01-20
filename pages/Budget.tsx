@@ -1,62 +1,49 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import BudgetCalendar from '../components/budget/BudgetCalendar';
 import BudgetBuckets from '../components/budget/BudgetBuckets';
 import BudgetAccounts from '../components/budget/BudgetAccounts';
 import TransactionMasterList from '../components/budget/TransactionMasterList';
-
-type Tab = 'calendar' | 'buckets' | 'accounts' | 'history';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 const Budget: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('calendar');
-
   return (
     <div className="min-h-screen bg-brand-50 pb-28 pt-4">
-      <div className="px-4">
-        {/* Sub-Navigation */}
-        <div className="bg-brand-100 p-1 rounded-xl flex gap-1 mb-6 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab('calendar')}
-            className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'calendar' ? 'bg-white text-brand-800 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-            }`}
-          >
-            Calendar
-          </button>
-          <button
-            onClick={() => setActiveTab('buckets')}
-            className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'buckets' ? 'bg-white text-brand-800 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-            }`}
-          >
-            Buckets
-          </button>
-          <button
-            onClick={() => setActiveTab('accounts')}
-            className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'accounts' ? 'bg-white text-brand-800 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-            }`}
-          >
-            Accounts
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 min-w-[80px] py-2 text-sm font-bold rounded-lg transition-all ${
-              activeTab === 'history' ? 'bg-white text-brand-800 shadow-sm' : 'text-brand-500 hover:text-brand-700'
-            }`}
-          >
-            History
-          </button>
-        </div>
+      <Tabs defaultValue="calendar">
+        <div className="px-4">
+          {/* Sub-Navigation */}
+          <TabsList className="mb-6 overflow-x-auto no-scrollbar">
+            <TabsTrigger value="calendar" className="min-w-[80px]">
+              Calendar
+            </TabsTrigger>
+            <TabsTrigger value="buckets" className="min-w-[80px]">
+              Buckets
+            </TabsTrigger>
+            <TabsTrigger value="accounts" className="min-w-[80px]">
+              Accounts
+            </TabsTrigger>
+            <TabsTrigger value="history" className="min-w-[80px]">
+              History
+            </TabsTrigger>
+          </TabsList>
 
-        {/* View Container */}
-        <div className="animate-in fade-in duration-300">
-          {activeTab === 'calendar' && <BudgetCalendar />}
-          {activeTab === 'buckets' && <BudgetBuckets />}
-          {activeTab === 'accounts' && <BudgetAccounts />}
-          {activeTab === 'history' && <TransactionMasterList />}
+          {/* View Container */}
+          <div>
+            <TabsContent value="calendar">
+              <BudgetCalendar />
+            </TabsContent>
+            <TabsContent value="buckets">
+              <BudgetBuckets />
+            </TabsContent>
+            <TabsContent value="accounts">
+              <BudgetAccounts />
+            </TabsContent>
+            <TabsContent value="history">
+              <TransactionMasterList />
+            </TabsContent>
+          </div>
         </div>
-      </div>
+      </Tabs>
     </div>
   );
 };
