@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signInWithGoogle } from '@/services/authService';
@@ -54,9 +53,10 @@ const Login: React.FC = () => {
       await signInWithGoogle();
       toast.success('Successfully signed in!');
       // Redirect will happen automatically via useEffect above
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Sign-in error:', error);
-      toast.error(error.message || 'Failed to sign in');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
+      toast.error(errorMessage);
       setLoading(false);
     }
   };

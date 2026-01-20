@@ -1,5 +1,4 @@
 
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { YearlyGoal } from '@/types/schema';
@@ -25,17 +24,23 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
   const [requiredMonths, setRequiredMonths] = useState(10);
 
   useEffect(() => {
-    if (editingGoal) {
-      setTitle(editingGoal.title);
-      setDescription(editingGoal.description || '');
-      setYear(editingGoal.year);
-      setRequiredMonths(editingGoal.requiredMonths);
-    } else {
-      // Reset form for new goal
-      setTitle('');
-      setDescription('');
-      setYear(new Date().getFullYear());
-      setRequiredMonths(10);
+    if (isOpen) {
+      // Use setTimeout to avoid synchronous state update warning
+      const timer = setTimeout(() => {
+        if (editingGoal) {
+          setTitle(editingGoal.title);
+          setDescription(editingGoal.description || '');
+          setYear(editingGoal.year);
+          setRequiredMonths(editingGoal.requiredMonths);
+        } else {
+          // Reset form for new goal
+          setTitle('');
+          setDescription('');
+          setYear(new Date().getFullYear());
+          setRequiredMonths(10);
+        }
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [editingGoal, isOpen]);
 

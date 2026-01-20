@@ -1,14 +1,12 @@
-/* eslint-disable */
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   isHabitStale,
   calculateStreak,
   getMultiplier,
-  processToggleHabit,
-  ToggleHabitResult
+  processToggleHabit
 } from './habitLogic';
-import { Habit, HouseholdMember } from '@/types/schema';
-import { format, subDays, subWeeks, addDays } from 'date-fns';
+import { Habit } from '@/types/schema';
+import { format, subDays, subWeeks } from 'date-fns';
 
 describe('habitLogic', () => {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -16,7 +14,7 @@ describe('habitLogic', () => {
 
   describe('isHabitStale', () => {
     it('returns true if lastUpdated is missing', () => {
-      const habit = { id: '1', period: 'daily', lastUpdated: null } as any;
+      const habit = { id: '1', period: 'daily', lastUpdated: null } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(true);
     });
 
@@ -24,8 +22,8 @@ describe('habitLogic', () => {
       const habit = {
         id: '1',
         period: 'daily',
-        lastUpdated: new Date()
-      } as any;
+        lastUpdated: new Date().toISOString() // Fixed: changed Date object to ISO string to match Habit type
+      } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(false);
     });
 
@@ -33,19 +31,17 @@ describe('habitLogic', () => {
       const habit = {
         id: '1',
         period: 'daily',
-        lastUpdated: subDays(new Date(), 1)
-      } as any;
+        lastUpdated: subDays(new Date(), 1).toISOString()
+      } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(true);
     });
 
     it('returns false for weekly habit updated this week', () => {
-      // Assuming today is not the very start of the week for this test to be robust,
-      // but isHabitStale uses isSameWeek(now, lastUpdate, { weekStartsOn: 1 })
       const habit = {
         id: '1',
         period: 'weekly',
-        lastUpdated: new Date()
-      } as any;
+        lastUpdated: new Date().toISOString()
+      } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(false);
     });
 
@@ -53,8 +49,8 @@ describe('habitLogic', () => {
       const habit = {
         id: '1',
         period: 'weekly',
-        lastUpdated: subWeeks(new Date(), 1)
-      } as any;
+        lastUpdated: subWeeks(new Date(), 1).toISOString()
+      } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(true);
     });
 
@@ -63,7 +59,7 @@ describe('habitLogic', () => {
         id: '1',
         period: 'daily',
         lastUpdated: new Date().toISOString()
-      } as any;
+      } as unknown as Habit;
       expect(isHabitStale(habit)).toBe(false);
     });
   });

@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
@@ -135,7 +134,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
           {filteredCatalog.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p>No history found matching "{searchQuery}"</p>
+              <p>No history found matching &quot;{searchQuery}&quot;</p>
               <p className="text-xs mt-1">Items you check off your shopping list will appear here.</p>
             </div>
           ) : (

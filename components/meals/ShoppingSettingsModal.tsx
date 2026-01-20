@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw } from 'lucide-react';
@@ -35,12 +34,17 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   // Initialize local categories from context (or default if empty)
   useEffect(() => {
     if (isOpen) {
-      if (groceryCategories && groceryCategories.length > 0) {
-        setLocalCategories([...groceryCategories]);
-      } else {
-        setLocalCategories([...GROCERY_CATEGORIES]);
-      }
-      setHasUnsavedCategoryChanges(false);
+      // Use setTimeout to avoid synchronous state update warning during render phase
+      // This ensures form state is initialized after the modal mounts/updates
+      const timer = setTimeout(() => {
+        if (groceryCategories && groceryCategories.length > 0) {
+          setLocalCategories([...groceryCategories]);
+        } else {
+          setLocalCategories([...GROCERY_CATEGORIES]);
+        }
+        setHasUnsavedCategoryChanges(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, groceryCategories]);
 

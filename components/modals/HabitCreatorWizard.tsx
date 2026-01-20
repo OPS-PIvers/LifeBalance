@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { X, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
@@ -386,7 +385,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               </div>
             </div>
             <p className="text-sm text-brand-600 mb-6">
-              Are you sure you want to delete <span className="font-semibold">"{deleteConfirmHabit.title}"</span>?
+              Are you sure you want to delete <span className="font-semibold">&quot;{deleteConfirmHabit.title}&quot;</span>?
             </p>
             <div className="flex gap-3">
               <button

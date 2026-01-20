@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { describe, it, expect } from 'vitest';
 import { generateRecurringInstances, expandCalendarItems } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';
@@ -135,7 +134,7 @@ describe('calendarRecurrence', () => {
         const unknownFreqItem: CalendarItem = {
           ...baseItem,
           isRecurring: true,
-          frequency: 'daily' as any // Explicitly force unknown frequency
+          frequency: 'daily' as unknown as 'weekly' | 'bi-weekly' | 'monthly' // Explicitly force unknown frequency for test
         };
 
         // Range: Jan 1 to Jan 5

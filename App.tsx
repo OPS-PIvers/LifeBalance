@@ -81,8 +81,10 @@ const App: React.FC = () => {
                      sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true';
 
   // Dynamically load mock providers only when needed (tree-shaken in production)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [MockProviders, setMockProviders] = React.useState<any>(null);
+  const [MockProviders, setMockProviders] = React.useState<{
+    Auth: React.ComponentType<{ children: React.ReactNode }>;
+    Household: React.ComponentType<{ children: React.ReactNode }>;
+  } | null>(null);
 
   React.useEffect(() => {
     if (isTestMode && !MockProviders) {
