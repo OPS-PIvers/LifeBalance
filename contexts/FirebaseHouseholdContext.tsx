@@ -2307,7 +2307,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
     } catch (error) {
       console.error('[addPantryItem] Failed:', error);
-      toast.error('Failed to add item');
+      if (!options?.suppressToast) {
+        toast.error('Failed to add item');
+      }
+      throw error; // Rethrow so Promise.allSettled can track failures
     }
   };
 
