@@ -64,7 +64,7 @@ import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
-import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek } from 'date-fns';
+import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid } from 'date-fns';
 
 export interface HouseholdContextType {
   // State
@@ -1255,11 +1255,40 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const deferCalendarItem = async (itemId: string) => {
     if (!householdId || !user) return;
 
+    // Common date calculation logic:
+    // "Tomorrow", unless the item is already in the future, then +1 day from item date.
+    // This ensures deferring always pushes it forward relative to today.
+    const calculateDeferredDate = (currentDateString: string): string => {
+      const today = startOfToday();
+      const tomorrowDate = addDays(today, 1);
+      const originalDate = parseISO(currentDateString);
+
+      if (!isValid(originalDate)) {
+        return format(tomorrowDate, 'yyyy-MM-dd');
+      }
+
+      // Default: defer to tomorrow relative to TODAY
+      // If original date is in the future (after today), add 1 day to it
+      // So if due Jan 10 (and today is Jan 5), deferring makes it Jan 11.
+      // If due Jan 1 (and today is Jan 5), deferring makes it Jan 6 (tomorrow).
+      const deferredFromOriginal = addDays(originalDate, 1);
+
+      // If deferredFromOriginal is after tomorrow, use it. Otherwise use tomorrow.
+      const newDate = isAfter(deferredFromOriginal, tomorrowDate)
+        ? deferredFromOriginal
+        : tomorrowDate;
+
+      return format(newDate, 'yyyy-MM-dd');
+    };
+
     // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
     const isRecurringInstance = itemId.includes('-202');
 
     if (isRecurringInstance) {
-      // For recurring instances, create a one-time reminder for tomorrow
+      // For recurring instances:
+      // 1. Create a one-time deferred item
+      // 2. Hide (delete) the original recurring instance to prevent duplication
+
       const parts = itemId.split('-202');
       const parentRecurringId = parts[0];
       const specificDate = '202' + parts[1];
@@ -1268,11 +1297,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const template = calendarItems.find(i => i.id === parentRecurringId);
       if (!template) return;
 
-      // Calculate tomorrow's date from the specific instance date
-      const currentDate = parseISO(specificDate);
-      const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      const newDate = calculateDeferredDate(specificDate);
 
-      // Create a one-time non-recurring item for tomorrow
+      // 1. Create deferred item
       await addDoc(collection(db, `households/${householdId}/calendarItems`), {
         title: template.title,
         amount: template.amount,
@@ -1283,20 +1310,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdBy: user.uid,
       });
 
-      toast.success('Deferred to tomorrow (one-time)');
+      // 2. Delete/Hide original instance
+      // We create a "tombstone" with isDeleted: true to hide this specific instance from expansion
+      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        title: template.title,
+        amount: template.amount,
+        date: specificDate,
+        type: template.type,
+        isPaid: false,
+        isRecurring: false,
+        isDeleted: true,
+        parentRecurringId: parentRecurringId,
+        createdBy: user.uid,
+      });
+
+      const formattedDate = format(parseISO(newDate), 'MMM d');
+      toast.success(`Deferred to ${formattedDate}`);
     } else {
       // Non-recurring item - just move the date
       const item = calendarItems.find(i => i.id === itemId);
       if (!item) return;
 
-      const currentDate = parseISO(item.date);
-      const newDate = format(new Date(currentDate.getTime() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+      const newDate = calculateDeferredDate(item.date);
 
       await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
         date: newDate,
       });
 
-      toast.success('Deferred to tomorrow');
+      const formattedDate = format(parseISO(newDate), 'MMM d');
+      toast.success(`Deferred to ${formattedDate}`);
     }
   };
 
