@@ -746,7 +746,7 @@ export const generateInsight = async (
   }
 };
 
-export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'unknown';
+export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'query' | 'unknown';
 
 export interface MagicActionResponse {
   type: MagicActionType;
@@ -766,6 +766,10 @@ export interface MagicActionResponse {
     item?: string;
     quantity?: string;
     store?: string;
+
+    // Query fields
+    queryType?: 'budget_check' | 'pantry_check' | 'general';
+    target?: string; // "milk", "headphones", etc.
   };
 }
 
@@ -794,7 +798,7 @@ export const parseMagicAction = async (
 
     const prompt = `
       Analyze this user input: "${sanitizedInput}".
-      Determine the intent: 'transaction', 'todo', or 'shopping'.
+      Determine the intent: 'transaction', 'todo', 'shopping', or 'query'.
       Today's date is ${context.todayDate}.
 
       1. Transaction: User spent money or wants to log an expense.
@@ -803,6 +807,8 @@ export const parseMagicAction = async (
          Extract: text (task description), completeByDate (YYYY-MM-DD). If no date is specified, set completeByDate to today's date. If the user says "tomorrow", set completeByDate to tomorrow's date (today + 1 day).
       3. Shopping: User wants to buy something later.
          Extract: item (name), quantity (string), category (match one of: ${groceryCategoryList}), store (optional).
+      4. Query: User asks a question about their data.
+         Extract: queryType ('budget_check' if asking about affordability, 'pantry_check' if asking if they have something, or 'general'), and target (the item or topic in question).
 
       If unsure, default to 'unknown'.
 
@@ -815,7 +821,7 @@ export const parseMagicAction = async (
       {
         type: Type.OBJECT,
         properties: {
-          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'unknown'] },
+          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'query', 'unknown'] },
           confidence: { type: Type.NUMBER },
           data: {
             type: Type.OBJECT,
@@ -828,7 +834,9 @@ export const parseMagicAction = async (
               completeByDate: { type: Type.STRING },
               item: { type: Type.STRING },
               quantity: { type: Type.STRING },
-              store: { type: Type.STRING }
+              store: { type: Type.STRING },
+              queryType: { type: Type.STRING, enum: ['budget_check', 'pantry_check', 'general'] },
+              target: { type: Type.STRING }
             }
           }
         },
