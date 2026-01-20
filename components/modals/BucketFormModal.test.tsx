@@ -63,8 +63,8 @@ describe('BucketFormModal', () => {
   it('calls addBucket with correct data when creating new bucket', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: 'New Bucket' } });
-    fireEvent.change(screen.getByPlaceholderText(/monthly limit/i), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'New Bucket' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
 
     fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
 
@@ -89,8 +89,8 @@ describe('BucketFormModal', () => {
     };
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} editingBucket={bucket} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: 'Updated Groceries' } });
-    fireEvent.change(screen.getByPlaceholderText(/monthly limit/i), { target: { value: '600' } });
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'Updated Groceries' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '600' } });
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -129,11 +129,14 @@ describe('BucketFormModal', () => {
     confirmSpy.mockRestore();
   });
 
-  it('does not submit if required fields are missing', () => {
+  it('disables submit if required fields are missing', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
 
-    // Attempt to save without filling anything
-    fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
+    const createButton = screen.getByRole('button', { name: /create bucket/i });
+    expect(createButton).toBeDisabled();
+
+    // Attempt to save (should be disabled)
+    fireEvent.click(createButton);
 
     expect(mockAddBucket).not.toHaveBeenCalled();
     expect(mockOnClose).not.toHaveBeenCalled();
