@@ -27,8 +27,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Type check
+      - name: Lint Root
         run: pnpm lint
+
+      - name: Lint Functions
+        run: pnpm --filter functions run lint
 
       - name: Run unit tests
         run: pnpm test
@@ -54,6 +57,9 @@ jobs:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
           VITE_ADMIN_UID: ${{ secrets.VITE_ADMIN_UID }}
+
+      - name: Build Functions
+        run: pnpm --filter functions run build
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
