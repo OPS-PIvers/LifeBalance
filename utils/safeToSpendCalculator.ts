@@ -38,20 +38,18 @@ export function findNextPaycheckDate(
 }
 
 /**
- * Calculate the safe-to-spend amount based on checking balance and unpaid bills
- * between paychecks. This is the primary financial health metric for the household.
- *
- * Formula: Checking Balance - Unpaid Bills (from last paycheck to next paycheck)
+ * Calculate the safe-to-spend amount using pre-expanded calendar items.
+ * Separating expansion from calculation allows for better performance optimization
+ * (memoizing the expansion step) in React contexts.
  *
  * @param accounts - All household accounts
- * @param calendarItems - All calendar items (bills/income)
- * @param buckets - All budget buckets (for bill matching only)
- * @param currentPeriodId - Last paycheck date (YYYY-MM-DD), or empty string to return full checking balance
- * @returns The safe-to-spend amount
+ * @param allExpandedItems - Pre-expanded calendar items (should cover at least 2 months from currentPeriodId)
+ * @param buckets - All budget buckets
+ * @param currentPeriodId - Last paycheck date (YYYY-MM-DD)
  */
-export const calculateSafeToSpend = (
+export const calculateSafeToSpendFromExpanded = (
   accounts: Account[],
-  calendarItems: CalendarItem[],
+  allExpandedItems: CalendarItem[],
   buckets: BudgetBucket[],
   currentPeriodId: string = ''
 ): number => {
@@ -68,14 +66,6 @@ export const calculateSafeToSpend = (
   }
 
   const paycheckA = parseISO(currentPeriodId); // lastPaycheckDate
-
-  // ⚡ Bolt Optimization: Expand items ONCE for a 60-day window
-  // This covers the search for the next paycheck (Paycheck B) AND the bills in between.
-  // Previously, this function called `findNextPaycheckDate` (which expanded for 60 days)
-  // and then called `expandCalendarItems` AGAIN for the determined range.
-  // This approach reduces the expensive expansion operation from 2x to 1x.
-  const searchWindowEnd = addMonths(paycheckA, 2);
-  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
 
   // Find next paycheck (Paycheck B) from the already expanded list
   const upcomingPaychecks = allExpandedItems
@@ -130,4 +120,39 @@ export const calculateSafeToSpend = (
 
   // 4. Final calculation: Checking - Bills (NO bucket liabilities)
   return checkingBalance - unpaidBills;
+};
+
+/**
+ * Calculate the safe-to-spend amount based on checking balance and unpaid bills
+ * between paychecks. This is the primary financial health metric for the household.
+ *
+ * Formula: Checking Balance - Unpaid Bills (from last paycheck to next paycheck)
+ *
+ * @param accounts - All household accounts
+ * @param calendarItems - All calendar items (bills/income)
+ * @param buckets - All budget buckets (for bill matching only)
+ * @param currentPeriodId - Last paycheck date (YYYY-MM-DD), or empty string to return full checking balance
+ * @returns The safe-to-spend amount
+ */
+export const calculateSafeToSpend = (
+  accounts: Account[],
+  calendarItems: CalendarItem[],
+  buckets: BudgetBucket[],
+  currentPeriodId: string = ''
+): number => {
+  if (!currentPeriodId) {
+    return calculateSafeToSpendFromExpanded(accounts, [], buckets, currentPeriodId);
+  }
+
+  const paycheckA = parseISO(currentPeriodId);
+
+  // ⚡ Bolt Optimization: Expand items ONCE for a 60-day window
+  // This covers the search for the next paycheck (Paycheck B) AND the bills in between.
+  // Previously, this function called `findNextPaycheckDate` (which expanded for 60 days)
+  // and then called `expandCalendarItems` AGAIN for the determined range.
+  // This approach reduces the expensive expansion operation from 2x to 1x.
+  const searchWindowEnd = addMonths(paycheckA, 2);
+  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+
+  return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId);
 };
