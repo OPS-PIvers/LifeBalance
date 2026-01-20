@@ -554,7 +554,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const existingQuery = query(
           shoppingRef,
           where('name', '==', item.item),
-          where('purchased', '==', false)
+          where('isPurchased', '==', false)
         );
         const existing = await getDocs(existingQuery);
 
@@ -569,9 +569,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           // Add new item
           await addDoc(shoppingRef, {
             name: item.item,
-            quantity: item.quantity,
+            quantity: String(item.quantity),
             category: item.category,
-            purchased: false,
+            isPurchased: false,
             source: 'voice',
             createdAt: serverTimestamp()
           });
