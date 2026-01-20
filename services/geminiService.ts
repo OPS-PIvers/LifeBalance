@@ -1115,7 +1115,7 @@ If no items found, return {"items": []}`;
           required: ["items"]
         },
         _aiClient,
-        'gemini-2.0-flash-exp' // Fast, cheap model for simple parsing
+        'gemini-3-flash-preview'
       );
     }
 
@@ -1159,7 +1159,7 @@ If no tasks found, return {"tasks": []}`;
           required: ["tasks"]
         },
         _aiClient,
-        'gemini-2.0-flash-exp'
+        'gemini-3-flash-preview'
       );
     }
 
@@ -1200,7 +1200,7 @@ If no amount found, return { "error": "No amount found" }`;
           }
         },
         _aiClient,
-        'gemini-2.0-flash-exp'
+        'gemini-3-flash-preview'
       );
     }
 
@@ -1230,7 +1230,7 @@ Return JSON with detectedType and confidence (0-1):
         required: ["detectedType", "confidence"]
       },
       _aiClient,
-      'gemini-2.0-flash-exp'
+      'gemini-3-flash-preview'
     );
 
   } catch (error) {
