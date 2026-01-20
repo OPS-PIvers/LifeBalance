@@ -224,6 +224,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Real-time state from Firestore
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
+  const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -390,8 +391,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           // Check if migration is needed
           if (needsFreezeBankMigration(data.freezeBank)) {
             try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await migrateFreezeBankToEnhanced(householdId, data.freezeBank as any);
+              // Cast to unknown first to satisfy linter, then to legacy format expected by migration
+              await migrateFreezeBankToEnhanced(
+                householdId,
+                data.freezeBank as unknown as { current: number; accrued: number; lastMonth: string }
+              );
               // Migration will trigger a new snapshot with updated data
             } catch (error) {
               console.error('[FreezeBank] Migration failed:', error);
@@ -491,7 +495,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
             try {
               // Get available categories for parsing
-              const expenseCategories = buckets.map(b => b.name);
+              const expenseCategories = bucketsRef.current.map(b => b.name);
 
               // Parse with Gemini
               const parsed = await parseNaturalLanguageCommand(
@@ -802,6 +806,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     runMigrations();
+
   }, [householdId, householdSettings, currentPeriodId, transactions, buckets]);
 
   // Migrate from date-based periods to paycheck-based periods if needed
@@ -1821,11 +1826,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Step 3: Update habit's completedDates if removing last submission for date
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updates: any = {
+      const updates: Partial<Habit> = {
         count: Math.max(0, habit.count - submission.count),
         totalCount: Math.max(0, habit.totalCount - submission.count),
-        lastUpdated: serverTimestamp(),
+        lastUpdated: serverTimestamp() as unknown as string,
       };
 
       if (isLastForDate) {
@@ -1843,8 +1847,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const today = format(new Date(), 'yyyy-MM-dd');
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pointUpdates: any = {
+      const pointUpdates: Record<string, unknown> = {
         'points.total': increment(-submission.pointsEarned),
       };
 
@@ -1922,8 +1925,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const today = format(new Date(), 'yyyy-MM-dd');
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pointUpdates: any = {
+        const pointUpdates: Record<string, unknown> = {
           'points.total': increment(pointsDelta),
         };
 
@@ -1972,9 +1974,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       await updateDoc(doc(db, `households/${householdId}/challenges`, activeChallenge.id), updatedChallenge);
     } else {
       // Remove placeholder ID if it exists
-
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id, ...newChallengeData } = updatedChallenge;
+      const { id: _id, ...newChallengeData } = updatedChallenge;
 
       await addDoc(collection(db, `households/${householdId}/challenges`), {
         ...newChallengeData,

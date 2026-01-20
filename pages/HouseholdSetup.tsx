@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
@@ -44,9 +43,10 @@ const HouseholdSetup: React.FC = () => {
 
       setMode('success');
       toast.success('Household created successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating household:', error);
-      toast.error(error.message || 'Failed to create household');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create household';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -62,9 +62,10 @@ const HouseholdSetup: React.FC = () => {
       setHouseholdId(householdId);
       toast.success('Successfully joined household!');
       navigate('/');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error joining household:', error);
-      toast.error(error.message || 'Failed to join household');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to join household';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

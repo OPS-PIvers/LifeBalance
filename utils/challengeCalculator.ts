@@ -179,7 +179,7 @@ function calculateNegativeHabitSuccessDays(
  */
 export function getChallengeStatusMessage(
   progress: ChallengeProgress,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   _targetType: 'count' | 'percentage'
 ): string {
   const { progress: progressPercent } = progress;

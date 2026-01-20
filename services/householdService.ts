@@ -1,4 +1,3 @@
-/* eslint-disable */
 import {
   collection,
   query,
@@ -149,7 +148,7 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
     });
 
     return householdId;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error joining household:', error);
     throw error;
   }

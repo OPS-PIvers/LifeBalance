@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React from 'react';
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
@@ -64,7 +63,7 @@ export const isPWA = (): boolean => {
   // Check if running in standalone mode (PWA)
   return window.matchMedia('(display-mode: standalone)').matches ||
     // iOS Safari specific check
-    (window.navigator as any).standalone === true;
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
 };
 
 /**
@@ -322,23 +321,24 @@ export const requestNotificationPermission = async (
           vapidKey,
           serviceWorkerRegistration: registration
         });
-      } catch (tokenError: any) {
-        console.error('Error fetching FCM token:', tokenError);
-        console.error('Error code:', tokenError.code);
-        console.error('Error message:', tokenError.message);
-        console.error('Full error:', JSON.stringify(tokenError, null, 2));
+      } catch (tokenError: unknown) {
+        const err = tokenError as { code?: string; message?: string };
+        console.error('Error fetching FCM token:', err);
+        console.error('Error code:', err.code);
+        console.error('Error message:', err.message);
+        console.error('Full error:', JSON.stringify(err, null, 2));
 
         // Provide specific error messages based on failure type
-        if (tokenError.code === 'messaging/permission-blocked') {
+        if (err.code === 'messaging/permission-blocked') {
           toast.error('Notification permission blocked. Please enable in browser settings.');
-        } else if (tokenError.code === 'messaging/unsupported-browser') {
+        } else if (err.code === 'messaging/unsupported-browser') {
           toast.error('Push notifications are not supported in this browser.');
-        } else if (tokenError.code === 'messaging/failed-service-worker-registration') {
+        } else if (err.code === 'messaging/failed-service-worker-registration') {
           toast.error('Service worker registration failed. Try refreshing the page.');
-        } else if (tokenError.message?.includes('VAPID')) {
+        } else if (err.message?.includes('VAPID')) {
           toast.error('Configuration error: Invalid VAPID key.');
         } else {
-          toast.error(`Failed to connect to push service. Error: ${tokenError.code || tokenError.message}`);
+          toast.error(`Failed to connect to push service. Error: ${err.code || err.message}`);
         }
         return false;
       }

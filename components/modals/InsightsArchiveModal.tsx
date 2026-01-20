@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React from 'react';
 import { X, Sparkles } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -68,7 +67,7 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
                       </span>
                   </div>
                   <p className="text-indigo-900 font-medium leading-relaxed">
-                    "{insight.text}"
+                    &quot;{insight.text}&quot;
                   </p>
                 </div>
               );

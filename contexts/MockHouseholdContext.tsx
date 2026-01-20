@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, ReactNode, useCallback } from 'react';
 import { FirebaseHouseholdContext, HouseholdContextType } from './FirebaseHouseholdContext';
 import {
@@ -18,7 +17,9 @@ import {
   ToDo,
   Insight,
   GroceryCatalogItem,
-  Store
+  Store,
+  YearlyGoal,
+  Household
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -94,7 +95,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [habits, setHabits] = useState<Habit[]>(SEED_HABITS);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [challenges] = useState<Challenge[]>([]);
-  const [yearlyGoals] = useState<any[]>([]);
+  const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards] = useState<RewardItem[]>([]);
   const [members] = useState<HouseholdMember[]>(SEED_MEMBERS);
   const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
@@ -316,7 +317,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // No-op functions for features not critical to testing
 
-  const noOp = useCallback(async <T,>(..._args: any[]): Promise<T | void> => {
+  const noOp = useCallback(async <T,>(..._args: unknown[]): Promise<T | void> => {
     // toast.info doesn't exist, use toast with custom styling instead
     toast('Mock: Operation not implemented in test mode', {
       icon: 'ℹ️',
@@ -337,7 +338,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const totalPoints = 500;
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
-  const activeYearlyGoals: any[] = [];
+  const activeYearlyGoals: YearlyGoal[] = [];
   const primaryYearlyGoal = null;
   const rewardsInventory = rewards;
   const freezeBank = null;
@@ -354,7 +355,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores: stores,
     groceryCategories: groceryCategories
 
-  } as any;
+  } as unknown as Household;
   const currentPeriodId = '2024-01-01';
   const bucketSpentMap = new Map();
 
