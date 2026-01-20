@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2 } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
@@ -15,17 +15,24 @@ const ToDosPage: React.FC = () => {
   // Track current date to trigger re-categorization at midnight
   const [currentDate, setCurrentDate] = useState(() => startOfToday());
 
-  // Modal and form state - declared before useEffect that references them
+  // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Update date at midnight using recursive setTimeout pattern
-  // Note: This pattern is preferred over setInterval because:
-  // 1. We need to trigger exactly at midnight (00:00:00), not at regular intervals
-  // 2. Each timeout reschedules itself to the next midnight after firing
-  // 3. The cleanup function properly clears the timeout on unmount/dependency change
-  // 4. No accumulation of callbacks occurs because the recursive call only happens
-  //    inside the timeout callback itself, and cleanup clears the active timeout
+  // Batch Mode State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+
+  // Clear selection when mode is toggled off
+  useEffect(() => {
+    if (!isSelectionMode) {
+      setSelectedIds(new Set());
+    }
+  }, [isSelectionMode]);
+
+  // Update date at midnight
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     
@@ -38,7 +45,6 @@ const ToDosPage: React.FC = () => {
       
       timeoutId = setTimeout(() => {
         setCurrentDate(startOfToday());
-        // Schedule the next midnight check
         scheduleNextMidnight();
       }, msUntilMidnight);
     };
@@ -49,7 +55,7 @@ const ToDosPage: React.FC = () => {
         clearTimeout(timeoutId);
       }
     };
-  }, []); // Run once on mount to initiate recurring midnight checks
+  }, []);
 
   // Form State
   const [text, setText] = useState('');
@@ -57,7 +63,7 @@ const ToDosPage: React.FC = () => {
   const [assignedTo, setAssignedTo] = useState('');
 
   // Categorize To-Dos
-  const { immediate, upcoming, radar } = useMemo(() => {
+  const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
     const active = todos.filter(t => !t.isCompleted);
     const today = currentDate;
     const endOfCurrentWeek = endOfWeek(today, { weekStartsOn: 1 }); // Monday start
@@ -93,7 +99,9 @@ const ToDosPage: React.FC = () => {
     return {
       immediate: immediate.sort(sortByCompleteByDate),
       upcoming: upcoming.sort(sortByCompleteByDate),
-      radar: radar.sort(sortByCompleteByDate)
+      radar: radar.sort(sortByCompleteByDate),
+      allActiveCount: active.length,
+      allActiveIds: active.map(t => t.id)
     };
   }, [todos, currentDate]);
 
@@ -113,7 +121,6 @@ const ToDosPage: React.FC = () => {
   const openAddModal = () => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
-    // Default to current user, or first member if available
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0].uid : '');
     setAssignedTo(defaultAssignee);
     setEditingId(null);
@@ -131,22 +138,15 @@ const ToDosPage: React.FC = () => {
 
   const handleExport = () => {
     try {
-      // Filter for active (not completed) tasks
       const activeTodos = todos.filter(t => !t.isCompleted);
-
       if (activeTodos.length === 0) {
         toast.error('No active tasks to export');
         return;
       }
-
       const today = startOfToday();
-
-      // Map to CSV friendly format
       const exportData = activeTodos.map(todo => {
         const assignee = members.find(m => m.uid === todo.assignedTo);
         const dueDate = parseISO(todo.completeByDate);
-
-        // Calculate status text
         let status = 'Future';
         if (isBefore(dueDate, today)) {
           status = 'Overdue';
@@ -167,7 +167,6 @@ const ToDosPage: React.FC = () => {
         };
       });
 
-      // Sort by Due Date
       exportData.sort((a, b) => {
         if (a['Due Date'] !== b['Due Date']) {
           return a['Due Date'].localeCompare(b['Due Date']);
@@ -185,23 +184,17 @@ const ToDosPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validate in order: members exist, required fields filled, valid assignee
     if (members.length === 0) {
       toast.error('No household members available. Please add members first.');
       return;
     }
-
     if (!text.trim() || !completeByDate) {
       toast.error('Please fill in all required fields');
       return;
     }
-
-    // Validate assignee is in members list (also covers unselected assignee case)
     const isValidAssignee = members.some(member => member.uid === assignedTo);
     if (!isValidAssignee) {
       if (assignedTo) {
-        // The previously selected member may have been removed or is no longer available
         toast.error('The selected household member is no longer available. Please choose another member.');
       } else {
         toast.error('Please select a valid household member to assign this task to');
@@ -234,39 +227,134 @@ const ToDosPage: React.FC = () => {
     }
   };
 
-  // Action Implementation
-  // Swiping is not implemented in this MVP web/PWA version to avoid adding external
-  // dependencies or complex touch handling logic. Instead, equivalent actions are
-  // exposed via clearly labeled, mobile-friendly buttons.
-  // TODO: If a swipe interaction library is added in the future, replace button-based
-  // actions with real swipe gestures where appropriate.
+  // --- Batch Mode Handlers ---
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === allActiveCount && allActiveCount > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allActiveIds));
+    }
+  };
+
+  const handleBatchComplete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => completeToDo(id));
+      const results = await Promise.allSettled(promises);
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (successful > 0) {
+        toast.success(`Completed ${successful} tasks! 🎉`);
+      }
+      if (failed > 0) {
+        toast.error(`Failed to complete ${failed} tasks`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch complete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id => deleteToDo(id));
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Deleted ${selectedIds.size} tasks`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchDeleteConfirm(false);
+    } catch (error) {
+      console.error('Batch delete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
 
   return (
     <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-brand-800">To-Do List</h1>
-          <p className="text-sm text-brand-500">Stay on top of your tasks</p>
+          {isSelectionMode ? (
+             <div className="flex flex-col">
+               <h1 className="text-2xl font-bold text-brand-800">Select Tasks</h1>
+               <button
+                  onClick={handleSelectAll}
+                  className="text-sm text-brand-600 font-medium flex items-center gap-1 mt-1 hover:text-brand-800"
+               >
+                 <CheckSquare size={14} className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
+                 {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect All' : 'Select All'}
+               </button>
+             </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-brand-800">To-Do List</h1>
+              <p className="text-sm text-brand-500">Stay on top of your tasks</p>
+            </>
+          )}
         </div>
+
         <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            disabled={todos.filter(t => !t.isCompleted).length === 0}
-            className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Export active tasks to CSV"
-            title="Export active tasks to CSV"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-          <button
-            onClick={openAddModal}
-            className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
-            aria-label="Add new task"
-          >
-            <Plus size={16} /> New Task
-          </button>
+           {!isSelectionMode && (
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={todos.filter(t => !t.isCompleted).length === 0}
+                  className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Export active tasks to CSV"
+                  title="Export active tasks to CSV"
+                >
+                  <Download size={16} />
+                  <span className="hidden sm:inline">Export</span>
+                </button>
+                <button
+                  onClick={openAddModal}
+                  className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
+                  aria-label="Add new task"
+                >
+                  <Plus size={16} /> <span className="hidden xs:inline">New Task</span>
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => setIsSelectionMode(!isSelectionMode)}
+              className={`p-2 rounded-xl transition-colors border ${isSelectionMode ? 'bg-brand-100 text-brand-800 border-brand-200' : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'}`}
+              title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
+              aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
+            >
+              {isSelectionMode ? <X size={20} /> : <Layers size={20} />}
+            </button>
         </div>
       </div>
 
@@ -280,6 +368,9 @@ const ToDosPage: React.FC = () => {
         onEdit={openEditModal}
         onDelete={deleteToDo}
         members={members}
+        isSelectionMode={isSelectionMode}
+        selectedIds={selectedIds}
+        onToggleSelection={toggleSelection}
       />
 
       {/* Upcoming Section */}
@@ -292,6 +383,9 @@ const ToDosPage: React.FC = () => {
         onEdit={openEditModal}
         onDelete={deleteToDo}
         members={members}
+        isSelectionMode={isSelectionMode}
+        selectedIds={selectedIds}
+        onToggleSelection={toggleSelection}
       />
 
       {/* On The Radar Section */}
@@ -304,7 +398,41 @@ const ToDosPage: React.FC = () => {
         onEdit={openEditModal}
         onDelete={deleteToDo}
         members={members}
+        isSelectionMode={isSelectionMode}
+        selectedIds={selectedIds}
+        onToggleSelection={toggleSelection}
       />
+
+      {/* Floating Action Bar (FAB) for Batch Actions */}
+      {isSelectionMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+            <div className="px-3 font-bold text-sm border-r border-brand-700">
+              {selectedIds.size} selected
+            </div>
+
+            <button
+              onClick={handleBatchComplete}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Mark selected as completed"
+            >
+              <Check size={18} />
+              <span className="text-[10px] font-medium">Complete</span>
+            </button>
+
+            <button
+              onClick={() => setShowBatchDeleteConfirm(true)}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Delete selected items"
+            >
+              <Trash2 size={18} />
+              <span className="text-[10px] font-medium">Delete</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -398,6 +526,43 @@ const ToDosPage: React.FC = () => {
         </form>
       </Modal>
 
+      {/* Batch Delete Confirmation Modal */}
+      {showBatchDeleteConfirm && (
+        <Modal
+          isOpen={true}
+          onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
+          disableBackdropClose={isBatchProcessing}
+        >
+          <div className="p-4 space-y-4">
+            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
+            <p className="text-brand-600">
+              Are you sure you want to delete <strong>{selectedIds.size}</strong> tasks?
+            </p>
+            <p className="text-sm text-money-neg font-bold">
+              This action cannot be undone.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowBatchDeleteConfirm(false)}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBatchDelete}
+                disabled={isBatchProcessing}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                <span>Delete All</span>
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
     </div>
   );
 };
@@ -412,7 +577,10 @@ const Section: React.FC<{
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   members: HouseholdMember[];
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members }) => {
+  isSelectionMode: boolean;
+  selectedIds: Set<string>;
+  onToggleSelection: (id: string) => void;
+}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, members, isSelectionMode, selectedIds, onToggleSelection }) => {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -445,36 +613,49 @@ const Section: React.FC<{
       <div className="space-y-3">
         {items.map(item => {
            const assignee = memberMap.get(item.assignedTo);
+           const isSelected = selectedIds.has(item.id);
 
            return (
              <div
                 key={item.id}
-                className="bg-white rounded-2xl p-4 shadow-sm border border-brand-100 transition-all active:scale-[0.99]"
+                onClick={() => isSelectionMode && onToggleSelection(item.id)}
+                className={`rounded-2xl p-4 shadow-sm border transition-all active:scale-[0.99] ${
+                  isSelectionMode
+                    ? `cursor-pointer ${isSelected ? 'bg-brand-50 border-brand-200' : 'bg-white border-brand-100'}`
+                    : 'bg-white border-brand-100'
+                }`}
              >
                <div className="flex items-start gap-3">
-                 {/* Complete Checkbox */}
-                 <button
-                   onClick={async () => {
-                     try {
-                       await onComplete(item.id);
-                       toast.success('To-Do completed! 🎉');
-                     } catch (error) {
-                       console.error('Failed to complete task:', error);
-                       toast.error('Failed to complete to-do');
-                     }
-                   }}
-                   className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                     color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
-                     color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
-                     'border-blue-200 hover:bg-blue-50 active:bg-blue-100'
-                   }`}
-                   aria-label="Complete task"
-                 >
-                   <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
-                 </button>
+                 {/* Complete Checkbox or Selection Box */}
+                 {isSelectionMode ? (
+                   <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
+                      {isSelected ? <CheckSquare size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+                   </div>
+                 ) : (
+                   <button
+                     onClick={async (e) => {
+                       e.stopPropagation();
+                       try {
+                         await onComplete(item.id);
+                         toast.success('To-Do completed! 🎉');
+                       } catch (error) {
+                         console.error('Failed to complete task:', error);
+                         toast.error('Failed to complete to-do');
+                       }
+                     }}
+                     className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
+                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
+                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100'
+                     }`}
+                     aria-label="Complete task"
+                   >
+                     <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
+                   </button>
+                 )}
 
                  <div className="flex-1 min-w-0">
-                   <p className="font-medium text-brand-800 leading-snug">{item.text}</p>
+                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800' : 'text-brand-800'}`}>{item.text}</p>
 
                    <div className="flex flex-wrap items-center gap-2 mt-2">
                      {isBefore(parseISO(item.completeByDate), startOfToday()) ? (
@@ -508,28 +689,31 @@ const Section: React.FC<{
                    </div>
                  </div>
 
-                 {/* Edit/Delete Actions (Always Visible) */}
-                 <div className="flex items-center gap-1 pl-2">
-                    <button
-                      onClick={() => onEdit(item)}
-                      className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                      aria-label="Edit task"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        showDeleteConfirmation(async () => {
-                          await onDelete(item.id);
-                          toast.success('Task deleted');
-                        });
-                      }}
-                      className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
-                      aria-label="Delete task"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                 </div>
+                 {/* Edit/Delete Actions (Only visible when NOT in selection mode) */}
+                 {!isSelectionMode && (
+                   <div className="flex items-center gap-1 pl-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                        aria-label="Edit task"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showDeleteConfirmation(async () => {
+                            await onDelete(item.id);
+                            toast.success('Task deleted');
+                          });
+                        }}
+                        className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
+                        aria-label="Delete task"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                   </div>
+                 )}
                </div>
              </div>
            );
