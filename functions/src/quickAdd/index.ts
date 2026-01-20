@@ -570,7 +570,7 @@ export const quickAddShoppingItem = onRequest(
         // 5. Fetch existing items once for duplicate checking
         const existingItems = await db
           .collection(`households/${householdId}/shoppingList`)
-          .where("purchased", "==", false)
+          .where("isPurchased", "==", false)
           .get();
 
         const results = [];
@@ -608,7 +608,7 @@ export const quickAddShoppingItem = onRequest(
               quantity: itemQuantity,
               category: itemCategory,
               store: itemStore,
-              purchased: false,
+              isPurchased: false,
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               source: "shortcut",
             };
@@ -684,7 +684,7 @@ export const quickAddShoppingItem = onRequest(
       // 5. Check for duplicate items (case-insensitive)
       const existingItems = await db
         .collection(`households/${householdId}/shoppingList`)
-        .where("purchased", "==", false)
+        .where("isPurchased", "==", false)
         .get();
 
       const normalizedItem = item.trim().toLowerCase();
@@ -721,7 +721,7 @@ export const quickAddShoppingItem = onRequest(
         quantity,
         category,
         store: store || null,
-        purchased: false,
+        isPurchased: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         source: "shortcut",
       };
