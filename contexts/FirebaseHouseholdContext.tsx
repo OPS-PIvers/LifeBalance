@@ -529,14 +529,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             } catch (error) {
               console.error('Failed to process pending item:', error);
 
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
               // Mark as processed with error
               await updateDoc(doc(db, `households/${householdId}/pendingItems`, docSnapshot.id), {
                 processed: true,
                 processedAt: serverTimestamp(),
-                error: error instanceof Error ? error.message : 'Unknown error'
+                error: errorMessage
               });
 
-              toast.error(`Failed to process: ${item.text.substring(0, 30)}...`);
+              toast.error(`Voice command failed: ${errorMessage}`);
             }
           }
         }
