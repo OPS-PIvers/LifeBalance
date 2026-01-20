@@ -129,7 +129,7 @@ const ShoppingListTab: React.FC = () => {
             quantity: item.quantity || '1',
             category: item.category,
             purchaseDate: new Date().toISOString().split('T')[0],
-          })
+          }, { suppressToast: true })
         ));
 
         const successCount = results.filter(r => r.status === 'fulfilled').length;

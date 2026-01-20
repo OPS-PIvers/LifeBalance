@@ -204,10 +204,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Pantry operations
-  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id' | 'addedAt' | 'addedBy'>) => {
+  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id' | 'addedAt' | 'addedBy'>, options?: { suppressToast?: boolean }) => {
     const newItem = { ...item, id: generateId(), addedAt: new Date().toISOString(), addedBy: 'test-user-id' } as PantryItem;
     setPantry(prev => [...prev, newItem]);
-    toast.success('Mock: Pantry item added');
+    if (!options?.suppressToast) {
+      toast.success('Mock: Pantry item added');
+    }
   }, []);
 
   const updatePantryItem = useCallback(async (item: PantryItem) => {
