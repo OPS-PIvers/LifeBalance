@@ -63,9 +63,9 @@ const checkAiAvailability = async (householdId: string) => {
   // If date changed, effectively count is 0
   const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
 
-  // Limit: 20 requests per day for Alpha
-  if (currentCount >= 20) {
-    throw new Error("Daily AI quota exceeded (20 requests/day). Try again tomorrow.");
+  // Limit: 100 requests per day for development/testing (was 20 for Alpha)
+  if (currentCount >= 100) {
+    throw new Error("Daily AI quota exceeded (100 requests/day). Try again tomorrow.");
   }
 };
 
