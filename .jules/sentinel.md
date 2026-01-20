@@ -48,3 +48,8 @@
 **Vulnerability:** The `quickAddShoppingItem` batch endpoint validated the main `item` name but skipped validation for optional fields (`category`, `store`) within the batch array. An attacker could bypass the single-item checks and send massive payloads (e.g., 1MB strings) via the batch array, causing storage exhaustion or cost spikes.
 **Learning:** Validating the top-level object or a single item is not enough. When processing arrays/batches, *every* field of *every* item must be rigorously validated against the same constraints as single-item endpoints.
 **Prevention:** Applied strict length (max 50 chars) and type checks to `category` and `store` fields inside the batch processing loop, mirroring the single-item validation logic.
+
+## 2026-02-28 - [DoS/Storage Exhaustion] Unrestricted Firestore Writes
+**Vulnerability:** Firestore rules allowed authenticated members to write arbitrary data to collections like `habits`, `members`, and `households` without input validation. A malicious or compromised member could write massive strings (up to 1MB per document) to fields like `displayName`, `title`, or `name`, causing storage exhaustion or client-side performance issues (DoS).
+**Learning:** Client-side validation is insufficient for security. Firestore rules must enforce data integrity and constraints (like string length) at the database layer to prevent "garbage in" attacks.
+**Prevention:** Introduced `isValidString` and `isValidOptionalString` helper functions in `firestore.rules` and applied them to critical write paths (`create`/`update`) to enforce maximum string lengths (e.g., 50-100 chars).

@@ -20,6 +20,16 @@ service cloud.firestore {
              get(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // 🛡️ SENTINEL SECURITY FIX: Input Validation Helper
+    // Validate string length to prevent DoS/Storage Exhaustion
+    function isValidString(text, maxLen) {
+      return text is string && text.size() <= maxLen;
+    }
+
+    function isValidOptionalString(data, field, maxLen) {
+      return !data.keys().hasAny([field]) || isValidString(data[field], maxLen);
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -32,13 +42,17 @@ service cloud.firestore {
       // Admin can list all households for the AI Meter
       allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
-      allow create: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+                    isValidString(request.resource.data.name, 50);
+
       // Allow update if member (but cannot modify immutable fields).
       // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
       // This implicitly requires the user to have a valid member document in the members/ subcollection.
       // Since creating a member document requires validating the invite code (see members create rule),
       // this ensures that no one can add themselves to memberUids without a valid invite.
       allow update: if isMemberOf(householdId) &&
+                        // 🛡️ SENTINEL FIX: Validate input length
+                        isValidOptionalString(request.resource.data, 'name', 50) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
@@ -75,7 +89,10 @@ service cloud.firestore {
         // Secure creation: Must be creator OR provide valid invite code
         // - Household creator can create their member doc with any role.
         // - Invite-based joins must not assign themselves an admin role.
-        allow create: if isAuthenticated() && request.auth.uid == memberId && (
+        allow create: if isAuthenticated() && request.auth.uid == memberId &&
+          // 🛡️ SENTINEL FIX: Validate input length
+          isValidOptionalString(request.resource.data, 'displayName', 50) &&
+          (
           // Case 1: Household creator (admin) - createdBy check
           get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
           // Case 2: Joining via Invite Code (non-creator)
@@ -96,7 +113,10 @@ service cloud.firestore {
         // New rule restricts updates to:
         // 1. The user themselves (but they cannot change their own role)
         // 2. Household Admins (can update any field including role)
-        allow update: if isMemberOf(householdId) && (
+        allow update: if isMemberOf(householdId) &&
+          // 🛡️ SENTINEL FIX: Validate input length
+          isValidOptionalString(request.resource.data, 'displayName', 50) &&
+          (
           // Case 1: User updating their own profile (cannot change role)
           (request.auth.uid == memberId && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])) ||
           // Case 2: Admin updating any member (including role)
@@ -109,7 +129,11 @@ service cloud.firestore {
       // Habits subcollection
       match /habits/{habitId} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId);
+        // 🛡️ SENTINEL FIX: Validate input length
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidOptionalString(request.resource.data, 'title', 100) &&
+                              isValidOptionalString(request.resource.data, 'category', 50);
+        allow delete: if isMemberOf(householdId);
 
         // Habit submissions subcollection
         match /submissions/{submissionId} {
@@ -141,6 +165,14 @@ service cloud.firestore {
         allow read: if isMemberOf(householdId);
         // Cloud Functions update this via Admin SDK, but allow admin updates for testing
         allow write: if isAdminOf(householdId);
+      }
+
+      // 🛡️ SENTINEL FIX: Shopping List Validation
+      match /shoppingList/{itemId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if isMemberOf(householdId) &&
+          isValidOptionalString(request.resource.data, 'name', 100) &&
+          isValidOptionalString(request.resource.data, 'category', 50);
       }
 
       // All other subcollections (accounts, buckets, transactions, etc.)
