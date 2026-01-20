@@ -564,6 +564,25 @@ export const quickAddShoppingItem = onRequest(
           errorResponse(res, 400, `Item name too long: ${itemObj.item} (max 100 chars)`, "BAD_REQUEST");
           return;
         }
+        // Security: Validate optional fields to prevent storage exhaustion
+        if (itemObj.category !== undefined && itemObj.category !== null) {
+          if (typeof itemObj.category !== "string" || itemObj.category.length > 50) {
+            errorResponse(res, 400, `Category too long for item '${itemObj.item}' (max 50 chars)`, "BAD_REQUEST");
+            return;
+          }
+        }
+        if (itemObj.store !== undefined && itemObj.store !== null) {
+          if (typeof itemObj.store !== "string" || itemObj.store.length > 50) {
+            errorResponse(res, 400, `Store too long for item '${itemObj.item}' (max 50 chars)`, "BAD_REQUEST");
+            return;
+          }
+        }
+        if (itemObj.quantity !== undefined && itemObj.quantity !== null) {
+          if (typeof itemObj.quantity !== "number" || itemObj.quantity < 0.01) {
+             errorResponse(res, 400, `Invalid quantity for item '${itemObj.item}'`, "BAD_REQUEST");
+             return;
+          }
+        }
       }
 
       try {
