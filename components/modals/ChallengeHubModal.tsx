@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Plus } from 'lucide-react';
 import { Challenge } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 
@@ -113,58 +114,33 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
 
         {/* Modal */}
         <div className="relative w-full max-w-2xl max-h-full bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-brand-800">Challenge Hub</h2>
-              <button
-                onClick={onClose}
-                className="p-2 text-brand-400 hover:bg-white rounded-full transition-colors"
-              >
-                <X size={20} />
-              </button>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)} className="flex flex-col h-full overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50 shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-brand-800">Challenge Hub</h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 text-brand-400 hover:bg-white rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* Tab Navigation */}
-          <div className="flex p-2 bg-brand-50 mx-4 mt-4 rounded-xl gap-1">
-            <button
-              onClick={() => setActiveTab('challenge')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${
-                activeTab === 'challenge'
-                  ? 'bg-white shadow-sm text-brand-800'
-                  : 'text-brand-400 hover:text-brand-600'
-              }`}
-            >
-              Challenge
-            </button>
-            <button
-              onClick={() => setActiveTab('yearly')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${
-                activeTab === 'yearly'
-                  ? 'bg-white shadow-sm text-brand-800'
-                  : 'text-brand-400 hover:text-brand-600'
-              }`}
-            >
-              Yearly Goal
-            </button>
-            <button
-              onClick={() => setActiveTab('freeze')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${
-                activeTab === 'freeze'
-                  ? 'bg-white shadow-sm text-brand-800'
-                  : 'text-brand-400 hover:text-brand-600'
-              }`}
-            >
-              Freeze Bank
-            </button>
-          </div>
+            {/* Tab Navigation */}
+            <div className="px-4 mt-4 shrink-0">
+              <TabsList>
+                <TabsTrigger value="challenge">Challenge</TabsTrigger>
+                <TabsTrigger value="yearly">Yearly Goal</TabsTrigger>
+                <TabsTrigger value="freeze">Freeze Bank</TabsTrigger>
+              </TabsList>
+            </div>
 
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {/* Challenge Tab */}
-            {activeTab === 'challenge' && (
-              <div className="space-y-4">
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Challenge Tab */}
+              <TabsContent value="challenge" className="space-y-4">
                 {/* Title */}
                 <div>
                   <label className="text-xs font-bold text-brand-400 uppercase">
@@ -308,12 +284,10 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                     })}
                   </div>
                 </div>
-              </div>
-            )}
+              </TabsContent>
 
-            {/* Yearly Goal Tab */}
-            {activeTab === 'yearly' && (
-              <div className="space-y-6">
+              {/* Yearly Goal Tab */}
+              <TabsContent value="yearly" className="space-y-6">
                 {displayYearlyGoal ? (
                   <>
                     {/* Goal Info */}
@@ -416,12 +390,10 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                     </button>
                   </div>
                 )}
-              </div>
-            )}
+              </TabsContent>
 
-            {/* Freeze Bank Tab */}
-            {activeTab === 'freeze' && (
-              <div className="space-y-6">
+              {/* Freeze Bank Tab */}
+              <TabsContent value="freeze" className="space-y-6">
                 {/* Token Display */}
                 <div className="bg-gradient-to-br from-cyan-50 to-blue-50 p-6 rounded-2xl border border-cyan-100">
                   <h3 className="text-sm font-bold text-brand-400 uppercase mb-3">
@@ -575,41 +547,40 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              </TabsContent>
+            </div>
 
-          {/* Footer Actions */}
-          <div className="p-4 border-t border-brand-100 bg-brand-50">
-            {activeTab === 'challenge' && (
-              <button
-                onClick={handleSaveChallenge}
-                disabled={!title}
-                className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Save Challenge
-              </button>
-            )}
-            {activeTab === 'yearly' && displayYearlyGoal && (
-              <div className="text-center">
-                <p className="text-xs text-brand-400">
-                  Monthly challenges automatically update yearly progress
-                </p>
-              </div>
-            )}
-            {activeTab === 'freeze' && (
-              <button
-                onClick={onClose}
-                className="w-full py-3 bg-brand-100 text-brand-700 font-bold rounded-xl active:scale-95 transition-transform"
-              >
-                Close
-              </button>
-            )}
-          </div>
+            {/* Footer Actions */}
+            <div className="p-4 border-t border-brand-100 bg-brand-50 shrink-0">
+              {activeTab === 'challenge' && (
+                <button
+                  onClick={handleSaveChallenge}
+                  disabled={!title}
+                  className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Save Challenge
+                </button>
+              )}
+              {activeTab === 'yearly' && displayYearlyGoal && (
+                <div className="text-center">
+                  <p className="text-xs text-brand-400">
+                    Monthly challenges automatically update yearly progress
+                  </p>
+                </div>
+              )}
+              {activeTab === 'freeze' && (
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 bg-brand-100 text-brand-700 font-bold rounded-xl active:scale-95 transition-transform"
+                >
+                  Close
+                </button>
+              )}
+            </div>
+          </Tabs>
         </div>
       </div>
 
-      {/* Yearly Goal Form Modal */}
       <YearlyGoalFormModal
         isOpen={isYearlyGoalFormOpen}
         onClose={() => setIsYearlyGoalFormOpen(false)}
