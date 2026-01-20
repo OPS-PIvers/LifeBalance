@@ -52,14 +52,15 @@ describe('App Smoke Test', () => {
 
   it('renders Dashboard when authenticated and has household', async () => {
     // Mock authenticated user with household
+    const mockUser = { uid: 'test-user', email: 'test@example.com' };
     vi.mocked(AuthContext.useAuth).mockReturnValue({
-      user: { uid: 'test-user', email: 'test@example.com' } as any,
+      user: mockUser as unknown as import('firebase/auth').User,
+      currentUser: mockUser as unknown as import('firebase/auth').User,
       householdId: 'test-household',
       loading: false,
-      signIn: vi.fn(),
       signOut: vi.fn(),
-      userProfile: null,
-      updateUserProfile: vi.fn(),
+      logout: vi.fn(),
+      setHouseholdId: vi.fn(),
     });
 
     render(<App />);
@@ -75,12 +76,12 @@ describe('App Smoke Test', () => {
     // Mock unauthenticated user
     vi.mocked(AuthContext.useAuth).mockReturnValue({
       user: null,
+      currentUser: null,
       householdId: null,
       loading: false,
-      signIn: vi.fn(),
       signOut: vi.fn(),
-      userProfile: null,
-      updateUserProfile: vi.fn(),
+      logout: vi.fn(),
+      setHouseholdId: vi.fn(),
     });
 
     render(<App />);
@@ -92,14 +93,15 @@ describe('App Smoke Test', () => {
 
   it('redirects to Setup when authenticated but no household', async () => {
     // Mock authenticated user but NO household
+    const mockUser = { uid: 'test-user' };
     vi.mocked(AuthContext.useAuth).mockReturnValue({
-      user: { uid: 'test-user' } as any,
+      user: mockUser as unknown as import('firebase/auth').User,
+      currentUser: mockUser as unknown as import('firebase/auth').User,
       householdId: null,
       loading: false,
-      signIn: vi.fn(),
       signOut: vi.fn(),
-      userProfile: null,
-      updateUserProfile: vi.fn(),
+      logout: vi.fn(),
+      setHouseholdId: vi.fn(),
     });
 
     render(<App />);

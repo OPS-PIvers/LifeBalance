@@ -30,7 +30,7 @@ describe('CustomTooltip', () => {
   });
 
   it('applies formatter', () => {
-    const formatter = (val: any) => `$${val}`;
+    const formatter = (val: number | string) => `$${val}`;
     render(<CustomTooltip active={true} payload={mockPayload} formatter={formatter} />);
 
     expect(screen.getByText('$100')).toBeInTheDocument();
