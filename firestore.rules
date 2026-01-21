@@ -31,6 +31,10 @@ service cloud.firestore {
       // Let's allow empty strings for optional fields to be safe, but enforce max length.
     }
 
+    function isValidNumber(num) {
+      return num is number || num is float || num is int;
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -201,10 +205,32 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (accounts, buckets, transactions, etc.)
+      // Transactions subcollection with strict input validation
+      match /transactions/{transactionId} {
+        allow read: if isMemberOf(householdId);
+
+        // 🛡️ SENTINEL SECURITY FIX: Validate transaction data integrity
+        // Enforce types and constraints to prevent data corruption
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.amount) &&
+                              isValidString(request.resource.data.merchant, 100) &&
+                              isValidString(request.resource.data.category, 50) &&
+                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD
+                              (request.resource.data.get('status', 'verified') in ['verified', 'pending_review']) &&
+                              isValidOptionalString(request.resource.data.get('payPeriodId', null), 20);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (accounts, buckets, etc.)
+      // 🛡️ SENTINEL SECURITY FIX: Exclude subcollections that have explicit validation rules above.
+      // Without this exclusion, the generic wildcard allows permissive access that bypasses specific validation.
       match /{subcollection}/{document} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId);
+        allow write: if isMemberOf(householdId) &&
+                     // Explicitly deny writing to collections that have specific rules above
+                     // to prevent bypassing validation via this generic wildcard.
+                     !(subcollection in ['members', 'habits', 'apiKeys', 'apiUsage', 'shoppingList', 'transactions']);
       }
     }
 

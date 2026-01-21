@@ -57,3 +57,10 @@
 - `members` (displayName: 50 chars, email: 100 chars, telegramChatId: 50 chars, photoURL: 500 chars, notificationPreferences.time: 10 chars, notificationPreferences.timezone: 100 chars)
 - `habits` (title: 100 chars, category: 50 chars, telegramAlias: 50 chars, presetId: 50 chars)
 - `shoppingList` (name: 100 chars, category: 50 chars)
+
+## 2026-02-05 - [Integrity] Generic Wildcard Bypass
+**Vulnerability:** The `transactions` subcollection (and others like `shoppingList`, `habits`) had specific validation rules defined, but a permissive wildcard match (`match /{subcollection}/{document}`) located below them allowed `write` access based solely on membership. Since Firestore permissions are additive (OR logic), this generic rule effectively bypassed all specific validation logic, allowing invalid or malicious data to be written.
+**Learning:** In Firestore, specific rules do not override generic ones; they merge. If *any* rule grants access, the operation is allowed. Catch-all wildcards are extremely dangerous if they don't explicitly exclude collections that require stricter validation.
+**Prevention:**
+1. Added strict validation for `transactions` (checking `amount`, `merchant`, etc.).
+2. Crucially, updated the generic wildcard match to explicitly *exclude* all subcollections that have their own validation rules (`transactions`, `shoppingList`, `members`, `habits`, `apiKeys`, `apiUsage`) using `!(subcollection in [...])` to ensure the stricter rules are the only ones that apply.
