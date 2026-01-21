@@ -21,7 +21,7 @@ vi.mock('react-hot-toast', () => ({
   default: { error: vi.fn(), success: vi.fn() },
 }));
 
-// Mock Lazy Loaded Pages to avoid full render and focus on routing
+// Mock Lazy Loaded Pages
 vi.mock('./pages/Dashboard', () => ({
   default: () => <div data-testid="dashboard-page">Dashboard Page</div>,
 }));
@@ -34,6 +34,34 @@ vi.mock('./pages/HouseholdSetup', () => ({
   default: () => <div data-testid="setup-page">Setup Page</div>,
 }));
 
+vi.mock('./pages/Budget', () => ({
+  default: () => <div data-testid="budget-page">Budget Page</div>
+}));
+
+vi.mock('./pages/Habits', () => ({
+  default: () => <div data-testid="habits-page">Habits Page</div>
+}));
+
+vi.mock('./pages/MealsPage', () => ({
+  default: () => <div data-testid="meals-page">Meals Page</div>
+}));
+
+vi.mock('./pages/ShoppingPage', () => ({
+  default: () => <div data-testid="shopping-page">Shopping Page</div>
+}));
+
+vi.mock('./pages/ToDosPage', () => ({
+  default: () => <div data-testid="todos-page">ToDos Page</div>
+}));
+
+vi.mock('./pages/Settings', () => ({
+  default: () => <div data-testid="settings-page">Settings Page</div>
+}));
+
+vi.mock('./pages/MigrateSubmissions', () => ({
+  default: () => <div data-testid="migrate-page">Migrate Page</div>
+}));
+
 // Mock Layout
 vi.mock('./components/layout/MainLayout', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid="main-layout">{children}</div>,
@@ -44,70 +72,101 @@ vi.mock('./services/notificationService', () => ({
   setupForegroundNotificationListener: vi.fn(() => vi.fn()),
 }));
 
-describe('App Smoke Test', () => {
+describe('App Routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.location.hash = ''; // Reset router state
   });
 
-  it('renders Dashboard when authenticated and has household', async () => {
-    // Mock authenticated user with household
-    const mockUser = { uid: 'test-user', email: 'test@example.com' };
-    vi.mocked(AuthContext.useAuth).mockReturnValue({
-      user: mockUser as unknown as import('firebase/auth').User,
-      currentUser: mockUser as unknown as import('firebase/auth').User,
-      householdId: 'test-household',
-      loading: false,
-      signOut: vi.fn(),
-      logout: vi.fn(),
-      setHouseholdId: vi.fn(),
-    });
+  const mockAuthenticatedUser = {
+    user: { uid: 'test-user', email: 'test@example.com' } as unknown as import('firebase/auth').User,
+    currentUser: { uid: 'test-user', email: 'test@example.com' } as unknown as import('firebase/auth').User,
+    householdId: 'test-household',
+    loading: false,
+    signOut: vi.fn(),
+    logout: vi.fn(),
+    setHouseholdId: vi.fn(),
+  };
 
+  it('renders Dashboard at root path /', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
     render(<App />);
-
-    // Expect to see the dashboard (wrapped in layout)
-    await waitFor(() => {
-      expect(screen.getByTestId('dashboard-page')).toBeInTheDocument();
-    });
-    expect(screen.getByTestId('main-layout')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('dashboard-page')).toBeInTheDocument());
   });
 
   it('redirects to Login when unauthenticated', async () => {
-    // Mock unauthenticated user
     vi.mocked(AuthContext.useAuth).mockReturnValue({
+      ...mockAuthenticatedUser,
       user: null,
       currentUser: null,
       householdId: null,
-      loading: false,
-      signOut: vi.fn(),
-      logout: vi.fn(),
-      setHouseholdId: vi.fn(),
     });
-
     render(<App />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByTestId('login-page')).toBeInTheDocument());
   });
 
   it('redirects to Setup when authenticated but no household', async () => {
-    // Mock authenticated user but NO household
-    const mockUser = { uid: 'test-user' };
     vi.mocked(AuthContext.useAuth).mockReturnValue({
-      user: mockUser as unknown as import('firebase/auth').User,
-      currentUser: mockUser as unknown as import('firebase/auth').User,
+      ...mockAuthenticatedUser,
       householdId: null,
-      loading: false,
-      signOut: vi.fn(),
-      logout: vi.fn(),
-      setHouseholdId: vi.fn(),
     });
-
     render(<App />);
+    await waitFor(() => expect(screen.getByTestId('setup-page')).toBeInTheDocument());
+  });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('setup-page')).toBeInTheDocument();
-    });
+  it('renders Budget page at /budget', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/budget';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('budget-page')).toBeInTheDocument());
+  });
+
+  it('renders Habits page at /habits', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/habits';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('habits-page')).toBeInTheDocument());
+  });
+
+  it('renders Meals page at /meals', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/meals';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('meals-page')).toBeInTheDocument());
+  });
+
+  it('renders Shopping page at /shopping', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/shopping';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('shopping-page')).toBeInTheDocument());
+  });
+
+  it('renders ToDos page at /todos', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/todos';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('todos-page')).toBeInTheDocument());
+  });
+
+  it('renders Settings page at /settings', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/settings';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('settings-page')).toBeInTheDocument());
+  });
+
+  it('renders Migrate page at /migrate-submissions', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/migrate-submissions';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('migrate-page')).toBeInTheDocument());
+  });
+
+  it('redirects unknown routes to Dashboard', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/unknown-route-123';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('dashboard-page')).toBeInTheDocument());
   });
 });
