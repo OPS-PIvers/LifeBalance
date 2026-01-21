@@ -9,6 +9,7 @@ import { ActionQueueItemCard } from '../components/dashboard/ActionQueueItem';
 import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
 import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidget';
 import { InsightWidget } from '../components/dashboard/InsightWidget';
+import { OmniBar } from '../components/dashboard/OmniBar';
 
 const Dashboard: React.FC = () => {
   const {
@@ -141,6 +142,9 @@ const Dashboard: React.FC = () => {
            </div>
         </div>
       )}
+
+      {/* OmniBar - Universal Command Center */}
+      <OmniBar />
 
     </div>
   );
