@@ -31,6 +31,10 @@ service cloud.firestore {
       // Let's allow empty strings for optional fields to be safe, but enforce max length.
     }
 
+    function isValidNumber(num) {
+      return num is number;
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -201,10 +205,47 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (accounts, buckets, transactions, etc.)
+      // 🛡️ SENTINEL SECURITY FIX: Strict validation for financial data
+      match /transactions/{transactionId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.get('amount', null)) &&
+                              isValidString(request.resource.data.get('merchant', null), 100) &&
+                              isValidString(request.resource.data.get('category', null), 50) &&
+                              isValidString(request.resource.data.get('date', null), 10) &&
+                              isValidOptionalString(request.resource.data.get('notes', null), 500);
+        allow delete: if isMemberOf(householdId);
+      }
+
+      match /accounts/{accountId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.get('balance', null)) &&
+                              isValidString(request.resource.data.get('name', null), 50);
+        allow delete: if isMemberOf(householdId);
+      }
+
+      match /buckets/{bucketId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.get('limit', null)) &&
+                              isValidString(request.resource.data.get('name', null), 50);
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (calendarItems, pantry, meals, etc.)
+      // 🛡️ SENTINEL SECURITY FIX: Exclude collections with specific rules from wildcard to prevent validation bypass
       match /{subcollection}/{document} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId);
+        allow write: if isMemberOf(householdId) &&
+                     subcollection != 'members' &&
+                     subcollection != 'habits' &&
+                     subcollection != 'shoppingList' &&
+                     subcollection != 'apiKeys' &&
+                     subcollection != 'apiUsage' &&
+                     subcollection != 'transactions' &&
+                     subcollection != 'accounts' &&
+                     subcollection != 'buckets';
       }
     }
 
