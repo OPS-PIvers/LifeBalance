@@ -271,7 +271,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                             </span>
                           </div>
                           <div
-                            className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
                               habit.type === 'positive'
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-rose-100 text-rose-700'
@@ -346,7 +346,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                                   monthIndex
                                 )}
                               </div>
-                              <span className="text-[10px] text-brand-400 mt-1 font-medium">
+                              <span className="text-xxs text-brand-400 mt-1 font-medium">
                                 {format(parseISO(`${monthKey}-01`), 'MMM')}
                               </span>
                             </div>
@@ -445,7 +445,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                                   : 'border-brand-100 hover:border-brand-200'
                               }`}
                             >
-                              <div className="text-[10px] text-brand-400 font-medium">
+                              <div className="text-xxs text-brand-400 font-medium">
                                 {format(date, 'EEE')}
                               </div>
                               <div className="text-sm font-bold text-brand-800">

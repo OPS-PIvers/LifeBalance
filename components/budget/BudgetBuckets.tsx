@@ -257,7 +257,7 @@ const BudgetBuckets: React.FC = () => {
                     )}
                   </div>
                   {spent.pending > 0 && (
-                    <span className="text-[10px] text-brand-400">
+                    <span className="text-xxs text-brand-400">
                       *pending review
                     </span>
                   )}

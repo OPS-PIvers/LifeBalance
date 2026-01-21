@@ -442,7 +442,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
                           </span>
-                          <span className="text-[10px] text-brand-400 font-bold">
+                          <span className="text-xxs text-brand-400 font-bold">
                             {dayCount} log{dayCount !== 1 ? 's' : ''}
                           </span>
                         </div>
@@ -464,7 +464,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
                                 </span>
                               </div>
-                              <div className="text-[10px] text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
+                              <div className="text-xxs text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
                                 <span>{sub.multiplierApplied}x multiplier</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">

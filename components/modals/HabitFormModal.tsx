@@ -214,7 +214,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   onClick={() => setPeriod(period === 'daily' ? 'weekly' : 'daily')}
                   disabled={isSaving}
                   type="button"
-                  className="text-[10px] font-bold uppercase bg-white border border-brand-200 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
+                  className="text-xxs font-bold uppercase bg-white border border-brand-200 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
                 >
                   {period}
                 </button>

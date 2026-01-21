@@ -360,7 +360,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     <div className="flex items-center gap-3">
                         <div className="text-right">
                             <span className="block font-bold text-brand-700">+{item.calculatedPoints}</span>
-                            <span className="text-[10px] text-gray-400">points</span>
+                            <span className="text-xxs text-gray-400">points</span>
                         </div>
                         <button
                             onClick={() => handleEdit(item.id)}

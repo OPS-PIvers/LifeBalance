@@ -35,7 +35,7 @@ const TopToolbar: React.FC = () => {
             >
               ${Math.abs(safeToSpend).toFixed(2)}
             </span>
-            <span className="text-[10px] text-brand-400 uppercase tracking-wider font-bold leading-tight">
+            <span className="text-xxs text-brand-400 uppercase tracking-wider font-bold leading-tight">
               Safe to Spend
             </span>
           </button>

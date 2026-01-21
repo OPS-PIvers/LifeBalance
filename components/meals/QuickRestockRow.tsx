@@ -54,7 +54,7 @@ export const QuickRestockRow: React.FC = () => {
   return (
     <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
       <div className="flex items-center gap-2 px-1">
-        <span className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Quick Restock</span>
+        <span className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Quick Restock</span>
         <div className="h-px bg-brand-100 flex-1"></div>
       </div>
 

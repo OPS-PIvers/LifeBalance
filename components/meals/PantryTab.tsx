@@ -379,7 +379,7 @@ const PantryTab: React.FC = () => {
               aria-label="Restock selected items"
             >
               <ShoppingCart size={18} />
-              <span className="text-[10px] font-medium">Restock</span>
+              <span className="text-xxs font-medium">Restock</span>
             </button>
 
             <button
@@ -389,7 +389,7 @@ const PantryTab: React.FC = () => {
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
-              <span className="text-[10px] font-medium">Delete</span>
+              <span className="text-xxs font-medium">Delete</span>
             </button>
           </div>
         </div>

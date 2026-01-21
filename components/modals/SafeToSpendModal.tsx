@@ -127,7 +127,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                   <Receipt size={16} />
                   <div className="flex flex-col">
                     <span className="font-bold text-sm">Reserved for Bills</span>
-                    <span className="text-[10px] text-brand-400">{rangeLabel}</span>
+                    <span className="text-xxs text-brand-400">{rangeLabel}</span>
                   </div>
                 </div>
                 <span className="font-mono font-bold">-${totalUnpaidBills.toLocaleString()}</span>
@@ -151,7 +151,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                   <CreditCard size={16} />
                   <div className="flex flex-col">
                     <span className="font-bold text-sm">Bucket Balances</span>
-                    <span className="text-[10px] text-brand-400">For reference only</span>
+                    <span className="text-xxs text-brand-400">For reference only</span>
                   </div>
                 </div>
                 <span className="font-mono font-bold text-brand-600">
@@ -172,7 +172,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                          <div className="flex items-center gap-2">
                            <span>{b.name}</span>
                            {b.spent.pending > 0 && (
-                             <span className="text-[10px] text-amber-600">
+                             <span className="text-xxs text-amber-600">
                                ({b.spent.pending} pending)
                              </span>
                            )}
@@ -210,7 +210,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
             </span>
           </div>
           
-          <p className="text-[10px] text-center text-brand-400">
+          <p className="text-xxs text-center text-brand-400">
             This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
 

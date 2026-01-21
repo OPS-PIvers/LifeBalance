@@ -104,7 +104,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
               }`}
             >
               <span className="block text-xs font-bold">{EFFORT_LABELS[level]}</span>
-              <span className="block text-[10px] mt-0.5 opacity-75">
+              <span className="block text-xxs mt-0.5 opacity-75">
                 {formData.type === 'positive' ? '+' : '-'}{EFFORT_POINTS[level]} pts
               </span>
             </button>
@@ -125,7 +125,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             }`}
           >
             <span className="block font-bold text-sm text-brand-800">Threshold</span>
-            <span className="block text-[10px] text-brand-400 mt-0.5">Points when target is met</span>
+            <span className="block text-xxs text-brand-400 mt-0.5">Points when target is met</span>
           </button>
           <button
             onClick={() => onFormChange({ scoringType: 'incremental' })}
@@ -136,7 +136,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             }`}
           >
             <span className="block font-bold text-sm text-brand-800">Incremental</span>
-            <span className="block text-[10px] text-brand-400 mt-0.5">Points for every tap</span>
+            <span className="block text-xxs text-brand-400 mt-0.5">Points for every tap</span>
           </button>
         </div>
       </div>

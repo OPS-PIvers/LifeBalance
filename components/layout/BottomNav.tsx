@@ -25,7 +25,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <LayoutDashboard className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Home</span>
+                  <span className="text-xxs font-medium">Home</span>
                 </>
               )}
             </NavLink>
@@ -33,7 +33,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Wallet className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Budget</span>
+                  <span className="text-xxs font-medium">Budget</span>
                 </>
               )}
             </NavLink>
@@ -41,7 +41,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Activity className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Habits</span>
+                  <span className="text-xxs font-medium">Habits</span>
                 </>
               )}
             </NavLink>
@@ -56,7 +56,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <CheckSquare className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">To-Dos</span>
+                  <span className="text-xxs font-medium">To-Dos</span>
                 </>
               )}
             </NavLink>
@@ -64,7 +64,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Utensils className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Meals</span>
+                  <span className="text-xxs font-medium">Meals</span>
                 </>
               )}
             </NavLink>
@@ -72,7 +72,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <ShoppingCart className={iconClass(isActive)} />
-                  <span className="text-[10px] font-medium">Shopping</span>
+                  <span className="text-xxs font-medium">Shopping</span>
                 </>
               )}
             </NavLink>

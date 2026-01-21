@@ -57,7 +57,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
         </div>
 
         {/* Progress Stats */}
-        <div className="flex justify-between text-[10px] font-medium text-brand-300 mb-3">
+        <div className="flex justify-between text-xxs font-medium text-brand-300 mb-3">
           <span>
             {challengeProgressData.currentValue} / {challengeTarget}{' '}
             {activeChallenge.targetType === 'percentage' ? '%' : ''}
