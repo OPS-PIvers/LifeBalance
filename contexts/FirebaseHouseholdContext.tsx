@@ -526,19 +526,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               );
 
               // Route to appropriate handler
-              if (item.type === 'shopping' && 'items' in parsed) {
-                await handleShoppingItems(parsed as ParsedShoppingList);
+              if (parsed.detectedType === 'shopping') {
+                await handleShoppingItems(parsed);
                 toast.success(`Added ${parsed.items.length} item(s) from voice command`);
-              } else if (item.type === 'todo' && 'tasks' in parsed) {
-                await handleTodoItems(parsed as ParsedTodoList);
+              } else if (parsed.detectedType === 'todo') {
+                await handleTodoItems(parsed);
                 toast.success(`Added ${parsed.tasks.length} task(s) from voice command`);
-              } else if (item.type === 'expense' && 'amount' in parsed) {
-                const expenseData = parsed as ParsedExpense;
-                if (expenseData.error) {
-                  throw new Error(expenseData.error);
+              } else if (parsed.detectedType === 'expense') {
+                if (parsed.error) {
+                  throw new Error(parsed.error);
                 }
-                await handleExpense(expenseData);
-                toast.success(`Added expense: $${expenseData.amount?.toFixed(2) || '0.00'} at ${expenseData.merchant || 'Unknown'}`);
+                await handleExpense(parsed);
+                toast.success(`Added expense: $${parsed.amount?.toFixed(2) || '0.00'} at ${parsed.merchant || 'Unknown'}`);
               }
 
               // Mark as processed
