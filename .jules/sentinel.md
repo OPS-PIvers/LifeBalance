@@ -52,4 +52,4 @@
 ## 2026-01-25 - [DoS/Storage Exhaustion] Firestore Input Validation
 **Vulnerability:** Firestore rules allowed string fields (like `displayName`, `email`, `title`, `category`) to be updated with strings of arbitrary length (up to the 1MB document limit). This could be abused for Storage Exhaustion or Denial of Service by filling documents with massive strings.
 **Learning:** Client-side validation is insufficient. Database rules must strictly enforce constraints on all user-writable fields to protect the integrity and availability of the database.
-**Prevention:** Implemented helper functions `isValidString` and `isValidOptionalString` in `firestore.rules` and applied them to `members` (displayName, email) and `habits` (title, category) collections to enforce reasonable length limits.
+**Prevention:** Implemented helper functions `isValidString` and `isValidOptionalString` in `firestore.rules` and applied them to `members` (displayName, email, telegramChatId, photoURL, notificationPreferences) and `habits` (title, category, telegramAlias, presetId) collections to enforce reasonable length limits.
