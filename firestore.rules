@@ -43,13 +43,18 @@ service cloud.firestore {
       // Admin can list all households for the AI Meter
       allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
-      allow create: if isAuthenticated();
+      // 🛡️ SENTINEL FIX: Validate household name on creation
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAny(['name']) &&
+                    isValidString(request.resource.data.name, 50);
       // Allow update if member (but cannot modify immutable fields).
       // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
       // This implicitly requires the user to have a valid member document in the members/ subcollection.
       // Since creating a member document requires validating the invite code (see members create rule),
       // this ensures that no one can add themselves to memberUids without a valid invite.
       allow update: if isMemberOf(householdId) &&
+                        // 🛡️ SENTINEL FIX: Validate household name if being updated
+                        isValidOptionalString(request.resource.data.get('name', null), 50) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
@@ -182,6 +187,18 @@ service cloud.firestore {
         allow read: if isMemberOf(householdId);
         // Cloud Functions update this via Admin SDK, but allow admin updates for testing
         allow write: if isAdminOf(householdId);
+      }
+
+      // Shopping list subcollection with input validation
+      match /shoppingList/{itemId} {
+        allow read: if isMemberOf(householdId);
+
+        // 🛡️ SENTINEL SECURITY FIX: Validate shopping list items to prevent storage exhaustion
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidString(request.resource.data.get('name', null), 100) &&
+                              isValidOptionalString(request.resource.data.get('category', null), 50);
+
+        allow delete: if isMemberOf(householdId);
       }
 
       // All other subcollections (accounts, buckets, transactions, etc.)
