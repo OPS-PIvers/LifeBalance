@@ -2,9 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 
@@ -132,6 +133,34 @@ const BudgetCalendar: React.FC = () => {
     setIsAddModalOpen(false);
   };
 
+  const handleExport = () => {
+    try {
+      if (expandedCalendarItems.length === 0) {
+        toast.error('No events to export for this month');
+        return;
+      }
+
+      const exportData = expandedCalendarItems.map(item => ({
+        Date: item.date,
+        Title: item.title,
+        Amount: item.amount,
+        Type: item.type,
+        Status: item.isPaid ? 'Paid' : 'Unpaid',
+        Recurring: item.isRecurring ? 'Yes' : 'No',
+        Frequency: item.frequency || 'N/A'
+      }));
+
+      // Sort by date
+      exportData.sort((a, b) => a.Date.localeCompare(b.Date));
+
+      generateCsvExport(exportData, `budget-calendar-${format(currentDate, 'yyyy-MM')}`);
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export calendar');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Calendar Card */}
@@ -142,6 +171,14 @@ const BudgetCalendar: React.FC = () => {
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              className="p-1 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 mr-2"
+              title="Export this month to CSV"
+            >
+              <Download size={20} />
+            </button>
+            <div className="w-px h-6 bg-brand-100 my-auto mx-1" />
             <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-brand-50 rounded-lg">
               <ChevronLeft size={20} className="text-brand-400" />
             </button>

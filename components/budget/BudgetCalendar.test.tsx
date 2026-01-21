@@ -26,6 +26,7 @@ vi.mock('lucide-react', () => ({
   X: () => <div data-testid="close" />,
   Copy: () => <div data-testid="copy" />,
   CheckSquare: () => <div data-testid="check-square" />,
+  Download: () => <div data-testid="download" />,
 }));
 
 describe('BudgetCalendar', () => {
