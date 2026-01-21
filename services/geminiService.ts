@@ -865,16 +865,32 @@ export const analyzeHabitPoints = async (
   if (habits.length === 0) return [];
 
   try {
-    // 1. Anonymize and Prepare Data
+    // 1. Validate and Prepare Data
+    // Filter out habits with missing critical fields
+    const validHabits = habits.filter(h => {
+      return h.id &&
+             h.title &&
+             typeof h.basePoints === 'number' &&
+             !isNaN(h.basePoints) &&
+             h.period &&
+             typeof h.streakDays === 'number' &&
+             typeof h.totalCount === 'number';
+    });
+
+    if (validHabits.length === 0) {
+      console.warn("No valid habits to analyze");
+      return [];
+    }
+
     // We only send relevant stats, not PII.
-    const habitStats = habits.map(h => {
+    const habitStats = validHabits.map(h => {
       return {
         id: h.id,
         title: h.title, // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
         basePoints: h.basePoints,
         period: h.period,
-        streakDays: h.streakDays,
-        totalCount: h.totalCount,
+        streakDays: h.streakDays ?? 0,
+        totalCount: h.totalCount ?? 0,
         type: h.type
       };
     });
@@ -898,7 +914,7 @@ export const analyzeHabitPoints = async (
       - habitId: (string) matches input id
       - habitTitle: (string) matches input title
       - currentPoints: (number) matches input basePoints
-      - suggestedPoints: (number) the new recommended value
+      - suggestedPoints: (number) the new recommended value (must be between 1-100)
       - reasoning: (string) brief, encouraging explanation for the change (e.g., "You're crushing this! Dropping points slightly to balance the economy." or "Struggling here? Let's bump the reward to get you back on track!")
     `;
 
@@ -919,15 +935,38 @@ export const analyzeHabitPoints = async (
           required: ["habitId", "habitTitle", "currentPoints", "suggestedPoints", "reasoning"]
         }
       },
-      _aiClient
+      _aiClient,
+      'gemini-3-flash-preview' // Explicitly specify model
     );
 
     // 2. Validate and Post-process Results
     return rawSuggestions
       .filter(suggestion => {
+        // Validate suggestion has all required fields
+        if (!suggestion.habitId || !suggestion.habitTitle || !suggestion.reasoning) {
+          console.warn("Skipping suggestion with missing fields:", suggestion);
+          return false;
+        }
+
+        // Validate numeric fields
+        if (typeof suggestion.currentPoints !== 'number' || isNaN(suggestion.currentPoints)) {
+          console.warn("Skipping suggestion with invalid currentPoints:", suggestion);
+          return false;
+        }
+
+        if (typeof suggestion.suggestedPoints !== 'number' || isNaN(suggestion.suggestedPoints)) {
+          console.warn("Skipping suggestion with invalid suggestedPoints:", suggestion);
+          return false;
+        }
+
         // Validate habit exists
-        const habit = habits.find(h => h.id === suggestion.habitId);
-        return !!habit;
+        const habit = validHabits.find(h => h.id === suggestion.habitId);
+        if (!habit) {
+          console.warn("Skipping suggestion for non-existent habit:", suggestion.habitId);
+          return false;
+        }
+
+        return true;
       })
       .map(suggestion => ({
         ...suggestion,
@@ -940,6 +979,10 @@ export const analyzeHabitPoints = async (
 
   } catch (error) {
     console.error("Gemini Habit Analysis Error:", error);
+    // Preserve the original error message for debugging
+    if (error instanceof Error) {
+      throw new Error(`Failed to analyze habits: ${error.message}`);
+    }
     throw new Error("Failed to analyze habits.");
   }
 };

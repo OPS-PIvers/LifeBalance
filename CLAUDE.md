@@ -104,7 +104,7 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
   - Returns: merchant, amount, category, date
 - **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
   - Returns: array of transactions with dates, descriptions, amounts
-- **Pantry Image Analysis**: `analyzePantryImage()` - Identifies food items from photos (model: `gemini-2.0-flash-exp`)
+- **Pantry Image Analysis**: `analyzePantryImage()` - Identifies food items from photos (model: `gemini-3-flash-preview`)
   - Returns: array of items with name, quantity, category, expiry date
 - **Meal Suggestions**: `suggestMeal()` - AI-powered meal planning based on pantry, budget, time constraints
   - Returns: meal name, description, ingredients, tags, reasoning

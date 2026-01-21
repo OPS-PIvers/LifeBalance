@@ -324,7 +324,7 @@ Safe-to-Spend = (Checking Account Balance)
 - Located in `services/geminiService.ts`.
 - **Receipt Scanning**: Extracts merchant, amount, category from expense receipts (model: `gemini-3-flash-preview`).
 - **Statement Parsing**: Parses full bank statement screenshots into transaction lists.
-- **Pantry Image Analysis**: Identifies food items from photos with quantity, category, expiry (model: `gemini-2.0-flash-exp`).
+- **Pantry Image Analysis**: Identifies food items from photos with quantity, category, expiry (model: `gemini-3-flash-preview`).
 - **Meal Suggestions**: AI-generated meal ideas based on pantry inventory, budget, time, and novelty preferences.
 - **Grocery Receipt Parsing**: Extracts grocery items from receipt photos to populate pantry.
 - **API Key**: `VITE_GEMINI_API_KEY`.

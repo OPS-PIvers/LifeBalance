@@ -85,7 +85,7 @@ describe('SmartHabitAdjustModal', () => {
     render(<SmartHabitAdjustModal isOpen={true} onClose={mockOnClose} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to generate suggestions. Please try again later.')).toBeInTheDocument();
+      expect(screen.getByText('Failed to generate suggestions: API Error')).toBeInTheDocument();
     });
 
     consoleSpy.mockRestore();

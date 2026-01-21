@@ -27,7 +27,9 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
           setSuggestions(results);
         } catch (err) {
           console.error("Failed to analyze habits:", err);
-          setError("Failed to generate suggestions. Please try again later.");
+          // Show the actual error message to help with debugging
+          const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+          setError(`Failed to generate suggestions: ${errorMessage}`);
         } finally {
           setIsLoading(false);
         }
