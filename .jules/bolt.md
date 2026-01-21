@@ -15,3 +15,7 @@
 ## 2026-01-28 - [Context Action Circular Dependencies]
 **Learning:** When memoizing context actions with `useCallback`, functions calling other internal functions (e.g., `payCalendarItem` calling `handlePaycheckApproval`) creates a dependency chain. If the callee is defined *after* the caller, strict linting (no-use-before-define) or runtime TDZ (Temporal Dead Zone) issues occur if included in the dependency array.
 **Action:** Reorder function definitions in large context files so that dependencies are defined *before* they are used in `useCallback` dependency arrays. For `FirebaseHouseholdContext`, this meant moving Pay Period actions to the top.
+
+## 2026-02-14 - [Input State Isolation in Lists]
+**Learning:** When an editable field exists within a list item, lifting that state to the parent (to coordinate 'only one editing at a time') causes the entire list to re-render on every keystroke.
+**Action:** Lift the 'isEditing' boolean to the parent to enforce singleton editing, but keep the 'currentValue' state local to the child component. Use a derived state pattern (syncing state when prop changes) or `key` resetting to initialize the local state when editing begins. This ensures only the active item re-renders while typing.

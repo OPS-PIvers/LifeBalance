@@ -1,12 +1,12 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { AlertTriangle, ArrowRightLeft, Plus, Pencil, Check, ChevronDown, ChevronUp, Edit, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Plus } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
-import { format, parseISO } from 'date-fns';
+import { BudgetBucketCard } from './BudgetBucketCard';
 
 const BudgetBuckets: React.FC = () => {
   const {
@@ -23,8 +23,6 @@ const BudgetBuckets: React.FC = () => {
   } = useHousehold();
 
   // ⚡ Bolt Optimization: Pre-calculate transactions grouped by bucket
-  // Replaced O(N log N) global sort with O(N) grouping + O(K log K) per-bucket sort.
-  // This avoids allocating a large sorted array and is faster for large transaction sets.
   const transactionsByBucket = useMemo(() => {
     const map = new Map<string, Transaction[]>();
 
@@ -33,7 +31,6 @@ const BudgetBuckets: React.FC = () => {
     buckets.forEach(b => {
       const key = b.name.toLowerCase();
       if (!nameToIdMap.has(key)) {
-        // Preserve first-match behavior for duplicate bucket names
         nameToIdMap.set(key, b.id);
       }
     });
@@ -46,7 +43,6 @@ const BudgetBuckets: React.FC = () => {
 
       const bucketId = nameToIdMap.get(tx.category.toLowerCase());
       if (bucketId) {
-        // We know bucketId exists, so we can lazily initialize the array
         let list = map.get(bucketId);
         if (!list) {
           list = [];
@@ -56,7 +52,7 @@ const BudgetBuckets: React.FC = () => {
       }
     });
 
-    // 3. Sort each small group independently (O(K log K) where K is subset size)
+    // 3. Sort each small group independently (O(K log K))
     map.forEach((list) => {
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     });
@@ -70,9 +66,8 @@ const BudgetBuckets: React.FC = () => {
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingBucket, setEditingBucket] = useState<BudgetBucket | undefined>(undefined);
 
-  // Edit Limit Inline State
+  // Edit Limit Inline State (Parent only tracks WHO is editing)
   const [editingLimitId, setEditingLimitId] = useState<string | null>(null);
-  const [editLimitValue, setEditLimitValue] = useState('');
 
   // Expandable transaction list state
   const [expandedBucketId, setExpandedBucketId] = useState<string | null>(null);
@@ -81,39 +76,45 @@ const BudgetBuckets: React.FC = () => {
   const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  const handleEditBucket = (bucket: BudgetBucket) => {
+  // --- Memoized Handlers ---
+
+  const handleEditBucket = useCallback((bucket: BudgetBucket) => {
     setEditingBucket(bucket);
     setIsFormModalOpen(true);
-  };
+  }, []);
 
   const handleAddBucket = () => {
     setEditingBucket(undefined);
     setIsFormModalOpen(true);
   };
 
-  const handleEditTransaction = (transaction: Transaction) => {
+  const handleEditTransaction = useCallback((transaction: Transaction) => {
     setEditingTransaction(transaction);
     setIsEditTransactionModalOpen(true);
-  };
+  }, []);
 
-  const handleDeleteTransaction = async (id: string) => {
+  const handleDeleteTransaction = useCallback(async (id: string) => {
     if (window.confirm('Are you sure you want to delete this transaction?')) {
       await deleteTransaction(id);
     }
-  };
+  }, [deleteTransaction]);
 
-  const startEditingLimit = (id: string, limit: number) => {
+  const startEditingLimit = useCallback((id: string) => {
     setEditingLimitId(id);
-    setEditLimitValue(limit.toString());
-  };
+  }, []);
 
-  const saveLimit = (id: string) => {
-    const val = parseFloat(editLimitValue);
-    if (!isNaN(val)) {
-      updateBucketLimit(id, val);
-    }
+  const saveLimit = useCallback((id: string, val: number) => {
+    updateBucketLimit(id, val);
     setEditingLimitId(null);
-  };
+  }, [updateBucketLimit]);
+
+  const handleExpand = useCallback((id: string) => {
+    setExpandedBucketId(prev => (prev === id ? null : id));
+  }, []);
+
+  const handleReallocate = useCallback((targetId: string) => {
+    setReallocateModal({ sourceId: null, targetId });
+  }, []);
 
   // Reallocation Logic
   const getSourceDetails = (sourceId: string) => {
@@ -144,7 +145,6 @@ const BudgetBuckets: React.FC = () => {
     if (amountNeeded === 0) return;
 
     if (sourceId === 'safe_to_spend') {
-      // Logic: Just increase the limit. Safe-to-Spend naturally decreases as liabilities increase.
       updateBucketLimit(targetId, targetBucket.limit + amountNeeded);
     } else {
       const sourceBucket = buckets.find(b => b.id === sourceId);
@@ -153,7 +153,6 @@ const BudgetBuckets: React.FC = () => {
       if (sourceBucket) {
         reallocateBucket(sourceId, targetId, amountNeeded);
       } else if (sourceAccount) {
-        // Logic: Reduce Account Balance (Spent Savings), Increase Bucket Limit
         updateAccountBalance(sourceId, sourceAccount.balance - amountNeeded);
         updateBucketLimit(targetId, targetBucket.limit + amountNeeded);
       }
@@ -162,9 +161,6 @@ const BudgetBuckets: React.FC = () => {
   };
 
   // Prepare Source Options
-  // 1. Buckets with remaining funds
-  // 2. Savings Accounts
-  // 3. Safe to Spend
   const availableSourceBuckets = buckets.filter(b => {
     if (b.id === reallocateModal?.targetId) return false;
     const spent = bucketSpentMap.get(b.id)?.verified || 0;
@@ -184,176 +180,24 @@ const BudgetBuckets: React.FC = () => {
     <div className="space-y-4">
       {buckets.map(bucket => {
         const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
-        const totalCommitted = spent.verified + spent.pending;
-        const percent = Math.min(100, (totalCommitted / bucket.limit) * 100);
-        const isOverspent = totalCommitted > bucket.limit;
-        const isEditingLimit = editingLimitId === bucket.id;
-        const isExpanded = expandedBucketId === bucket.id;
-
-        // Get transactions for this bucket from memoized map
         const bucketTransactions = transactionsByBucket.get(bucket.id) || [];
 
         return (
-          <div
+          <BudgetBucketCard
             key={bucket.id}
-            className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative group"
-          >
-            {/* Header - Clickable for toggle */}
-            <div
-              className="flex items-center justify-between mb-3 cursor-pointer"
-              onClick={() => setExpandedBucketId(isExpanded ? null : bucket.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setExpandedBucketId(isExpanded ? null : bucket.id);
-                }
-              }}
-              aria-expanded={isExpanded}
-              aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
-                <span className="font-bold text-brand-800">{bucket.name}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="text-sm font-mono flex flex-col items-end">
-                  <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-brand-600'}`}>
-                    <span>${spent.verified.toFixed(2)}</span>
-                    {spent.pending > 0 && (
-                      <span className="text-brand-400">
-                        +${spent.pending.toFixed(2)}*
-                      </span>
-                    )}
-                    <span className="text-brand-300">/</span>
-
-                    {isEditingLimit ? (
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="number"
-                          value={editLimitValue}
-                          onChange={e => setEditLimitValue(e.target.value)}
-                          className="w-16 p-1 bg-brand-50 border border-brand-200 rounded text-right font-bold"
-                          autoFocus
-                          aria-label={`Edit limit for ${bucket.name}`}
-                        />
-                        <button
-                          onClick={() => saveLimit(bucket.id)}
-                          className="text-money-pos"
-                          aria-label="Save limit"
-                        >
-                          <Check size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <span
-                        onClick={() => startEditingLimit(bucket.id, bucket.limit)}
-                        className="text-brand-400 border-b border-dashed border-brand-200 cursor-pointer hover:text-brand-600"
-                      >
-                        ${bucket.limit}
-                      </span>
-                    )}
-                  </div>
-                  {spent.pending > 0 && (
-                    <span className="text-xxs text-brand-400">
-                      *pending review
-                    </span>
-                  )}
-                </div>
-
-                {/* Expand Indicator */}
-                {bucketTransactions.length > 0 && (
-                  <div className="text-brand-400 p-1" aria-hidden="true">
-                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </div>
-                )}
-
-                {/* Edit Button */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleEditBucket(bucket); }}
-                  className="text-brand-300 hover:text-brand-600 p-1"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="h-3 w-full bg-brand-100 rounded-full overflow-hidden mb-2">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-
-            {/* Expandable Transaction List */}
-            {isExpanded && bucketTransactions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-brand-100 space-y-2 animate-in fade-in slide-in-from-top-2">
-                <p className="text-xs font-bold text-brand-400 uppercase mb-2">
-                  Transactions This Period ({bucketTransactions.length})
-                </p>
-                <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {bucketTransactions.map(tx => (
-                    <div
-                      key={tx.id}
-                      className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors group"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-brand-800">{tx.merchant}</p>
-                        <p className="text-xs text-brand-400">
-                          {format(parseISO(tx.date), 'MMM d, yyyy')}
-                          {tx.status === 'pending_review' && (
-                            <span className="ml-2 text-amber-600">• Pending</span>
-                          )}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-mono font-bold ${
-                          tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
-                        }`}>
-                          ${tx.amount}
-                        </span>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => handleEditTransaction(tx)}
-                            className="text-brand-400 hover:text-brand-600 p-1"
-                            title="Edit transaction"
-                          >
-                            <Edit size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTransaction(tx.id)}
-                            className="text-brand-400 hover:text-money-neg p-1"
-                            title="Delete transaction"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Overspend Action */}
-            {isOverspent && (
-              <div className="mt-3 bg-money-bgNeg p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-                <div className="flex items-center gap-2 text-money-neg text-xs font-bold">
-                  <AlertTriangle size={14} />
-                  <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setReallocateModal({ sourceId: null, targetId: bucket.id }); }}
-                  className="bg-white text-money-neg text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-200 shadow-sm active:scale-95 transition-transform"
-                >
-                  Fix
-                </button>
-              </div>
-            )}
-          </div>
+            bucket={bucket}
+            spent={spent}
+            bucketTransactions={bucketTransactions}
+            isExpanded={expandedBucketId === bucket.id}
+            isEditingLimit={editingLimitId === bucket.id}
+            onExpand={handleExpand}
+            onEditBucket={handleEditBucket}
+            onStartEditingLimit={startEditingLimit}
+            onSaveLimit={saveLimit}
+            onReallocate={handleReallocate}
+            onEditTransaction={handleEditTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
+          />
         );
       })}
 
