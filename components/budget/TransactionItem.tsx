@@ -76,7 +76,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
           </p>
           {tx.status === 'pending_review' && (
-            <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
+            <p className="text-xxs text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
               Pending
             </p>
           )}

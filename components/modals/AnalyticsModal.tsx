@@ -407,7 +407,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-slate-400 uppercase tracking-wide">
                   <span>Less</span>
                   <div className="flex gap-1">
                     {[0,1,2,3,4].map(i => (

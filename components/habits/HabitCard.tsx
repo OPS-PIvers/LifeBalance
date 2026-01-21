@@ -189,7 +189,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
           <div className="flex flex-wrap gap-2">
             {/* Points Potential */}
             <span className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide",
+              "inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold tracking-wide",
               isPositive ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
             )}>
               {pointsDisplay > 0 ? '+' : ''}{pointsDisplay} pts
@@ -198,7 +198,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
             {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
             {isPositive && habit.streakDays >= 2 && (
               <span className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors",
+                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold transition-colors",
                 habit.streakDays >= 3 ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"
               )}>
                 <Flame size={10} fill={habit.streakDays >= 3 ? "currentColor" : "none"} />
@@ -208,7 +208,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
 
             {/* Linked Challenge Badge */}
             {isLinkedToChallenge && (
-               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold bg-indigo-100 text-indigo-700">
                 <Target size={10} /> Goal
               </span>
             )}

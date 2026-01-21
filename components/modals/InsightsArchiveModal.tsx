@@ -62,7 +62,7 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
               return (
                 <div key={insight.id} className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100/50">
                   <div className="flex justify-between items-start mb-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-white px-2 py-1 rounded-lg border border-indigo-50">
+                      <span className="text-xxs font-bold uppercase tracking-wider text-indigo-400 bg-white px-2 py-1 rounded-lg border border-indigo-50">
                           {formattedDate}
                       </span>
                   </div>

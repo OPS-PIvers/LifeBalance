@@ -630,7 +630,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Scan Receipt</span>
                       <span className="text-xs text-brand-400">Take a photo of your receipt</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
                       REVIEW
                     </div>
                   </button>
@@ -646,7 +646,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Upload Image</span>
                       <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full">
+                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
                       REVIEW
                     </div>
                   </button>
@@ -662,7 +662,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Manual Entry</span>
                       <span className="text-xs text-brand-400">Enter transaction details directly</span>
                     </div>
-                    <div className="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full">
+                    <div className="px-2 py-1 bg-green-100 text-green-700 text-xxs font-bold rounded-full">
                       INSTANT
                     </div>
                   </button>
@@ -763,7 +763,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                                 <button
                                   key={cat}
                                   onClick={() => updateParsedCategory(tx.id, cat)}
-                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-colors ${
+                                  className={`px-2 py-1 rounded-lg text-xxs font-bold transition-colors ${
                                     tx.category === cat
                                       ? 'bg-brand-800 text-white'
                                       : 'bg-brand-100 text-brand-600 hover:bg-brand-200'
@@ -776,7 +776,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                                 <select
                                   value={tx.category}
                                   onChange={(e) => updateParsedCategory(tx.id, e.target.value)}
-                                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-brand-100 text-brand-600 border-none outline-none"
+                                  className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 text-brand-600 border-none outline-none"
                                 >
                                   {dynamicCategories.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
@@ -1061,7 +1061,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                                     {member.photoURL ? (
                                         <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
                                     ) : (
-                                        <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
+                                        <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-xxs font-bold text-brand-600">
                                             {member.displayName?.charAt(0) ?? 'U'}
                                         </div>
                                     )}

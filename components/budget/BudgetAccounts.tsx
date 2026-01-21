@@ -188,7 +188,7 @@ const BudgetAccounts: React.FC = () => {
             </div>
             <div>
               <p className="font-bold text-brand-800">{account.name}</p>
-              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+              <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
                 isLiability ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
               }`}>
                 {account.type}
@@ -249,7 +249,7 @@ const BudgetAccounts: React.FC = () => {
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
                   ${account.balance.toLocaleString()}
                 </p>
-                <p className="text-[10px] text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
+                <p className="text-xxs text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
                 </p>
               </div>
@@ -260,7 +260,7 @@ const BudgetAccounts: React.FC = () => {
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
           <div className="mt-2 ml-7">
-            <div className="flex justify-between text-[10px] text-brand-400 mb-1">
+            <div className="flex justify-between text-xxs text-brand-400 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
             </div>

@@ -263,7 +263,7 @@ const totalMultiplier = streakMultiplier + (weatherBonus ? 1.0 : 0);
 {/* Weather Bonus (Positive Only) */}
 {isPositive && habit.weatherSensitive && (
   <span className={cn(
-    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold",
+    "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold",
     weatherData?.isNiceDay ? "bg-sky-100 text-sky-700" : "bg-gray-100 text-gray-400"
   )}>
     <CloudSun size={10} />

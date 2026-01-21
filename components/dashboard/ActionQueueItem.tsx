@@ -157,7 +157,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       {isExpanded && (
         <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
           <div className="flex justify-between items-center mb-2">
-             <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">
+             <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">
                {isCalendarQueueItem(item) ? 'Actions' : 'Select Category'}
              </p>
              <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
@@ -289,7 +289,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
               {/* Habits Section - Smart Suggestions */}
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
+                  <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
                   {suggestedHabits.some(s => s.confidence !== 'low') && (
                     <Sparkles size={10} className="text-violet-500" />
                   )}
@@ -379,7 +379,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
               {/* Categories Section */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider">Budget Category</p>
+                <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Budget Category</p>
                 <div className="flex flex-wrap gap-2">
                   {buckets.map(bucket => (
                     <button

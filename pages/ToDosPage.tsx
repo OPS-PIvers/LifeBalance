@@ -418,7 +418,7 @@ const ToDosPage: React.FC = () => {
               aria-label="Mark selected as completed"
             >
               <Check size={18} />
-              <span className="text-[10px] font-medium">Complete</span>
+              <span className="text-xxs font-medium">Complete</span>
             </button>
 
             <button
@@ -428,7 +428,7 @@ const ToDosPage: React.FC = () => {
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
-              <span className="text-[10px] font-medium">Delete</span>
+              <span className="text-xxs font-medium">Delete</span>
             </button>
           </div>
         </div>
@@ -501,7 +501,7 @@ const ToDosPage: React.FC = () => {
                     {member.photoURL ? (
                       <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-600">
+                      <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-xxs font-bold text-brand-600">
                         {member.displayName?.charAt(0) ?? 'U'}
                       </div>
                     )}

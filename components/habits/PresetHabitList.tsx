@@ -91,14 +91,14 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
                               {preset.title}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                              <span className={`text-xxs px-1.5 py-0.5 rounded-full font-medium ${
                                 preset.type === 'negative'
                                   ? 'bg-rose-100 text-rose-700'
                                   : `${EFFORT_COLORS[preset.effortLevel].bg} ${EFFORT_COLORS[preset.effortLevel].text}`
                               }`}>
                                 {pointsDisplay} pts
                               </span>
-                              <span className="text-[10px] text-brand-400">
+                              <span className="text-xxs text-brand-400">
                                 {preset.period}
                               </span>
                             </div>

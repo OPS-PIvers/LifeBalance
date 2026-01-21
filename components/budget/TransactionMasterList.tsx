@@ -398,7 +398,7 @@ const TransactionMasterList: React.FC = () => {
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
             >
               <Tag size={18} />
-              <span className="text-[10px] font-medium">Categorize</span>
+              <span className="text-xxs font-medium">Categorize</span>
             </button>
 
             <button
@@ -407,7 +407,7 @@ const TransactionMasterList: React.FC = () => {
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
             >
               <Check size={18} />
-              <span className="text-[10px] font-medium">Verify</span>
+              <span className="text-xxs font-medium">Verify</span>
             </button>
 
             <button
@@ -416,7 +416,7 @@ const TransactionMasterList: React.FC = () => {
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
             >
               <Trash2 size={18} />
-              <span className="text-[10px] font-medium">Delete</span>
+              <span className="text-xxs font-medium">Delete</span>
             </button>
           </div>
         </div>

@@ -497,7 +497,7 @@ const MealPlanTab: React.FC = () => {
                                     <div key={planItem.id} className="group bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-3">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
                                                     {planItem.type || 'dinner'}
                                                 </span>
                                             </div>
@@ -513,7 +513,7 @@ const MealPlanTab: React.FC = () => {
                                                         e.stopPropagation();
                                                         addIngredientsToShoppingList(linkedMeal.ingredients);
                                                     }}
-                                                    className="mt-2 text-[10px] font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
+                                                    className="mt-2 text-xxs font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
                                                 >
                                                     <ShoppingCart className="w-3 h-3" /> Shop Ingredients
                                                 </button>
@@ -860,7 +860,7 @@ const MealPlanTab: React.FC = () => {
                                             <Plus className="w-5 h-5" />
                                         </button>
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-2 pl-1">
+                                    <p className="text-xxs text-gray-400 mt-2 pl-1">
                                         Items not in your pantry will be added to the shopping list when creating a new meal plan.
                                     </p>
                                </div>

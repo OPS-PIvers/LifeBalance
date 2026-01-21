@@ -609,7 +609,7 @@ const ShoppingListTab: React.FC = () => {
                 aria-label="Mark selected as purchased"
                 >
                 <Check size={18} />
-                <span className="text-[10px] font-medium">Purchased</span>
+                <span className="text-xxs font-medium">Purchased</span>
                 </button>
 
                 <button
@@ -619,7 +619,7 @@ const ShoppingListTab: React.FC = () => {
                 aria-label="Delete selected items"
                 >
                 <Trash2 size={18} />
-                <span className="text-[10px] font-medium">Delete</span>
+                <span className="text-xxs font-medium">Delete</span>
                 </button>
             </div>
             </div>
