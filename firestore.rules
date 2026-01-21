@@ -23,7 +23,7 @@ service cloud.firestore {
     // 🛡️ SENTINEL SECURITY FIX: Input Validation Helper
     // Validate string length to prevent DoS/Storage Exhaustion
     function isValidString(text, maxLen) {
-      return text is string && text.size() <= maxLen;
+      return text is string && text.size() > 0 && text.size() <= maxLen;
     }
 
     function isValidOptionalString(data, field, maxLen) {
@@ -43,6 +43,7 @@ service cloud.firestore {
       allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
       allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAny(['name']) &&
                     isValidString(request.resource.data.name, 50);
 
       // Allow update if member (but cannot modify immutable fields).
@@ -170,9 +171,10 @@ service cloud.firestore {
       // 🛡️ SENTINEL FIX: Shopping List Validation
       match /shoppingList/{itemId} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId) &&
+        allow create, update: if isMemberOf(householdId) &&
           isValidOptionalString(request.resource.data, 'name', 100) &&
           isValidOptionalString(request.resource.data, 'category', 50);
+        allow delete: if isMemberOf(householdId);
       }
 
       // All other subcollections (accounts, buckets, transactions, etc.)
