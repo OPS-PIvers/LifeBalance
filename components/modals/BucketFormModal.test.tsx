@@ -63,8 +63,8 @@ describe('BucketFormModal', () => {
   it('calls addBucket with correct data when creating new bucket', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: 'New Bucket' } });
-    fireEvent.change(screen.getByPlaceholderText(/monthly limit/i), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'New Bucket' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
 
     fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
 
@@ -89,8 +89,8 @@ describe('BucketFormModal', () => {
     };
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} editingBucket={bucket} />);
 
-    fireEvent.change(screen.getByPlaceholderText(/name/i), { target: { value: 'Updated Groceries' } });
-    fireEvent.change(screen.getByPlaceholderText(/monthly limit/i), { target: { value: '600' } });
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'Updated Groceries' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '600' } });
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
@@ -129,13 +129,53 @@ describe('BucketFormModal', () => {
     confirmSpy.mockRestore();
   });
 
-  it('does not submit if required fields are missing', () => {
+  it('disables submit if required fields are missing or invalid', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
 
-    // Attempt to save without filling anything
+    const createButton = screen.getByRole('button', { name: /create bucket/i });
+    expect(createButton).toBeDisabled();
+
+    // 1. Fill only name -> Disabled
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'New Bucket' } });
+    expect(createButton).toBeDisabled();
+
+    // 2. Fill invalid limit -> Disabled
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '-10' } });
+    expect(createButton).toBeDisabled();
+
+    // 3. Fill valid limit -> Enabled
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
+    expect(createButton).not.toBeDisabled();
+
+    fireEvent.click(createButton);
+    expect(mockAddBucket).toHaveBeenCalled();
+  });
+
+  it('supports accessible color selection', () => {
+    render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
+
+    // Verify radiogroup exists
+    const radioGroup = screen.getByRole('radiogroup', { name: /bucket color/i });
+    expect(radioGroup).toBeInTheDocument();
+
+    // Verify all color options are present as radio buttons
+    const colorOptions = screen.getAllByRole('radio');
+    expect(colorOptions.length).toBeGreaterThan(0);
+
+    // Verify selecting a color via label
+    const blueOption = screen.getByLabelText(/select blue/i);
+    fireEvent.click(blueOption);
+
+    expect(blueOption).toBeChecked();
+
+    // Verify submitting uses the selected color
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'Blue Bucket' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
+
     fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
 
-    expect(mockAddBucket).not.toHaveBeenCalled();
-    expect(mockOnClose).not.toHaveBeenCalled();
+    expect(mockAddBucket).toHaveBeenCalledWith(expect.objectContaining({
+      color: 'bg-blue-500'
+    }));
   });
 });

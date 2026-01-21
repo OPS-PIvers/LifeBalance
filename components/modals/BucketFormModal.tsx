@@ -4,6 +4,7 @@ import { BudgetBucket } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import Input from '../ui/Input';
 
 interface BucketFormModalProps {
   isOpen: boolean;
@@ -12,6 +13,11 @@ interface BucketFormModalProps {
 }
 
 const COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500', 'bg-cyan-500'];
+
+const getColorName = (colorClass: string) => {
+  // e.g., "bg-emerald-500" -> "emerald"
+  return colorClass.split('-')[1] || 'color';
+};
 
 const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, editingBucket }) => {
   const { addBucket, updateBucket, deleteBucket } = useHousehold();
@@ -74,7 +80,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         </h2>
         <button
           onClick={onClose}
-          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full"
+          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-500"
           aria-label="Close modal"
         >
           <X size={20} />
@@ -82,39 +88,60 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        <input
-            type="text"
-            placeholder="Name (e.g. Coffee)"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
-            autoFocus={!editingBucket}
+        <Input
+          id="bucket-name"
+          label="Bucket Name"
+          type="text"
+          placeholder="e.g. Coffee"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          autoFocus={!editingBucket}
         />
 
-        <input
-            type="number"
-            placeholder="Monthly Limit"
-            value={limit}
-            onChange={e => setLimit(e.target.value)}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
+        <Input
+          id="bucket-limit"
+          label="Monthly Limit"
+          type="number"
+          placeholder="0.00"
+          min={0}
+          step="0.01"
+          value={limit}
+          onChange={e => setLimit(e.target.value)}
+          className="font-mono"
+          icon={<span>$</span>}
         />
 
         <div>
-          <label className="text-xs font-bold text-brand-400">Color</label>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {COLORS.map(c => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`w-8 h-8 rounded-full ${c} ${color === c ? 'ring-2 ring-brand-800 ring-offset-2' : ''}`}
-              />
-            ))}
+          <label className="text-xs font-bold text-brand-400 uppercase block mb-2">Color</label>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Bucket color">
+            {COLORS.map(c => {
+              const colorName = getColorName(c);
+              const isSelected = color === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={`w-8 h-8 rounded-full ${c} ${isSelected ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-none focus:ring-2 focus:ring-brand-800 focus:ring-offset-1 transition-all`}
+                  aria-label={`Select ${colorName}`}
+                  aria-checked={isSelected}
+                  role="radio"
+                  title={colorName}
+                  type="button"
+                />
+              );
+            })}
           </div>
         </div>
 
         <Button
           onClick={handleSave}
           className="w-full py-3 mt-2"
+          disabled={
+            !name ||
+            !limit ||
+            isNaN(parseFloat(limit)) ||
+            parseFloat(limit) <= 0
+          }
         >
           {editingBucket ? 'Save Changes' : 'Create Bucket'}
         </Button>
