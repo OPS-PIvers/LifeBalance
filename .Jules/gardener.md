@@ -4,3 +4,8 @@
 **Weed:** `TransactionMasterList.tsx` was growing too large (> 650 lines) and contained a fully defined nested component `TransactionItem`.
 **Root Cause:** Organic growth of the component as features were added (filters, batch actions, etc.). This increases cognitive load and makes the file harder to maintain.
 **Plan:** Extracted `TransactionItem` into a separate file (`components/budget/TransactionItem.tsx`) to improve readability and separation of concerns.
+
+## 2026-02-18 - Unified Natural Language Parsing
+**Weed:** Duplicated natural language parsing logic between `parseMagicAction` (single-item) and `parseNaturalLanguageCommand` (multi-item), with broken logic for 'unknown' types in `FirebaseHouseholdContext`.
+**Root Cause:** Two different implementations for similar features (Modal vs Voice) led to divergence. The voice command handler failed to process commands where the type wasn't explicitly provided by the input source.
+**Plan:** Refactored `parseNaturalLanguageCommand` to return a Discriminated Union and implemented "One Shot" parsing for unknown inputs, enabling robust handling of all voice commands and aligning the logic with the more efficient `parseMagicAction` pattern.

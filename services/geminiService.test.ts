@@ -267,4 +267,80 @@ describe('geminiService', () => {
     const result = await analyzeHabitPoints('test-household', habits);
     expect(result).toHaveLength(0); // Should be filtered out
   });
+
+  it('parseNaturalLanguageCommand handles unknown type by detecting shopping list', async () => {
+    const { parseNaturalLanguageCommand } = await import('./geminiService');
+
+    const mockResponse = {
+      detectedType: 'shopping',
+      confidence: 0.95,
+      items: [
+        { item: 'Milk', quantity: 1, category: 'Dairy' }
+      ]
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseNaturalLanguageCommand('test-id', 'Buy milk', 'unknown');
+
+    expect(result.detectedType).toBe('shopping');
+    // TS narrowing check
+    if (result.detectedType === 'shopping') {
+        expect(result.items).toHaveLength(1);
+        expect(result.items[0].item).toBe('Milk');
+    } else {
+        throw new Error('Expected detectedType to be shopping');
+    }
+  });
+
+  it('parseNaturalLanguageCommand handles unknown type by detecting expense', async () => {
+    const { parseNaturalLanguageCommand } = await import('./geminiService');
+
+    const mockResponse = {
+      detectedType: 'expense',
+      confidence: 0.9,
+      amount: 20,
+      merchant: 'Target',
+      category: 'Shopping'
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseNaturalLanguageCommand('test-id', 'Spent 20 at Target', 'unknown');
+
+    expect(result.detectedType).toBe('expense');
+    if (result.detectedType === 'expense') {
+        expect(result.amount).toBe(20);
+        expect(result.merchant).toBe('Target');
+    } else {
+        throw new Error('Expected detectedType to be expense');
+    }
+  });
+
+  it('parseNaturalLanguageCommand handles known type correctly (forcing type)', async () => {
+    const { parseNaturalLanguageCommand } = await import('./geminiService');
+
+    const mockResponse = {
+      items: [
+        { item: 'Milk', quantity: 1, category: 'Dairy' }
+      ]
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    // Even if detection wasn't part of the prompt, the wrapper adds it
+    const result = await parseNaturalLanguageCommand('test-id', 'Buy milk', 'shopping');
+
+    expect(result.detectedType).toBe('shopping');
+    expect(result.confidence).toBe(1);
+    if (result.detectedType === 'shopping') {
+        expect(result.items).toHaveLength(1);
+    }
+  });
 });

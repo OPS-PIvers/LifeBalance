@@ -1048,6 +1048,12 @@ export interface ParsedExpense {
   error?: string;
 }
 
+export type NaturalLanguageResult =
+  | (ParsedShoppingList & { detectedType: 'shopping'; confidence: number })
+  | (ParsedTodoList & { detectedType: 'todo'; confidence: number })
+  | (ParsedExpense & { detectedType: 'expense'; confidence: number })
+  | { detectedType: 'unclear' | 'unknown'; confidence: number; error?: string };
+
 /**
  * Parses natural language commands for iOS Shortcuts into structured data.
  * Supports shopping lists, to-do lists, and expense tracking.
@@ -1067,7 +1073,7 @@ export const parseNaturalLanguageCommand = async (
     expense?: string[];
   },
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<ParsedShoppingList | ParsedTodoList | ParsedExpense | { detectedType: string; confidence: number }> => {
+): Promise<NaturalLanguageResult> => {
   try {
     const sanitizedText = sanitizeForPrompt(text);
 
@@ -1093,7 +1099,7 @@ Return ONLY a JSON object with this structure (no markdown, no explanation):
 
 If no items found, return {"items": []}`;
 
-      return await generateJsonContent<ParsedShoppingList>(
+      const result = await generateJsonContent<ParsedShoppingList>(
         householdId,
         prompt,
         {
@@ -1117,6 +1123,7 @@ If no items found, return {"items": []}`;
         _aiClient,
         'gemini-3-flash-preview'
       );
+      return { ...result, detectedType: 'shopping', confidence: 1 };
     }
 
     // To-Do List
@@ -1138,7 +1145,7 @@ Return ONLY a JSON object:
 
 If no tasks found, return {"tasks": []}`;
 
-      return await generateJsonContent<ParsedTodoList>(
+      const result = await generateJsonContent<ParsedTodoList>(
         householdId,
         prompt,
         {
@@ -1161,6 +1168,7 @@ If no tasks found, return {"tasks": []}`;
         _aiClient,
         'gemini-3-flash-preview'
       );
+      return { ...result, detectedType: 'todo', confidence: 1 };
     }
 
     // Expense
@@ -1186,7 +1194,7 @@ Return ONLY a JSON object:
 
 If no amount found, return { "error": "No amount found" }`;
 
-      return await generateJsonContent<ParsedExpense>(
+      const result = await generateJsonContent<ParsedExpense>(
         householdId,
         prompt,
         {
@@ -1202,30 +1210,66 @@ If no amount found, return { "error": "No amount found" }`;
         _aiClient,
         'gemini-3-flash-preview'
       );
+      return { ...result, detectedType: 'expense', confidence: 1 };
     }
 
-    // Unknown - detect type
+    // Unknown - detect type AND parse in one shot
+    const shoppingCategories = availableCategories?.shopping?.join(', ') || GROCERY_CATEGORIES.join(', ');
+    const expenseCategories = availableCategories?.expense?.join(', ') || 'Groceries, Dining, Entertainment, Utilities, Gas, Healthcare, Shopping, Other';
+
     const prompt = `Analyze this command: "${sanitizedText}"
 
-Determine if this is:
-- 'shopping': Adding items to a shopping list (e.g., "add milk and eggs", "buy bread")
-- 'todo': Creating a task/reminder (e.g., "remind me to call", "need to fix")
-- 'expense': Logging spending (e.g., "spent $20 at", "paid 50 for")
+    1. Determine the intent: 'shopping', 'todo', or 'expense'.
+    2. Extract relevant data based on the intent.
 
-Return JSON with detectedType and confidence (0-1):
-{
-  "detectedType": "shopping",
-  "confidence": 0.9
-}`;
+    - If 'shopping': Extract 'items' (array of {item, quantity, category}). Categories: ${shoppingCategories}.
+    - If 'todo': Extract 'tasks' (array of {task, priority}).
+    - If 'expense': Extract 'amount', 'merchant', 'category', 'notes'. Categories: ${expenseCategories}.
 
-    return await generateJsonContent<{ detectedType: string; confidence: number }>(
+    Return JSON with 'detectedType', 'confidence', and the extracted data fields.
+    If intent is unclear, set detectedType to 'unclear'.
+    `;
+
+    // Define a loose schema that covers all possibilities
+    return await generateJsonContent<NaturalLanguageResult>(
       householdId,
       prompt,
       {
         type: Type.OBJECT,
         properties: {
           detectedType: { type: Type.STRING, enum: ['shopping', 'todo', 'expense', 'unclear'] },
-          confidence: { type: Type.NUMBER }
+          confidence: { type: Type.NUMBER },
+          // Shopping fields
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                item: { type: Type.STRING },
+                quantity: { type: Type.NUMBER },
+                category: { type: Type.STRING }
+              },
+              required: ["item", "quantity", "category"]
+            }
+          },
+          // Todo fields
+          tasks: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                task: { type: Type.STRING },
+                priority: { type: Type.STRING, enum: ['low', 'medium', 'high'] }
+              },
+              required: ["task", "priority"]
+            }
+          },
+          // Expense fields
+          amount: { type: Type.NUMBER },
+          merchant: { type: Type.STRING },
+          category: { type: Type.STRING },
+          notes: { type: Type.STRING },
+          error: { type: Type.STRING }
         },
         required: ["detectedType", "confidence"]
       },
