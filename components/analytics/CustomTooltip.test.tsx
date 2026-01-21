@@ -19,6 +19,11 @@ describe('CustomTooltip', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('renders nothing when payload is undefined', () => {
+    const { container } = render(<CustomTooltip active={true} payload={undefined} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('renders correctly with data', () => {
     render(<CustomTooltip active={true} payload={mockPayload} label="Test Label" />);
 
@@ -41,5 +46,14 @@ describe('CustomTooltip', () => {
     render(<CustomTooltip active={true} payload={mockPayload} suffix=" kg" />);
 
     expect(screen.getByText('100 kg')).toBeInTheDocument();
+    expect(screen.getByText('200 kg')).toBeInTheDocument();
+  });
+
+  it('applies formatter and suffix together', () => {
+    const formatter = (val: number | string) => `$${val}`;
+    render(<CustomTooltip active={true} payload={mockPayload} formatter={formatter} suffix=" USD" />);
+
+    expect(screen.getByText('$100 USD')).toBeInTheDocument();
+    expect(screen.getByText('$200 USD')).toBeInTheDocument();
   });
 });
