@@ -61,7 +61,7 @@ const TopToolbar: React.FC = () => {
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-gold tabular-nums">
-                    +{dailyPoints}
+                    {dailyPoints}
                   </span>
                   <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
                 </div>
@@ -75,7 +75,7 @@ const TopToolbar: React.FC = () => {
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-blue tabular-nums">
-                    +{weeklyPoints}
+                    {weeklyPoints}
                   </span>
                   <TrendingUp className="w-4 h-4 text-habit-blue" />
                 </div>

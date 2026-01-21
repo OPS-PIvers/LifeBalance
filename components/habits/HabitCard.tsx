@@ -39,6 +39,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
   const totalMultiplier = streakMultiplier;
 
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
+  const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
 
   const containerClasses = cn(
     "relative flex items-center justify-between p-4 rounded-card border shadow-soft transition-all duration-300 select-none group/card",
@@ -192,7 +193,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide",
               isPositive ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
             )}>
-              {pointsDisplay > 0 ? '+' : ''}{pointsDisplay} pts
+              {signedPointsDisplay} pts
             </span>
 
             {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
