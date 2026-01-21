@@ -271,8 +271,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 onChange={e => setEditStoreName(e.target.value)}
                                 className="flex-1 p-1.5 border border-brand-300 rounded text-sm outline-none"
                              />
-                             <button onClick={handleUpdateStore} className="text-green-600 p-1 hover:bg-green-50 rounded"><Save className="w-4 h-4"/></button>
-                             <button onClick={() => setEditingStoreId(null)} className="text-gray-400 p-1 hover:bg-gray-100 rounded"><X className="w-4 h-4"/></button>
+                             <button onClick={handleUpdateStore} className="text-green-600 p-1 hover:bg-green-50 rounded" aria-label="Save store name"><Save className="w-4 h-4"/></button>
+                             <button onClick={() => setEditingStoreId(null)} className="text-gray-400 p-1 hover:bg-gray-100 rounded" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
@@ -297,6 +297,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 <button
                                     onClick={() => handleDeleteStore(store.id)}
                                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                                    aria-label={`Delete store ${store.name}`}
                                 >
                                     <Trash2 className="w-4 h-4" />
                                 </button>
@@ -351,6 +352,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                 <button
                                     onClick={() => removeCategory(cat)}
                                     className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                    aria-label={`Remove category ${cat}`}
                                 >
                                     <X className="w-3 h-3" />
                                 </button>
