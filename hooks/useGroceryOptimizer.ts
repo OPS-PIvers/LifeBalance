@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { optimizeGroceryList, OptimizableItem } from '@/services/geminiService';
+import { OptimizableItem } from '@/services/geminiService';
 import { normalizeValue } from '@/utils/stringNormalizer';
 
 interface UseGroceryOptimizerConfig<T> {
@@ -79,7 +79,8 @@ export const useGroceryOptimizer = <T extends { id: string }>({
       // Convert items to optimizable format
       const optimizableItems = items.map(mapToOptimizable);
 
-      // Call AI optimization
+      // Call AI optimization (dynamically import to avoid bundling)
+      const { optimizeGroceryList } = await import('@/services/geminiService');
       const optimizedItems = await optimizeGroceryList(
         householdId,
         optimizableItems,
