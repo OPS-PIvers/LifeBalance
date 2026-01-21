@@ -226,6 +226,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [buckets, setBuckets] = useState<BudgetBucket[]>([]);
   const bucketsRef = useRef(buckets); // Ref to access latest buckets in listeners
+
+  useEffect(() => {
+    bucketsRef.current = buckets;
+  }, [buckets]);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -962,7 +967,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: ACCOUNTS ---
 
-  const addAccount = async (account: Account) => {
+  const addAccount = useCallback(async (account: Account) => {
     if (!householdId || !user) return;
     await addDoc(collection(db, `households/${householdId}/accounts`), {
       ...account,
@@ -970,39 +975,39 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       lastUpdated: serverTimestamp(),
     });
     toast.success('Account added');
-  };
+  }, [householdId, user]);
 
-  const updateAccountBalance = async (id: string, newBalance: number) => {
+  const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
       balance: newBalance,
       lastUpdated: serverTimestamp(),
     });
     toast.success('Account updated');
-  };
+  }, [householdId]);
 
-  const setAccountGoal = async (id: string, goal: number) => {
+  const setAccountGoal = useCallback(async (id: string, goal: number) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
       monthlyGoal: goal,
     });
     toast.success('Goal set');
-  };
+  }, [householdId]);
 
-  const deleteAccount = async (id: string) => {
+  const deleteAccount = useCallback(async (id: string) => {
     if (!householdId) return;
     await deleteDoc(doc(db, `households/${householdId}/accounts`, id));
     toast.success('Account deleted');
-  };
+  }, [householdId]);
 
-  const updateAccountOrder = async (accountId: string, newOrder: number) => {
+  const updateAccountOrder = useCallback(async (accountId: string, newOrder: number) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
       order: newOrder,
     });
-  };
+  }, [householdId]);
 
-  const reorderAccounts = async (orderedIds: string[]) => {
+  const reorderAccounts = useCallback(async (orderedIds: string[]) => {
     if (!householdId) return;
     try {
       const batch = writeBatch(db);
@@ -1016,20 +1021,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to reorder accounts');
       throw error;
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: BUCKETS ---
 
-  const addBucket = async (bucket: BudgetBucket) => {
+  const addBucket = useCallback(async (bucket: BudgetBucket) => {
     if (!householdId || !user) return;
     await addDoc(collection(db, `households/${householdId}/buckets`), {
       ...bucket,
       createdBy: user.uid,
     });
     toast.success('Bucket added');
-  };
+  }, [householdId, user]);
 
-  const updateBucket = async (bucket: BudgetBucket) => {
+  const updateBucket = useCallback(async (bucket: BudgetBucket) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/buckets`, bucket.id), {
       name: bucket.name,
@@ -1040,23 +1045,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // DO NOT update spent - it's calculated in real-time
     });
     toast.success('Bucket updated');
-  };
+  }, [householdId]);
 
-  const deleteBucket = async (id: string) => {
+  const deleteBucket = useCallback(async (id: string) => {
     if (!householdId) return;
     await deleteDoc(doc(db, `households/${householdId}/buckets`, id));
     toast.success('Bucket deleted');
-  };
+  }, [householdId]);
 
-  const updateBucketLimit = async (id: string, newLimit: number) => {
+  const updateBucketLimit = useCallback(async (id: string, newLimit: number) => {
     if (!householdId) return;
     await updateDoc(doc(db, `households/${householdId}/buckets`, id), {
       limit: newLimit,
     });
     toast.success('Limit updated');
-  };
+  }, [householdId]);
 
-  const reallocateBucket = async (sourceId: string, targetId: string, amount: number) => {
+  const reallocateBucket = useCallback(async (sourceId: string, targetId: string, amount: number) => {
     if (!householdId) return;
 
     const sourceBucket = buckets.find(b => b.id === sourceId);
@@ -1073,11 +1078,107 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     toast.success('Funds reallocated');
-  };
+  }, [householdId, buckets]);
+
+  // --- ACTIONS: PAY PERIOD MANAGEMENT ---
+
+  const resetBucketsForNewPeriod = useCallback(async (newPeriodId: string) => {
+    if (!householdId || !currentPeriodId) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Create snapshots for all buckets from the old period
+      for (const bucket of buckets) {
+        const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
+        const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
+
+        const periodStart = currentPeriodId;
+        const periodEnd = format(subDays(parseISO(newPeriodId), 1), 'yyyy-MM-dd');
+
+        // Create snapshot in bucketHistory subcollection
+        const snapshotRef = doc(collection(db, `households/${householdId}/bucketHistory`));
+        batch.set(snapshotRef, {
+          bucketId: bucket.id,
+          bucketName: bucket.name,
+          periodId: currentPeriodId,
+          periodStartDate: periodStart,
+          periodEndDate: periodEnd,
+          limit: bucket.limit,
+          totalSpent: spent.verified,
+          totalPending: spent.pending,
+          transactionCount: bucketTransactions.length,
+          createdAt: new Date().toISOString(),
+        } as BucketPeriodSnapshot);
+
+        // Update bucket's current period
+        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
+        batch.update(bucketRef, {
+          currentPeriodId: newPeriodId,
+          lastResetDate: periodStart,
+        });
+      }
+
+      // Commit all changes atomically
+      await batch.commit();
+      toast.success('Buckets reset for new pay period');
+    } catch (error) {
+      console.error('[resetBucketsForNewPeriod] Failed:', error);
+      toast.error('Failed to reset period. Please try again.');
+    }
+  }, [householdId, currentPeriodId, buckets, bucketSpentMap, transactions]);
+
+  const initializeFirstPeriod = useCallback(async (paycheckDate: string) => {
+    if (!householdId || !user) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      // Set household's first paycheck
+      const householdRef = doc(db, `households/${householdId}`);
+      batch.update(householdRef, {
+        lastPaycheckDate: paycheckDate,
+      });
+
+      // Initialize all buckets with this period ID
+      for (const bucket of buckets) {
+        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
+        batch.update(bucketRef, {
+          currentPeriodId: paycheckDate,
+          lastResetDate: paycheckDate,
+        });
+      }
+
+      await batch.commit();
+      toast.success('Pay period tracking initialized!');
+    } catch (error) {
+      console.error('[initializeFirstPeriod] Failed:', error);
+      toast.error('Failed to initialize period tracking');
+    }
+  }, [householdId, user, buckets]);
+
+  const handlePaycheckApproval = useCallback(async (paycheckDate: string) => {
+    if (!householdId || !user) return;
+
+    if (!currentPeriodId) {
+      // First paycheck ever - initialize period tracking
+      await initializeFirstPeriod(paycheckDate);
+      return;
+    }
+
+    // Reset buckets for the period that just ended
+    await resetBucketsForNewPeriod(paycheckDate);
+
+    // Update household's last paycheck date
+    const householdRef = doc(db, `households/${householdId}`);
+    await updateDoc(householdRef, {
+      lastPaycheckDate: paycheckDate,
+    });
+  }, [householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod]);
 
   // --- ACTIONS: CALENDAR ---
 
-  const addCalendarItem = async (item: CalendarItem) => {
+  const addCalendarItem = useCallback(async (item: CalendarItem) => {
     if (!householdId || !user) return;
     const sanitizedItem = sanitizeFirestoreData(item);
     await addDoc(collection(db, `households/${householdId}/calendarItems`), {
@@ -1085,9 +1186,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       createdBy: user.uid,
     });
     toast.success('Event added');
-  };
+  }, [householdId, user]);
 
-  const updateCalendarItem = async (item: CalendarItem) => {
+  const updateCalendarItem = useCallback(async (item: CalendarItem) => {
     if (!householdId) return;
     const updates = {
       title: item.title,
@@ -1101,9 +1202,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const sanitizedUpdates = sanitizeFirestoreData(updates);
     await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
     toast.success('Event updated');
-  };
+  }, [householdId]);
 
-  const deleteRecurringInstance = async (syntheticId: string) => {
+  const deleteRecurringInstance = useCallback(async (syntheticId: string) => {
     if (!householdId || !user) return;
 
     // Parse synthetic ID to get template ID and date
@@ -1140,9 +1241,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     toast.success('Instance deleted');
-  };
+  }, [householdId, user, calendarItems]);
 
-  const deleteCalendarItem = async (id: string) => {
+  const deleteCalendarItem = useCallback(async (id: string) => {
     if (!householdId) return;
 
     // Check if this is a recurring instance (synthetic ID with date suffix)
@@ -1156,9 +1257,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
       toast.success('Event deleted');
     }
-  };
+  }, [householdId, deleteRecurringInstance]);
 
-  const payCalendarItem = async (itemId: string, accountId: string) => {
+  const payCalendarItem = useCallback(async (itemId: string, accountId: string) => {
     if (!householdId || !user) return;
 
     const account = accounts.find(a => a.id === accountId);
@@ -1262,9 +1363,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
 
     toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
-  };
+  }, [householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval]);
 
-  const deferCalendarItem = async (itemId: string) => {
+  const deferCalendarItem = useCallback(async (itemId: string) => {
     if (!householdId || !user) return;
 
     // Common date calculation logic:
@@ -1352,11 +1453,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const formattedDate = format(parseISO(newDate), 'MMM d');
       toast.success(`Deferred to ${formattedDate}`);
     }
-  };
+  }, [householdId, user, calendarItems]);
 
   // --- ACTIONS: TRANSACTIONS ---
 
-  const addTransaction = async (tx: Transaction) => {
+  const addTransaction = useCallback(async (tx: Transaction) => {
     if (!householdId || !user) return;
 
     // Assign pay period ID based on paycheck approval
@@ -1380,9 +1481,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
-  };
+  }, [householdId, user, householdSettings, accounts]);
 
-  const updateTransactionCategory = async (id: string, category: string, relatedHabitIds?: string[]) => {
+  const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[]) => {
     if (!householdId || !currentUser) return;
 
     // Get current transaction status to check if we are verifying a pending one
@@ -1463,9 +1564,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // The bucketSpentMap effect will automatically recalculate when transactions change
 
     toast.success('Verified & Categorized!');
-  };
+  }, [householdId, currentUser, habits]);
 
-  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+  const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
     if (!householdId) return;
 
     try {
@@ -1508,9 +1609,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to update transaction');
       throw error;
     }
-  };
+  }, [householdId, transactions, householdSettings, accounts]);
 
-  const deleteTransaction = async (id: string) => {
+  const deleteTransaction = useCallback(async (id: string) => {
     if (!householdId) return;
 
     try {
@@ -1538,11 +1639,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to delete transaction');
       throw error;
     }
-  };
+  }, [householdId, transactions, accounts]);
 
   // --- ACTIONS: HABITS ---
 
-  const addHabit = async (habit: Habit) => {
+  const addHabit = useCallback(async (habit: Habit) => {
     if (!householdId || !user) return;
     try {
       await addDoc(collection(db, `households/${householdId}/habits`), {
@@ -1558,9 +1659,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to create habit. Please try again.');
       throw error;
     }
-  };
+  }, [householdId, user]);
 
-  const updateHabit = async (habit: Habit) => {
+  const updateHabit = useCallback(async (habit: Habit) => {
     if (!householdId) return;
     console.log('[updateHabit] Updating habit with scoringType:', habit.scoringType, 'full habit:', habit);
     try {
@@ -1594,9 +1695,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateHabit] Failed to update habit:', error);
       throw error;
     }
-  };
+  }, [householdId]);
 
-  const deleteHabit = async (id: string) => {
+  const deleteHabit = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/habits`, id));
@@ -1604,9 +1705,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteHabit] Failed to delete habit:', error);
       throw error;
     }
-  };
+  }, [householdId]);
 
-  const toggleHabit = async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
     if (!householdId || !currentUser || !householdSettings) return;
 
     const habit = habits.find(h => h.id === id);
@@ -1693,9 +1794,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       );
     }
-  };
+  }, [householdId, currentUser, householdSettings, habits]);
 
-  const resetHabit = async (id: string) => {
+  const resetHabit = useCallback(async (id: string) => {
     if (!householdId || !householdSettings) return;
 
     const habit = habits.find(h => h.id === id);
@@ -1740,11 +1841,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     toast('Reset', { icon: '↺' });
-  };
+  }, [householdId, householdSettings, habits]);
 
   // --- ACTIONS: HABIT SUBMISSIONS ---
 
-  const addHabitSubmission = async (habitId: string, count: number, timestamp?: string) => {
+  const addHabitSubmission = useCallback(async (habitId: string, count: number, timestamp?: string) => {
     if (!householdId || !currentUser) return;
 
     const habit = habits.find(h => h.id === habitId);
@@ -1819,9 +1920,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addHabitSubmission] Failed:', error);
       toast.error('Failed to add submission');
     }
-  };
+  }, [householdId, currentUser, habits]);
 
-  const getHabitSubmissions = async (
+  const getHabitSubmissions = useCallback(async (
     habitId: string,
     startDate?: string,
     endDate?: string
@@ -1851,9 +1952,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[getHabitSubmissions] Failed:', error);
       return [];
     }
-  };
+  }, [householdId]);
 
-  const deleteHabitSubmission = async (habitId: string, submissionId: string) => {
+  const deleteHabitSubmission = useCallback(async (habitId: string, submissionId: string) => {
     if (!householdId) return;
 
     try {
@@ -1920,9 +2021,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteHabitSubmission] Failed:', error);
       toast.error('Failed to delete submission');
     }
-  };
+  }, [householdId, habits]);
 
-  const updateHabitSubmission = async (
+  const updateHabitSubmission = useCallback(async (
     habitId: string,
     submissionId: string,
     updates: Partial<HabitSubmission>
@@ -2001,11 +2102,74 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateHabitSubmission] Failed:', error);
       toast.error('Failed to update submission');
     }
-  };
+  }, [householdId, habits]);
+
+  // --- ACTIONS: YEARLY GOALS ---
+
+  const createYearlyGoal = useCallback(async (goal: Omit<YearlyGoal, 'id'>) => {
+    if (!householdId || !user) return;
+
+    await addDoc(collection(db, `households/${householdId}/yearlyGoals`), {
+      ...goal,
+      createdBy: user.uid,
+      createdAt: serverTimestamp(),
+      status: 'in_progress',
+      successfulMonths: [],
+    });
+
+    toast.success('Yearly goal created!');
+  }, [householdId, user]);
+
+  const updateYearlyGoal = useCallback(async (goalId: string, updates: Partial<YearlyGoal>) => {
+    if (!householdId) return;
+
+    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
+    toast.success('Yearly goal updated');
+  }, [householdId]);
+
+  const updateYearlyGoalProgress = useCallback(async (goalId: string, month: string, success: boolean) => {
+    if (!householdId) return;
+
+    const goal = yearlyGoals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    let updatedMonths = [...goal.successfulMonths];
+
+    if (success && !updatedMonths.includes(month)) {
+      updatedMonths.push(month);
+    } else if (!success && updatedMonths.includes(month)) {
+      updatedMonths = updatedMonths.filter(m => m !== month);
+    }
+
+    // Check if yearly goal is achieved
+    const isAchieved = updatedMonths.length >= goal.requiredMonths;
+
+    const updates: Partial<YearlyGoal> = {
+      successfulMonths: updatedMonths,
+    };
+
+    if (isAchieved && goal.status !== 'achieved') {
+      updates.status = 'achieved';
+      updates.achievedAt = serverTimestamp() as unknown as string;
+    }
+
+    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
+
+    if (isAchieved) {
+      toast.success(`🎉 Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
+    }
+  }, [householdId, yearlyGoals]);
+
+  const deleteYearlyGoal = useCallback(async (goalId: string) => {
+    if (!householdId) return;
+
+    await deleteDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId));
+    toast.success('Yearly goal deleted');
+  }, [householdId]);
 
   // --- ACTIONS: CHALLENGES & REWARDS ---
 
-  const updateChallenge = async (challenge: Challenge) => {
+  const updateChallenge = useCallback(async (challenge: Challenge) => {
     if (!householdId) return;
 
     // Calculate currentValue from linked habits
@@ -2037,9 +2201,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       });
     }
     toast.success('Challenge Updated');
-  };
+  }, [householdId, habits, activeChallenge, user]);
 
-  const markChallengeComplete = async (challengeId: string, success: boolean) => {
+  const markChallengeComplete = useCallback(async (challengeId: string, success: boolean) => {
     if (!householdId) return;
 
     const challenge = challenges.find(c => c.id === challengeId);
@@ -2058,9 +2222,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     toast.success(success ? '🎉 Challenge completed!' : 'Challenge marked failed');
-  };
+  }, [householdId, challenges, updateYearlyGoalProgress]);
 
-  const redeemReward = async (rewardId: string) => {
+  const redeemReward = useCallback(async (rewardId: string) => {
     if (!householdId) return;
 
     const reward = rewards.find(r => r.id === rewardId);
@@ -2098,74 +2262,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toast.error('Failed to redeem reward');
       }
     }
-  };
-
-  // --- ACTIONS: YEARLY GOALS ---
-
-  const createYearlyGoal = async (goal: Omit<YearlyGoal, 'id'>) => {
-    if (!householdId || !user) return;
-
-    await addDoc(collection(db, `households/${householdId}/yearlyGoals`), {
-      ...goal,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-      status: 'in_progress',
-      successfulMonths: [],
-    });
-
-    toast.success('Yearly goal created!');
-  };
-
-  const updateYearlyGoal = async (goalId: string, updates: Partial<YearlyGoal>) => {
-    if (!householdId) return;
-
-    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
-    toast.success('Yearly goal updated');
-  };
-
-  const updateYearlyGoalProgress = async (goalId: string, month: string, success: boolean) => {
-    if (!householdId) return;
-
-    const goal = yearlyGoals.find(g => g.id === goalId);
-    if (!goal) return;
-
-    let updatedMonths = [...goal.successfulMonths];
-
-    if (success && !updatedMonths.includes(month)) {
-      updatedMonths.push(month);
-    } else if (!success && updatedMonths.includes(month)) {
-      updatedMonths = updatedMonths.filter(m => m !== month);
-    }
-
-    // Check if yearly goal is achieved
-    const isAchieved = updatedMonths.length >= goal.requiredMonths;
-
-    const updates: Partial<YearlyGoal> = {
-      successfulMonths: updatedMonths,
-    };
-
-    if (isAchieved && goal.status !== 'achieved') {
-      updates.status = 'achieved';
-      updates.achievedAt = serverTimestamp() as unknown as string;
-    }
-
-    await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
-
-    if (isAchieved) {
-      toast.success(`🎉 Yearly goal achieved: ${goal.title}!`, { duration: 5000 });
-    }
-  };
-
-  const deleteYearlyGoal = async (goalId: string) => {
-    if (!householdId) return;
-
-    await deleteDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId));
-    toast.success('Yearly goal deleted');
-  };
+  }, [householdId, rewards]);
 
   // --- ACTIONS: FREEZE BANK ---
 
-  const useFreezeBankToken = async (habitId: string, targetDate: string) => {
+  const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
     if (!householdId || !freezeBank || freezeBank.tokens <= 0) {
       toast.error('No freeze tokens available');
       return;
@@ -2221,7 +2322,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
-  };
+  }, [householdId, freezeBank, habits]);
 
   const rolloverFreezeBankTokens = useCallback(async () => {
     if (!householdId || !freezeBank) return;
@@ -2265,7 +2366,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: MEMBER MANAGEMENT ---
 
-  const addMember = async (memberData: Partial<HouseholdMember>) => {
+  const addMember = useCallback(async (memberData: Partial<HouseholdMember>) => {
     if (!householdId) return;
 
     try {
@@ -2301,9 +2402,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to add member');
       throw error;
     }
-  };
+  }, [householdId]);
 
-  const updateMember = async (memberId: string, updates: Partial<HouseholdMember>) => {
+  const updateMember = useCallback(async (memberId: string, updates: Partial<HouseholdMember>) => {
     if (!householdId) return;
 
     try {
@@ -2314,9 +2415,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to update member');
       throw error;
     }
-  };
+  }, [householdId]);
 
-  const removeMember = async (memberId: string) => {
+  const removeMember = useCallback(async (memberId: string) => {
     if (!householdId) return;
 
     try {
@@ -2342,11 +2443,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to remove member');
       throw error;
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: PANTRY ---
 
-  const addPantryItem = async (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => {
+  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => {
     if (!householdId || !user) return;
     try {
       // Default purchaseDate to today if not present
@@ -2368,9 +2469,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
       throw error; // Rethrow so Promise.allSettled can track failures
     }
-  };
+  }, [householdId, user]);
 
-  const updatePantryItem = async (item: PantryItem) => {
+  const updatePantryItem = useCallback(async (item: PantryItem) => {
     if (!householdId) return;
     try {
       const { id, ...itemData } = item;
@@ -2384,9 +2485,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updatePantryItem] Failed:', error);
       toast.error('Failed to update item');
     }
-  };
+  }, [householdId]);
 
-  const deletePantryItem = async (id: string) => {
+  const deletePantryItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/pantry`, id));
@@ -2395,11 +2496,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deletePantryItem] Failed:', error);
       toast.error('Failed to delete item');
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: MEALS ---
 
-  const addMeal = async (meal: Omit<Meal, 'id'>): Promise<string> => {
+  const addMeal = useCallback(async (meal: Omit<Meal, 'id'>): Promise<string> => {
     if (!householdId || !user) throw new Error("Not authenticated");
     try {
       const sanitizedMeal = sanitizeFirestoreData(meal);
@@ -2415,9 +2516,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to add meal');
       throw error;
     }
-  };
+  }, [householdId, user]);
 
-  const updateMeal = async (meal: Meal) => {
+  const updateMeal = useCallback(async (meal: Meal) => {
     if (!householdId) return;
     try {
       const { id, ...mealData } = meal;
@@ -2431,9 +2532,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateMeal] Failed:', error);
       toast.error('Failed to update meal');
     }
-  };
+  }, [householdId]);
 
-  const deleteMeal = async (id: string) => {
+  const deleteMeal = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/meals`, id));
@@ -2442,11 +2543,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteMeal] Failed:', error);
       toast.error('Failed to delete meal');
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: SHOPPING LIST ---
 
-  const addShoppingItem = async (item: Omit<ShoppingItem, 'id'>) => {
+  const addShoppingItem = useCallback(async (item: Omit<ShoppingItem, 'id'>) => {
     if (!householdId) return;
     try {
       const sanitizedItem = sanitizeFirestoreData(item);
@@ -2459,9 +2560,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addShoppingItem] Failed:', error);
       toast.error('Failed to add item');
     }
-  };
+  }, [householdId]);
 
-  const updateShoppingItem = async (item: ShoppingItem) => {
+  const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
     if (!householdId) return;
     try {
       const { id, ...itemData } = item;
@@ -2474,9 +2575,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateShoppingItem] Failed:', error);
       toast.error('Failed to update item');
     }
-  };
+  }, [householdId]);
 
-  const deleteShoppingItem = async (id: string) => {
+  const deleteShoppingItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/shoppingList`, id));
@@ -2485,9 +2586,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteShoppingItem] Failed:', error);
       toast.error('Failed to remove item');
     }
-  };
+  }, [householdId]);
 
-  const toggleShoppingItemPurchased = async (id: string) => {
+  const toggleShoppingItemPurchased = useCallback(async (id: string) => {
     if (!householdId) return;
 
     try {
@@ -2572,9 +2673,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[toggleShoppingItemPurchased] Failed:', error);
       toast.error('Failed to update status');
     }
-  };
+  }, [householdId, shoppingList, groceryCatalog, pantry]);
 
-  const clearPurchasedShoppingItems = async () => {
+  const clearPurchasedShoppingItems = useCallback(async () => {
     if (!householdId) return;
 
     try {
@@ -2594,11 +2695,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[clearPurchasedShoppingItems] Failed:', error);
       toast.error('Failed to clear items');
     }
-  };
+  }, [householdId, shoppingList]);
 
   // --- ACTIONS: SHOPPING SETTINGS ---
 
-  const addStore = async (store: Omit<Store, 'id'>) => {
+  const addStore = useCallback(async (store: Omit<Store, 'id'>) => {
     if (!householdId) return;
     try {
       const newStore = { ...store, id: crypto.randomUUID() };
@@ -2610,9 +2711,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addStore] Failed:', error);
       toast.error('Failed to add store');
     }
-  };
+  }, [householdId]);
 
-  const updateStore = async (updatedStore: Store) => {
+  const updateStore = useCallback(async (updatedStore: Store) => {
     if (!householdId || !householdSettings) return;
     try {
       // We need to replace the object in the array
@@ -2627,9 +2728,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateStore] Failed:', error);
       toast.error('Failed to update store');
     }
-  };
+  }, [householdId, householdSettings]);
 
-  const deleteStore = async (id: string) => {
+  const deleteStore = useCallback(async (id: string) => {
     if (!householdId || !householdSettings) return;
     try {
       const storeToDelete = householdSettings.stores?.find(s => s.id === id);
@@ -2664,9 +2765,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteStore] Failed:', error);
       toast.error('Failed to delete store');
     }
-  };
+  }, [householdId, householdSettings, shoppingList]);
 
-  const updateGroceryCategories = async (categories: string[]) => {
+  const updateGroceryCategories = useCallback(async (categories: string[]) => {
     if (!householdId) return;
     try {
       await updateDoc(doc(db, `households/${householdId}`), {
@@ -2677,11 +2778,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateGroceryCategories] Failed:', error);
       toast.error('Failed to update categories');
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: GROCERY CATALOG ---
 
-  const addGroceryCatalogItem = async (item: Omit<GroceryCatalogItem, 'id'>) => {
+  const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>) => {
     if (!householdId) return;
     try {
       await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
@@ -2689,9 +2790,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addGroceryCatalogItem] Failed:', error);
       toast.error('Failed to add to history');
     }
-  };
+  }, [householdId]);
 
-  const updateGroceryCatalogItem = async (id: string, updates: Partial<GroceryCatalogItem>) => {
+  const updateGroceryCatalogItem = useCallback(async (id: string, updates: Partial<GroceryCatalogItem>) => {
     if (!householdId) return;
     try {
       await updateDoc(doc(db, `households/${householdId}/groceryCatalog`, id), updates);
@@ -2700,9 +2801,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateGroceryCatalogItem] Failed:', error);
       toast.error('Failed to update item');
     }
-  };
+  }, [householdId]);
 
-  const deleteGroceryCatalogItem = async (id: string) => {
+  const deleteGroceryCatalogItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/groceryCatalog`, id));
@@ -2711,11 +2812,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteGroceryCatalogItem] Failed:', error);
       toast.error('Failed to remove item');
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: MEAL PLAN ---
 
-  const addMealPlanItem = async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
+  const addMealPlanItem = useCallback(async (item: Omit<MealPlanItem, 'id'>, options?: { suppressToast?: boolean, throwOnError?: boolean }) => {
     if (!householdId || !user) return;
     try {
       await addDoc(collection(db, `households/${householdId}/mealPlan`), {
@@ -2734,9 +2835,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         throw error;
       }
     }
-  };
+  }, [householdId, user]);
 
-  const updateMealPlanItem = async (id: string, updates: Partial<MealPlanItem>) => {
+  const updateMealPlanItem = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
     if (!householdId) return;
     try {
       await updateDoc(doc(db, `households/${householdId}/mealPlan`, id), {
@@ -2747,9 +2848,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateMealPlanItem] Failed:', error);
       toast.error('Failed to update plan');
     }
-  };
+  }, [householdId]);
 
-  const deleteMealPlanItem = async (id: string) => {
+  const deleteMealPlanItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
       await deleteDoc(doc(db, `households/${householdId}/mealPlan`, id));
@@ -2758,7 +2859,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteMealPlanItem] Failed:', error);
       toast.error('Failed to remove from plan');
     }
-  };
+  }, [householdId]);
 
   // --- ACTIONS: TO-DOS ---
 
@@ -2771,7 +2872,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const addToDo = async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
+  const addToDo = useCallback(async (todo: Omit<ToDo, 'id' | 'createdAt' | 'createdBy'>) => {
     if (!householdId || !user) {
       throw new Error('User not authenticated or household not selected');
     }
@@ -2787,7 +2888,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addToDo] Failed:', error);
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
-  };
+  }, [householdId, user]);
 
   /**
    * Updates an existing to-do item.
@@ -2797,7 +2898,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const updateToDo = async (id: string, updates: Partial<ToDo>) => {
+  const updateToDo = useCallback(async (id: string, updates: Partial<ToDo>) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -2808,7 +2909,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateToDo] Failed:', error);
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
-  };
+  }, [householdId]);
 
   /**
    * Deletes a to-do item.
@@ -2818,7 +2919,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const deleteToDo = async (id: string) => {
+  const deleteToDo = useCallback(async (id: string) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -2828,7 +2929,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteToDo] Failed:', error);
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
-  };
+  }, [householdId]);
 
   /**
    * Marks a to-do item as completed.
@@ -2839,7 +2940,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
    * 
    * @throws Re-throws any caught errors so callers can provide contextual error messages
    */
-  const completeToDo = async (id: string) => {
+  const completeToDo = useCallback(async (id: string) => {
     if (!householdId) {
       throw new Error('Household not selected');
     }
@@ -2853,105 +2954,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[completeToDo] Failed:', error);
       throw error; // Re-throw so callers can handle the error with contextual messaging
     }
-  };
+  }, [householdId]);
 
-  // --- ACTIONS: PAY PERIOD MANAGEMENT ---
 
-  const resetBucketsForNewPeriod = async (newPeriodId: string) => {
-    if (!householdId || !currentPeriodId) return;
-
-    try {
-      const batch = writeBatch(db);
-
-      // Create snapshots for all buckets from the old period
-      for (const bucket of buckets) {
-        const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
-        const bucketTransactions = getTransactionsForBucket(bucket.name, transactions, currentPeriodId);
-
-        const periodStart = currentPeriodId;
-        const periodEnd = format(subDays(parseISO(newPeriodId), 1), 'yyyy-MM-dd');
-
-        // Create snapshot in bucketHistory subcollection
-        const snapshotRef = doc(collection(db, `households/${householdId}/bucketHistory`));
-        batch.set(snapshotRef, {
-          bucketId: bucket.id,
-          bucketName: bucket.name,
-          periodId: currentPeriodId,
-          periodStartDate: periodStart,
-          periodEndDate: periodEnd,
-          limit: bucket.limit,
-          totalSpent: spent.verified,
-          totalPending: spent.pending,
-          transactionCount: bucketTransactions.length,
-          createdAt: new Date().toISOString(),
-        } as BucketPeriodSnapshot);
-
-        // Update bucket's current period
-        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
-        batch.update(bucketRef, {
-          currentPeriodId: newPeriodId,
-          lastResetDate: periodStart,
-        });
-      }
-
-      // Commit all changes atomically
-      await batch.commit();
-      toast.success('Buckets reset for new pay period');
-    } catch (error) {
-      console.error('[resetBucketsForNewPeriod] Failed:', error);
-      toast.error('Failed to reset period. Please try again.');
-    }
-  };
-
-  const handlePaycheckApproval = async (paycheckDate: string) => {
-    if (!householdId || !user) return;
-
-    if (!currentPeriodId) {
-      // First paycheck ever - initialize period tracking
-      await initializeFirstPeriod(paycheckDate);
-      return;
-    }
-
-    // Reset buckets for the period that just ended
-    await resetBucketsForNewPeriod(paycheckDate);
-
-    // Update household's last paycheck date
-    const householdRef = doc(db, `households/${householdId}`);
-    await updateDoc(householdRef, {
-      lastPaycheckDate: paycheckDate,
-    });
-  };
-
-  const initializeFirstPeriod = async (paycheckDate: string) => {
-    if (!householdId || !user) return;
-
-    try {
-      const batch = writeBatch(db);
-
-      // Set household's first paycheck
-      const householdRef = doc(db, `households/${householdId}`);
-      batch.update(householdRef, {
-        lastPaycheckDate: paycheckDate,
-      });
-
-      // Initialize all buckets with this period ID
-      for (const bucket of buckets) {
-        const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
-        batch.update(bucketRef, {
-          currentPeriodId: paycheckDate,
-          lastResetDate: paycheckDate,
-        });
-      }
-
-      await batch.commit();
-      toast.success('Pay period tracking initialized!');
-    } catch (error) {
-      console.error('[initializeFirstPeriod] Failed:', error);
-      toast.error('Failed to initialize period tracking');
-    }
-  };
-
-  const refreshInsight = async () => {
+  const refreshInsight = useCallback(async () => {
     if (!householdId) return;
 
     // Prevent rapid clicking and multiple API calls
@@ -2992,7 +2998,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } finally {
       setIsGeneratingInsight(false);
     }
-  };
+  }, [householdId, isGeneratingInsight, transactions, habits]);
 
   // Check for freeze bank rollover on 1st of month (or first login)
   const checkFreezeBankRollover = useCallback(async () => {
@@ -3009,113 +3015,138 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
 
+  const contextValue = useMemo(() => ({
+    safeToSpend,
+    dailyPoints,
+    weeklyPoints,
+    totalPoints,
+    currentUser,
+    members,
+    accounts,
+    buckets,
+    calendarItems,
+    transactions,
+    habits,
+    activeChallenge,
+    challenges,
+    yearlyGoals,
+    activeYearlyGoals,
+    primaryYearlyGoal,
+    rewardsInventory: rewards,
+    freezeBank,
+    insight,
+    insightsHistory,
+    isGeneratingInsight,
+    householdId,
+    currentPeriodId,
+    bucketSpentMap,
+    householdSettings,
+    household: householdSettings, // Provide alias
+    pantry,
+    meals,
+    shoppingList,
+    mealPlan,
+    todos,
+    groceryCatalog,
+    pendingItemsCount,
+    stores,
+    groceryCategories,
+    apiKeys,
+    addAccount,
+    updateAccountBalance,
+    setAccountGoal,
+    deleteAccount,
+    updateAccountOrder,
+    reorderAccounts,
+    addBucket,
+    updateBucket,
+    deleteBucket,
+    updateBucketLimit,
+    reallocateBucket,
+    addCalendarItem,
+    updateCalendarItem,
+    deleteCalendarItem,
+    payCalendarItem,
+    deferCalendarItem,
+    addTransaction,
+    updateTransactionCategory,
+    updateTransaction,
+    deleteTransaction,
+    addHabit,
+    updateHabit,
+    deleteHabit,
+    toggleHabit,
+    resetHabit,
+    addHabitSubmission,
+    updateHabitSubmission,
+    deleteHabitSubmission,
+    getHabitSubmissions,
+    updateChallenge,
+    markChallengeComplete,
+    redeemReward,
+    refreshInsight,
+    createYearlyGoal,
+    updateYearlyGoal,
+    updateYearlyGoalProgress,
+    deleteYearlyGoal,
+    useFreezeBankToken,
+    rolloverFreezeBankTokens,
+    addMember,
+    updateMember,
+    removeMember,
+    addPantryItem,
+    updatePantryItem,
+    deletePantryItem,
+    addMeal,
+    updateMeal,
+    deleteMeal,
+    addShoppingItem,
+    updateShoppingItem,
+    deleteShoppingItem,
+    toggleShoppingItemPurchased,
+    clearPurchasedShoppingItems,
+    addStore,
+    updateStore,
+    deleteStore,
+    updateGroceryCategories,
+    addGroceryCatalogItem,
+    updateGroceryCatalogItem,
+    deleteGroceryCatalogItem,
+    addMealPlanItem,
+    updateMealPlanItem,
+    deleteMealPlanItem,
+    addToDo,
+    updateToDo,
+    deleteToDo,
+    completeToDo
+  }), [
+    safeToSpend, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
+    calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
+    primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
+    currentPeriodId, bucketSpentMap, householdSettings, pantry, meals, shoppingList, mealPlan, todos,
+    groceryCatalog, pendingItemsCount, stores, groceryCategories, apiKeys,
+    addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
+    addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
+    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction,
+    addHabit, updateHabit, deleteHabit, toggleHabit, resetHabit,
+    addHabitSubmission, updateHabitSubmission, deleteHabitSubmission, getHabitSubmissions,
+    updateChallenge, markChallengeComplete, redeemReward, refreshInsight,
+    createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
+    useFreezeBankToken, rolloverFreezeBankTokens,
+    addMember, updateMember, removeMember,
+    addPantryItem, updatePantryItem, deletePantryItem,
+    addMeal, updateMeal, deleteMeal,
+    addShoppingItem, updateShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    addStore, updateStore, deleteStore, updateGroceryCategories,
+    addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
+    addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
+    addToDo, updateToDo, deleteToDo, completeToDo
+  ]);
+
   return (
     <FirebaseHouseholdContext.Provider
-      value={{
-        safeToSpend,
-        dailyPoints,
-        weeklyPoints,
-        totalPoints,
-        currentUser,
-        members,
-        accounts,
-        buckets,
-        calendarItems,
-        transactions,
-        habits,
-        activeChallenge,
-        challenges,
-        yearlyGoals,
-        activeYearlyGoals,
-        primaryYearlyGoal,
-        rewardsInventory: rewards,
-        freezeBank,
-        insight,
-        insightsHistory,
-        isGeneratingInsight,
-        householdId,
-        currentPeriodId,
-        bucketSpentMap,
-        householdSettings,
-        household: householdSettings, // Provide alias
-        pantry,
-        meals,
-        shoppingList,
-        mealPlan,
-        todos,
-        groceryCatalog,
-        pendingItemsCount,
-        stores,
-        groceryCategories,
-        apiKeys,
-        addAccount,
-        updateAccountBalance,
-        setAccountGoal,
-        deleteAccount,
-        updateAccountOrder,
-        reorderAccounts,
-        addBucket,
-        updateBucket,
-        deleteBucket,
-        updateBucketLimit,
-        reallocateBucket,
-        addCalendarItem,
-        updateCalendarItem,
-        deleteCalendarItem,
-        payCalendarItem,
-        deferCalendarItem,
-        addTransaction,
-        updateTransactionCategory,
-        updateTransaction,
-        deleteTransaction,
-        addHabit,
-        updateHabit,
-        deleteHabit,
-        toggleHabit,
-        resetHabit,
-        addHabitSubmission,
-        updateHabitSubmission,
-        deleteHabitSubmission,
-        getHabitSubmissions,
-        updateChallenge,
-        markChallengeComplete,
-        redeemReward,
-        refreshInsight,
-        createYearlyGoal,
-        updateYearlyGoal,
-        updateYearlyGoalProgress,
-        deleteYearlyGoal,
-        useFreezeBankToken,
-        rolloverFreezeBankTokens,
-        addMember,
-        updateMember,
-        removeMember,
-        addPantryItem,
-        updatePantryItem,
-        deletePantryItem,
-        addMeal,
-        updateMeal,
-        deleteMeal,
-        addShoppingItem,
-        updateShoppingItem,
-        deleteShoppingItem,
-        toggleShoppingItemPurchased,
-        clearPurchasedShoppingItems,
-        addStore,
-        updateStore,
-        deleteStore,
-        updateGroceryCategories,
-        addGroceryCatalogItem,
-        updateGroceryCatalogItem,
-        deleteGroceryCatalogItem,
-        addMealPlanItem,
-        updateMealPlanItem,
-        deleteMealPlanItem,
-        addToDo,
-        updateToDo,
-        deleteToDo,
-        completeToDo
-      }}
+      value={contextValue}
     >
       {children}
     </FirebaseHouseholdContext.Provider>
