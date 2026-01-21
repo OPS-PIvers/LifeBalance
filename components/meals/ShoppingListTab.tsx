@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare, Package } from 'lucide-react';
 import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -61,6 +61,7 @@ const ShoppingListTab: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [showBatchMoveConfirm, setShowBatchMoveConfirm] = useState(false);
 
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
 
@@ -308,6 +309,42 @@ const ShoppingListTab: React.FC = () => {
       setShowBatchDeleteConfirm(false);
     } catch (error) {
       console.error('Batch delete failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
+  const handleBatchMoveToPantry = async () => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const itemsToMove = shoppingList.filter(i => selectedIds.has(i.id));
+
+      // 1. Add to Pantry
+      const addPromises = itemsToMove.map(item =>
+        addPantryItem({
+            name: item.name,
+            quantity: item.quantity || '1',
+            category: item.category,
+            purchaseDate: new Date().toISOString().split('T')[0],
+            notes: item.store ? `Purchased from ${item.store}` : undefined
+        }, { suppressToast: true })
+      );
+
+      await Promise.all(addPromises);
+
+      // 2. Delete from Shopping List
+      const deletePromises = itemsToMove.map(item => deleteShoppingItem(item.id));
+      await Promise.allSettled(deletePromises);
+
+      toast.success(`Moved ${itemsToMove.length} items to Pantry`);
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+      setShowBatchMoveConfirm(false);
+    } catch (error) {
+      console.error('Batch move failed:', error);
       toast.error('An unexpected error occurred');
     } finally {
       setIsBatchProcessing(false);
@@ -613,6 +650,16 @@ const ShoppingListTab: React.FC = () => {
                 </button>
 
                 <button
+                onClick={() => setShowBatchMoveConfirm(true)}
+                disabled={isBatchProcessing}
+                className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+                aria-label="Move selected to Pantry"
+                >
+                <Package size={18} />
+                <span className="text-[10px] font-medium">Pantry</span>
+                </button>
+
+                <button
                 onClick={() => setShowBatchDeleteConfirm(true)}
                 disabled={isBatchProcessing}
                 className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
@@ -656,6 +703,43 @@ const ShoppingListTab: React.FC = () => {
                 >
                     {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
                     <span>Delete All</span>
+                </button>
+                </div>
+            </div>
+            </Modal>
+        )}
+
+        {/* Batch Move to Pantry Confirmation */}
+        {showBatchMoveConfirm && (
+            <Modal
+            isOpen={true}
+            onClose={() => !isBatchProcessing && setShowBatchMoveConfirm(false)}
+            disableBackdropClose={isBatchProcessing}
+            >
+            <div className="p-4 space-y-4">
+                <h3 className="text-lg font-bold text-brand-800">Move to Pantry</h3>
+                <p className="text-brand-600">
+                Move <strong>{selectedIds.size}</strong> items to Pantry?
+                </p>
+                <p className="text-sm text-gray-500">
+                This will add them to your pantry and remove them from the shopping list.
+                </p>
+
+                <div className="flex gap-3 pt-2">
+                <button
+                    onClick={() => setShowBatchMoveConfirm(false)}
+                    disabled={isBatchProcessing}
+                    className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={handleBatchMoveToPantry}
+                    disabled={isBatchProcessing}
+                    className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                    {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Package size={18} />}
+                    <span>Move to Pantry</span>
                 </button>
                 </div>
             </div>

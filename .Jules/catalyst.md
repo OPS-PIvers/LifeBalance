@@ -1,3 +1,5 @@
 # Catalyst Journal
 
 ## 2025-02-18 - Batch Mode Pattern Standardization **Discovery:** Multiple list views (`PantryTab`, `TransactionMasterList`) implement a "Selection Mode" pattern with a Floating Action Bar (FAB) and `Promise.allSettled` for batch operations. **Opportunity:** Standardize this pattern across all list-based views. Implemented it for `ShoppingListTab` to enable "Batch Purchase" and "Batch Delete", significantly reducing clicks for power users. This pattern relies on the atomic actions exposed by `FirebaseHouseholdContext` and scales well for client-side batching.
+
+## 2025-05-22 - Batch Move to Pantry **Discovery:** ShoppingList and Pantry data models share core fields (name, category, quantity), and the `addPantryItem` action is readily available in the shared context. **Opportunity:** Implemented "Batch Move to Pantry" in Shopping List, enabling users to seamlessly transition purchased items to inventory tracking without data re-entry. This closes the loop between "Buying" and "Having", while preserving store provenance in the notes field.
