@@ -145,6 +145,7 @@ export const processToggleHabit = (
   // 2. Determine if Scorable (Points + Completion)
   const currentStreak = calculateStreak(habit.completedDates);
   const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+  const sign = habit.type === 'positive' ? 1 : -1;
 
   let isCompletedNow = false;
   let wasCompletedBefore = false;
@@ -153,9 +154,9 @@ export const processToggleHabit = (
   if (habit.scoringType === 'incremental') {
     // Incremental: Points on every action
     if (direction === 'up') {
-      pointsChange = Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else {
-      pointsChange = -Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
     // Completion: Hit target (or 1 if 0)
     const target = habit.targetCount > 0 ? habit.targetCount : 1;
@@ -169,10 +170,10 @@ export const processToggleHabit = (
 
     if (isCompletedNow && !wasCompletedBefore) {
       // Just hit target -> Award Points
-      pointsChange = Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
       // Just lost target -> Remove Points
-      pointsChange = -Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
   }
 
@@ -211,12 +212,13 @@ export const calculateResetPoints = (habit: Habit): number => {
   let pointsToRemove = 0;
   const currentStreak = calculateStreak(habit.completedDates);
   const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+  const sign = habit.type === 'positive' ? 1 : -1;
 
   if (habit.scoringType === 'incremental') {
-    pointsToRemove = habit.count * Math.floor(habit.basePoints * multiplier);
+    pointsToRemove = sign * habit.count * Math.floor(habit.basePoints * multiplier);
   } else {
     if (habit.count >= habit.targetCount) {
-      pointsToRemove = Math.floor(habit.basePoints * multiplier);
+      pointsToRemove = sign * Math.floor(habit.basePoints * multiplier);
     }
   }
 
@@ -243,14 +245,15 @@ export const calculatePointsForDate = (habits: Habit[], targetDate: string): num
 
     const currentStreak = calculateStreak(habit.completedDates);
     const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+    const sign = habit.type === 'positive' ? 1 : -1;
 
     if (habit.scoringType === 'incremental') {
       // For incremental: points per count
-      totalPoints += habit.count * Math.floor(habit.basePoints * multiplier);
+      totalPoints += sign * habit.count * Math.floor(habit.basePoints * multiplier);
     } else {
       // For threshold: points only if target met
       if (habit.count >= habit.targetCount) {
-        totalPoints += Math.floor(habit.basePoints * multiplier);
+        totalPoints += sign * Math.floor(habit.basePoints * multiplier);
       }
     }
   }
@@ -285,15 +288,16 @@ export const calculatePointsForDateRange = (
     // Note: We use the current streak for multiplier calculation
     const currentStreak = calculateStreak(habit.completedDates);
     const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+    const sign = habit.type === 'positive' ? 1 : -1;
 
     if (habit.scoringType === 'incremental') {
       // For incremental habits, we need to estimate points per completion
       // Since we don't store historical counts, use basePoints * multiplier per completion day
       // This is an approximation - for accurate tracking we'd need per-day snapshots
-      totalPoints += completionsInRange.length * Math.floor(habit.basePoints * multiplier);
+      totalPoints += sign * completionsInRange.length * Math.floor(habit.basePoints * multiplier);
     } else {
       // For threshold: each completed day in range earns the threshold points
-      totalPoints += completionsInRange.length * Math.floor(habit.basePoints * multiplier);
+      totalPoints += sign * completionsInRange.length * Math.floor(habit.basePoints * multiplier);
     }
   }
 

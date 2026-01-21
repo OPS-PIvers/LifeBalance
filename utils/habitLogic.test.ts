@@ -137,7 +137,7 @@ describe('habitLogic', () => {
     };
 
     describe('Incremental Scoring', () => {
-      it('increments count and adds points', () => {
+      it('increments count and adds points for positive habit', () => {
         const result = processToggleHabit(baseHabit, 'up');
         expect(result).not.toBeNull();
         expect(result?.updatedHabit.count).toBe(1);
@@ -145,13 +145,32 @@ describe('habitLogic', () => {
         expect(result?.updatedHabit.completedDates).toContain(today);
       });
 
-      it('decrements count and removes points', () => {
+      it('increments count and subtracts points for negative habit', () => {
+        const negativeHabit = { ...baseHabit, type: 'negative' as const };
+        const result = processToggleHabit(negativeHabit, 'up');
+        expect(result).not.toBeNull();
+        expect(result?.updatedHabit.count).toBe(1);
+        expect(result?.pointsChange).toBe(-10); // -10 * 1.0 (sign applied)
+        expect(result?.updatedHabit.completedDates).toContain(today);
+      });
+
+      it('decrements count and removes points (adds back for positive)', () => {
         const habit = { ...baseHabit, count: 1, totalCount: 1, completedDates: [today] };
         const result = processToggleHabit(habit, 'down');
 
         expect(result).not.toBeNull();
         expect(result?.updatedHabit.count).toBe(0);
         expect(result?.pointsChange).toBe(-10);
+        expect(result?.updatedHabit.completedDates).not.toContain(today);
+      });
+
+      it('decrements count and adds points back for negative habit', () => {
+        const negativeHabit = { ...baseHabit, type: 'negative' as const, count: 1, totalCount: 1, completedDates: [today] };
+        const result = processToggleHabit(negativeHabit, 'down');
+
+        expect(result).not.toBeNull();
+        expect(result?.updatedHabit.count).toBe(0);
+        expect(result?.pointsChange).toBe(10); // -(-10) = 10
         expect(result?.updatedHabit.completedDates).not.toContain(today);
       });
 

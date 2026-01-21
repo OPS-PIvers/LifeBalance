@@ -1831,7 +1831,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     });
 
     // Use increment() with negative value for atomic server-side calculation
-    if (pointsToRemove > 0) {
+    // Note: pointsToRemove can be negative if resetting a negative habit (so we add points back)
+    if (pointsToRemove !== 0) {
       await updateDoc(doc(db, `households/${householdId}`), {
         'points.daily': increment(-pointsToRemove),
         'points.weekly': increment(-pointsToRemove),
