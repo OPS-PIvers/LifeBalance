@@ -103,6 +103,8 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           label="Monthly Limit"
           type="number"
           placeholder="0.00"
+          min={0}
+          step="0.01"
           value={limit}
           onChange={e => setLimit(e.target.value)}
           className="font-mono"
@@ -134,7 +136,12 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         <Button
           onClick={handleSave}
           className="w-full py-3 mt-2"
-          disabled={!name || !limit}
+          disabled={
+            !name ||
+            !limit ||
+            isNaN(parseFloat(limit)) ||
+            parseFloat(limit) <= 0
+          }
         >
           {editingBucket ? 'Save Changes' : 'Create Bucket'}
         </Button>

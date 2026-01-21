@@ -129,16 +129,53 @@ describe('BucketFormModal', () => {
     confirmSpy.mockRestore();
   });
 
-  it('disables submit if required fields are missing', () => {
+  it('disables submit if required fields are missing or invalid', () => {
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
 
     const createButton = screen.getByRole('button', { name: /create bucket/i });
     expect(createButton).toBeDisabled();
 
-    // Attempt to save (should be disabled)
-    fireEvent.click(createButton);
+    // 1. Fill only name -> Disabled
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'New Bucket' } });
+    expect(createButton).toBeDisabled();
 
-    expect(mockAddBucket).not.toHaveBeenCalled();
-    expect(mockOnClose).not.toHaveBeenCalled();
+    // 2. Fill invalid limit -> Disabled
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '-10' } });
+    expect(createButton).toBeDisabled();
+
+    // 3. Fill valid limit -> Enabled
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
+    expect(createButton).not.toBeDisabled();
+
+    fireEvent.click(createButton);
+    expect(mockAddBucket).toHaveBeenCalled();
+  });
+
+  it('supports accessible color selection', () => {
+    render(<BucketFormModal isOpen={true} onClose={mockOnClose} />);
+
+    // Verify radiogroup exists
+    const radioGroup = screen.getByRole('radiogroup', { name: /bucket color/i });
+    expect(radioGroup).toBeInTheDocument();
+
+    // Verify all color options are present as radio buttons
+    const colorOptions = screen.getAllByRole('radio');
+    expect(colorOptions.length).toBeGreaterThan(0);
+
+    // Verify selecting a color via label
+    const blueOption = screen.getByLabelText(/select blue/i);
+    fireEvent.click(blueOption);
+
+    expect(blueOption).toBeChecked();
+
+    // Verify submitting uses the selected color
+    fireEvent.change(screen.getByLabelText(/bucket name/i), { target: { value: 'Blue Bucket' } });
+    fireEvent.change(screen.getByLabelText(/monthly limit/i), { target: { value: '100' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
+
+    expect(mockAddBucket).toHaveBeenCalledWith(expect.objectContaining({
+      color: 'bg-blue-500'
+    }));
   });
 });
