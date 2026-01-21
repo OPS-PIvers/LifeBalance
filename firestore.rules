@@ -20,6 +20,17 @@ service cloud.firestore {
              get(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // 🛡️ SENTINEL SECURITY HELPERS: Data Validation
+    function isValidString(text, max) {
+      return text is string && text.size() > 0 && text.size() <= max;
+    }
+
+    function isValidOptionalString(text, max) {
+      return text == null || (text is string && text.size() <= max); // Allow empty strings for optional fields if needed, or strictly reuse isValidString?
+      // If optional, it can be null. If string, it should follow string rules.
+      // Let's allow empty strings for optional fields to be safe, but enforce max length.
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -32,13 +43,18 @@ service cloud.firestore {
       // Admin can list all households for the AI Meter
       allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
 
-      allow create: if isAuthenticated();
+      // 🛡️ SENTINEL FIX: Validate household name on creation
+      allow create: if isAuthenticated() &&
+                    request.resource.data.keys().hasAny(['name']) &&
+                    isValidString(request.resource.data.name, 50);
       // Allow update if member (but cannot modify immutable fields).
       // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
       // This implicitly requires the user to have a valid member document in the members/ subcollection.
       // Since creating a member document requires validating the invite code (see members create rule),
       // this ensures that no one can add themselves to memberUids without a valid invite.
       allow update: if isMemberOf(householdId) &&
+                        // 🛡️ SENTINEL FIX: Validate household name if being updated
+                        isValidOptionalString(request.resource.data.get('name', null), 50) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
@@ -97,10 +113,30 @@ service cloud.firestore {
         // 1. The user themselves (but they cannot change their own role)
         // 2. Household Admins (can update any field including role)
         allow update: if isMemberOf(householdId) && (
-          // Case 1: User updating their own profile (cannot change role)
-          (request.auth.uid == memberId && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])) ||
-          // Case 2: Admin updating any member (including role)
-          isAdminOf(householdId)
+          // 🛡️ SENTINEL SECURITY FIX: Enforce input validation on profile updates to prevent storage exhaustion
+          // Use .get() to safely access optional fields; if missing, defaults to null which isValidOptionalString accepts
+          // DisplayName is required
+          isValidString(request.resource.data.get('displayName', null), 50) &&
+          isValidOptionalString(request.resource.data.get('email', null), 100) &&
+          isValidOptionalString(request.resource.data.get('telegramChatId', null), 50) &&
+          isValidOptionalString(request.resource.data.get('photoURL', null), 500) &&
+
+          // Validate notificationPreferences (Map) if present
+          (
+            !request.resource.data.keys().hasAny(['notificationPreferences']) ||
+            (
+              request.resource.data.notificationPreferences is map &&
+              isValidOptionalString(request.resource.data.notificationPreferences.get('time', null), 10) &&
+              isValidOptionalString(request.resource.data.notificationPreferences.get('timezone', null), 100)
+            )
+          ) &&
+
+          (
+            // Case 1: User updating their own profile (cannot change role)
+            (request.auth.uid == memberId && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])) ||
+            // Case 2: Admin updating any member (including role)
+            isAdminOf(householdId)
+          )
         );
 
         allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
@@ -109,7 +145,17 @@ service cloud.firestore {
       // Habits subcollection
       match /habits/{habitId} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId);
+
+        // 🛡️ SENTINEL SECURITY FIX: Split write into create/update/delete to enforce validation
+        // Prevent DoS/Storage Exhaustion by validating string lengths
+        // Title and Category are required (isValidString checks for non-null), telegramAlias is optional
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidString(request.resource.data.get('title', null), 100) &&
+                              isValidString(request.resource.data.get('category', null), 50) &&
+                              isValidOptionalString(request.resource.data.get('telegramAlias', null), 50) &&
+                              isValidOptionalString(request.resource.data.get('presetId', null), 50);
+
+        allow delete: if isMemberOf(householdId);
 
         // Habit submissions subcollection
         match /submissions/{submissionId} {
@@ -141,6 +187,18 @@ service cloud.firestore {
         allow read: if isMemberOf(householdId);
         // Cloud Functions update this via Admin SDK, but allow admin updates for testing
         allow write: if isAdminOf(householdId);
+      }
+
+      // Shopping list subcollection with input validation
+      match /shoppingList/{itemId} {
+        allow read: if isMemberOf(householdId);
+
+        // 🛡️ SENTINEL SECURITY FIX: Validate shopping list items to prevent storage exhaustion
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidString(request.resource.data.get('name', null), 100) &&
+                              isValidOptionalString(request.resource.data.get('category', null), 50);
+
+        allow delete: if isMemberOf(householdId);
       }
 
       // All other subcollections (accounts, buckets, transactions, etc.)

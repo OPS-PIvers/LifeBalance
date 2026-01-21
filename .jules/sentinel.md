@@ -48,3 +48,12 @@
 **Vulnerability:** The `quickAddShoppingItem` batch endpoint validated the main `item` name but skipped validation for optional fields (`category`, `store`) within the batch array. An attacker could bypass the single-item checks and send massive payloads (e.g., 1MB strings) via the batch array, causing storage exhaustion or cost spikes.
 **Learning:** Validating the top-level object or a single item is not enough. When processing arrays/batches, *every* field of *every* item must be rigorously validated against the same constraints as single-item endpoints.
 **Prevention:** Applied strict length (max 50 chars) and type checks to `category` and `store` fields inside the batch processing loop, mirroring the single-item validation logic.
+
+## 2026-01-25 - [DoS/Storage Exhaustion] Firestore Input Validation
+**Vulnerability:** Firestore rules allowed string fields (like `displayName`, `email`, `title`, `category`, `name`) to be updated with strings of arbitrary length (up to the 1MB document limit). This could be abused for Storage Exhaustion or Denial of Service by filling documents with massive strings.
+**Learning:** Client-side validation is insufficient. Database rules must strictly enforce constraints on all user-writable fields to protect the integrity and availability of the database.
+**Prevention:** Implemented helper functions `isValidString` and `isValidOptionalString` in `firestore.rules` and applied them to:
+- `households` (name: 50 chars on create and update)
+- `members` (displayName: 50 chars, email: 100 chars, telegramChatId: 50 chars, photoURL: 500 chars, notificationPreferences.time: 10 chars, notificationPreferences.timezone: 100 chars)
+- `habits` (title: 100 chars, category: 50 chars, telegramAlias: 50 chars, presetId: 50 chars)
+- `shoppingList` (name: 100 chars, category: 50 chars)
