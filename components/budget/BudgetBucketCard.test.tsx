@@ -1,0 +1,131 @@
+
+import { render, screen, fireEvent } from '@testing-library/react';
+import { BudgetBucketCard } from './BudgetBucketCard';
+import { BudgetBucket, Transaction } from '../../types/schema';
+import { vi, describe, it, expect } from 'vitest';
+
+describe('BudgetBucketCard', () => {
+  const mockBucket: BudgetBucket = {
+    id: 'bucket1',
+    name: 'Groceries',
+    limit: 500,
+    color: 'bg-green-500',
+    isVariable: false,
+    isCore: true
+  };
+
+  const mockSpent = { verified: 200, pending: 50 };
+  const mockTransactions: Transaction[] = [];
+
+  const defaultProps = {
+    bucket: mockBucket,
+    spent: mockSpent,
+    bucketTransactions: mockTransactions,
+    isExpanded: false,
+    isEditingLimit: false,
+    onExpand: vi.fn(),
+    onEditBucket: vi.fn(),
+    onStartEditingLimit: vi.fn(),
+    onSaveLimit: vi.fn(),
+    onCancelEdit: vi.fn(),
+    onReallocate: vi.fn(),
+    onEditTransaction: vi.fn(),
+    onDeleteTransaction: vi.fn(),
+  };
+
+  it('renders bucket information correctly', () => {
+    render(<BudgetBucketCard {...defaultProps} />);
+
+    expect(screen.getByText('Groceries')).toBeInTheDocument();
+    expect(screen.getByText('$200.00')).toBeInTheDocument();
+    expect(screen.getByText('+$50.00*')).toBeInTheDocument();
+    expect(screen.getByText('$500')).toBeInTheDocument();
+  });
+
+  it('renders progress bar correctly', () => {
+    const { container } = render(<BudgetBucketCard {...defaultProps} />);
+    // Target the progress bar specifically (it's inside the bg-brand-100 wrapper)
+    const progressBar = container.querySelector('.bg-brand-100 > div');
+    expect(progressBar).toHaveStyle('width: 50%'); // (250/500)*100
+    expect(progressBar).toHaveClass('bg-green-500');
+  });
+
+  it('switches to edit mode when isEditingLimit is true', () => {
+    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
+
+    const input = screen.getByLabelText('Edit limit for Groceries');
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveValue(500);
+    expect(input).toHaveFocus();
+  });
+
+  it('calls onStartEditingLimit when limit text is clicked', () => {
+    render(<BudgetBucketCard {...defaultProps} />);
+
+    fireEvent.click(screen.getByText('$500'));
+    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
+  });
+
+  it('calls onSaveLimit when save button is clicked', () => {
+    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
+
+    const input = screen.getByLabelText('Edit limit for Groceries');
+    fireEvent.change(input, { target: { value: '600' } });
+
+    fireEvent.click(screen.getByLabelText('Save limit'));
+    expect(defaultProps.onSaveLimit).toHaveBeenCalledWith('bucket1', 600);
+  });
+
+  it('calls onSaveLimit when Enter is pressed', () => {
+    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
+
+    const input = screen.getByLabelText('Edit limit for Groceries');
+    fireEvent.change(input, { target: { value: '600' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(defaultProps.onSaveLimit).toHaveBeenCalledWith('bucket1', 600);
+  });
+
+  it('calls onCancelEdit when Escape is pressed', () => {
+    render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
+
+    const input = screen.getByLabelText('Edit limit for Groceries');
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(defaultProps.onCancelEdit).toHaveBeenCalled();
+  });
+
+  it('syncs local state when entering edit mode', () => {
+    const { rerender } = render(<BudgetBucketCard {...defaultProps} />);
+
+    // Initial render - not editing
+    expect(screen.queryByLabelText('Edit limit for Groceries')).not.toBeInTheDocument();
+
+    // Re-render with editing enabled
+    rerender(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
+
+    const input = screen.getByLabelText('Edit limit for Groceries');
+    expect(input).toHaveValue(500);
+  });
+
+  it('calls onExpand when header is clicked', () => {
+    render(<BudgetBucketCard {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /Toggle/ }));
+    expect(defaultProps.onExpand).toHaveBeenCalledWith('bucket1');
+  });
+
+  it('renders transactions when expanded', () => {
+    const tx = {
+      id: 'tx1',
+      merchant: 'Test Merchant',
+      amount: 50,
+      date: '2023-01-01',
+      category: 'Groceries',
+      status: 'verified',
+    } as Transaction;
+
+    render(<BudgetBucketCard {...defaultProps} isExpanded={true} bucketTransactions={[tx]} />);
+
+    expect(screen.getByText('Test Merchant')).toBeInTheDocument();
+  });
+});

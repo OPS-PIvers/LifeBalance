@@ -1,5 +1,4 @@
-/* eslint-disable react/prop-types */
-import React, { useState, memo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
@@ -14,6 +13,7 @@ interface BudgetBucketCardProps {
   onEditBucket: (bucket: BudgetBucket) => void;
   onStartEditingLimit: (id: string) => void;
   onSaveLimit: (id: string, limit: number) => void;
+  onCancelEdit: () => void;
   onReallocate: (targetId: string) => void;
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
@@ -21,7 +21,10 @@ interface BudgetBucketCardProps {
 
 const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps) => {
   return (
-    prev.bucket === next.bucket &&
+    prev.bucket.id === next.bucket.id &&
+    prev.bucket.limit === next.bucket.limit &&
+    prev.bucket.name === next.bucket.name &&
+    prev.bucket.color === next.bucket.color &&
     prev.spent.verified === next.spent.verified &&
     prev.spent.pending === next.spent.pending &&
     prev.bucketTransactions === next.bucketTransactions &&
@@ -31,6 +34,7 @@ const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps)
     prev.onEditBucket === next.onEditBucket &&
     prev.onStartEditingLimit === next.onStartEditingLimit &&
     prev.onSaveLimit === next.onSaveLimit &&
+    prev.onCancelEdit === next.onCancelEdit &&
     prev.onReallocate === next.onReallocate &&
     prev.onEditTransaction === next.onEditTransaction &&
     prev.onDeleteTransaction === next.onDeleteTransaction
@@ -47,6 +51,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   onEditBucket,
   onStartEditingLimit,
   onSaveLimit,
+  onCancelEdit,
   onReallocate,
   onEditTransaction,
   onDeleteTransaction,
@@ -56,26 +61,25 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   const isOverspent = totalCommitted > bucket.limit;
 
   // Local state for limit editing to prevent parent re-renders on keystroke
+  // We initialize it directly from props so it has a valid value immediately
   const [localLimit, setLocalLimit] = useState(bucket.limit.toString());
 
-  // Use a state variable to track the previous isEditingLimit to mimic getDerivedStateFromProps
-  const [prevIsEditingLimit, setPrevIsEditingLimit] = useState(isEditingLimit);
-
-  // Update state during render if prop changed (recommended pattern for derived state)
-  if (isEditingLimit && !prevIsEditingLimit) {
-    setLocalLimit(bucket.limit.toString());
-    setPrevIsEditingLimit(true);
-  } else if (!isEditingLimit && prevIsEditingLimit) {
-    setPrevIsEditingLimit(false);
-  }
+  // To avoid the "setState in effect" warning while correctly syncing state:
+  // We use a pattern where we key the state initialization off the editing mode.
+  useEffect(() => {
+    if (isEditingLimit) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLocalLimit(bucket.limit.toString());
+    }
+  }, [isEditingLimit, bucket.limit]);
 
   const handleSaveLimit = () => {
     const val = parseFloat(localLimit);
     if (!isNaN(val)) {
       onSaveLimit(bucket.id, val);
     } else {
-      // If invalid, just cancel/save original (or could handle error)
-      onSaveLimit(bucket.id, bucket.limit);
+      // If invalid, revert/cancel
+      onCancelEdit();
     }
   };
 
@@ -83,7 +87,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
     if (e.key === 'Enter') {
       handleSaveLimit();
     } else if (e.key === 'Escape') {
-      onSaveLimit(bucket.id, bucket.limit); // Cancel by saving original/current
+      onCancelEdit();
     }
   };
 
@@ -169,6 +173,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           <button
             onClick={(e) => { e.stopPropagation(); onEditBucket(bucket); }}
             className="text-brand-300 hover:text-brand-600 p-1"
+            aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />
           </button>

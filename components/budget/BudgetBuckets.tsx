@@ -104,9 +104,17 @@ const BudgetBuckets: React.FC = () => {
   }, []);
 
   const saveLimit = useCallback((id: string, val: number) => {
-    updateBucketLimit(id, val);
+    // Only update if value actually changed
+    const bucket = buckets.find(b => b.id === id);
+    if (bucket && bucket.limit !== val) {
+      updateBucketLimit(id, val);
+    }
     setEditingLimitId(null);
-  }, [updateBucketLimit]);
+  }, [updateBucketLimit, buckets]);
+
+  const cancelEditLimit = useCallback(() => {
+    setEditingLimitId(null);
+  }, []);
 
   const handleExpand = useCallback((id: string) => {
     setExpandedBucketId(prev => (prev === id ? null : id));
@@ -194,6 +202,7 @@ const BudgetBuckets: React.FC = () => {
             onEditBucket={handleEditBucket}
             onStartEditingLimit={startEditingLimit}
             onSaveLimit={saveLimit}
+            onCancelEdit={cancelEditLimit}
             onReallocate={handleReallocate}
             onEditTransaction={handleEditTransaction}
             onDeleteTransaction={handleDeleteTransaction}
