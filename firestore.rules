@@ -208,35 +208,90 @@ service cloud.firestore {
       // 🛡️ SENTINEL SECURITY FIX: Strict validation for financial data
       match /transactions/{transactionId} {
         allow read: if isMemberOf(householdId);
+
+        // Comprehensive validation for transaction data integrity
         allow create, update: if isMemberOf(householdId) &&
-                              isValidNumber(request.resource.data.get('amount', null)) &&
-                              isValidString(request.resource.data.get('merchant', null), 100) &&
-                              isValidString(request.resource.data.get('category', null), 50) &&
-                              isValidString(request.resource.data.get('date', null), 10) &&
-                              isValidOptionalString(request.resource.data.get('notes', null), 500);
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['amount', 'merchant', 'category', 'date']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.amount) &&
+                              isValidString(request.resource.data.merchant, 100) &&
+                              isValidString(request.resource.data.category, 50) &&
+                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD format
+                              // Validate status (default to 'verified' if not present)
+                              (request.resource.data.get('status', 'verified') in ['verified', 'pending_review']) &&
+                              // Validate optional fields
+                              isValidOptionalString(request.resource.data.get('notes', null), 1000) &&
+                              isValidOptionalString(request.resource.data.get('payPeriodId', null), 50) &&
+                              isValidOptionalString(request.resource.data.get('source', 'manual'), 50) &&
+                              // Boolean flags must be booleans if present
+                              (request.resource.data.get('isRecurring', null) == null ||
+                               request.resource.data.get('isRecurring') is bool) &&
+                              (request.resource.data.get('autoCategorized', null) == null ||
+                               request.resource.data.get('autoCategorized') is bool) &&
+                              // relatedHabitIds must be a reasonable list if present
+                              (request.resource.data.get('relatedHabitIds', null) == null ||
+                               (request.resource.data.relatedHabitIds is list &&
+                                request.resource.data.relatedHabitIds.size() <= 50)) &&
+                              // createdBy must match authenticated user if provided
+                              (request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid);
+
         allow delete: if isMemberOf(householdId);
       }
 
       match /accounts/{accountId} {
         allow read: if isMemberOf(householdId);
+
+        // Comprehensive validation for account data integrity
         allow create, update: if isMemberOf(householdId) &&
-                              isValidNumber(request.resource.data.get('balance', null)) &&
-                              isValidString(request.resource.data.get('name', null), 50);
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['balance', 'name', 'type']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.balance) &&
+                              isValidString(request.resource.data.name, 50) &&
+                              // Validate type is one of the allowed enum values
+                              (request.resource.data.type in ['checking', 'savings', 'credit']) &&
+                              // Validate optional fields
+                              isValidOptionalString(request.resource.data.get('lastUpdated', null), 30);
+
         allow delete: if isMemberOf(householdId);
       }
 
       match /buckets/{bucketId} {
         allow read: if isMemberOf(householdId);
+
+        // Comprehensive validation for budget bucket data integrity
         allow create, update: if isMemberOf(householdId) &&
-                              isValidNumber(request.resource.data.get('limit', null)) &&
-                              isValidString(request.resource.data.get('name', null), 50);
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['limit', 'name']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.limit) &&
+                              isValidString(request.resource.data.name, 50) &&
+                              // Validate optional fields
+                              isValidOptionalString(request.resource.data.get('color', null), 20) &&
+                              // Boolean flags must be booleans if present
+                              (request.resource.data.get('isVariable', null) == null ||
+                               request.resource.data.get('isVariable') is bool) &&
+                              (request.resource.data.get('isCore', null) == null ||
+                               request.resource.data.get('isCore') is bool);
+
         allow delete: if isMemberOf(householdId);
       }
 
       // All other subcollections (calendarItems, pantry, meals, etc.)
       // 🛡️ SENTINEL SECURITY FIX: Exclude collections with specific rules from wildcard to prevent validation bypass
+      // Collections with specific rules (must be excluded from wildcard):
+      // - members (lines 91-147) - profile and membership management
+      // - habits (lines 150-169) - habit tracking with validation
+      // - apiKeys (lines 172-186) - ADMIN-ONLY sensitive data
+      // - apiUsage (lines 189-194) - rate limiting data
+      // - shoppingList (lines 197-206) - validated shopping items
+      // - transactions (lines 209-218) - financial data with strict validation
+      // - accounts (lines 220-226) - financial accounts
+      // - buckets (lines 228-234) - budget buckets
       match /{subcollection}/{document} {
-        allow read: if isMemberOf(householdId);
+        // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
+        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
         allow write: if isMemberOf(householdId) &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
