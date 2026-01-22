@@ -43,7 +43,8 @@ export const MoneyPulseWidget: React.FC = () => {
 
   // 2. Get Recent Transactions
   const recentTransactions = useMemo(() => {
-    return [...transactions]
+    return transactions
+      .filter(t => t.category !== 'Income' && t.status !== 'pending_review')
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 3);
   }, [transactions]);
@@ -74,11 +75,33 @@ export const MoneyPulseWidget: React.FC = () => {
         </div>
 
         <div className="bg-white rounded-xl p-3 border border-slate-100 flex flex-col justify-center">
-           <div className={`flex items-center gap-1.5 text-xs font-bold ${spendingStats.isHigher ? 'text-rose-500' : 'text-emerald-500'}`}>
-              {spendingStats.isHigher ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-              <span>{Math.abs(spendingStats.percentChange).toFixed(0)}%</span>
+           <div
+             className={`flex items-center gap-1.5 text-xs font-bold ${
+               spendingStats.percentChange === 0 && spendingStats.isHigher
+                 ? 'text-slate-400'
+                 : spendingStats.isHigher
+                   ? 'text-rose-500'
+                   : 'text-emerald-500'
+             }`}
+           >
+             {spendingStats.percentChange === 0 && spendingStats.isHigher ? (
+               <ArrowRight size={16} />
+             ) : spendingStats.isHigher ? (
+               <TrendingUp size={16} />
+             ) : (
+               <TrendingDown size={16} />
+             )}
+             <span>
+               {spendingStats.percentChange === 0 && spendingStats.isHigher
+                 ? 'N/A'
+                 : `${Math.abs(spendingStats.percentChange).toFixed(0)}%`}
+             </span>
            </div>
-           <p className="text-xxs text-slate-400 font-medium mt-1">vs Last Week</p>
+           <p className="text-xxs text-slate-400 font-medium mt-1">
+             {spendingStats.percentChange === 0 && spendingStats.isHigher
+               ? 'No spending last week to compare'
+               : 'vs Last Week'}
+           </p>
         </div>
       </div>
 
@@ -97,7 +120,7 @@ export const MoneyPulseWidget: React.FC = () => {
                  </div>
               </div>
               <span className="font-mono font-bold text-slate-900 text-sm">
-                 ${tx.amount.toLocaleString()}
+                 ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
             </div>
           ))}
