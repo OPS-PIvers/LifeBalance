@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Copy } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -17,7 +18,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, addHabit, activeChallenge } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -61,8 +62,38 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleDuplicate = async () => {
+    try {
+      // Create a clean copy without ID and reset state
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, ...habitData } = habit;
+
+      const newHabit = {
+        ...habitData,
+        title: `${habit.title} (Copy)`,
+        count: 0,
+        totalCount: 0,
+        completedDates: [],
+        streakDays: 0,
+        lastUpdated: new Date().toISOString(),
+        // Preserve other settings like isShared/ownerId
+        // But maybe reset linked challenge IDs? The logic doesn't store challenge IDs in habit,
+        // challenges store habit IDs. So simply copying habit won't link it to challenges. Correct.
+      };
+
+      // Cast to any to satisfy the Habit type requirement which includes ID,
+      // though addHabit/addDoc ignores it
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await addHabit(newHabit as any);
+      toast.success('Habit duplicated');
+    } catch (error) {
+      console.error('Failed to duplicate habit:', error);
+      toast.error('Failed to duplicate habit');
+    }
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = 4; // Edit, View Log, Duplicate, Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -88,6 +119,9 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
           setIsLogModalOpen(true);
           setIsMenuOpen(false);
         } else if (focusedMenuIndex === 2) {
+          handleDuplicate();
+          setIsMenuOpen(false);
+        } else if (focusedMenuIndex === 3) {
           deleteHabit(habit.id);
           setIsMenuOpen(false);
         }
@@ -269,12 +303,27 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleDuplicate();
+                  setIsMenuOpen(false);
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 2 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
+              >
+                <Copy size={14} /> Duplicate
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   deleteHabit(habit.id);
                   setIsMenuOpen(false);
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === 3 && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}

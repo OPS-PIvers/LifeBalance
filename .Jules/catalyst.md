@@ -1,3 +1,5 @@
 # Catalyst Journal
 
 ## 2025-02-18 - Batch Mode Pattern Standardization **Discovery:** Multiple list views (`PantryTab`, `TransactionMasterList`) implement a "Selection Mode" pattern with a Floating Action Bar (FAB) and `Promise.allSettled` for batch operations. **Opportunity:** Standardize this pattern across all list-based views. Implemented it for `ShoppingListTab` to enable "Batch Purchase" and "Batch Delete", significantly reducing clicks for power users. This pattern relies on the atomic actions exposed by `FirebaseHouseholdContext` and scales well for client-side batching.
+
+## 2025-02-18 - Reusing Create Logic for Duplication **Discovery:** The `addHabit` function (and likely other create functions in `FirebaseHouseholdContext`) accepts a full object spread, ignoring the input ID while creating a new one. **Opportunity:** This allows for rapid implementation of "Duplicate" features by simply stripping the ID and resetting state fields (count, streaks) from an existing item, then passing it to the create function. This unlocks "Duplicate Transaction", "Duplicate Habit", "Duplicate Meal", etc. with minimal code.
