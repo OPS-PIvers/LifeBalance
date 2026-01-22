@@ -9,6 +9,7 @@ import { ActionQueueItemCard } from '../components/dashboard/ActionQueueItem';
 import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
 import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidget';
 import { InsightWidget } from '../components/dashboard/InsightWidget';
+import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 
 const Dashboard: React.FC = () => {
   const {
@@ -90,6 +91,9 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Widget: Money Pulse */}
+        <MoneyPulseWidget />
 
         {/* Widget B: Monthly Challenge (Enhanced) */}
         {activeChallenge ? (
