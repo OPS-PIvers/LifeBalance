@@ -290,10 +290,13 @@ export const analyzeReceipt = async (
       ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
-    const today = new Date().toISOString().split('T')[0];
-    const prompt = `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''}
-    Today's date is ${today}. If the year is missing, infer it.
-    Return JSON.`;
+    const now = new Date();
+    const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    const prompt = [
+      `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''}`,
+      `Today's date is ${today}. If the year is missing, infer it.`,
+      'Return JSON.'
+    ].join('\n');
 
     return await generateJsonContent<ReceiptData>(
       householdId,
@@ -342,16 +345,18 @@ export const parseBankStatement = async (
       ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
-    const today = new Date().toISOString().split('T')[0];
-    const prompt = `Analyze this bank statement or transaction list screenshot. Extract ALL visible transactions. For each transaction, provide:
-- merchant: The merchant or payee name
-- amount: The transaction amount as a POSITIVE number (even if shown as negative/debit)
-- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.
-- category: Suggest the most appropriate category from: ${categoryList}
-${habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : ''}
-
-Only include expense transactions (debits/withdrawals). Skip any credits, deposits, or payments received.
-Return a JSON array of transactions.`;
+    const now = new Date();
+    const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    const prompt = [
+      `Analyze this bank statement or transaction list screenshot. Extract ALL visible transactions. For each transaction, provide:`,
+      `- merchant: The merchant or payee name`,
+      `- amount: The transaction amount as a POSITIVE number (even if shown as negative/debit)`,
+      `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.`,
+      `- category: Suggest the most appropriate category from: ${categoryList}`,
+      habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : '',
+      `Only include expense transactions (debits/withdrawals). Skip any credits, deposits, or payments received.`,
+      `Return a JSON array of transactions.`
+    ].filter(Boolean).join('\n');
 
     const transactions = await generateJsonContent<BankTransactionData[]>(
       householdId,
