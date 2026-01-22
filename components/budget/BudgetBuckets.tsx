@@ -202,21 +202,20 @@ const BudgetBuckets: React.FC = () => {
             <div
               className="flex items-center justify-between mb-3 cursor-pointer"
               onClick={() => setExpandedBucketId(isExpanded ? null : bucket.id)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  setExpandedBucketId(isExpanded ? null : bucket.id);
-                }
-              }}
-              aria-expanded={isExpanded}
-              aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
             >
-              <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="flex items-center gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg p-1 -ml-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedBucketId(isExpanded ? null : bucket.id);
+                }}
+                aria-expanded={isExpanded}
+                aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name}`}
+              >
                 <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
-                <span className="font-bold text-brand-800">{bucket.name}</span>
-              </div>
+                <span className="font-bold text-brand-800 text-left">{bucket.name}</span>
+              </button>
 
               <div className="flex items-center gap-2">
                 <div className="text-sm font-mono flex flex-col items-end">
@@ -248,12 +247,17 @@ const BudgetBuckets: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      <span
-                        onClick={() => startEditingLimit(bucket.id, bucket.limit)}
-                        className="text-brand-400 border-b border-dashed border-brand-200 cursor-pointer hover:text-brand-600"
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingLimit(bucket.id, bucket.limit);
+                        }}
+                        className="text-brand-400 border-b border-dashed border-brand-200 cursor-pointer hover:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded px-1"
+                        aria-label={`Edit limit for ${bucket.name}, currently $${bucket.limit}`}
                       >
                         ${bucket.limit}
-                      </span>
+                      </button>
                     )}
                   </div>
                   {spent.pending > 0 && (
