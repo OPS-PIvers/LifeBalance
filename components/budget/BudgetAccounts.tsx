@@ -338,7 +338,7 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Add Account Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-dropdown flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
            <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
              <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-brand-800">Add Account</h3>
@@ -382,7 +382,7 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Goal Modal */}
       {isGoalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-dropdown flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
            <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
              <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-brand-800">Set Savings Goal</h3>

@@ -556,7 +556,7 @@ const MealPlanTab: React.FC = () => {
       {/* Add Meal Modal */}
       {isAddModalOpen && (
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
             style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
             onClick={(e) => {
                 if (e.target === e.currentTarget) handleCancel();
@@ -891,7 +891,7 @@ const MealPlanTab: React.FC = () => {
       {/* Previous Meals Modal */}
       {isPreviousMealsModalOpen && (
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
             }}
@@ -931,7 +931,7 @@ const MealPlanTab: React.FC = () => {
       {/* AI Modal */}
       {isAIModalOpen && (
           <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
             onClick={(e) => {
                 if (e.target === e.currentTarget) setIsAIModalOpen(false);
             }}
