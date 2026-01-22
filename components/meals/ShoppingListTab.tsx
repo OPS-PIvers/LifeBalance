@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare, Download } from 'lucide-react';
 import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -11,6 +11,7 @@ import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { Modal } from '@/components/ui/Modal';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import toast from 'react-hot-toast';
+import { generateCsvExport } from '@/utils/exportUtils';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -247,6 +248,24 @@ const ShoppingListTab: React.FC = () => {
     }
   };
 
+  const handleExport = () => {
+    if (shoppingList.length === 0) {
+      toast.error("Shopping list is empty");
+      return;
+    }
+
+    const exportData = shoppingList.map(item => ({
+      Name: item.name,
+      Category: item.category || 'Uncategorized',
+      Quantity: item.quantity || '',
+      Store: item.store || '',
+      Status: item.isPurchased ? 'Purchased' : 'Pending'
+    }));
+
+    generateCsvExport(exportData, 'shopping-list-export');
+    toast.success("Export started");
+  };
+
   const handleBatchPurchase = async () => {
     if (selectedIds.size === 0) return;
     setIsBatchProcessing(true);
@@ -361,13 +380,24 @@ const ShoppingListTab: React.FC = () => {
             {/* Actions: Settings & Selection Toggle */}
             <div className={`flex justify-end gap-2 ${stores.length === 0 && !isSelectionMode ? 'w-full' : 'ml-auto'}`}>
                  {!isSelectionMode && (
-                    <button
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
-                        aria-label="Shopping List Settings"
-                    >
-                        <Settings className="w-5 h-5" />
-                    </button>
+                    <>
+                        <button
+                            onClick={handleExport}
+                            disabled={shoppingList.length === 0}
+                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                            title="Export to CSV"
+                            aria-label="Export to CSV"
+                        >
+                            <Download className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                            aria-label="Shopping List Settings"
+                        >
+                            <Settings className="w-5 h-5" />
+                        </button>
+                    </>
                  )}
                  <button
                     onClick={() => setIsSelectionMode(!isSelectionMode)}

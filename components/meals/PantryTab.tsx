@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
-import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X, Layers, CheckSquare, ShoppingCart } from 'lucide-react';
+import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X, Layers, CheckSquare, ShoppingCart, Download } from 'lucide-react';
 import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
+import { generateCsvExport } from '@/utils/exportUtils';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -94,6 +95,25 @@ const PantryTab: React.FC = () => {
     } else {
       setSelectedIds(new Set(pantry.map(i => i.id)));
     }
+  };
+
+  const handleExport = () => {
+    if (pantry.length === 0) {
+      toast.error("Pantry is empty");
+      return;
+    }
+
+    const exportData = pantry.map(item => ({
+      Name: item.name,
+      Category: item.category || 'Uncategorized',
+      Quantity: item.quantity || '',
+      'Purchase Date': item.purchaseDate || '',
+      'Notes': item.notes || '',
+      'Location': item.location || ''
+    }));
+
+    generateCsvExport(exportData, 'pantry-export');
+    toast.success("Export started");
   };
 
   const handleBatchRestock = async () => {
@@ -243,6 +263,15 @@ const PantryTab: React.FC = () => {
         <div className="flex gap-2">
            {!isSelectionMode && (
              <>
+               <button
+                 onClick={handleExport}
+                 disabled={pantry.length === 0}
+                 className="p-2 text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-lg disabled:opacity-50 transition-colors"
+                 title="Export pantry to CSV"
+                 aria-label="Export pantry to CSV"
+               >
+                 <Download className="w-5 h-5" />
+               </button>
                <button
                  onClick={handleOptimize}
                  disabled={isOptimizing || pantry.length === 0}
