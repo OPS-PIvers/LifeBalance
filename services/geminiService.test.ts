@@ -107,6 +107,31 @@ describe('geminiService', () => {
     expect(result.actions).toEqual([]);
   });
 
+  it('generateInsight includes previous insights in prompt', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    const mockInsightData = {
+      text: "New insight.",
+      actions: []
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockInsightData)
+    });
+
+    const previousInsights = ["Old insight 1", "Old insight 2"];
+    await generateInsight('test-household-id', [], [], previousInsights);
+
+    expect(generateContentMock).toHaveBeenCalled();
+    // Check if the prompt (which is inside contents.parts[0].text) contains the previous insights
+    const callArgs = generateContentMock.mock.calls[0][0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).toContain("PREVIOUS INSIGHTS");
+    expect(promptText).toContain("Old insight 1");
+    expect(promptText).toContain("Old insight 2");
+  });
+
   it('parseMagicAction correctly parses transaction', async () => {
     const { parseMagicAction } = await import('./geminiService');
 

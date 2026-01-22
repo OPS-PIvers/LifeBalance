@@ -116,10 +116,15 @@ const incrementAiUsage = async (householdId: string, modelName: string) => {
  * AI Prompt template for generating household insights.
  * This can be easily modified or A/B tested without changing function logic.
  */
-const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string) => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
+const INSIGHT_GENERATION_PROMPT = (transactions: string, habits: string, previousInsights: string = "") => `Analyze this household data to provide ONE concise, helpful, and digestible insight.
 The insight should be deep and actionable, not just a basic observation.
 Focus on patterns between spending and habits if possible, or interesting trends in either.
 Keep the 'text' under 30 words.
+
+${previousInsights ? `
+PREVIOUS INSIGHTS (Do not repeat these. Instead, expand on them with new analysis, look for different patterns, or provide a completely new insight):
+${previousInsights}
+` : ''}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
 - 'update_bucket': If spending consistently exceeds limits. Payload: { "bucketName": "CategoryName", "newLimit": number }
@@ -678,6 +683,7 @@ export const optimizeGroceryList = async (
  * @param householdId - The household ID for quota tracking
  * @param transactions - List of recent transactions
  * @param habits - List of habits with completion data
+ * @param previousInsights - List of previous insight texts to avoid repetition
  * @param options - Optional configuration for insight generation
  * @param options.includeMerchantNames - If true, includes merchant names in the data sent to AI (default: true)
  * @param _aiClient - Optional injected AI client for testing purposes.
@@ -686,6 +692,7 @@ export const generateInsight = async (
   householdId: string,
   transactions: Transaction[],
   habits: Habit[],
+  previousInsights: string[] = [],
   options?: { includeMerchantNames?: boolean },
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
@@ -706,9 +713,14 @@ export const generateInsight = async (
       completedDates: h.completedDates.slice(0, 10) // last 10 dates
     }));
 
+    const previousInsightsStr = previousInsights.length > 0
+      ? previousInsights.map(t => `- "${t}"`).join('\n')
+      : '';
+
     const prompt = INSIGHT_GENERATION_PROMPT(
       JSON.stringify(simplifiedTransactions),
-      JSON.stringify(simplifiedHabits)
+      JSON.stringify(simplifiedHabits),
+      previousInsightsStr
     );
 
     return await generateJsonContent<{ text: string, actions?: InsightAction[] }>(

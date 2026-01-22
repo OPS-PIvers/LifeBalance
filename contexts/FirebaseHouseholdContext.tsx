@@ -2981,7 +2981,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Dynamically load Gemini service only when needed
       const { generateInsight } = await import('@/services/geminiService');
-      const { text, actions } = await generateInsight(householdId, transactions, habits);
+
+      // Get last 3 previous insights to avoid repetition
+      const previousInsightsTexts = insightsHistory
+        .slice(0, 3)
+        .map(i => i.text);
+
+      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
 
       const newInsight: Omit<Insight, 'id'> = {
         text,
