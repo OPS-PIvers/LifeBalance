@@ -1462,8 +1462,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Assign pay period ID based on paycheck approval
     const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
+    const sanitizedTx = sanitizeFirestoreData(tx);
     await addDoc(collection(db, `households/${householdId}/transactions`), {
-      ...tx,
+      ...sanitizedTx,
       payPeriodId,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
