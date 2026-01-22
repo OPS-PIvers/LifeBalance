@@ -62,7 +62,7 @@ import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
-import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
+import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -515,6 +515,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               const expenseCategories = bucketsRef.current.map(b => b.name);
 
               // Parse with Gemini
+              // Dynamically load to prevent circular dependency and bundle bloat
+              const { parseNaturalLanguageCommand } = await import('@/services/geminiService');
               const parsed = await parseNaturalLanguageCommand(
                 householdId,
                 item.text,
@@ -1463,8 +1465,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Assign pay period ID based on paycheck approval
     const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
+    const sanitizedTx = sanitizeFirestoreData(tx);
     await addDoc(collection(db, `households/${householdId}/transactions`), {
-      ...tx,
+      ...sanitizedTx,
       payPeriodId,
       createdBy: user.uid,
       createdAt: serverTimestamp(),
@@ -2981,7 +2984,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Dynamically load Gemini service only when needed
       const { generateInsight } = await import('@/services/geminiService');
-      const { text, actions } = await generateInsight(householdId, transactions, habits);
+
+      // Get last 3 previous insights to avoid repetition
+      const previousInsightsTexts = insightsHistory
+        .slice(0, 3)
+        .map(i => i.text);
+
+      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
 
       const newInsight: Omit<Insight, 'id'> = {
         text,

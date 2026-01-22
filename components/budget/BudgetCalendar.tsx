@@ -175,14 +175,23 @@ const BudgetCalendar: React.FC = () => {
               onClick={handleExport}
               className="p-1 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 mr-2"
               title="Export this month to CSV"
+              aria-label="Export this month to CSV"
             >
               <Download size={20} />
             </button>
             <div className="w-px h-6 bg-brand-100 my-auto mx-1" />
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))} className="p-1 hover:bg-brand-50 rounded-lg">
+            <button
+              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
+              className="p-1 hover:bg-brand-50 rounded-lg"
+              aria-label="Previous month"
+            >
               <ChevronLeft size={20} className="text-brand-400" />
             </button>
-            <button onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))} className="p-1 hover:bg-brand-50 rounded-lg">
+            <button
+              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
+              className="p-1 hover:bg-brand-50 rounded-lg"
+              aria-label="Next month"
+            >
               <ChevronRight size={20} className="text-brand-400" />
             </button>
           </div>
@@ -318,13 +327,18 @@ const BudgetCalendar: React.FC = () => {
 
                     {/* Edit/Delete (visible mostly on hover in desktop, but always accessible) */}
                     {!item.isPaid && (
-                      <button onClick={() => openEditModal(item)} className="p-1 text-brand-300 hover:text-brand-600">
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="p-1 text-brand-300 hover:text-brand-600"
+                        aria-label={`Edit ${item.title}`}
+                      >
                         <Edit2 size={14} />
                       </button>
                     )}
                     <button
                       onClick={() => deleteCalendarItem(item.id)}
                       className="p-1 text-brand-300 hover:text-money-neg"
+                      aria-label={`Delete ${item.title}`}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -347,7 +361,9 @@ const BudgetCalendar: React.FC = () => {
             <h3 className="font-bold text-lg text-brand-800">
               {editingItem ? 'Edit Event' : 'Add Calendar Item'}
             </h3>
-            <button onClick={() => setIsAddModalOpen(false)}><X size={20} className="text-brand-400" /></button>
+            <button onClick={() => setIsAddModalOpen(false)} aria-label="Close modal">
+              <X size={20} className="text-brand-400" />
+            </button>
           </div>
 
           <div className="space-y-4">

@@ -105,7 +105,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-8 pb-24">
+      <div className="fixed inset-0 z-modal flex items-start justify-center p-4 pt-8 pb-24">
         {/* Backdrop */}
         <div
           className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm"

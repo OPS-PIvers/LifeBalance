@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare } from 'lucide-react';
-import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
+import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
@@ -120,6 +120,7 @@ const ShoppingListTab: React.FC = () => {
         if (!householdId) throw new Error("Household ID not found");
         setIsProcessingReceipt(true);
         const base64 = await fileToBase64(file);
+        const { parseGroceryReceipt } = await import('@/services/geminiService');
         const items = await parseGroceryReceipt(householdId, base64, categories);
 
         // Add all found items concurrently for better performance
@@ -596,7 +597,7 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Floating Action Bar (FAB) for Batch Actions */}
         {isSelectionMode && selectedIds.size > 0 && (
-            <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
+            <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
             <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
                 <div className="px-3 font-bold text-sm border-r border-brand-700">
                 {selectedIds.size} selected
@@ -674,7 +675,7 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Edit Modal */}
         {editingItem && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
+            <div className="fixed inset-0 z-modal flex items-center justify-center p-4 pb-24 sm:pb-4">
                 <div
                     className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                     onClick={() => setEditingItem(null)}

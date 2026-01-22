@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
-import { analyzeHabitPoints, HabitPointAdjustmentSuggestion } from '@/services/geminiService';
+import { HabitPointAdjustmentSuggestion } from '@/services/geminiService';
 import toast from 'react-hot-toast';
 
 interface SmartHabitAdjustModalProps {
@@ -23,6 +23,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
         setIsLoading(true);
         setError(null);
         try {
+          const { analyzeHabitPoints } = await import('@/services/geminiService');
           const results = await analyzeHabitPoints(householdId, habits);
           setSuggestions(results);
         } catch (err) {

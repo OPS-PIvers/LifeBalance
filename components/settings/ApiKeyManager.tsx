@@ -175,6 +175,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                     size="icon"
                     onClick={() => handleRevokeKey(key.id, key.name)}
                     title="Revoke key"
+                    aria-label={`Revoke key ${key.name}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -342,6 +343,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   size="icon"
                   onClick={() => handleDeleteKey(key.id, key.name)}
                   title="Delete permanently"
+                  aria-label={`Delete key ${key.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>

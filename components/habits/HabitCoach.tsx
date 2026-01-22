@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { analyzeHabitPatterns, HabitPatternInsight } from '@/services/geminiService';
+import { HabitPatternInsight } from '@/services/geminiService';
 import { Sparkles, Trophy, TrendingUp, AlertCircle, RefreshCw, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -14,6 +14,7 @@ export const HabitCoach: React.FC = () => {
     if (!householdId) return;
     setLoading(true);
     try {
+      const { analyzeHabitPatterns } = await import('@/services/geminiService');
       const results = await analyzeHabitPatterns(householdId, habits);
       setInsights(results);
       setHasRun(true);
