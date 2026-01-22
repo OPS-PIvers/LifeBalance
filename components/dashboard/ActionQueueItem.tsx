@@ -1,4 +1,3 @@
-/* eslint-disable react/prop-types */
 import React, { useState, useMemo, memo } from 'react';
 import {
   CalendarClock, Receipt, X, Check, Trash2, Clock, ListTodo, AlertCircle, Sparkles, Pencil, Save
