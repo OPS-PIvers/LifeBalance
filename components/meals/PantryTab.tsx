@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { PantryItem } from '@/types/schema';
 import { Plus, Trash2, Edit2, Camera, Loader2, Sparkles, X, Layers, CheckSquare, ShoppingCart } from 'lucide-react';
-import { analyzePantryImage, OptimizableItem } from '@/services/geminiService';
+import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { Modal } from '../ui/Modal';
@@ -202,6 +202,7 @@ const PantryTab: React.FC = () => {
       if (!householdId) throw new Error("Household ID not found");
       setIsProcessingImage(true);
       const base64 = await fileToBase64(file);
+      const { analyzePantryImage } = await import('@/services/geminiService');
       const items = await analyzePantryImage(householdId, base64, availableCategories);
 
       // Add all found items concurrently, handling partial failures

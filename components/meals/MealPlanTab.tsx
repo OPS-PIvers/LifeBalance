@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
-import { suggestMeal } from '@/services/geminiService';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
@@ -388,6 +387,7 @@ const MealPlanTab: React.FC = () => {
     }
     setIsGeneratingAI(true);
     try {
+        const { suggestMeal } = await import('@/services/geminiService');
         const suggestion = await suggestMeal(householdId, {
             usePantry: aiOptions.usePantry,
             cheap: aiOptions.cheap,

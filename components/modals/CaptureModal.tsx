@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { analyzeReceipt, parseBankStatement, parseMagicAction, ReceiptData } from '../../services/geminiService';
+import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
@@ -104,6 +104,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         groceryCategories: GROCERY_CATEGORIES,
         todayDate: getLocalDateString()
       };
+
+      const { parseMagicAction } = await import('../../services/geminiService');
       const result = await parseMagicAction(householdId, magicInput, context);
 
       if (result.type === 'transaction') {
@@ -257,6 +259,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setProcessingMessage('Scanning receipt...');
       try {
         if (!householdId) throw new Error("Household ID not found");
+        const { analyzeReceipt } = await import('../../services/geminiService');
         const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles);
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
@@ -312,6 +315,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setProcessingMessage('Extracting transactions...');
     try {
       if (!householdId) throw new Error("Household ID not found");
+      const { parseBankStatement, analyzeReceipt } = await import('../../services/geminiService');
       const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');

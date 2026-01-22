@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare } from 'lucide-react';
-import { parseGroceryReceipt, OptimizableItem } from '@/services/geminiService';
+import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
@@ -120,6 +120,7 @@ const ShoppingListTab: React.FC = () => {
         if (!householdId) throw new Error("Household ID not found");
         setIsProcessingReceipt(true);
         const base64 = await fileToBase64(file);
+        const { parseGroceryReceipt } = await import('@/services/geminiService');
         const items = await parseGroceryReceipt(householdId, base64, categories);
 
         // Add all found items concurrently for better performance
