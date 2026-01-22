@@ -107,6 +107,31 @@ describe('geminiService', () => {
     expect(result.actions).toEqual([]);
   });
 
+  it('generateInsight includes previous insights in prompt', async () => {
+    const { generateInsight } = await import('./geminiService');
+
+    const mockInsightData = {
+      text: "New insight.",
+      actions: []
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockInsightData)
+    });
+
+    const previousInsights = ["Old insight 1", "Old insight 2"];
+    await generateInsight('test-household-id', [], [], previousInsights);
+
+    expect(generateContentMock).toHaveBeenCalled();
+    // Check if the prompt (which is inside contents.parts[0].text) contains the previous insights
+    const callArgs = generateContentMock.mock.calls[0][0];
+    const promptText = callArgs.contents.parts[0].text;
+
+    expect(promptText).toContain("PREVIOUS INSIGHTS");
+    expect(promptText).toContain("Old insight 1");
+    expect(promptText).toContain("Old insight 2");
+  });
+
   it('parseMagicAction correctly parses transaction', async () => {
     const { parseMagicAction } = await import('./geminiService');
 
@@ -342,5 +367,64 @@ describe('geminiService', () => {
     if (result.detectedType === 'shopping') {
         expect(result.items).toHaveLength(1);
     }
+  });
+
+  it('analyzeReceipt prompt includes correct date from local time', async () => {
+    const { analyzeReceipt } = await import('./geminiService');
+
+    // Mock date to 2026-02-15
+    const mockDate = new Date(2026, 1, 15); // Month is 0-indexed (1 = Feb)
+    vi.useFakeTimers();
+    vi.setSystemTime(mockDate);
+
+    const mockResponse = {
+        merchant: 'Target',
+        amount: 25.00,
+        category: 'Shopping'
+    };
+
+    generateContentMock.mockResolvedValue({
+        text: JSON.stringify(mockResponse)
+    });
+
+    await analyzeReceipt('test-id', 'base64-img');
+
+    // Verify the prompt sent to Gemini contains the date
+    // We access the first argument of the first call, which is the model options/config object
+    const callArgs = generateContentMock.mock.calls[0][0];
+    const promptText = callArgs.contents.parts[1].text; // The second part is text
+
+    expect(promptText).toContain("Today's date is 2026-02-15");
+
+    vi.useRealTimers();
+  });
+
+  it('parseBankStatement prompt includes correct date from local time', async () => {
+    const { parseBankStatement } = await import('./geminiService');
+
+    // Mock date to 2026-03-10
+    const mockDate = new Date(2026, 2, 10);
+    vi.useFakeTimers();
+    vi.setSystemTime(mockDate);
+
+    const mockResponse = [{
+        merchant: 'Starbucks',
+        amount: 5.50,
+        category: 'Dining',
+        date: '2026-03-10'
+    }];
+
+    generateContentMock.mockResolvedValue({
+        text: JSON.stringify(mockResponse)
+    });
+
+    await parseBankStatement('test-id', 'base64-img');
+
+    const callArgs = generateContentMock.mock.calls[0][0];
+    const promptText = callArgs.contents.parts[1].text;
+
+    expect(promptText).toContain("Today's date is 2026-03-10");
+
+    vi.useRealTimers();
   });
 });

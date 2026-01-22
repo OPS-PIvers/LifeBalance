@@ -84,7 +84,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pb-24 sm:pb-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4 pb-24 sm:pb-4">
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
@@ -193,7 +193,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
       {/* Nested Edit Modal */}
       {editingItem && (
-        <div className="absolute inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="absolute inset-0 z-popover flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 animate-in zoom-in-95">
             <h4 className="text-lg font-bold text-gray-800 mb-4">Edit History Item</h4>
 

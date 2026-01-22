@@ -24,3 +24,8 @@
 **Weed:** "Rot Pattern" - Blanket `/* eslint-disable */` in `contexts/FirebaseHouseholdContext.tsx`.
 **Root Cause:** Rapid development and legacy migration logic (using `any`) led to disabling all lint checks to suppress errors, hiding potential bugs and unused variables.
 **Plan:** Removed the blanket disable. Fixed unused variables (`progress`, `id`). Added `householdSettings` and `buckets` to `useEffect` dependency arrays to prevent stale closures. Used granular `eslint-disable-next-line` for legacy migration functions involving `any`.
+
+### 2026-02-27 - Magic Strings in Calendar Recurrence IDs
+**Weed:** "Magic Strings" - Recurring calendar items relied on fragile string splitting with `'-202'` and manual checks in `FirebaseHouseholdContext.tsx` and `BudgetCalendar.tsx`.
+**Root Cause:** Logic for synthetic ID generation was leaked into consumers instead of being encapsulated.
+**Plan:** Encapsulated ID generation and parsing into `generateRecurringId`, `isRecurringId`, and `parseRecurringId` in `utils/calendarRecurrence.ts`. Updated consumers to use these helpers.

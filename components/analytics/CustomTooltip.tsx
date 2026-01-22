@@ -21,7 +21,7 @@ export interface CustomTooltipProps {
 export const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, formatter, suffix = '' }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-2xl z-50">
+      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-2xl z-dropdown">
         <p className="text-slate-400 text-xs font-bold mb-1">{label}</p>
         {payload.map((entry, index) => (
           <div key={`${entry.name ?? 'entry'}-${index}`} className="flex items-center gap-2 text-sm">
