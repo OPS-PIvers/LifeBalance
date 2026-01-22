@@ -61,7 +61,7 @@ import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/h
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
-import { expandCalendarItems } from '@/utils/calendarRecurrence';
+import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
@@ -1207,9 +1207,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || !user) return;
 
     // Parse synthetic ID to get template ID and date
-    const parts = syntheticId.split('-202');
-    const parentRecurringId = parts[0];
-    const specificDate = '202' + parts[1];
+    const parsed = parseRecurringId(syntheticId);
+    if (!parsed) return;
+    const { templateId: parentRecurringId, date: specificDate } = parsed;
 
     // Find the recurring template to get item details
     const template = calendarItems.find(i => i.id === parentRecurringId);
@@ -1246,7 +1246,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
 
     // Check if this is a recurring instance (synthetic ID with date suffix)
-    const isRecurringInstance = id.includes('-202');
+    const isRecurringInstance = isRecurringId(id);
 
     if (isRecurringInstance) {
       // Delete only this instance, not the entire series
@@ -1264,8 +1264,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const account = accounts.find(a => a.id === accountId);
     if (!account) return;
 
-    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
-    const isRecurringInstance = itemId.includes('-202');
+    // Check if this is a recurring instance
+    const isRecurringInstance = isRecurringId(itemId);
 
     let item: CalendarItem | undefined;
     let parentRecurringId: string | undefined;
@@ -1273,9 +1273,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     if (isRecurringInstance) {
       // Parse synthetic ID to get original template ID and date
-      const parts = itemId.split('-202');
-      parentRecurringId = parts[0];
-      specificDate = '202' + parts[1]; // Reconstruct the date part
+      const parsed = parseRecurringId(itemId);
+      if (!parsed) return;
+      parentRecurringId = parsed.templateId;
+      specificDate = parsed.date;
 
       // Find the recurring template
       const template = calendarItems.find(i => i.id === parentRecurringId);
@@ -1393,17 +1394,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       return format(newDate, 'yyyy-MM-dd');
     };
 
-    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
-    const isRecurringInstance = itemId.includes('-202');
+    // Check if this is a recurring instance
+    const isRecurringInstance = isRecurringId(itemId);
 
     if (isRecurringInstance) {
       // For recurring instances:
       // 1. Create a one-time deferred item
       // 2. Hide (delete) the original recurring instance to prevent duplication
 
-      const parts = itemId.split('-202');
-      const parentRecurringId = parts[0];
-      const specificDate = '202' + parts[1];
+      const parsed = parseRecurringId(itemId);
+      if (!parsed) return;
+      const { templateId: parentRecurringId, date: specificDate } = parsed;
 
       // Find the recurring template
       const template = calendarItems.find(i => i.id === parentRecurringId);
