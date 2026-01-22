@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateRecurringInstances, expandCalendarItems } from './calendarRecurrence';
+import { generateRecurringInstances, expandCalendarItems, generateRecurringId, isRecurringId, parseRecurringId } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';
 
 describe('calendarRecurrence', () => {
@@ -13,6 +13,43 @@ describe('calendarRecurrence', () => {
     isPaid: false,
     isDeleted: false,
   };
+
+  describe('ID Helper Functions', () => {
+    it('generates consistent IDs', () => {
+        const id = generateRecurringId('template-1', '2024-01-01');
+        expect(id).toBe('template-1_instance_2024-01-01');
+    });
+
+    it('identifies recurring IDs correctly', () => {
+        expect(isRecurringId('template-1_instance_2024-01-01')).toBe(true);
+        expect(isRecurringId('template-1-2024-01-01')).toBe(false); // Old format
+        expect(isRecurringId('normal-id')).toBe(false);
+    });
+
+    it('parses recurring IDs correctly', () => {
+        const parsed = parseRecurringId('template-1_instance_2024-01-01');
+        expect(parsed).toEqual({
+            templateId: 'template-1',
+            date: '2024-01-01'
+        });
+    });
+
+    it('returns null for invalid IDs', () => {
+        expect(parseRecurringId('invalid-id')).toBeNull();
+    });
+
+    it('handles IDs containing the separator in the template ID (edge case)', () => {
+        // Technically possible if a user somehow creates an ID with '_instance_' in it
+        const id = generateRecurringId('weird_instance_id', '2024-01-01');
+        expect(id).toBe('weird_instance_id_instance_2024-01-01');
+
+        const parsed = parseRecurringId(id);
+        expect(parsed).toEqual({
+            templateId: 'weird_instance_id',
+            date: '2024-01-01'
+        });
+    });
+  });
 
   describe('generateRecurringInstances', () => {
     it('returns empty array for non-recurring item outside range', () => {
@@ -34,7 +71,7 @@ describe('calendarRecurrence', () => {
       expect(result[0].id).toBe(baseItem.id);
     });
 
-    it('generates weekly instances correctly', () => {
+    it('generates weekly instances correctly with new ID format', () => {
       const weeklyItem: CalendarItem = {
         ...baseItem,
         isRecurring: true,
@@ -52,7 +89,7 @@ describe('calendarRecurrence', () => {
       expect(result[1].date).toBe('2024-01-08');
       expect(result[2].date).toBe('2024-01-15');
       // Check ID generation format
-      expect(result[1].id).toContain('2024-01-08');
+      expect(result[1].id).toBe('test-item-1_instance_2024-01-08');
     });
 
     it('generates bi-weekly instances correctly', () => {

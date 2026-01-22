@@ -4,7 +4,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
-import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
@@ -62,20 +62,20 @@ const BudgetCalendar: React.FC = () => {
   };
 
   // Helper to check if an item is a generated recurring instance (vs. the original)
-  const isRecurringInstance = (item: CalendarItem): boolean => {
-    return item.isRecurring === true && item.id.includes('-202'); // Synthetic IDs contain date like "-2024-01-15"
+  const isInstance = (item: CalendarItem): boolean => {
+    return item.isRecurring === true && isRecurringId(item.id);
   };
 
   // Helper to find the original calendar item for a recurring instance
   const findOriginalItem = (instanceId: string): CalendarItem | undefined => {
-    // Extract original ID (everything before the date suffix)
-    const originalId = instanceId.split('-202')[0]; // Split on "-202" to get base ID
-    return calendarItems.find(item => item.id === originalId);
+    const parsed = parseRecurringId(instanceId);
+    if (!parsed) return undefined;
+    return calendarItems.find(item => item.id === parsed.templateId);
   };
 
   const openEditModal = (item: CalendarItem) => {
     // If this is a recurring instance, edit the original item instead
-    const itemToEdit = isRecurringInstance(item) ? findOriginalItem(item.id) || item : item;
+    const itemToEdit = isInstance(item) ? findOriginalItem(item.id) || item : item;
 
     setTitle(itemToEdit.title);
     setAmount(itemToEdit.amount.toString());
