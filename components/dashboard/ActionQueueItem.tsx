@@ -85,7 +85,8 @@ const areActionQueueItemPropsEqual = (
   if (isCalendarQueueItem(prev.item) && isCalendarQueueItem(next.item)) {
        return prev.item.amount === next.item.amount &&
              prev.item.title === next.item.title &&
-             prev.item.date === next.item.date;
+             prev.item.date === next.item.date &&
+             prev.item.type === next.item.type;
   }
 
   if (isTodoQueueItem(prev.item) && isTodoQueueItem(next.item)) {
