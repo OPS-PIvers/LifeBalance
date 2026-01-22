@@ -145,6 +145,7 @@ export interface Habit {
   presetId?: string; // If from a preset, stores the preset ID
   isCustom?: boolean; // true = user-created, false/undefined = from preset
   effortLevel?: EffortLevel; // Effort level for the habit
+  order?: number; // Display order for sorting
 
   // Legacy/Optional
   weatherSensitive: boolean;

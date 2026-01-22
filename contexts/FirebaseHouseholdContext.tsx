@@ -146,6 +146,7 @@ export interface HouseholdContextType {
   addHabit: (habit: Habit) => Promise<void>;
   updateHabit: (habit: Habit) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
+  reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
   toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
   resetHabit: (id: string) => Promise<void>;
 
@@ -1707,6 +1708,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
+    if (!householdId) return;
+    try {
+      const batch = writeBatch(db);
+      updates.forEach(({ id, order, category }) => {
+        const habitRef = doc(db, `households/${householdId}/habits`, id);
+        const updateData: { order: number; category?: string } = { order };
+        if (category) {
+          updateData.category = category;
+        }
+        batch.update(habitRef, updateData);
+      });
+      await batch.commit();
+      toast.success('Habits reordered');
+    } catch (error) {
+      console.error('[reorderHabits] Failed:', error);
+      toast.error('Failed to reorder habits');
+      throw error;
+    }
+  }, [householdId]);
+
   const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
     if (!householdId || !currentUser || !householdSettings) return;
 
@@ -3076,6 +3098,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addHabit,
     updateHabit,
     deleteHabit,
+    reorderHabits,
     toggleHabit,
     resetHabit,
     addHabitSubmission,
@@ -3130,7 +3153,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction,
-    addHabit, updateHabit, deleteHabit, toggleHabit, resetHabit,
+    addHabit, updateHabit, deleteHabit, reorderHabits, toggleHabit, resetHabit,
     addHabitSubmission, updateHabitSubmission, deleteHabitSubmission, getHabitSubmissions,
     updateChallenge, markChallengeComplete, redeemReward, refreshInsight,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,

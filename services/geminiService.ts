@@ -1335,3 +1335,99 @@ If no amount found, return { "error": "No amount found" }`;
     throw new Error("Failed to parse command. Please try again.");
   }
 };
+
+export interface HabitReorganizationPlan {
+  habits: {
+    id: string;
+    category: string;
+    order: number;
+  }[];
+  reasoning: string;
+}
+
+/**
+ * Reorganizes habits into logical categories and sorts them.
+ * @param householdId - The household ID for quota tracking
+ * @param habits - List of habits to reorganize
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const reorganizeHabits = async (
+  householdId: string,
+  habits: Habit[],
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<HabitReorganizationPlan> => {
+  // Test Mode Bypass
+  if (import.meta.env.VITE_ENABLE_TEST_MODE === 'true' && !_aiClient) {
+    return {
+      habits: habits.map((h, i) => ({
+        id: h.id,
+        category: i % 2 === 0 ? 'Mock Morning' : 'Mock Evening',
+        order: i
+      })),
+      reasoning: "This is a mock reorganization plan for testing purposes."
+    };
+  }
+
+  if (habits.length === 0) return { habits: [], reasoning: "No habits to reorganize." };
+
+  try {
+    const habitData = habits.map(h => ({
+      id: h.id,
+      title: h.title,
+      category: h.category,
+      type: h.type,
+      basePoints: h.basePoints,
+      period: h.period,
+      count: h.count,
+      totalCount: h.totalCount
+    }));
+
+    const habitsJson = JSON.stringify(habitData);
+
+    const prompt = `
+      You are an expert productivity coach and organizer. I will provide a list of habits.
+      Your goal is to reorganize and recategorize them to create a perfect daily flow.
+
+      1. **Categories:** Group habits into logical categories (e.g., "Morning Routine", "Health & Fitness", "Evening Wind Down", "Work/Focus", "Chores"). Rename existing categories if a better name exists.
+      2. **Ordering:** Sort habits within each category in a logical execution order (e.g., wake up -> brush teeth -> coffee).
+      3. **Prioritization:** Put the most important or frequent habits earlier in the list.
+
+      Analyze these habits:
+      ${habitsJson}
+
+      Return a JSON object with:
+      - habits: Array of objects { id, category, order }. "order" should be a number (0, 1, 2...) representing the sort order. The order should be global or per category (it doesn't matter as long as sorting by it produces the desired result). Let's use a global order: 0 is the very first habit in the first category, 1 is the next, etc.
+      - reasoning: Brief explanation of the new structure (e.g., "I grouped morning tasks together and moved health habits to the top for better visibility.").
+    `;
+
+    return await generateJsonContent<HabitReorganizationPlan>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          habits: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                category: { type: Type.STRING },
+                order: { type: Type.NUMBER }
+              },
+              required: ["id", "category", "order"]
+            }
+          },
+          reasoning: { type: Type.STRING }
+        },
+        required: ["habits", "reasoning"]
+      },
+      _aiClient,
+      'gemini-3-flash-preview'
+    );
+
+  } catch (error) {
+    console.error("Gemini Habit Reorganization Error:", error);
+    throw new Error("Failed to reorganize habits.");
+  }
+};
