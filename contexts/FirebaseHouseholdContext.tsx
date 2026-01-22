@@ -1460,30 +1460,40 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: TRANSACTIONS ---
 
   const addTransaction = useCallback(async (tx: Transaction) => {
-    if (!householdId || !user) return;
-
-    // Assign pay period ID based on paycheck approval
-    const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
-
-    const sanitizedTx = sanitizeFirestoreData(tx);
-    await addDoc(collection(db, `households/${householdId}/transactions`), {
-      ...sanitizedTx,
-      payPeriodId,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-    });
-
-    // Update checking account balance
-    const checkingAcc = accounts.find(a => a.type === 'checking');
-    if (checkingAcc) {
-      await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-        balance: checkingAcc.balance - tx.amount,
-        lastUpdated: serverTimestamp(),
-      });
+    if (!householdId) {
+      throw new Error('No household selected. Please create or join a household first.');
+    }
+    if (!user) {
+      throw new Error('User not authenticated. Please sign in again.');
     }
 
-    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-    // The bucketSpentMap effect will automatically recalculate when transactions change
+    try {
+      // Assign pay period ID based on paycheck approval
+      const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
+
+      const sanitizedTx = sanitizeFirestoreData(tx);
+      await addDoc(collection(db, `households/${householdId}/transactions`), {
+        ...sanitizedTx,
+        payPeriodId,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+
+      // Update checking account balance
+      const checkingAcc = accounts.find(a => a.type === 'checking');
+      if (checkingAcc) {
+        await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          balance: checkingAcc.balance - tx.amount,
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+      // The bucketSpentMap effect will automatically recalculate when transactions change
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      throw error; // Re-throw to let caller handle
+    }
   }, [householdId, user, householdSettings, accounts]);
 
   const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[]) => {

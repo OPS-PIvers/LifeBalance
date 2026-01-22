@@ -394,6 +394,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.error("Please fill in required fields");
       return;
     }
+
+    // Validate merchant is not just whitespace
+    const trimmedMerchant = merchant.trim();
+    if (!trimmedMerchant) {
+      toast.error("Please enter a merchant name");
+      return;
+    }
+
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       toast.error("Please enter a valid amount");
@@ -414,7 +422,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       amount: parsedAmount,
-      merchant,
+      merchant: trimmedMerchant,
       category,
       date: transactionDate,
       status: isFuture ? 'pending_review' : 'verified',
@@ -429,7 +437,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.success("Transaction saved!");
       handleClose();
     } catch (error) {
-      toast.error("Failed to save transaction");
+      console.error("Failed to save transaction:", error);
+      toast.error(`Failed to save transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
