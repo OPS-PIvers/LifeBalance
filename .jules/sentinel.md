@@ -57,3 +57,12 @@
 - `members` (displayName: 50 chars, email: 100 chars, telegramChatId: 50 chars, photoURL: 500 chars, notificationPreferences.time: 10 chars, notificationPreferences.timezone: 100 chars)
 - `habits` (title: 100 chars, category: 50 chars, telegramAlias: 50 chars, presetId: 50 chars)
 - `shoppingList` (name: 100 chars, category: 50 chars)
+
+## 2026-02-05 - [DoS/Data Integrity] Transaction Schema Enforcement
+**Vulnerability:** The `transactions` subcollection fell under a generic wildcard match (`match /{subcollection}/{document}`) which allowed any member to write arbitrary data fields (e.g., massive strings, unexpected types) without validation. This created a risk of Storage Exhaustion (filling documents with 1MB of junk) and Data Integrity issues (saving non-numbers as amounts).
+**Learning:** Generic wildcard rules are dangerous for core data collections. Specific collections must have explicit `match` blocks to enforce schema validation (types, length limits, required fields) at the database level.
+**Prevention:** Added a specific `match /transactions/{transactionId}` block in `firestore.rules` to enforce:
+1.  Type safety (`amount` must be number, `isRecurring` must be boolean).
+2.  Length limits (`merchant` max 100 chars, `category` max 50 chars, `notes` max 500 chars).
+3.  Enum validation (`status` must be 'verified' or 'pending_review').
+4.  Explicitly excluded `transactions` from the generic wildcard match to ensure the new validation rules cannot be bypassed.
