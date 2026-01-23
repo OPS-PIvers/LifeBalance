@@ -112,7 +112,10 @@ service cloud.firestore {
               !request.resource.data.keys().hasAny(['role']) ||
               request.resource.data.role != 'admin'
             )
-          )
+          ) ||
+          // Case 3: Legacy Migration (User already in memberUids)
+          // Allows existing legacy users to backfill their member document
+          (request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []))
         );
 
         // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
