@@ -58,6 +58,11 @@ export const createHousehold = async (userId: string, householdName: string): Pr
       createdAt: serverTimestamp(),
       createdBy: userId,
       memberUids: [userId],
+      points: {
+        daily: 0,
+        weekly: 0,
+        total: 0,
+      },
       freezeBank: {
         current: 0,
         accrued: 0,

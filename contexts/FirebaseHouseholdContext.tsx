@@ -385,13 +385,48 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Members listener
     const membersQuery = query(collection(db, `households/${householdId}/members`));
     unsubscribers.push(
-      onSnapshot(membersQuery, (snapshot) => {
+      onSnapshot(membersQuery, async (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
         setMembers(data);
 
         // Set current user
         const current = data.find(m => m.uid === user?.uid);
-        setCurrentUser(current || null);
+
+        // AUTO-FIX: If current user's member document doesn't exist, create it
+        if (user && !current) {
+          console.warn('[FirebaseHouseholdContext] Member document missing for current user. Auto-creating...');
+          try {
+            // Check if user is the household creator (has permission to create member doc)
+            const householdDoc = await getDoc(doc(db, `households/${householdId}`));
+            if (householdDoc.exists()) {
+              const householdData = householdDoc.data();
+              const isCreator = householdData.createdBy === user.uid;
+              const role = isCreator ? 'admin' : 'member';
+
+              await setDoc(doc(db, `households/${householdId}/members/${user.uid}`), {
+                uid: user.uid,
+                displayName: user.displayName || 'User',
+                email: user.email || '',
+                photoURL: user.photoURL || '',
+                role: role,
+                points: {
+                  daily: 0,
+                  weekly: 0,
+                  total: 0,
+                },
+                joinedAt: serverTimestamp(),
+              });
+
+              console.log('[FirebaseHouseholdContext] Member document auto-created successfully');
+              toast.success('Account setup completed');
+            }
+          } catch (error) {
+            console.error('[FirebaseHouseholdContext] Failed to auto-create member document:', error);
+            toast.error('Failed to complete account setup. Please refresh the page.');
+          }
+        } else {
+          setCurrentUser(current || null);
+        }
       })
     );
 
