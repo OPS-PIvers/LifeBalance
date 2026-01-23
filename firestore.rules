@@ -35,6 +35,10 @@ service cloud.firestore {
       return num is number;
     }
 
+    function isValidOptionalNumber(num) {
+      return num == null || num is number;
+    }
+
     function isValidBoolean(val) {
       return val is bool;
     }
@@ -236,7 +240,22 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (accounts, buckets, calendarItems, pantry, meals, etc.)
+      // Accounts subcollection
+      match /accounts/{accountId} {
+        allow read: if isMemberOf(householdId);
+        // 🛡️ SENTINEL SECURITY FIX: Enforce schema validation for accounts
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidString(request.resource.data.name, 50) &&
+                              request.resource.data.type in ['checking', 'savings', 'credit'] &&
+                              isValidNumber(request.resource.data.balance) &&
+                              isValidString(request.resource.data.lastUpdated, 30) &&
+                              isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
+                              isValidOptionalNumber(request.resource.data.get('order', null));
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (buckets, calendarItems, pantry, meals, etc.)
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded below
       match /{subcollection}/{document} {
@@ -248,7 +267,8 @@ service cloud.firestore {
                      subcollection != 'shoppingList' &&
                      subcollection != 'apiKeys' &&
                      subcollection != 'apiUsage' &&
-                     subcollection != 'transactions';
+                     subcollection != 'transactions' &&
+                     subcollection != 'accounts';
       }
     }
 

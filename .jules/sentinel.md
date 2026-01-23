@@ -66,3 +66,8 @@
 2.  Length limits (`merchant` max 100 chars, `category` max 50 chars, `notes` max 500 chars).
 3.  Enum validation (`status` must be 'verified' or 'pending_review').
 4.  Explicitly excluded `transactions` from the generic wildcard match to ensure the new validation rules cannot be bypassed.
+
+## 2026-02-06 - [DoS/Data Integrity] Accounts Schema Enforcement
+**Vulnerability:** The `accounts` subcollection was covered by a generic wildcard match (`match /{subcollection}/{document}`) which allowed writing arbitrary data without schema validation. This could lead to storage exhaustion (massive strings) or data corruption (invalid types causing frontend crashes).
+**Learning:** Wildcard rules are convenient but dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
+**Prevention:** Explicitly define `match` blocks for all core collections (`accounts`) with strict schema validation using helper functions like `isValidString` and `isValidNumber`, and explicitly exclude them from generic wildcard matches.
