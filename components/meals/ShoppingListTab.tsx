@@ -1,17 +1,17 @@
-/* eslint-disable */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare, Download } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings, Store } from 'lucide-react';
+import { Reorder } from 'framer-motion';
+import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
-import { Modal } from '@/components/ui/Modal';
+import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
-import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
+import toast from 'react-hot-toast';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -30,10 +30,12 @@ const ShoppingListTab: React.FC = () => {
     deleteShoppingItem,
     toggleShoppingItemPurchased,
     updateShoppingItem,
+    reorderShoppingItems,
     addPantryItem,
     clearPurchasedShoppingItems,
     stores,
     groceryCategories,
+    groceryCatalog,
     householdId
   } = useHousehold();
 
@@ -44,35 +46,32 @@ const ShoppingListTab: React.FC = () => {
       : [...GROCERY_CATEGORIES];
   }, [groceryCategories]);
 
-  // Add Form State
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState('Uncategorized');
-  const [newItemStoreId, setNewItemStoreId] = useState<string>('');
+  // Local state for Reorder.Group
+  const [items, setItems] = useState<ShoppingItem[]>([]);
+
+  // Sync local items with context shoppingList, respecting order
+  useEffect(() => {
+    // Sort items by order field, then by creation or name as fallback
+    const sorted = [...shoppingList].sort((a, b) => {
+      const orderA = a.order ?? 9999;
+      const orderB = b.order ?? 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      // Fallback to name
+      return a.name.localeCompare(b.name);
+    });
+    setItems(sorted);
+  }, [shoppingList]);
+
+  // Input State
+  const [newItemText, setNewItemText] = useState('');
 
   // Modal States
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Filter State
-  const [filterStoreId, setFilterStoreId] = useState<string>('all');
-
-  // Batch Mode State
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
-  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
-
   const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
 
-  // Clear selection when mode is toggled off
-  useEffect(() => {
-    if (!isSelectionMode) {
-      setSelectedIds(new Set());
-    }
-  }, [isSelectionMode]);
-
-  // Use the shared grocery optimizer hook
+  // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
     householdId,
     items: shoppingList,
@@ -96,21 +95,64 @@ const ShoppingListTab: React.FC = () => {
     errorMessage: "Failed to optimize your shopping list"
   });
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
+  // Handle Smart Add
+  const handleSmartAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemName) return;
+    const rawName = newItemText.trim();
+    if (!rawName) return;
 
-    // Resolve store name from ID
-    const selectedStore = stores.find(s => s.id === newItemStoreId);
+    // Reset input immediately
+    setNewItemText('');
+
+    // 1. Smart Lookup in History (Grocery Catalog)
+    // Find exact or close match (case-insensitive)
+    const match = groceryCatalog.find(
+        c => c.name.toLowerCase() === rawName.toLowerCase()
+    );
+
+    let category = 'Uncategorized';
+    let store = undefined;
+    let quantity = undefined;
+
+    if (match) {
+        category = match.category;
+        store = match.defaultStore;
+        quantity = match.defaultQuantity;
+    }
+
+    // 2. Add Item
+    // Calculate new order (last + 1)
+    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
 
     await addShoppingItem({
-      name: newItemName,
-      category: newItemCategory,
-      isPurchased: false,
-      store: selectedStore ? selectedStore.name : undefined
+        name: rawName,
+        category,
+        store,
+        quantity,
+        isPurchased: false,
+        order: maxOrder + 1
     });
-    setNewItemName('');
-    // Keep category and store as is for successive adds
+
+    // If we inferred metadata, maybe show a toast?
+    if (store || (category !== 'Uncategorized')) {
+        // Optional feedback, skipping to keep UI clean
+    }
+  };
+
+  const handleReorder = (newOrder: ShoppingItem[]) => {
+    setItems(newOrder);
+    // Debounce or just call it?
+    // For smoother UX, we update local state immediately (above).
+    // Then we trigger the context update.
+    // Ideally we should debounce this if the user is dragging around a lot,
+    // but Reorder.Group onReorder fires once per drag operation usually?
+    // Actually framer-motion calls onReorder on every swap.
+    // We should probably rely on onDragEnd, but Reorder.Group manages the array.
+
+    // We will call the API. The context function creates a batch.
+    // Note: Frequent writes might be rate limited or costly.
+    // But for a shopping list reorder, it's acceptable.
+    reorderShoppingItems(newOrder);
   };
 
   const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,7 +166,7 @@ const ShoppingListTab: React.FC = () => {
         const { parseGroceryReceipt } = await import('@/services/geminiService');
         const items = await parseGroceryReceipt(householdId, base64, categories);
 
-        // Add all found items concurrently for better performance
+        // Add all found items concurrently to Pantry
         const results = await Promise.allSettled(items.map(item =>
           addPantryItem({
             name: item.name,
@@ -155,378 +197,107 @@ const ShoppingListTab: React.FC = () => {
       }
     };
 
-  const handleSaveEdit = useCallback(async () => {
-      if (!editingItem) return;
-      const trimmedName = editingItem.name?.trim();
-      if (!trimmedName) return;
+    const handleSaveEdit = async () => {
+        if (!editingItem) return;
+        if (!editingItem.name.trim()) return;
 
-      // Trim and normalize optional fields
-      const trimmedQuantity = editingItem.quantity?.trim();
-      const normalizedQuantity = trimmedQuantity === '' ? undefined : trimmedQuantity;
-
-      const trimmedStore = editingItem.store?.trim();
-      // Normalize store name against existing stores if possible
-      let normalizedStore = trimmedStore === '' ? undefined : trimmedStore;
-
-      if (normalizedStore) {
-        const matchingStore = stores.find(s => s.name.toLowerCase() === normalizedStore!.toLowerCase());
-        if (matchingStore) {
-            normalizedStore = matchingStore.name;
-        }
-      }
-
-      await updateShoppingItem({
-        ...editingItem,
-        name: trimmedName,
-        quantity: normalizedQuantity,
-        store: normalizedStore,
-      });
-      setEditingItem(null);
-      toast.success('Item updated');
-  }, [editingItem, updateShoppingItem]);
-
-  // Keyboard support for edit modal
-  useEffect(() => {
-    if (!editingItem) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+        await updateShoppingItem(editingItem);
         setEditingItem(null);
-      } else if (e.key === 'Enter' && !e.shiftKey && editingItem.name?.trim()) {
-        e.preventDefault();
-        handleSaveEdit();
-      }
+        toast.success('Updated');
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingItem, handleSaveEdit]);
-
-  // Filter items
-  const filteredItems = useMemo(() => {
-    if (filterStoreId === 'all') return shoppingList;
-
-    // Find the store name to filter by
-    const storeToFilter = stores.find(s => s.id === filterStoreId);
-    if (!storeToFilter) return shoppingList; // Should not happen, but safe fallback
-
-    return shoppingList.filter(item =>
-        item.store && item.store.toLowerCase() === storeToFilter.name.toLowerCase()
-    );
-  }, [shoppingList, filterStoreId, stores]);
-
-  // Group by category
-  const groupedItems = filteredItems.reduce((acc, item) => {
-    const cat = item.category || 'Uncategorized';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(item);
-    return acc;
-  }, {} as Record<string, ShoppingItem[]>);
-
-  // Sort categories alphabetically or custom order
-  const sortedCategories = Object.keys(groupedItems).sort();
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectAll = () => {
-    // Only select filtered items
-    const filteredIds = filteredItems.map(i => i.id);
-    if (selectedIds.size === filteredIds.length && filteredIds.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredIds));
-    }
-  };
-
-  const handleExport = () => {
-    if (shoppingList.length === 0) {
-      toast.error("Shopping list is empty");
-      return;
-    }
-
-    const exportData = shoppingList.map(item => ({
-      Name: item.name,
-      Category: item.category || 'Uncategorized',
-      Quantity: item.quantity || '',
-      Store: item.store || '',
-      Status: item.isPurchased ? 'Purchased' : 'Pending'
-    }));
-
-    generateCsvExport(exportData, 'shopping-list-export');
-    toast.success("Export started");
-  };
-
-  const handleBatchPurchase = async () => {
-    if (selectedIds.size === 0) return;
-    setIsBatchProcessing(true);
-    try {
-      // 1. Identify items that actually need to be purchased
-      const itemsToPurchase = Array.from(selectedIds).filter(id => {
-        const item = shoppingList.find(i => i.id === id);
-        return item && !item.isPurchased;
-      });
-
-      if (itemsToPurchase.length === 0) {
-        toast('All selected items are already marked as purchased', { icon: 'ℹ️' });
-        setSelectedIds(new Set());
-        setIsSelectionMode(false);
-        setIsBatchProcessing(false);
-        return;
-      }
-
-      // 2. Perform actions only on those items
-      const promises = itemsToPurchase.map(id => toggleShoppingItemPurchased(id));
-
-      const results = await Promise.allSettled(promises);
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      if (successful > 0) {
-        toast.success(`Marked ${successful} items as purchased`);
-      }
-
-      if (failed > 0) {
-        toast.error(`Failed to update ${failed} items`);
-      }
-
-      setSelectedIds(new Set());
-      setIsSelectionMode(false);
-    } catch (error) {
-      console.error('Batch purchase failed:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setIsBatchProcessing(false);
-    }
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
-    setIsBatchProcessing(true);
-    try {
-      const promises = Array.from(selectedIds).map(id => deleteShoppingItem(id));
-      const results = await Promise.allSettled(promises);
-      const failed = results.filter(r => r.status === 'rejected');
-
-      if (failed.length > 0) {
-        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
-      } else {
-        toast.success(`Deleted ${selectedIds.size} items`);
-      }
-
-      setSelectedIds(new Set());
-      setIsSelectionMode(false);
-      setShowBatchDeleteConfirm(false);
-    } catch (error) {
-      console.error('Batch delete failed:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setIsBatchProcessing(false);
-    }
-  };
+    const handleExport = () => {
+        if (shoppingList.length === 0) return;
+        const exportData = shoppingList.map(item => ({
+          Name: item.name,
+          Category: item.category || 'Uncategorized',
+          Quantity: item.quantity || '',
+          Store: item.store || '',
+          Status: item.isPurchased ? 'Purchased' : 'Pending'
+        }));
+        generateCsvExport(exportData, 'shopping-list-export');
+        toast.success("Export started");
+    };
 
   return (
     <div className="space-y-6 pb-20">
-        <div className="flex justify-between items-center">
-             {/* Filter Bar */}
-            {!isSelectionMode && stores.length > 0 && (
-                <div
-                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[70%] no-scrollbar"
-                    role="group"
-                    aria-label="Filter by store"
-                >
-                    <button
-                        onClick={() => setFilterStoreId('all')}
-                        aria-pressed={filterStoreId === 'all'}
-                        className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                            filterStoreId === 'all'
-                            ? 'bg-brand-600 text-white border-brand-600'
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                        }`}
-                    >
-                        All Stores
-                    </button>
-                    {stores.map(store => (
-                        <button
-                            key={store.id}
-                            onClick={() => setFilterStoreId(store.id)}
-                            aria-pressed={filterStoreId === store.id}
-                            aria-label={`Filter by ${store.name}`}
-                            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                                filterStoreId === store.id
-                                ? 'bg-brand-600 text-white border-brand-600'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                            }`}
-                        >
-                            <Store className="w-3 h-3" />
-                            {store.name}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            {/* Title when selection mode is active and no stores, or just spacer */}
-            {isSelectionMode && <div className="font-bold text-brand-800">Select Items</div>}
-
-            {/* Actions: Settings & Selection Toggle */}
-            <div className={`flex justify-end gap-2 ${stores.length === 0 && !isSelectionMode ? 'w-full' : 'ml-auto'}`}>
-                 {!isSelectionMode && (
-                    <>
-                        <button
-                            onClick={handleExport}
-                            disabled={shoppingList.length === 0}
-                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
-                            title="Export to CSV"
-                            aria-label="Export to CSV"
-                        >
-                            <Download className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setIsSettingsOpen(true)}
-                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
-                            aria-label="Shopping List Settings"
-                        >
-                            <Settings className="w-5 h-5" />
-                        </button>
-                    </>
-                 )}
-                 <button
-                    onClick={() => setIsSelectionMode(!isSelectionMode)}
-                    className={`p-2 rounded-lg transition-colors ${isSelectionMode ? 'bg-brand-800 text-white' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
-                    title={isSelectionMode ? "Cancel Selection" : "Select Items"}
-                    aria-label={isSelectionMode ? "Cancel Selection" : "Select Items"}
-                 >
-                    {isSelectionMode ? <X className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
-                 </button>
-            </div>
+        {/* Header Actions */}
+        <div className="flex justify-end gap-2">
+            <button
+                onClick={handleExport}
+                disabled={shoppingList.length === 0}
+                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                aria-label="Export to CSV"
+            >
+                <Download className="w-5 h-5" />
+            </button>
+            <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                aria-label="Settings"
+            >
+                <Settings className="w-5 h-5" />
+            </button>
         </div>
 
-        {/* Selection Stats */}
-        {isSelectionMode && (
-            <div className="flex items-center justify-between px-2 text-sm text-brand-600">
-                <button
-                    onClick={handleSelectAll}
-                    className="flex items-center gap-2 font-bold hover:text-brand-800"
-                >
-                    <CheckSquare size={16} className={selectedIds.size === filteredItems.length && filteredItems.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
-                    Select All ({filteredItems.length})
-                </button>
-                <span className="text-xs">{selectedIds.size} selected</span>
-            </div>
-        )}
-
-        {/* Quick Add Form */}
+        {/* Quick Add Input */}
         <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
-            <QuickRestockRow />
-            <form onSubmit={handleAddSubmit} className="space-y-3">
-                <div className="flex items-center gap-2">
-                    <input
-                        type="text"
-                        value={newItemName}
-                        onChange={(e) => setNewItemName(e.target.value)}
-                        placeholder="Add to list..."
-                        className="flex-1 min-w-0 rounded-lg border-gray-300 focus:ring-brand-500 focus:border-brand-500 text-sm py-2"
-                    />
-                    <div className="relative w-28 sm:w-40 shrink-0">
-                        <select
-                            value={newItemCategory}
-                            onChange={(e) => setNewItemCategory(e.target.value)}
-                            className="w-full appearance-none rounded-lg border-gray-300 bg-white focus:ring-brand-500 focus:border-brand-500 text-xs sm:text-sm pl-2 pr-6 py-2 truncate"
-                            aria-label="Category"
-                        >
-                            {categories.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                        <ChevronDown className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400 pointer-events-none" />
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                     {/* Store Chips */}
-                                    <div
-                        className="flex items-center gap-2 overflow-x-auto no-scrollbar max-w-[calc(100%-3rem)]"
-                        role="group"
-                        aria-label="Select store"
-                    >
-                        {stores.length > 0 ? (
-                            stores.map(store => (
-                                <button
-                                    key={store.id}
-                                    type="button"
-                                    onClick={() => setNewItemStoreId(newItemStoreId === store.id ? '' : store.id)}
-                                    aria-pressed={newItemStoreId === store.id}
-                                    aria-label={`Tag item for ${store.name}`}
-                                    className={`shrink-0 px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
-                                        newItemStoreId === store.id
-                                        ? 'bg-brand-100 text-brand-800 border-brand-200'
-                                        : 'bg-gray-50 text-gray-500 border-transparent hover:bg-gray-100'
-                                    }`}
-                                >
-                                    <Store className="w-3 h-3" />
-                                    {store.name}
-                                </button>
-                            ))
-                        ) : (
-                             <span className="text-xs text-gray-400 italic pl-1">Add stores in settings to tag items</span>
-                        )}
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="btn-primary p-2 shrink-0 rounded-lg ml-auto"
-                        aria-label="Add item to shopping list"
-                    >
-                        <Plus className="w-5 h-5" />
-                    </button>
-                </div>
-            </form>
+             <QuickRestockRow />
+             <form onSubmit={handleSmartAdd} className="relative">
+                <input
+                    type="text"
+                    value={newItemText}
+                    onChange={(e) => setNewItemText(e.target.value)}
+                    placeholder="Add item (e.g. Milk)..."
+                    className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    autoFocus
+                />
+                <button
+                    type="submit"
+                    disabled={!newItemText.trim()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+                >
+                    <Plus size={18} />
+                </button>
+             </form>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        {/* Helper Actions Row: AI, History, Scan */}
+        <div className="flex items-center gap-2">
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
-                title="Optimize your shopping list with AI"
-                aria-label="AI Optimize List"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all disabled:opacity-50"
+                title="AI Optimize List"
              >
-                {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>AI Optimize</span>
+                {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                <span>Optimize</span>
              </button>
+
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
-                aria-label="Open previously purchased items"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all"
+                title="View Item History"
              >
-                <Clock className="w-4 h-4" />
+                <Clock className="w-3.5 h-3.5" />
                 <span>History</span>
              </button>
+
+             <label className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all cursor-pointer disabled:opacity-50">
+                {isProcessingReceipt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                <span>Scan Receipt</span>
+                <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleReceiptUpload}
+                    disabled={isProcessingReceipt}
+                />
+            </label>
         </div>
 
-        <label className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full cursor-pointer">
-          {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-          <span>Scan Receipt to Pantry</span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleReceiptUpload}
-            disabled={isProcessingReceipt}
-          />
-        </label>
-
-        {/* Actions Row */}
-        {!isSelectionMode && shoppingList.some(i => i.isPurchased) && (
+        {/* Clear Checked */}
+        {shoppingList.some(i => i.isPurchased) && (
             <div className="flex justify-end">
                 <button
                     onClick={() => {
@@ -542,162 +313,31 @@ const ShoppingListTab: React.FC = () => {
             </div>
         )}
 
-        {/* List */}
-        {shoppingList.length === 0 ? (
+        {/* Main List */}
+        {items.length === 0 ? (
              <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
                 <div className="mb-2 text-4xl">🛒</div>
                 <p>Shopping list is empty.</p>
             </div>
         ) : (
-            <div className="space-y-4">
-                {sortedCategories.map(category => (
-                    <div key={category} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                        <div className="bg-brand-50 px-4 py-2 border-b border-brand-100 font-semibold text-brand-800 flex justify-between">
-                            <span>{category}</span>
-                            <span className="text-xs font-normal text-brand-600 bg-brand-100 px-2 py-0.5 rounded-full">
-                                {groupedItems[category].filter(i => !i.isPurchased).length} items
-                            </span>
-                        </div>
-                        <div className="divide-y divide-gray-100">
-    {groupedItems[category].map(item => {
-                                const isSelected = selectedIds.has(item.id);
-                                return (
-                                <div
-                                    key={item.id}
-                                    className={`p-3 flex items-center gap-3 transition-colors ${item.isPurchased ? 'bg-gray-50' : ''} ${isSelectionMode ? 'cursor-pointer hover:bg-brand-50' : 'hover:bg-gray-50'} ${isSelected ? 'bg-brand-50' : ''}`}
-                                    onClick={() => isSelectionMode && toggleSelection(item.id)}
-                                >
-                                    {isSelectionMode ? (
-                                        <div className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
-                                            {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
-                                        </div>
-                                    ) : (
-                                        <button
-                                            onClick={() => toggleShoppingItemPurchased(item.id)}
-                                            className={`w-6 h-6 rounded-full border flex items-center justify-center transition-colors shrink-0
-                                                ${item.isPurchased
-                                                    ? 'bg-green-500 border-green-500 text-white'
-                                                    : 'border-gray-300 hover:border-brand-500 text-transparent'}`}
-                                            aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-                                        >
-                                            <Check className="w-4 h-4" />
-                                        </button>
-                                    )}
-
-                                    <div className="flex-1 group min-w-0">
-                                        <div className={`font-medium truncate ${item.isPurchased ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
-                                            {item.name}
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1">
-                                            {item.quantity && <span className="bg-gray-100 px-1.5 py-0.5 rounded">{item.quantity}</span>}
-                                            {item.store && (
-                                                <span className="flex items-center gap-1 bg-brand-50 text-brand-700 px-1.5 py-0.5 rounded border border-brand-100">
-                                                    <Store className="w-3 h-3" /> {item.store}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {!isSelectionMode && (
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}
-                                                className="p-2 text-gray-400 hover:text-brand-500 rounded-full hover:bg-brand-50"
-                                                aria-label={`Edit ${item.name}`}
-                                            >
-                                                <Edit2 className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); deleteShoppingItem(item.id); }}
-                                                className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
-                                                aria-label={`Delete ${item.name}`}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-    })}
-                        </div>
-                    </div>
+            <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-2">
+                {items.map(item => (
+                    <ShoppingItemRow
+                        key={item.id}
+                        item={item}
+                        onCheck={(i) => toggleShoppingItemPurchased(i.id)}
+                        onDelete={(i) => deleteShoppingItem(i.id)}
+                        onEdit={setEditingItem}
+                    />
                 ))}
-            </div>
+            </Reorder.Group>
         )}
 
-        {/* Floating Action Bar (FAB) for Batch Actions */}
-        {isSelectionMode && selectedIds.size > 0 && (
-            <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
-            <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-                <div className="px-3 font-bold text-sm border-r border-brand-700">
-                {selectedIds.size} selected
-                </div>
-
-                <button
-                onClick={handleBatchPurchase}
-                disabled={isBatchProcessing}
-                className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
-                aria-label="Mark selected as purchased"
-                >
-                <Check size={18} />
-                <span className="text-xxs font-medium">Purchased</span>
-                </button>
-
-                <button
-                onClick={() => setShowBatchDeleteConfirm(true)}
-                disabled={isBatchProcessing}
-                className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
-                aria-label="Delete selected items"
-                >
-                <Trash2 size={18} />
-                <span className="text-xxs font-medium">Delete</span>
-                </button>
-            </div>
-            </div>
-        )}
-
-        {/* Batch Delete Confirmation */}
-        {showBatchDeleteConfirm && (
-            <Modal
-            isOpen={true}
-            onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
-            disableBackdropClose={isBatchProcessing}
-            >
-            <div className="p-4 space-y-4">
-                <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
-                <p className="text-brand-600">
-                Are you sure you want to delete <strong>{selectedIds.size}</strong> items?
-                </p>
-                <p className="text-sm text-money-neg font-bold">
-                This action cannot be undone.
-                </p>
-
-                <div className="flex gap-3 pt-2">
-                <button
-                    onClick={() => setShowBatchDeleteConfirm(false)}
-                    disabled={isBatchProcessing}
-                    className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
-                >
-                    Cancel
-                </button>
-                <button
-                    onClick={handleBatchDelete}
-                    disabled={isBatchProcessing}
-                    className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                    {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                    <span>Delete All</span>
-                </button>
-                </div>
-            </div>
-            </Modal>
-        )}
-
+        {/* Modals */}
         <GroceryCatalogModal
             isOpen={isCatalogOpen}
             onClose={() => setIsCatalogOpen(false)}
         />
-
         <ShoppingSettingsModal
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
@@ -710,110 +350,77 @@ const ShoppingListTab: React.FC = () => {
                     className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                     onClick={() => setEditingItem(null)}
                 />
-
-                <div
-                    className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="edit-item-title"
-                >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
-                        <h3 id="edit-item-title" className="text-lg font-bold text-brand-800">Edit Item</h3>
-                        <button
-                            onClick={() => setEditingItem(null)}
-                            className="p-2 text-brand-400 hover:bg-brand-50 rounded-full transition-colors"
-                            aria-label="Close edit modal"
-                        >
-                            <X className="w-5 h-5" />
-                        </button>
+                <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100">
+                        <h3 className="text-lg font-bold text-brand-800">Edit Item</h3>
+                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-gray-400" /></button>
                     </div>
-
-                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    <div className="p-6 space-y-4">
                         <div>
-                            <label htmlFor="edit-item-name" className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
+                            <label className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
                             <input
-                                id="edit-item-name"
                                 type="text"
                                 value={editingItem.name}
                                 onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                             />
                         </div>
-
                         <div className="grid grid-cols-2 gap-4">
                              <div>
-                                <label htmlFor="edit-item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
+                                <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
                                 <select
-                                    id="edit-item-category"
                                     value={editingItem.category || 'Uncategorized'}
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                                 >
-                                    {categories.map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
+                                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label htmlFor="edit-item-quantity" className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
+                                <label className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
                                 <input
-                                    id="edit-item-quantity"
                                     type="text"
                                     value={editingItem.quantity || ''}
                                     onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
-                                    placeholder="e.g. 2, 500g"
-                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                                 />
                             </div>
                         </div>
-
                         <div>
-                            <label htmlFor="edit-item-store" className="text-xs font-bold text-brand-400 uppercase">Store (Optional)</label>
-                            <div className="space-y-2 mt-2">
-                                <input
-                                    id="edit-item-store"
-                                    type="text"
-                                    value={editingItem.store || ''}
-                                    onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
-                                    placeholder="e.g. Costco, Trader Joe's"
-                                    className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-                                />
-
-                                {/* Quick Store Chips in Edit Modal */}
-                                {stores.length > 0 && (
-                                    <div
-                                        className="flex flex-wrap gap-2"
-                                        role="group"
-                                        aria-label="Select store"
-                                    >
-                                        {stores.map(store => (
-                                            <button
-                                                key={store.id}
-                                                type="button"
-                                                onClick={() => setEditingItem({...editingItem, store: store.name})}
-                                                aria-pressed={editingItem.store === store.name}
-                                                aria-label={`Tag item for ${store.name}`}
-                                                className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
-                                                    editingItem.store === store.name
-                                                    ? 'bg-brand-100 text-brand-800 border-brand-200'
-                                                    : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                                                }`}
-                                            >
-                                                <Store className="w-3 h-3" />
-                                                {store.name}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <label className="text-xs font-bold text-brand-400 uppercase">Store</label>
+                            <input
+                                type="text"
+                                value={editingItem.store || ''}
+                                onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
+                                placeholder="Optional"
+                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
+                            />
+                             {/* Quick Store Chips in Edit Modal */}
+                             {stores.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {stores.map(store => (
+                                        <button
+                                            key={store.id}
+                                            type="button"
+                                            onClick={() => setEditingItem({...editingItem, store: store.name})}
+                                            className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
+                                                editingItem.store === store.name
+                                                ? 'bg-brand-100 text-brand-800 border-brand-200'
+                                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                            }`}
+                                        >
+                                            <Store size={10} /> {store.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
-
-                    <div className="p-4 border-t border-brand-100 flex-shrink-0">
+                    <div className="p-4 border-t border-brand-100">
                         <button
                             onClick={handleSaveEdit}
-                            disabled={!editingItem.name?.trim()}
-                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                            disabled={!editingItem.name.trim()}
+                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-50"
                         >
                             Save Changes
                         </button>
