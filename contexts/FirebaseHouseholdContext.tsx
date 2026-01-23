@@ -390,7 +390,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         setMembers(data);
 
         // Set current user
-        const current = data.find(m => m.uid === user?.uid);
+        let current = data.find(m => m.uid === user?.uid);
 
         // AUTO-FIX: If current user's member document doesn't exist, create it
         if (user && !current) {
@@ -403,7 +403,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               const isCreator = householdData.createdBy === user.uid;
               const role = isCreator ? 'admin' : 'member';
 
-              await setDoc(doc(db, `households/${householdId}/members/${user.uid}`), {
+              const newMemberDoc = {
                 uid: user.uid,
                 displayName: user.displayName || 'User',
                 email: user.email || '',
@@ -415,18 +415,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
                   total: 0,
                 },
                 joinedAt: serverTimestamp(),
-              });
+              };
+
+              await setDoc(doc(db, `households/${householdId}/members/${user.uid}`), newMemberDoc);
 
               console.log('[FirebaseHouseholdContext] Member document auto-created successfully');
               toast.success('Account setup completed');
+
+              // Set current user immediately (snapshot will update on next fire)
+              current = { ...newMemberDoc, uid: user.uid } as HouseholdMember;
             }
           } catch (error) {
             console.error('[FirebaseHouseholdContext] Failed to auto-create member document:', error);
             toast.error('Failed to complete account setup. Please refresh the page.');
           }
-        } else {
-          setCurrentUser(current || null);
         }
+
+        setCurrentUser(current || null);
       })
     );
 
