@@ -22,7 +22,7 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative">
-        <header className="z-40 w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
@@ -65,7 +65,7 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
                 </div>
-                <span className="text-[9px] text-brand-400 uppercase tracking-wider">Today</span>
+                <span className="text-xxs text-brand-400 uppercase tracking-wider">Today</span>
               </div>
 
               {/* Vertical Divider */}
@@ -79,7 +79,7 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <TrendingUp className="w-4 h-4 text-habit-blue" />
                 </div>
-                <span className="text-[9px] text-brand-400 uppercase tracking-wider">Week</span>
+                <span className="text-xxs text-brand-400 uppercase tracking-wider">Week</span>
               </div>
             </button>
 

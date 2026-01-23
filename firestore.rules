@@ -31,6 +31,14 @@ service cloud.firestore {
       // Let's allow empty strings for optional fields to be safe, but enforce max length.
     }
 
+    function isValidNumber(num) {
+      return num is number;
+    }
+
+    function isValidBoolean(val) {
+      return val is bool;
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -104,7 +112,10 @@ service cloud.firestore {
               !request.resource.data.keys().hasAny(['role']) ||
               request.resource.data.role != 'admin'
             )
-          )
+          ) ||
+          // Case 3: Legacy Migration (User already in memberUids)
+          // Allows existing legacy users to backfill their member document
+          (request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []))
         );
 
         // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
@@ -201,10 +212,43 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (accounts, buckets, transactions, etc.)
-      match /{subcollection}/{document} {
+      // Transactions subcollection with input validation
+      match /transactions/{transactionId} {
         allow read: if isMemberOf(householdId);
-        allow write: if isMemberOf(householdId);
+        // 🛡️ SENTINEL SECURITY FIX: Enforce type and length validation to prevent storage exhaustion and data corruption
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.amount) &&
+                              isValidString(request.resource.data.merchant, 100) &&
+                              isValidString(request.resource.data.category, 50) &&
+                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD
+                              // Optional fields
+                              isValidOptionalString(request.resource.data.get('notes', null), 500) &&
+                              isValidOptionalString(request.resource.data.get('payPeriodId', null), 20) &&
+                              isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              // Booleans
+                              (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
+                              (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
+                              // Arrays (basic type check)
+                              (request.resource.data.get('relatedHabitIds', null) == null || request.resource.data.relatedHabitIds is list) &&
+                              // Status enum validation
+                              (request.resource.data.get('status', null) == null || request.resource.data.status in ['verified', 'pending_review']);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (accounts, buckets, calendarItems, pantry, meals, etc.)
+      // Proper multi-household isolation using member document checks
+      // Specific collections with custom rules are excluded below
+      match /{subcollection}/{document} {
+        // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
+        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
+        allow write: if isMemberOf(householdId) &&
+                     subcollection != 'members' &&
+                     subcollection != 'habits' &&
+                     subcollection != 'shoppingList' &&
+                     subcollection != 'apiKeys' &&
+                     subcollection != 'apiUsage' &&
+                     subcollection != 'transactions';
       }
     }
 

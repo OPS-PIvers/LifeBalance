@@ -2,16 +2,18 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-  Wallet, CheckSquare, ShoppingBag, Calendar, User, Store, ChevronDown,
+  Wallet, CheckSquare, ShoppingBag,
   Shield, Sparkles, ArrowRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { analyzeReceipt, parseBankStatement, parseMagicAction, ReceiptData } from '../../services/geminiService';
+import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
 import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
+import { CaptureShoppingTab } from './CaptureShoppingTab';
+import { CaptureTodoTab } from './CaptureTodoTab';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -104,6 +106,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         groceryCategories: GROCERY_CATEGORIES,
         todayDate: getLocalDateString()
       };
+
+      const { parseMagicAction } = await import('../../services/geminiService');
       const result = await parseMagicAction(householdId, magicInput, context);
 
       if (result.type === 'transaction') {
@@ -141,8 +145,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   };
 
   // Initialize Defaults when modal opens
+  // Use ref to track if we've initialized to avoid dependency loops
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasInitialized.current) {
       // Transaction defaults
       if (!category && dynamicCategories.length > 0) {
         setCategory(dynamicCategories[0]);
@@ -159,8 +166,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       if (!todoAssignee) {
          setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
       }
+
+      hasInitialized.current = true;
     }
-  }, [isOpen, dynamicCategories, category, transactionDate, todoDate, todoAssignee, currentUser, members]);
+
+    // Reset flag when modal closes
+    if (!isOpen) {
+      hasInitialized.current = false;
+    }
+  }, [isOpen, dynamicCategories, currentUser, members]);
 
   // Reset state when closing
   const handleClose = () => {
@@ -257,6 +271,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setProcessingMessage('Scanning receipt...');
       try {
         if (!householdId) throw new Error("Household ID not found");
+        const { analyzeReceipt } = await import('../../services/geminiService');
         const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles);
         const newTransaction: Transaction = {
           id: crypto.randomUUID(),
@@ -312,6 +327,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setProcessingMessage('Extracting transactions...');
     try {
       if (!householdId) throw new Error("Household ID not found");
+      const { parseBankStatement, analyzeReceipt } = await import('../../services/geminiService');
       const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');
@@ -390,6 +406,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.error("Please fill in required fields");
       return;
     }
+
+    // Validate merchant is not just whitespace
+    const trimmedMerchant = merchant.trim();
+    if (!trimmedMerchant) {
+      toast.error("Please enter a merchant name");
+      return;
+    }
+
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       toast.error("Please enter a valid amount");
@@ -410,22 +434,53 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       amount: parsedAmount,
-      merchant,
+      merchant: trimmedMerchant,
       category,
       date: transactionDate,
       status: isFuture ? 'pending_review' : 'verified',
-      isRecurring,
+      isRecurring: isRecurring, // Ensure boolean, not undefined
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined
     };
+
+    // Debug log before adding
+    console.log('[CaptureModal] Adding manual transaction:', {
+      amount: parsedAmount,
+      merchant: trimmedMerchant,
+      category,
+      date: transactionDate,
+      status: newTransaction.status,
+      isRecurring: newTransaction.isRecurring,
+      relatedHabitIds: newTransaction.relatedHabitIds
+    });
 
     try {
       await addTransaction(newTransaction);
       toast.success("Transaction saved!");
       handleClose();
     } catch (error) {
-      toast.error("Failed to save transaction");
+      console.error("Failed to save transaction:", error, newTransaction);
+
+      // Extract ALL error details for debugging
+      let errorMsg = 'Unknown error';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        if ('message' in error) {
+          errorMsg = String((error as { message: unknown }).message);
+        }
+        // Check for Firestore errors
+        if ('code' in error) {
+          errorMsg = `[${(error as { code: unknown }).code}] ${errorMsg}`;
+        }
+      }
+
+      // Show error in parts if too long
+      toast.error(errorMsg, { duration: 10000 });
+
+      // Also show transaction data for debugging
+      toast.error(`Data: amt=${parsedAmount} merch=${trimmedMerchant.substring(0, 20)} cat=${category}`, { duration: 10000 });
     }
   };
 
@@ -1003,158 +1058,31 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
           {/* 2. TO-DO TAB */}
           {activeTab === 'todo' && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                    <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                        Task
-                    </label>
-                    <input
-                        id="task-input"
-                        type="text"
-                        value={todoText}
-                        onChange={(e) => setTodoText(e.target.value)}
-                        placeholder="Enter task description"
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
-                        autoFocus
-                    />
-                </div>
-
-                <div>
-                    <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                        Due Date
-                    </label>
-                    <div className="relative w-full">
-                        <input
-                            id="due-date-input"
-                            type="date"
-                            value={todoDate}
-                            onChange={(e) => setTodoDate(e.target.value)}
-                            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
-                            style={{ WebkitAppearance: 'none' }}
-                        />
-                        <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
-                    </div>
-                </div>
-
-                <fieldset>
-                    <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
-                        Assign To
-                    </legend>
-                    {members.length === 0 ? (
-                        <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
-                            <AlertCircle size={16} className="flex-shrink-0" />
-                            <span>No household members available.</span>
-                        </div>
-                    ) : (
-                        <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
-                            {members.map(member => (
-                                <button
-                                    key={member.uid}
-                                    type="button"
-                                    onClick={() => setTodoAssignee(member.uid)}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
-                                        todoAssignee === member.uid
-                                            ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                                            : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
-                                    }`}
-                                >
-                                    {member.photoURL ? (
-                                        <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
-                                    ) : (
-                                        <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-xxs font-bold text-brand-600">
-                                            {member.displayName?.charAt(0) ?? 'U'}
-                                        </div>
-                                    )}
-                                    <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                </fieldset>
-
-                <button
-                    onClick={handleToDoSubmit}
-                    disabled={members.length === 0}
-                    className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-                        members.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-900 active:scale-[0.98]'
-                    }`}
-                >
-                    Create Task
-                </button>
-            </div>
+            <CaptureTodoTab
+              text={todoText}
+              setText={setTodoText}
+              date={todoDate}
+              setDate={setTodoDate}
+              assignee={todoAssignee}
+              setAssignee={setTodoAssignee}
+              members={members}
+              onSubmit={handleToDoSubmit}
+            />
           )}
 
           {/* 3. SHOPPING TAB */}
           {activeTab === 'shopping' && (
-             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div>
-                    <label htmlFor="item-name" className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
-                    <input
-                        id="item-name"
-                        type="text"
-                        value={shoppingName}
-                        onChange={(e) => setShoppingName(e.target.value)}
-                        placeholder="e.g. Milk, Eggs"
-                        className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-                        autoFocus
-                    />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     <div>
-                        <label htmlFor="item-category" className="text-xs font-bold text-brand-400 uppercase">Category</label>
-                        <div className="relative mt-1">
-                             <select
-                                id="item-category"
-                                value={shoppingCategory}
-                                onChange={(e) => setShoppingCategory(e.target.value)}
-                                className="w-full appearance-none p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-                            >
-                                {GROCERY_CATEGORIES.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 pointer-events-none" />
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="item-quantity" className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
-                        <input
-                            id="item-quantity"
-                            type="text"
-                            value={shoppingQuantity}
-                            onChange={(e) => setShoppingQuantity(e.target.value)}
-                            placeholder="e.g. 2, 500g"
-                            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-                        />
-                    </div>
-                </div>
-
-                <div>
-                    <label htmlFor="item-store" className="text-xs font-bold text-brand-400 uppercase">Store (Optional)</label>
-                    <div className="relative mt-1">
-                        <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
-                        <input
-                            id="item-store"
-                            type="text"
-                            value={shoppingStore}
-                            onChange={(e) => setShoppingStore(e.target.value)}
-                            placeholder="e.g. Costco, Trader Joe's"
-                            className="w-full p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-                        />
-                    </div>
-                </div>
-
-                <div className="pt-2">
-                    <button
-                        onClick={handleShoppingSubmit}
-                        disabled={!shoppingName.trim()}
-                        className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 hover:bg-brand-900"
-                    >
-                        Add to Shopping List
-                    </button>
-                </div>
-             </div>
+            <CaptureShoppingTab
+              name={shoppingName}
+              setName={setShoppingName}
+              category={shoppingCategory}
+              setCategory={setShoppingCategory}
+              quantity={shoppingQuantity}
+              setQuantity={setShoppingQuantity}
+              store={shoppingStore}
+              setStore={setShoppingStore}
+              onSubmit={handleShoppingSubmit}
+            />
           )}
 
       </div>

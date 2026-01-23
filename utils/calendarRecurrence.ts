@@ -3,6 +3,39 @@ import { addWeeks, addMonths, parseISO, format, isBefore, isAfter, isSameDay, di
 
 const MONDAY = 1;
 const MAX_ITERATIONS = 1000;
+const RECURRING_SEPARATOR = '_instance_';
+
+/**
+ * Generates a consistent synthetic ID for a recurring instance.
+ */
+export function generateRecurringId(templateId: string, date: string): string {
+  return `${templateId}${RECURRING_SEPARATOR}${date}`;
+}
+
+/**
+ * Checks if an ID is a synthetic recurring instance ID.
+ */
+export function isRecurringId(id: string): boolean {
+  return id.includes(RECURRING_SEPARATOR);
+}
+
+/**
+ * Parses a synthetic recurring ID into its components.
+ * Returns null if the ID format is invalid.
+ */
+export function parseRecurringId(id: string): { templateId: string; date: string } | null {
+  const parts = id.split(RECURRING_SEPARATOR);
+  if (parts.length < 2) return null;
+
+  // Handle case where template ID might contain the separator (unlikely but possible)
+  // The date is always the last part
+  const date = parts.pop();
+  const templateId = parts.join(RECURRING_SEPARATOR);
+
+  if (!date || !templateId) return null;
+
+  return { templateId, date };
+}
 
 /**
  * Calculates the first occurrence date on or after the range start.
@@ -90,10 +123,11 @@ export function generateRecurringInstances(
   ) {
     // Only add if within range (inclusive)
     if (isSameDay(currentDate, start) || isAfter(currentDate, start)) {
+      const dateStr = format(currentDate, 'yyyy-MM-dd');
       instances.push({
         ...item,
-        id: `${item.id}-${format(currentDate, 'yyyy-MM-dd')}`, // Unique ID for each instance
-        date: format(currentDate, 'yyyy-MM-dd'),
+        id: generateRecurringId(item.id, dateStr), // Use consistent ID generation
+        date: dateStr,
       });
     }
 

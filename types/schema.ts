@@ -285,6 +285,7 @@ export interface ShoppingItem {
   isPurchased: boolean;
   notes?: string;
   addedFromMealId?: string; // Traceability
+  order?: number;
 }
 
 export interface Store {

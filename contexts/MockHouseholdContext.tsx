@@ -264,6 +264,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Shopping item updated');
   }, []);
 
+  const reorderShoppingItems = useCallback(async (items: ShoppingItem[]) => {
+    setShoppingList(items);
+    toast.success('Mock: Shopping items reordered');
+  }, []);
+
   const deleteShoppingItem = useCallback(async (id: string) => {
     setShoppingList(prev => prev.filter(s => s.id !== id));
     toast.success('Mock: Shopping item deleted');
@@ -452,6 +457,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteMeal,
     addShoppingItem,
     updateShoppingItem,
+    reorderShoppingItems,
     deleteShoppingItem,
     toggleShoppingItemPurchased: noOp,
     clearPurchasedShoppingItems: noOp,

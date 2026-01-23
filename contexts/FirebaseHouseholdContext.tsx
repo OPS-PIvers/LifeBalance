@@ -61,8 +61,8 @@ import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/h
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
-import { expandCalendarItems } from '@/utils/calendarRecurrence';
-import { parseNaturalLanguageCommand, ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
+import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -190,6 +190,7 @@ export interface HouseholdContextType {
   // Shopping List Actions
   addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
+  reorderShoppingItems: (items: ShoppingItem[]) => Promise<void>;
   deleteShoppingItem: (id: string) => Promise<void>;
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
   clearPurchasedShoppingItems: () => Promise<void>;
@@ -386,13 +387,47 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Members listener
     const membersQuery = query(collection(db, `households/${householdId}/members`));
     unsubscribers.push(
-      onSnapshot(membersQuery, (snapshot) => {
+      onSnapshot(membersQuery, async (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
         setMembers(data);
 
         // Set current user
         const current = data.find(m => m.uid === user?.uid);
         setCurrentUser(current || null);
+
+        // AUTO-FIX: Ensure current user has a member document
+        // This handles legacy households created before member documents were required
+        if (user && !current) {
+          console.log('[FirebaseHouseholdContext] Member document missing for current user, creating...');
+          try {
+            // Check if user is in household's memberUids array
+            const householdDoc = await getDoc(doc(db, 'households', householdId));
+            const householdData = householdDoc.data();
+
+            if (householdData && householdData.memberUids?.includes(user.uid)) {
+              // User is in memberUids but missing member document - create it
+              const isCreator = householdData.createdBy === user.uid;
+              await setDoc(doc(db, 'households', householdId, 'members', user.uid), {
+                uid: user.uid,
+                displayName: user.displayName || 'User',
+                email: user.email || '',
+                photoURL: user.photoURL || '',
+                role: isCreator ? 'admin' : 'member',
+                points: {
+                  daily: 0,
+                  weekly: 0,
+                  total: 0,
+                },
+                joinedAt: serverTimestamp(),
+              });
+              console.log('[FirebaseHouseholdContext] Member document created successfully');
+            } else {
+              console.warn('[FirebaseHouseholdContext] User not in household memberUids, cannot create member doc');
+            }
+          } catch (error) {
+            console.error('[FirebaseHouseholdContext] Failed to create member document:', error);
+          }
+        }
       })
     );
 
@@ -516,6 +551,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               const expenseCategories = bucketsRef.current.map(b => b.name);
 
               // Parse with Gemini
+              // Dynamically load to prevent circular dependency and bundle bloat
+              const { parseNaturalLanguageCommand } = await import('@/services/geminiService');
               const parsed = await parseNaturalLanguageCommand(
                 householdId,
                 item.text,
@@ -1208,9 +1245,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || !user) return;
 
     // Parse synthetic ID to get template ID and date
-    const parts = syntheticId.split('-202');
-    const parentRecurringId = parts[0];
-    const specificDate = '202' + parts[1];
+    const parsed = parseRecurringId(syntheticId);
+    if (!parsed) return;
+    const { templateId: parentRecurringId, date: specificDate } = parsed;
 
     // Find the recurring template to get item details
     const template = calendarItems.find(i => i.id === parentRecurringId);
@@ -1247,7 +1284,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
 
     // Check if this is a recurring instance (synthetic ID with date suffix)
-    const isRecurringInstance = id.includes('-202');
+    const isRecurringInstance = isRecurringId(id);
 
     if (isRecurringInstance) {
       // Delete only this instance, not the entire series
@@ -1265,8 +1302,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const account = accounts.find(a => a.id === accountId);
     if (!account) return;
 
-    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
-    const isRecurringInstance = itemId.includes('-202');
+    // Check if this is a recurring instance
+    const isRecurringInstance = isRecurringId(itemId);
 
     let item: CalendarItem | undefined;
     let parentRecurringId: string | undefined;
@@ -1274,9 +1311,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     if (isRecurringInstance) {
       // Parse synthetic ID to get original template ID and date
-      const parts = itemId.split('-202');
-      parentRecurringId = parts[0];
-      specificDate = '202' + parts[1]; // Reconstruct the date part
+      const parsed = parseRecurringId(itemId);
+      if (!parsed) return;
+      parentRecurringId = parsed.templateId;
+      specificDate = parsed.date;
 
       // Find the recurring template
       const template = calendarItems.find(i => i.id === parentRecurringId);
@@ -1394,17 +1432,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       return format(newDate, 'yyyy-MM-dd');
     };
 
-    // Check if this is a recurring instance (synthetic ID like "originalId-2024-01-15")
-    const isRecurringInstance = itemId.includes('-202');
+    // Check if this is a recurring instance
+    const isRecurringInstance = isRecurringId(itemId);
 
     if (isRecurringInstance) {
       // For recurring instances:
       // 1. Create a one-time deferred item
       // 2. Hide (delete) the original recurring instance to prevent duplication
 
-      const parts = itemId.split('-202');
-      const parentRecurringId = parts[0];
-      const specificDate = '202' + parts[1];
+      const parsed = parseRecurringId(itemId);
+      if (!parsed) return;
+      const { templateId: parentRecurringId, date: specificDate } = parsed;
 
       // Find the recurring template
       const template = calendarItems.find(i => i.id === parentRecurringId);
@@ -1458,30 +1496,103 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: TRANSACTIONS ---
 
   const addTransaction = useCallback(async (tx: Transaction) => {
-    if (!householdId || !user) return;
-
-    // Assign pay period ID based on paycheck approval
-    const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
-
-    const sanitizedTx = sanitizeFirestoreData(tx);
-    await addDoc(collection(db, `households/${householdId}/transactions`), {
-      ...sanitizedTx,
-      payPeriodId,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
+    console.log('[addTransaction] Called with:', {
+      source: tx.source,
+      amount: tx.amount,
+      merchant: tx.merchant,
+      category: tx.category,
+      date: tx.date,
+      status: tx.status,
+      isRecurring: tx.isRecurring,
+      isRecurringType: typeof tx.isRecurring,
+      autoCategorized: tx.autoCategorized,
+      autoCategorizedType: typeof tx.autoCategorized
     });
 
-    // Update checking account balance
-    const checkingAcc = accounts.find(a => a.type === 'checking');
-    if (checkingAcc) {
-      await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-        balance: checkingAcc.balance - tx.amount,
-        lastUpdated: serverTimestamp(),
-      });
+    if (!householdId) {
+      console.error('[addTransaction] No household selected');
+      throw new Error('No household selected');
+    }
+    if (!user) {
+      console.error('[addTransaction] Not authenticated');
+      throw new Error('Not authenticated');
     }
 
-    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-    // The bucketSpentMap effect will automatically recalculate when transactions change
+    // Validate required fields before attempting Firestore write
+    if (!tx.amount || typeof tx.amount !== 'number') {
+      console.error('[addTransaction] Invalid amount:', tx.amount, typeof tx.amount);
+      throw new Error('Invalid amount');
+    }
+    if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) {
+      console.error('[addTransaction] Invalid merchant:', tx.merchant, typeof tx.merchant);
+      throw new Error('Invalid merchant');
+    }
+    if (!tx.category || typeof tx.category !== 'string') {
+      console.error('[addTransaction] Invalid category:', tx.category, typeof tx.category);
+      throw new Error('Invalid category');
+    }
+    if (!tx.date || typeof tx.date !== 'string') {
+      console.error('[addTransaction] Invalid date:', tx.date, typeof tx.date);
+      throw new Error('Invalid date');
+    }
+    if (!['verified', 'pending_review'].includes(tx.status)) {
+      console.error('[addTransaction] Invalid status:', tx.status);
+      throw new Error('Invalid status');
+    }
+    if (typeof tx.isRecurring !== 'boolean') {
+      console.error('[addTransaction] isRecurring must be boolean, got:', tx.isRecurring, typeof tx.isRecurring);
+      throw new Error('isRecurring must be boolean');
+    }
+    if (typeof tx.autoCategorized !== 'boolean') {
+      console.error('[addTransaction] autoCategorized must be boolean, got:', tx.autoCategorized, typeof tx.autoCategorized);
+      throw new Error('autoCategorized must be boolean');
+    }
+
+    console.log('[addTransaction] All validations passed');
+
+    try {
+      // Assign pay period ID based on paycheck approval
+      const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
+
+      // Build the document data explicitly to ensure compliance with Firestore rules
+      const docData: Record<string, unknown> = {
+        amount: tx.amount,
+        merchant: tx.merchant.trim(),
+        category: tx.category,
+        date: tx.date,
+        status: tx.status,
+        isRecurring: tx.isRecurring,
+        source: tx.source || 'manual',
+        autoCategorized: tx.autoCategorized,
+        payPeriodId: payPeriodId || null,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      };
+
+      // Add optional fields only if they exist
+      if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) {
+        docData.relatedHabitIds = tx.relatedHabitIds;
+      }
+
+      console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
+      await addDoc(collection(db, `households/${householdId}/transactions`), docData);
+      console.log('Transaction added successfully');
+
+      // Update checking account balance
+      const checkingAcc = accounts.find(a => a.type === 'checking');
+      if (checkingAcc) {
+        await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          balance: checkingAcc.balance - tx.amount,
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+      // The bucketSpentMap effect will automatically recalculate when transactions change
+    } catch (error) {
+      console.error('Error adding transaction:', error);
+      throw error; // Re-throw to let caller handle
+    }
   }, [householdId, user, householdSettings, accounts]);
 
   const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[]) => {
@@ -2600,6 +2711,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  const reorderShoppingItems = useCallback(async (items: ShoppingItem[]) => {
+    if (!householdId) return;
+    try {
+      const batch = writeBatch(db);
+      items.forEach((item, index) => {
+        const ref = doc(db, `households/${householdId}/shoppingList`, item.id);
+        batch.update(ref, { order: index });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('[reorderShoppingItems] Failed:', error);
+      toast.error('Failed to reorder items');
+    }
+  }, [householdId]);
+
   const deleteShoppingItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
@@ -3003,7 +3129,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // Dynamically load Gemini service only when needed
       const { generateInsight } = await import('@/services/geminiService');
-      const { text, actions } = await generateInsight(householdId, transactions, habits);
+
+      // Get last 3 previous insights to avoid repetition
+      const previousInsightsTexts = insightsHistory
+        .slice(0, 3)
+        .map(i => i.text);
+
+      const { text, actions } = await generateInsight(householdId, transactions, habits, previousInsightsTexts);
 
       const newInsight: Omit<Insight, 'id'> = {
         text,
@@ -3126,6 +3258,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteMeal,
     addShoppingItem,
     updateShoppingItem,
+    reorderShoppingItems,
     deleteShoppingItem,
     toggleShoppingItemPurchased,
     clearPurchasedShoppingItems,
@@ -3161,7 +3294,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMember, updateMember, removeMember,
     addPantryItem, updatePantryItem, deletePantryItem,
     addMeal, updateMeal, deleteMeal,
-    addShoppingItem, updateShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    addShoppingItem, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
     addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,

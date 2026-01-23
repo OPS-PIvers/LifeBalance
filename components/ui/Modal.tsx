@@ -51,7 +51,7 @@ export interface ModalProps {
 /**
  * Standardized Modal Component.
  * Unified Pattern:
- * - Fixed z-index (z-[60])
+ * - Fixed z-index (z-modal)
  * - Backdrop blur
  * - Animation (zoom-in-95)
  * - Rounded corners (rounded-2xl)
@@ -110,7 +110,7 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div
       className={clsx(
-        "fixed inset-0 z-[60] flex p-4",
+        "fixed inset-0 z-modal flex p-4",
         centerContent && "items-center justify-center"
       )}
       style={mobileSafePadding ? {
