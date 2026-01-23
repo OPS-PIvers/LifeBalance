@@ -259,38 +259,41 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
-                <button
+                <Button
+                  variant="success"
                   onClick={() => {
                     setPayModalItemId(item.id);
                     setExpandedId(null);
                   }}
-                  className="w-full sm:flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1"
+                  leftIcon={<Check size={16} />}
                 >
-                  <Check size={16} />
                   Approve
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="warning"
                   onClick={async () => {
                     await deferCalendarItem(item.id);
                     setExpandedId(null);
                   }}
-                  className="w-full sm:flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1"
+                  leftIcon={<Clock size={16} />}
                 >
-                  <Clock size={16} />
                   Defer
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
                   onClick={async () => {
                     if (confirm('Delete this calendar item?')) {
                       await deleteCalendarItem(item.id);
                       setExpandedId(null);
                     }
                   }}
-                  className="w-full sm:flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                  className="w-full sm:flex-1"
+                  leftIcon={<Trash2 size={16} />}
                 >
-                  <Trash2 size={16} />
                   Delete
-                </button>
+                </Button>
               </div>
             </div>
           ) : isTodoQueueItem(item) ? (
@@ -300,7 +303,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  Mark this task as complete or delay it:
                </p>
                <div className="flex flex-col sm:flex-row gap-2">
-                 <button
+                 <Button
+                   variant="success"
                    onClick={async () => {
                      try {
                        await completeToDo(item.id);
@@ -311,12 +315,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.error('Failed to complete to-do');
                      }
                    }}
-                   className="w-full sm:flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1"
+                   leftIcon={<Check size={16} />}
                  >
-                   <Check size={16} />
                    Complete
-                 </button>
-                 <button
+                 </Button>
+                 <Button
+                   variant="warning"
                    onClick={async () => {
                      const today = startOfToday();
                      const tomorrowDate = addDays(today, 1);
@@ -352,12 +357,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.error('Failed to defer task. Please try again.');
                      }
                    }}
-                   className="w-full sm:flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1"
+                   leftIcon={<Clock size={16} />}
                  >
-                   <Clock size={16} />
                    Defer
-                 </button>
-                 <button
+                 </Button>
+                 <Button
+                   variant="destructive"
                    onClick={() => {
                      showDeleteConfirmation(async () => {
                        await deleteToDo(item.id);
@@ -365,11 +371,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                        toast.success('Task deleted');
                      });
                    }}
-                   className="w-full sm:flex-1 py-2 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                   className="w-full sm:flex-1"
+                   leftIcon={<Trash2 size={16} />}
                  >
-                   <Trash2 size={16} />
                    Delete
-                 </button>
+                 </Button>
                </div>
             </div>
           ) : (
@@ -533,7 +539,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 </div>
 
                 {/* Approve Button */}
-                <button
+                <Button
+                  variant="success"
+                  size="lg"
                   onClick={async () => {
                     if (!selectedCategory) {
                       toast.error('Please select a category');
@@ -551,11 +559,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     }
                   }}
                   disabled={!selectedCategory}
-                  className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-brand-200 disabled:cursor-not-allowed text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  className="w-full py-3"
+                  leftIcon={<Check size={18} strokeWidth={3} />}
                 >
-                  <Check size={18} strokeWidth={3} />
                   Approve Transaction
-                </button>
+                </Button>
 
                 {/* Edit/Delete Actions */}
                 <div className="flex gap-2 pt-1 border-t border-brand-100 mt-2">
