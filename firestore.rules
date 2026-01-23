@@ -225,10 +225,10 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('payPeriodId', null), 50) &&
                               isValidOptionalString(request.resource.data.get('source', 'manual'), 50) &&
                               // Boolean flags must be booleans if present
-                              (request.resource.data.get('isRecurring', null) == null ||
-                               request.resource.data.get('isRecurring') is bool) &&
-                              (request.resource.data.get('autoCategorized', null) == null ||
-                               request.resource.data.get('autoCategorized') is bool) &&
+                              (!('isRecurring' in request.resource.data) ||
+                               request.resource.data.isRecurring is bool) &&
+                              (!('autoCategorized' in request.resource.data) ||
+                               request.resource.data.autoCategorized is bool) &&
                               // relatedHabitIds must be a reasonable list if present
                               (request.resource.data.get('relatedHabitIds', null) == null ||
                                (request.resource.data.relatedHabitIds is list &&
@@ -270,10 +270,10 @@ service cloud.firestore {
                               // Validate optional fields
                               isValidOptionalString(request.resource.data.get('color', null), 20) &&
                               // Boolean flags must be booleans if present
-                              (request.resource.data.get('isVariable', null) == null ||
-                               request.resource.data.get('isVariable') is bool) &&
-                              (request.resource.data.get('isCore', null) == null ||
-                               request.resource.data.get('isCore') is bool);
+                              (!('isVariable' in request.resource.data) ||
+                               request.resource.data.isVariable is bool) &&
+                              (!('isCore' in request.resource.data) ||
+                               request.resource.data.isCore is bool);
 
         allow delete: if isMemberOf(householdId);
       }

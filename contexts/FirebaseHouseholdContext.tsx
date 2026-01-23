@@ -1515,18 +1515,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
 
       console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
-
-      // Show transaction data types in toasts for mobile debugging
-      toast.loading(`amount: ${typeof docData.amount} = ${docData.amount}`, { id: 'debug-amount', duration: 15000 });
-      toast.loading(`merchant: ${typeof docData.merchant} = ${String(docData.merchant).substring(0,20)}`, { id: 'debug-merchant', duration: 15000 });
-      toast.loading(`category: ${typeof docData.category} = ${String(docData.category).substring(0,20)}`, { id: 'debug-category', duration: 15000 });
-      toast.loading(`date: ${typeof docData.date} = ${docData.date}`, { id: 'debug-date', duration: 15000 });
-      toast.loading(`status: ${typeof docData.status} = ${docData.status}`, { id: 'debug-status', duration: 15000 });
-      toast.loading(`isRecurring: ${typeof docData.isRecurring} = ${docData.isRecurring}`, { id: 'debug-isRecurring', duration: 15000 });
-      toast.loading(`autoCategorized: ${typeof docData.autoCategorized} = ${docData.autoCategorized}`, { id: 'debug-autoCat', duration: 15000 });
-      toast.loading(`source: ${typeof docData.source} = ${docData.source}`, { id: 'debug-source', duration: 15000 });
-      toast.loading(`payPeriodId: ${typeof docData.payPeriodId} = ${docData.payPeriodId}`, { id: 'debug-payPeriod', duration: 15000 });
-
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
       console.log('Transaction added successfully');
 
