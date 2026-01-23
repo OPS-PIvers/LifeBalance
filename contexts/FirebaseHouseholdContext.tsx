@@ -1515,6 +1515,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
 
       console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
+      console.log('HouseholdId:', householdId);
+      console.log('User UID:', user.uid);
+      console.log('Member path:', `households/${householdId}/members/${user.uid}`);
+
+      // Check if member document exists
+      const memberDoc = await getDoc(doc(db, `households/${householdId}/members/${user.uid}`));
+      console.log('Member document exists:', memberDoc.exists());
+      if (!memberDoc.exists()) {
+        console.error('MEMBER DOCUMENT MISSING! This will cause permission denied.');
+        throw new Error('Member document missing - cannot create transaction');
+      }
+
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
       console.log('Transaction added successfully');
 
