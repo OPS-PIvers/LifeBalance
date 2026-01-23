@@ -702,11 +702,11 @@ export const generateInsight = async (
       amount: t.amount,
       category: t.category,
       date: t.date,
-      ...(options?.includeMerchantNames !== false ? { merchant: t.merchant } : {})
+      ...(options?.includeMerchantNames !== false ? { merchant: sanitizeForPrompt(t.merchant) } : {})
     }));
 
     const simplifiedHabits = habits.map(h => ({
-      title: h.title,
+      title: sanitizeForPrompt(h.title),
       type: h.type,
       count: h.count,
       streak: h.streakDays,
@@ -907,7 +907,7 @@ export const analyzeHabitPoints = async (
     const habitStats = validHabits.map(h => {
       return {
         id: h.id,
-        title: h.title, // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
+        title: sanitizeForPrompt(h.title), // We send habit titles and performance statistics to provide context for point adjustments. These titles are user-created and should not contain sensitive personal information.
         basePoints: h.basePoints,
         period: h.period,
         streakDays: h.streakDays ?? 0,
@@ -1032,7 +1032,7 @@ export const analyzeHabitPatterns = async (
     // 1. Anonymize and Prepare Data
     const habitStats = habits.map(h => ({
       id: h.id,
-      title: h.title,
+      title: sanitizeForPrompt(h.title),
       period: h.period,
       streakDays: h.streakDays,
       completedDates: (h.completedDates || []).slice(-30) // Last 30 completions
