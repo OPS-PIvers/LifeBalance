@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare, Download } from 'lucide-react';
+import { Plus, Trash2, Check, Camera, Loader2, Edit2, X, Store, Sparkles, ChevronDown, Clock, RotateCcw, Settings, Layers, CheckSquare, Download, Share2 } from 'lucide-react';
 import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
+import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 
 // Helper for image file to base64
 const fileToBase64 = (file: File): Promise<string> => {
@@ -266,6 +267,24 @@ const ShoppingListTab: React.FC = () => {
     toast.success("Export started");
   };
 
+  const handleShareList = async () => {
+    // Share pending items only
+    const itemsToShare = shoppingList.filter(i => !i.isPurchased);
+    if (itemsToShare.length === 0) {
+      toast('No pending items to share', { icon: 'ℹ️' });
+      return;
+    }
+
+    const text = formatShoppingListForShare(itemsToShare);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Shopping list copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
   const handleBatchPurchase = async () => {
     if (selectedIds.size === 0) return;
     setIsBatchProcessing(true);
@@ -381,6 +400,15 @@ const ShoppingListTab: React.FC = () => {
             <div className={`flex justify-end gap-2 ${stores.length === 0 && !isSelectionMode ? 'w-full' : 'ml-auto'}`}>
                  {!isSelectionMode && (
                     <>
+                        <button
+                            onClick={handleShareList}
+                            disabled={shoppingList.filter(i => !i.isPurchased).length === 0}
+                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                            title="Copy list to clipboard"
+                            aria-label="Copy list to clipboard"
+                        >
+                            <Share2 className="w-5 h-5" />
+                        </button>
                         <button
                             onClick={handleExport}
                             disabled={shoppingList.length === 0}
