@@ -64,7 +64,7 @@ describe('geminiService', () => {
       const mockHabits = [
         { id: '1', title: 'Habit 1', category: 'Old', order: 1 },
         { id: '2', title: 'Habit 2', category: 'Old', order: 2 },
-      ] as Partial<Habit>[];
+      ] as Habit[];
 
       const mockResponse = {
         habits: [
