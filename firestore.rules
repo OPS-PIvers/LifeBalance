@@ -14,6 +14,19 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
     }
 
+    // Helper function: Check if user has access to household (member document OR in memberUids)
+    // This is more permissive than isMemberOf and handles cases where member doc might not exist
+    function hasHouseholdAccess(householdId) {
+      return isAuthenticated() && (
+        // Check if member document exists
+        exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)) ||
+        // Fallback: check if user is in household's memberUids array
+        request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.memberUids ||
+        // Global admin override
+        request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"
+      );
+    }
+
     // Helper function: Check if user is admin of household
     function isAdminOf(householdId) {
       return isAuthenticated() &&
@@ -207,18 +220,75 @@ service cloud.firestore {
 
       // 🛡️ SENTINEL SECURITY FIX: Strict validation for financial data
       match /transactions/{transactionId} {
-        // TEMPORARY: Allow everything for debugging
-        allow read, write: if true;
+        allow read: if hasHouseholdAccess(householdId);
+
+        // Comprehensive validation for transaction data integrity
+        allow create, update: if hasHouseholdAccess(householdId) &&
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['amount', 'merchant', 'category', 'date']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.amount) &&
+                              isValidString(request.resource.data.merchant, 100) &&
+                              isValidString(request.resource.data.category, 50) &&
+                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD format
+                              // Validate status (default to 'verified' if not present)
+                              (!('status' in request.resource.data) || request.resource.data.status in ['verified', 'pending_review']) &&
+                              // Validate optional fields
+                              (!('notes' in request.resource.data) || isValidOptionalString(request.resource.data.notes, 1000)) &&
+                              (!('payPeriodId' in request.resource.data) || isValidOptionalString(request.resource.data.payPeriodId, 50)) &&
+                              (!('source' in request.resource.data) || isValidOptionalString(request.resource.data.source, 50)) &&
+                              // Boolean flags must be booleans if present
+                              (!('isRecurring' in request.resource.data) ||
+                               request.resource.data.isRecurring is bool) &&
+                              (!('autoCategorized' in request.resource.data) ||
+                               request.resource.data.autoCategorized is bool) &&
+                              // relatedHabitIds must be a reasonable list if present
+                              (!('relatedHabitIds' in request.resource.data) ||
+                               (request.resource.data.relatedHabitIds is list &&
+                                request.resource.data.relatedHabitIds.size() <= 50)) &&
+                              // createdBy must match authenticated user if provided
+                              (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
+
+        allow delete: if hasHouseholdAccess(householdId);
       }
 
       match /accounts/{accountId} {
-        // TEMPORARY: Allow everything for debugging
-        allow read, write: if true;
+        allow read: if hasHouseholdAccess(householdId);
+
+        // Comprehensive validation for account data integrity
+        allow create, update: if hasHouseholdAccess(householdId) &&
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['balance', 'name', 'type']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.balance) &&
+                              isValidString(request.resource.data.name, 50) &&
+                              // Validate type is one of the allowed enum values
+                              (request.resource.data.type in ['checking', 'savings', 'credit']) &&
+                              // Validate optional fields
+                              (!('lastUpdated' in request.resource.data) || isValidOptionalString(request.resource.data.lastUpdated, 30));
+
+        allow delete: if hasHouseholdAccess(householdId);
       }
 
       match /buckets/{bucketId} {
-        // TEMPORARY: Allow everything for debugging
-        allow read, write: if true;
+        allow read: if hasHouseholdAccess(householdId);
+
+        // Comprehensive validation for budget bucket data integrity
+        allow create, update: if hasHouseholdAccess(householdId) &&
+                              // Required fields must exist
+                              request.resource.data.keys().hasAll(['limit', 'name']) &&
+                              // Validate required fields
+                              isValidNumber(request.resource.data.limit) &&
+                              isValidString(request.resource.data.name, 50) &&
+                              // Validate optional fields
+                              (!('color' in request.resource.data) || isValidOptionalString(request.resource.data.color, 20)) &&
+                              // Boolean flags must be booleans if present
+                              (!('isVariable' in request.resource.data) ||
+                               request.resource.data.isVariable is bool) &&
+                              (!('isCore' in request.resource.data) ||
+                               request.resource.data.isCore is bool);
+
+        allow delete: if hasHouseholdAccess(householdId);
       }
 
       // All other subcollections (calendarItems, pantry, meals, etc.)
