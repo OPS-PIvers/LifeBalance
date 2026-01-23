@@ -216,45 +216,19 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // 🛡️ SENTINEL SECURITY FIX: Strict validation for financial data
-      match /transactions/{transactionId} {
-        // TEMPORARY: Completely permissive for debugging - NO VALIDATION
-        allow read, write: if true;
-      }
 
-      match /accounts/{accountId} {
-        // TEMPORARY: Completely permissive for debugging - NO VALIDATION
-        allow read, write: if true;
-      }
-
-      match /buckets/{bucketId} {
-        // TEMPORARY: Completely permissive for debugging - NO VALIDATION
-        allow read, write: if true;
-      }
-
-      // All other subcollections (calendarItems, pantry, meals, etc.)
-      // 🛡️ SENTINEL SECURITY FIX: Exclude collections with specific rules from wildcard to prevent validation bypass
-      // Collections with specific rules (must be excluded from wildcard):
-      // - members (lines 91-147) - profile and membership management
-      // - habits (lines 150-169) - habit tracking with validation
-      // - apiKeys (lines 172-186) - ADMIN-ONLY sensitive data
-      // - apiUsage (lines 189-194) - rate limiting data
-      // - shoppingList (lines 197-206) - validated shopping items
-      // - transactions (lines 209-218) - financial data with strict validation
-      // - accounts (lines 220-226) - financial accounts
-      // - buckets (lines 228-234) - budget buckets
+      // All other subcollections (transactions, accounts, buckets, calendarItems, pantry, meals, etc.)
+      // Use simple authentication-based access control
+      // Specific collections with custom rules are excluded below
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
-        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
-        allow write: if isMemberOf(householdId) &&
+        allow read: if isAuthenticated() && subcollection != 'apiKeys';
+        allow write: if isAuthenticated() &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
                      subcollection != 'shoppingList' &&
                      subcollection != 'apiKeys' &&
-                     subcollection != 'apiUsage' &&
-                     subcollection != 'transactions' &&
-                     subcollection != 'accounts' &&
-                     subcollection != 'buckets';
+                     subcollection != 'apiUsage';
       }
     }
 
