@@ -35,6 +35,10 @@ service cloud.firestore {
       return num is number;
     }
 
+    function isValidBoolean(val) {
+      return val is bool;
+    }
+
     // Households collection
     match /households/{householdId} {
       // 🛡️ SENTINEL SECURITY FIX: Prevent IDOR/Information Disclosure
@@ -205,8 +209,31 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
+      // Transactions subcollection with input validation
+      match /transactions/{transactionId} {
+        allow read: if isMemberOf(householdId);
+        // 🛡️ SENTINEL SECURITY FIX: Enforce type and length validation to prevent storage exhaustion and data corruption
+        allow create, update: if isMemberOf(householdId) &&
+                              isValidNumber(request.resource.data.amount) &&
+                              isValidString(request.resource.data.merchant, 100) &&
+                              isValidString(request.resource.data.category, 50) &&
+                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD
+                              // Optional fields
+                              isValidOptionalString(request.resource.data.get('notes', null), 500) &&
+                              isValidOptionalString(request.resource.data.get('payPeriodId', null), 20) &&
+                              isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              // Booleans
+                              (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
+                              (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
+                              // Arrays (basic type check)
+                              (request.resource.data.get('relatedHabitIds', null) == null || request.resource.data.relatedHabitIds is list) &&
+                              // Status enum validation
+                              (request.resource.data.get('status', null) == null || request.resource.data.status in ['verified', 'pending_review']);
 
-      // All other subcollections (transactions, accounts, buckets, calendarItems, pantry, meals, etc.)
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (accounts, buckets, calendarItems, pantry, meals, etc.)
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded below
       match /{subcollection}/{document} {
@@ -217,7 +244,8 @@ service cloud.firestore {
                      subcollection != 'habits' &&
                      subcollection != 'shoppingList' &&
                      subcollection != 'apiKeys' &&
-                     subcollection != 'apiUsage';
+                     subcollection != 'apiUsage' &&
+                     subcollection != 'transactions';
       }
     }
 
