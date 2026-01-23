@@ -1460,35 +1460,59 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // --- ACTIONS: TRANSACTIONS ---
 
   const addTransaction = useCallback(async (tx: Transaction) => {
+    console.log('[addTransaction] Called with:', {
+      source: tx.source,
+      amount: tx.amount,
+      merchant: tx.merchant,
+      category: tx.category,
+      date: tx.date,
+      status: tx.status,
+      isRecurring: tx.isRecurring,
+      isRecurringType: typeof tx.isRecurring,
+      autoCategorized: tx.autoCategorized,
+      autoCategorizedType: typeof tx.autoCategorized
+    });
+
     if (!householdId) {
+      console.error('[addTransaction] No household selected');
       throw new Error('No household selected');
     }
     if (!user) {
+      console.error('[addTransaction] Not authenticated');
       throw new Error('Not authenticated');
     }
 
     // Validate required fields before attempting Firestore write
     if (!tx.amount || typeof tx.amount !== 'number') {
+      console.error('[addTransaction] Invalid amount:', tx.amount, typeof tx.amount);
       throw new Error('Invalid amount');
     }
     if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) {
+      console.error('[addTransaction] Invalid merchant:', tx.merchant, typeof tx.merchant);
       throw new Error('Invalid merchant');
     }
     if (!tx.category || typeof tx.category !== 'string') {
+      console.error('[addTransaction] Invalid category:', tx.category, typeof tx.category);
       throw new Error('Invalid category');
     }
     if (!tx.date || typeof tx.date !== 'string') {
+      console.error('[addTransaction] Invalid date:', tx.date, typeof tx.date);
       throw new Error('Invalid date');
     }
     if (!['verified', 'pending_review'].includes(tx.status)) {
+      console.error('[addTransaction] Invalid status:', tx.status);
       throw new Error('Invalid status');
     }
     if (typeof tx.isRecurring !== 'boolean') {
+      console.error('[addTransaction] isRecurring must be boolean, got:', tx.isRecurring, typeof tx.isRecurring);
       throw new Error('isRecurring must be boolean');
     }
     if (typeof tx.autoCategorized !== 'boolean') {
+      console.error('[addTransaction] autoCategorized must be boolean, got:', tx.autoCategorized, typeof tx.autoCategorized);
       throw new Error('autoCategorized must be boolean');
     }
+
+    console.log('[addTransaction] All validations passed');
 
     try {
       // Assign pay period ID based on paycheck approval

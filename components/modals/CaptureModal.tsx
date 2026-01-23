@@ -143,8 +143,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   };
 
   // Initialize Defaults when modal opens
+  // Use ref to track if we've initialized to avoid dependency loops
+  const hasInitialized = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !hasInitialized.current) {
       // Transaction defaults
       if (!category && dynamicCategories.length > 0) {
         setCategory(dynamicCategories[0]);
@@ -161,8 +164,15 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       if (!todoAssignee) {
          setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
       }
+
+      hasInitialized.current = true;
     }
-  }, [isOpen, dynamicCategories, category, transactionDate, todoDate, todoAssignee, currentUser, members]);
+
+    // Reset flag when modal closes
+    if (!isOpen) {
+      hasInitialized.current = false;
+    }
+  }, [isOpen, dynamicCategories, currentUser, members]);
 
   // Reset state when closing
   const handleClose = () => {
@@ -429,8 +439,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       isRecurring: isRecurring, // Ensure boolean, not undefined
       source: 'manual',
       autoCategorized: false,
-      ...(selectedHabitIds.length > 0 && { relatedHabitIds: selectedHabitIds })
+      relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined
     };
+
+    // Debug log before adding
+    console.log('[CaptureModal] Adding manual transaction:', {
+      amount: parsedAmount,
+      merchant: trimmedMerchant,
+      category,
+      date: transactionDate,
+      status: newTransaction.status,
+      isRecurring: newTransaction.isRecurring,
+      relatedHabitIds: newTransaction.relatedHabitIds
+    });
 
     try {
       await addTransaction(newTransaction);
