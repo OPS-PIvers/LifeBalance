@@ -5,3 +5,7 @@
 ## 2024-06-03 - Modal Accessibility Patterns
 **Learning:** Ad-hoc modal implementations frequently miss `aria-label` on icon-only close buttons, rendering them invisible to screen readers. Relying on the `X` icon visual is insufficient.
 **Action:** Standardize a `ModalHeader` component or strictly enforce `aria-label="Close modal"` reviews for any icon-only button implementation.
+
+## 2026-01-23 - Standardizing Form Error Accessibility
+**Learning:** Visual error messages adjacent to inputs are insufficient for screen reader users without explicit programmatic association.
+**Action:** Enforce `aria-describedby` linking input to error message ID and `aria-invalid="true"` on all form inputs in the design system.

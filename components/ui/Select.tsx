@@ -1,4 +1,4 @@
-import React, { SelectHTMLAttributes, forwardRef } from 'react';
+import React, { SelectHTMLAttributes, forwardRef, useId } from 'react';
 import { cn } from '../../utils/cn';
 import { ChevronDown } from 'lucide-react';
 
@@ -10,7 +10,9 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, icon, id, children, ...props }, ref) => {
-    const selectId = id || (label ? `select-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
+    const generatedId = useId();
+    const selectId = id || (label ? `select-${label.toLowerCase().replace(/\s+/g, '-')}` : generatedId);
+    const errorId = `${selectId}-error`;
 
     return (
       <div className="w-full">
@@ -31,6 +33,8 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <select
             id={selectId}
             ref={ref}
+            aria-invalid={!!error}
+            aria-describedby={error ? errorId : undefined}
             className={cn(
               "w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70 disabled:bg-gray-100 appearance-none",
               icon ? "pl-10" : "pl-3",
@@ -47,7 +51,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           </div>
         </div>
         {error && (
-          <p className="mt-1 text-sm text-money-neg">{error}</p>
+          <p id={errorId} className="mt-1 text-sm text-money-neg">{error}</p>
         )}
       </div>
     );

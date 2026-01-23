@@ -94,4 +94,19 @@ describe('Select', () => {
       );
       expect(screen.getByTestId('chevron-down')).toBeInTheDocument();
   });
+
+  it('associates error message with select via ARIA attributes', () => {
+    render(
+      <Select error="Invalid selection" label="Test Label">
+        <option value="1">Option 1</option>
+      </Select>
+    );
+    const select = screen.getByLabelText('Test Label');
+    const error = screen.getByText('Invalid selection');
+
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAttribute('aria-describedby', error.id);
+    expect(error.id).toBeDefined();
+    expect(error.id).toContain('error');
+  });
 });
