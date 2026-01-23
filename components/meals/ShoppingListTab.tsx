@@ -263,37 +263,39 @@ const ShoppingListTab: React.FC = () => {
              </form>
         </div>
 
-        {/* AI & History Buttons */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Helper Actions Row: AI, History, Scan */}
+        <div className="flex items-center gap-2">
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all disabled:opacity-50"
+                title="AI Optimize List"
              >
-                {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>AI Optimize</span>
+                {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                <span>Optimize</span>
              </button>
+
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all"
+                title="View Item History"
              >
-                <Clock className="w-4 h-4" />
+                <Clock className="w-3.5 h-3.5" />
                 <span>History</span>
              </button>
-        </div>
 
-        {/* Receipt Scan */}
-        <label className="flex items-center justify-center gap-2 p-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-medium text-brand-700 hover:bg-gray-50 active:bg-gray-100 transition-all w-full cursor-pointer">
-          {isProcessingReceipt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-          <span>Scan Receipt to Pantry</span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleReceiptUpload}
-            disabled={isProcessingReceipt}
-          />
-        </label>
+             <label className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all cursor-pointer disabled:opacity-50">
+                {isProcessingReceipt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+                <span>Scan Receipt</span>
+                <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleReceiptUpload}
+                    disabled={isProcessingReceipt}
+                />
+            </label>
+        </div>
 
         {/* Clear Checked */}
         {shoppingList.some(i => i.isPurchased) && (
