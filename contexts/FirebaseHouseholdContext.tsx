@@ -385,52 +385,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Members listener
     const membersQuery = query(collection(db, `households/${householdId}/members`));
     unsubscribers.push(
-      onSnapshot(membersQuery, async (snapshot) => {
+      onSnapshot(membersQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
         setMembers(data);
 
         // Set current user
-        let current = data.find(m => m.uid === user?.uid);
-
-        // AUTO-FIX: If current user's member document doesn't exist, create it
-        if (user && !current) {
-          console.warn('[FirebaseHouseholdContext] Member document missing for current user. Auto-creating...');
-          try {
-            // Check if user is the household creator (has permission to create member doc)
-            const householdDoc = await getDoc(doc(db, `households/${householdId}`));
-            if (householdDoc.exists()) {
-              const householdData = householdDoc.data();
-              const isCreator = householdData.createdBy === user.uid;
-              const role = isCreator ? 'admin' : 'member';
-
-              const newMemberDoc = {
-                uid: user.uid,
-                displayName: user.displayName || 'User',
-                email: user.email || '',
-                photoURL: user.photoURL || '',
-                role: role,
-                points: {
-                  daily: 0,
-                  weekly: 0,
-                  total: 0,
-                },
-                joinedAt: serverTimestamp(),
-              };
-
-              await setDoc(doc(db, `households/${householdId}/members/${user.uid}`), newMemberDoc);
-
-              console.log('[FirebaseHouseholdContext] Member document auto-created successfully');
-              toast.success('Account setup completed');
-
-              // Set current user immediately (snapshot will update on next fire)
-              current = { ...newMemberDoc, uid: user.uid } as HouseholdMember;
-            }
-          } catch (error) {
-            console.error('[FirebaseHouseholdContext] Failed to auto-create member document:', error);
-            toast.error('Failed to complete account setup. Please refresh the page.');
-          }
-        }
-
+        const current = data.find(m => m.uid === user?.uid);
         setCurrentUser(current || null);
       })
     );

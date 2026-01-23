@@ -92,16 +92,13 @@ service cloud.firestore {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
         allow read: if isMemberOf(householdId) || request.auth.uid == memberId;
 
-        // Secure creation: Must be creator OR already in memberUids OR provide valid invite code
+        // Secure creation: Must be creator OR provide valid invite code
         // - Household creator can create their member doc with any role.
-        // - Users already in memberUids can create their member doc (auto-fix for missing docs).
         // - Invite-based joins must not assign themselves an admin role.
         allow create: if isAuthenticated() && request.auth.uid == memberId && (
           // Case 1: Household creator (admin) - createdBy check
           get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
-          // Case 2: User already in memberUids (auto-fix for missing member document)
-          get(/databases/$(database)/documents/households/$(householdId)).data.memberUids.hasAny([request.auth.uid]) ||
-          // Case 3: Joining via Invite Code (non-creator)
+          // Case 2: Joining via Invite Code (non-creator)
           (
             request.resource.data.inviteCode != null &&
             exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)) &&
