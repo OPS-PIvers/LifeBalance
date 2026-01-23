@@ -1515,16 +1515,38 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
 
       console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
-      console.log('HouseholdId:', householdId);
-      console.log('User UID:', user.uid);
-      console.log('Member path:', `households/${householdId}/members/${user.uid}`);
 
       // Check if member document exists
       const memberDoc = await getDoc(doc(db, `households/${householdId}/members/${user.uid}`));
       console.log('Member document exists:', memberDoc.exists());
+
+      toast.loading(`Checking member doc at households/${householdId.substring(0,8)}.../members/${user.uid.substring(0,8)}...`, { id: 'debug1', duration: 10000 });
+      toast.loading(`Member doc exists: ${memberDoc.exists()}`, { id: 'debug2', duration: 10000 });
+
       if (!memberDoc.exists()) {
         console.error('MEMBER DOCUMENT MISSING! This will cause permission denied.');
-        throw new Error('Member document missing - cannot create transaction');
+        toast.error('MEMBER DOC MISSING! Creating it now...', { duration: 10000 });
+
+        // Auto-create member document
+        const householdDoc = await getDoc(doc(db, `households/${householdId}`));
+        if (householdDoc.exists()) {
+          const householdData = householdDoc.data();
+          const isCreator = householdData.createdBy === user.uid;
+          const role = isCreator ? 'admin' : 'member';
+
+          await setDoc(doc(db, `households/${householdId}/members/${user.uid}`), {
+            uid: user.uid,
+            displayName: user.displayName || 'User',
+            email: user.email || '',
+            photoURL: user.photoURL || '',
+            role: role,
+            points: { daily: 0, weekly: 0, total: 0 },
+            joinedAt: serverTimestamp(),
+          });
+
+          toast.success('Member doc created! Retry transaction.', { duration: 10000 });
+        }
+        throw new Error('Member document was missing - created it, please try again');
       }
 
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
