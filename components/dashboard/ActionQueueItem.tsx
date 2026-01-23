@@ -50,11 +50,21 @@ const areActionQueueItemPropsEqual = (
   // Check data dependencies (shallow comparison)
   // This ensures that if the parent passes the same array references, we don't re-render
   // unless the item itself changed.
-  if (prev.buckets !== next.buckets ||
-      prev.habits !== next.habits ||
-      prev.transactions !== next.transactions ||
-      prev.members !== next.members) {
+
+  // Members are used in the summary view (assignee chip), so we must always check for updates.
+  if (prev.members !== next.members) {
       return false;
+  }
+
+  // OPTIMIZATION: Buckets, Habits, and Transactions are ONLY used in the expanded view.
+  // If the item is collapsed (and staying collapsed), we can safely ignore changes to these large collections.
+  // This prevents the entire list from re-rendering when a single transaction is updated.
+  if (next.isExpanded) {
+    if (prev.buckets !== next.buckets ||
+        prev.habits !== next.habits ||
+        prev.transactions !== next.transactions) {
+        return false;
+    }
   }
 
   // Check action handlers (should be stable if from context)

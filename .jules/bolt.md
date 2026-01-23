@@ -19,3 +19,7 @@
 ## 2026-02-14 - [Input State Isolation in Lists]
 **Learning:** When an editable field exists within a list item, lifting that state to the parent (to coordinate 'only one editing at a time') causes the entire list to re-render on every keystroke.
 **Action:** Lift the 'isEditing' boolean to the parent to enforce singleton editing, but keep the 'currentValue' state local to the child component. Use a derived state pattern (syncing state when prop changes) or `key` resetting to initialize the local state when editing begins. This ensures only the active item re-renders while typing.
+
+## 2026-02-19 - [Conditional Prop Dependency in Memoization]
+**Learning:** Components receiving frequent global updates (e.g., `transactions` list from Firestore) will re-render constantly even if `React.memo` is used, because the global array reference changes. If the component only displays this data in a specific state (e.g., `isExpanded`), validating it in `arePropsEqual` unconditionally defeats the optimization.
+**Action:** In `arePropsEqual`, strictly ignore changes to expensive data props if the component's state (e.g., `!isExpanded`) makes them invisible. Only check them when the data is actually being rendered. This prevents background updates from thrashing the UI for collapsed list items.
