@@ -1,5 +1,4 @@
-/* eslint-disable */
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings, Store } from 'lucide-react';
