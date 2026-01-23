@@ -85,6 +85,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
         <button
           onClick={onClose}
           className="p-2 text-brand-400 hover:bg-brand-100 rounded-full transition-colors"
+          aria-label="Close modal"
         >
           <X size={20} />
         </button>
@@ -93,10 +94,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Title */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase">
+            <label htmlFor="goal-title" className="text-xs font-bold text-brand-400 uppercase">
               Goal Title *
             </label>
             <input
+              id="goal-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -107,10 +109,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
 
           {/* Description */}
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase">
+            <label htmlFor="goal-description" className="text-xs font-bold text-brand-400 uppercase">
               Description (Optional)
             </label>
             <textarea
+              id="goal-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add details about this goal..."
@@ -121,10 +124,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
           {/* Year and Required Months */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-brand-400 uppercase">
+              <label htmlFor="goal-year" className="text-xs font-bold text-brand-400 uppercase">
                 Year
               </label>
               <input
+                id="goal-year"
                 type="number"
                 value={year}
                 onChange={(e) => setYear(parseInt(e.target.value))}
@@ -135,10 +139,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-bold text-brand-400 uppercase">
+              <label htmlFor="goal-required-months" className="text-xs font-bold text-brand-400 uppercase">
                 Required Months *
               </label>
               <input
+                id="goal-required-months"
                 type="number"
                 value={requiredMonths}
                 onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
