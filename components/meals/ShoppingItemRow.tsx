@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React from 'react';
 import { ShoppingItem } from '@/types/schema';
-import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo, AnimatePresence } from 'framer-motion';
+import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
 import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -14,7 +14,6 @@ interface ShoppingItemRowProps {
 export const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
-  const [swiped, setSwiped] = useState<'left' | 'right' | null>(null);
 
   // Background color interpolation based on drag position
   const bgColor = useTransform(

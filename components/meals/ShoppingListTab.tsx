@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings, Store } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
@@ -326,8 +326,8 @@ const ShoppingListTab: React.FC = () => {
                     <ShoppingItemRow
                         key={item.id}
                         item={item}
-                        onCheck={toggleShoppingItemPurchased}
-                        onDelete={deleteShoppingItem}
+                        onCheck={(i) => toggleShoppingItemPurchased(i.id)}
+                        onDelete={(i) => deleteShoppingItem(i.id)}
                         onEdit={setEditingItem}
                     />
                 ))}
