@@ -207,245 +207,6 @@ const ShoppingListTab: React.FC = () => {
         toast.success('Updated');
     };
 
-<<<<<<< HEAD
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editingItem, handleSaveEdit]);
-
-  // Filter items
-  const filteredItems = useMemo(() => {
-    if (filterStoreId === 'all') return shoppingList;
-
-    // Find the store name to filter by
-    const storeToFilter = stores.find(s => s.id === filterStoreId);
-    if (!storeToFilter) return shoppingList; // Should not happen, but safe fallback
-
-    return shoppingList.filter(item =>
-        item.store && item.store.toLowerCase() === storeToFilter.name.toLowerCase()
-    );
-  }, [shoppingList, filterStoreId, stores]);
-
-  // Group by category
-  const groupedItems = filteredItems.reduce((acc, item) => {
-    const cat = item.category || 'Uncategorized';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(item);
-    return acc;
-  }, {} as Record<string, ShoppingItem[]>);
-
-  // Sort categories alphabetically or custom order
-  const sortedCategories = Object.keys(groupedItems).sort();
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectAll = () => {
-    // Only select filtered items
-    const filteredIds = filteredItems.map(i => i.id);
-    if (selectedIds.size === filteredIds.length && filteredIds.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredIds));
-    }
-  };
-
-  const handleExport = () => {
-    if (shoppingList.length === 0) {
-      toast.error("Shopping list is empty");
-      return;
-    }
-
-    const exportData = shoppingList.map(item => ({
-      Name: item.name,
-      Category: item.category || 'Uncategorized',
-      Quantity: item.quantity || '',
-      Store: item.store || '',
-      Status: item.isPurchased ? 'Purchased' : 'Pending'
-    }));
-
-    generateCsvExport(exportData, 'shopping-list-export');
-    toast.success("Export started");
-  };
-
-  const handleShareList = async () => {
-    // Share pending items only
-    const itemsToShare = shoppingList.filter(i => !i.isPurchased);
-    if (itemsToShare.length === 0) {
-      toast('No pending items to share', { icon: 'ℹ️' });
-      return;
-    }
-
-    const text = formatShoppingListForShare(itemsToShare);
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success('Shopping list copied to clipboard!');
-    } catch (err) {
-      console.error('Failed to copy:', err);
-      toast.error('Failed to copy to clipboard');
-    }
-  };
-
-  const handleBatchPurchase = async () => {
-    if (selectedIds.size === 0) return;
-    setIsBatchProcessing(true);
-    try {
-      // 1. Identify items that actually need to be purchased
-      const itemsToPurchase = Array.from(selectedIds).filter(id => {
-        const item = shoppingList.find(i => i.id === id);
-        return item && !item.isPurchased;
-      });
-
-      if (itemsToPurchase.length === 0) {
-        toast('All selected items are already marked as purchased', { icon: 'ℹ️' });
-        setSelectedIds(new Set());
-        setIsSelectionMode(false);
-        setIsBatchProcessing(false);
-        return;
-      }
-
-      // 2. Perform actions only on those items
-      const promises = itemsToPurchase.map(id => toggleShoppingItemPurchased(id));
-
-      const results = await Promise.allSettled(promises);
-      const successful = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      if (successful > 0) {
-        toast.success(`Marked ${successful} items as purchased`);
-      }
-
-      if (failed > 0) {
-        toast.error(`Failed to update ${failed} items`);
-      }
-
-      setSelectedIds(new Set());
-      setIsSelectionMode(false);
-    } catch (error) {
-      console.error('Batch purchase failed:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setIsBatchProcessing(false);
-    }
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedIds.size === 0) return;
-    setIsBatchProcessing(true);
-    try {
-      const promises = Array.from(selectedIds).map(id => deleteShoppingItem(id));
-      const results = await Promise.allSettled(promises);
-      const failed = results.filter(r => r.status === 'rejected');
-
-      if (failed.length > 0) {
-        toast.error(`Deleted ${selectedIds.size - failed.length}, failed ${failed.length}`);
-      } else {
-        toast.success(`Deleted ${selectedIds.size} items`);
-      }
-
-      setSelectedIds(new Set());
-      setIsSelectionMode(false);
-      setShowBatchDeleteConfirm(false);
-    } catch (error) {
-      console.error('Batch delete failed:', error);
-      toast.error('An unexpected error occurred');
-    } finally {
-      setIsBatchProcessing(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6 pb-20">
-        <div className="flex justify-between items-center">
-             {/* Filter Bar */}
-            {!isSelectionMode && stores.length > 0 && (
-                <div
-                    className="flex items-center gap-2 overflow-x-auto pb-1 max-w-[70%] no-scrollbar"
-                    role="group"
-                    aria-label="Filter by store"
-                >
-                    <button
-                        onClick={() => setFilterStoreId('all')}
-                        aria-pressed={filterStoreId === 'all'}
-                        className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                            filterStoreId === 'all'
-                            ? 'bg-brand-600 text-white border-brand-600'
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                        }`}
-                    >
-                        All Stores
-                    </button>
-                    {stores.map(store => (
-                        <button
-                            key={store.id}
-                            onClick={() => setFilterStoreId(store.id)}
-                            aria-pressed={filterStoreId === store.id}
-                            aria-label={`Filter by ${store.name}`}
-                            className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 ${
-                                filterStoreId === store.id
-                                ? 'bg-brand-600 text-white border-brand-600'
-                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                            }`}
-                        >
-                            <Store className="w-3 h-3" />
-                            {store.name}
-                        </button>
-                    ))}
-                </div>
-            )}
-
-            {/* Title when selection mode is active and no stores, or just spacer */}
-            {isSelectionMode && <div className="font-bold text-brand-800">Select Items</div>}
-
-            {/* Actions: Settings & Selection Toggle */}
-            <div className={`flex justify-end gap-2 ${stores.length === 0 && !isSelectionMode ? 'w-full' : 'ml-auto'}`}>
-                 {!isSelectionMode && (
-                    <>
-                        <button
-                            onClick={handleShareList}
-                            disabled={shoppingList.filter(i => !i.isPurchased).length === 0}
-                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
-                            title="Copy list to clipboard"
-                            aria-label="Copy list to clipboard"
-                        >
-                            <Share2 className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={handleExport}
-                            disabled={shoppingList.length === 0}
-                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
-                            title="Export to CSV"
-                            aria-label="Export to CSV"
-                        >
-                            <Download className="w-5 h-5" />
-                        </button>
-                        <button
-                            onClick={() => setIsSettingsOpen(true)}
-                            className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
-                            aria-label="Shopping List Settings"
-                        >
-                            <Settings className="w-5 h-5" />
-                        </button>
-                    </>
-                 )}
-                 <button
-                    onClick={() => setIsSelectionMode(!isSelectionMode)}
-                    className={`p-2 rounded-lg transition-colors ${isSelectionMode ? 'bg-brand-800 text-white' : 'text-brand-600 bg-brand-50 hover:bg-brand-100'}`}
-                    title={isSelectionMode ? "Cancel Selection" : "Select Items"}
-                    aria-label={isSelectionMode ? "Cancel Selection" : "Select Items"}
-                 >
-                    {isSelectionMode ? <X className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
-                 </button>
-            </div>
-=======
     const handleExport = () => {
         if (shoppingList.length === 0) return;
         const exportData = shoppingList.map(item => ({
@@ -459,10 +220,37 @@ const ShoppingListTab: React.FC = () => {
         toast.success("Export started");
     };
 
+    const handleShareList = async () => {
+        // Share pending items only
+        const itemsToShare = shoppingList.filter(i => !i.isPurchased);
+        if (itemsToShare.length === 0) {
+          toast('No pending items to share', { icon: 'ℹ️' });
+          return;
+        }
+
+        const text = formatShoppingListForShare(itemsToShare);
+        try {
+          await navigator.clipboard.writeText(text);
+          toast.success('Shopping list copied to clipboard!');
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          toast.error('Failed to copy to clipboard');
+        }
+    };
+
   return (
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
         <div className="flex justify-end gap-2">
+            <button
+                onClick={handleShareList}
+                disabled={shoppingList.filter(i => !i.isPurchased).length === 0}
+                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                title="Copy list to clipboard"
+                aria-label="Copy list to clipboard"
+            >
+                <Share2 className="w-5 h-5" />
+            </button>
             <button
                 onClick={handleExport}
                 disabled={shoppingList.length === 0}
@@ -478,7 +266,6 @@ const ShoppingListTab: React.FC = () => {
             >
                 <Settings className="w-5 h-5" />
             </button>
->>>>>>> origin/main
         </div>
 
         {/* Quick Add Input */}
