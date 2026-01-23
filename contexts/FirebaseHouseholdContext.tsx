@@ -385,13 +385,47 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Members listener
     const membersQuery = query(collection(db, `households/${householdId}/members`));
     unsubscribers.push(
-      onSnapshot(membersQuery, (snapshot) => {
+      onSnapshot(membersQuery, async (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
         setMembers(data);
 
         // Set current user
         const current = data.find(m => m.uid === user?.uid);
         setCurrentUser(current || null);
+
+        // AUTO-FIX: Ensure current user has a member document
+        // This handles legacy households created before member documents were required
+        if (user && !current) {
+          console.log('[FirebaseHouseholdContext] Member document missing for current user, creating...');
+          try {
+            // Check if user is in household's memberUids array
+            const householdDoc = await getDoc(doc(db, 'households', householdId));
+            const householdData = householdDoc.data();
+
+            if (householdData && householdData.memberUids?.includes(user.uid)) {
+              // User is in memberUids but missing member document - create it
+              const isCreator = householdData.createdBy === user.uid;
+              await setDoc(doc(db, 'households', householdId, 'members', user.uid), {
+                uid: user.uid,
+                displayName: user.displayName || 'User',
+                email: user.email || '',
+                photoURL: user.photoURL || '',
+                role: isCreator ? 'admin' : 'member',
+                points: {
+                  daily: 0,
+                  weekly: 0,
+                  total: 0,
+                },
+                joinedAt: serverTimestamp(),
+              });
+              console.log('[FirebaseHouseholdContext] Member document created successfully');
+            } else {
+              console.warn('[FirebaseHouseholdContext] User not in household memberUids, cannot create member doc');
+            }
+          } catch (error) {
+            console.error('[FirebaseHouseholdContext] Failed to create member document:', error);
+          }
+        }
       })
     );
 

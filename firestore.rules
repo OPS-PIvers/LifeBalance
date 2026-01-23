@@ -14,17 +14,6 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid));
     }
 
-    // Helper function: Check if user has access to household
-    // Simplified to avoid circular dependency with household read permissions
-    function hasHouseholdAccess(householdId) {
-      return isAuthenticated() && (
-        // Check if member document exists
-        exists(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)) ||
-        // Global admin override
-        request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"
-      );
-    }
-
     // Helper function: Check if user is admin of household
     function isAdminOf(householdId) {
       return isAuthenticated() &&
@@ -218,12 +207,12 @@ service cloud.firestore {
 
 
       // All other subcollections (transactions, accounts, buckets, calendarItems, pantry, meals, etc.)
-      // Use simple authentication-based access control
+      // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded below
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
-        allow read: if isAuthenticated() && subcollection != 'apiKeys';
-        allow write: if isAuthenticated() &&
+        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
+        allow write: if isMemberOf(householdId) &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
                      subcollection != 'shoppingList' &&
