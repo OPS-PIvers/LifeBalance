@@ -219,22 +219,22 @@ service cloud.firestore {
                               isValidString(request.resource.data.category, 50) &&
                               isValidString(request.resource.data.date, 10) && // YYYY-MM-DD format
                               // Validate status (default to 'verified' if not present)
-                              (request.resource.data.get('status', 'verified') in ['verified', 'pending_review']) &&
+                              (!('status' in request.resource.data) || request.resource.data.status in ['verified', 'pending_review']) &&
                               // Validate optional fields
-                              isValidOptionalString(request.resource.data.get('notes', null), 1000) &&
-                              isValidOptionalString(request.resource.data.get('payPeriodId', null), 50) &&
-                              isValidOptionalString(request.resource.data.get('source', 'manual'), 50) &&
+                              (!('notes' in request.resource.data) || isValidOptionalString(request.resource.data.notes, 1000)) &&
+                              (!('payPeriodId' in request.resource.data) || isValidOptionalString(request.resource.data.payPeriodId, 50)) &&
+                              (!('source' in request.resource.data) || isValidOptionalString(request.resource.data.source, 50)) &&
                               // Boolean flags must be booleans if present
                               (!('isRecurring' in request.resource.data) ||
                                request.resource.data.isRecurring is bool) &&
                               (!('autoCategorized' in request.resource.data) ||
                                request.resource.data.autoCategorized is bool) &&
                               // relatedHabitIds must be a reasonable list if present
-                              (request.resource.data.get('relatedHabitIds', null) == null ||
+                              (!('relatedHabitIds' in request.resource.data) ||
                                (request.resource.data.relatedHabitIds is list &&
                                 request.resource.data.relatedHabitIds.size() <= 50)) &&
                               // createdBy must match authenticated user if provided
-                              (request.resource.data.get('createdBy', request.auth.uid) == request.auth.uid);
+                              (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid);
 
         allow delete: if isMemberOf(householdId);
       }
@@ -252,7 +252,7 @@ service cloud.firestore {
                               // Validate type is one of the allowed enum values
                               (request.resource.data.type in ['checking', 'savings', 'credit']) &&
                               // Validate optional fields
-                              isValidOptionalString(request.resource.data.get('lastUpdated', null), 30);
+                              (!('lastUpdated' in request.resource.data) || isValidOptionalString(request.resource.data.lastUpdated, 30));
 
         allow delete: if isMemberOf(householdId);
       }
@@ -268,7 +268,7 @@ service cloud.firestore {
                               isValidNumber(request.resource.data.limit) &&
                               isValidString(request.resource.data.name, 50) &&
                               // Validate optional fields
-                              isValidOptionalString(request.resource.data.get('color', null), 20) &&
+                              (!('color' in request.resource.data) || isValidOptionalString(request.resource.data.color, 20)) &&
                               // Boolean flags must be booleans if present
                               (!('isVariable' in request.resource.data) ||
                                request.resource.data.isVariable is bool) &&
