@@ -65,7 +65,7 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
                 </div>
-                <span className="text-[9px] text-brand-400 uppercase tracking-wider">Today</span>
+                <span className="text-xxs text-brand-400 uppercase tracking-wider">Today</span>
               </div>
 
               {/* Vertical Divider */}
@@ -79,7 +79,7 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <TrendingUp className="w-4 h-4 text-habit-blue" />
                 </div>
-                <span className="text-[9px] text-brand-400 uppercase tracking-wider">Week</span>
+                <span className="text-xxs text-brand-400 uppercase tracking-wider">Week</span>
               </div>
             </button>
 

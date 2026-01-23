@@ -62,6 +62,27 @@ describe('Button', () => {
     expect(button).toHaveClass('text-red-400');
   });
 
+  it('applies success variant classes', () => {
+    render(<Button variant="success">Success</Button>);
+    const button = screen.getByRole('button', { name: /success/i });
+    expect(button).toHaveClass('bg-emerald-500');
+    expect(button).toHaveClass('text-white');
+  });
+
+  it('applies warning variant classes', () => {
+    render(<Button variant="warning">Warning</Button>);
+    const button = screen.getByRole('button', { name: /warning/i });
+    expect(button).toHaveClass('bg-amber-500');
+    expect(button).toHaveClass('text-white');
+  });
+
+  it('applies destructive variant classes', () => {
+    render(<Button variant="destructive">Destructive</Button>);
+    const button = screen.getByRole('button', { name: /destructive/i });
+    expect(button).toHaveClass('bg-rose-500');
+    expect(button).toHaveClass('text-white');
+  });
+
   // Size tests
   it('applies sm size classes', () => {
     render(<Button size="sm">Small</Button>);
