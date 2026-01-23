@@ -1514,7 +1514,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         docData.relatedHabitIds = tx.relatedHabitIds;
       }
 
+      console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
+      console.log('Transaction added successfully');
 
       // Update checking account balance
       const checkingAcc = accounts.find(a => a.type === 'checking');

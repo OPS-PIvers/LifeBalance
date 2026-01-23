@@ -437,19 +437,27 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.success("Transaction saved!");
       handleClose();
     } catch (error) {
-      console.error("Failed to save transaction:", error);
+      console.error("Failed to save transaction:", error, newTransaction);
 
-      // Extract meaningful error message
+      // Extract ALL error details for debugging
       let errorMsg = 'Unknown error';
       if (error instanceof Error) {
         errorMsg = error.message;
-      } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        errorMsg = String((error as { message: unknown }).message);
+      } else if (typeof error === 'object' && error !== null) {
+        if ('message' in error) {
+          errorMsg = String((error as { message: unknown }).message);
+        }
+        // Check for Firestore errors
+        if ('code' in error) {
+          errorMsg = `[${(error as { code: unknown }).code}] ${errorMsg}`;
+        }
       }
 
-      // Show first 100 chars of error to fit on mobile
-      const displayMsg = errorMsg.length > 100 ? errorMsg.substring(0, 97) + '...' : errorMsg;
-      toast.error(displayMsg, { duration: 5000 });
+      // Show error in parts if too long
+      toast.error(errorMsg, { duration: 10000 });
+
+      // Also show transaction data for debugging
+      toast.error(`Data: amt=${parsedAmount} merch=${trimmedMerchant.substring(0, 20)} cat=${category}`, { duration: 10000 });
     }
   };
 
