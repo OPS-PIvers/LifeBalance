@@ -18,6 +18,19 @@ const Dashboard: React.FC = () => {
     payCalendarItem,
     accounts,
     pendingItemsCount,
+    // Destructure required props for ActionQueueItemCard
+    buckets,
+    habits,
+    transactions,
+    members,
+    updateTransactionCategory,
+    updateTransaction,
+    deleteTransaction,
+    updateToDo,
+    deleteToDo,
+    completeToDo,
+    deferCalendarItem,
+    deleteCalendarItem,
   } = useHousehold();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -86,6 +99,18 @@ const Dashboard: React.FC = () => {
                   isExpanded={expandedId === item.id}
                   setExpandedId={setExpandedId}
                   setPayModalItemId={setPayModalItemId}
+                  buckets={buckets}
+                  habits={habits}
+                  transactions={transactions}
+                  members={members}
+                  updateTransactionCategory={updateTransactionCategory}
+                  updateTransaction={updateTransaction}
+                  deleteTransaction={deleteTransaction}
+                  updateToDo={updateToDo}
+                  deleteToDo={deleteToDo}
+                  completeToDo={completeToDo}
+                  deferCalendarItem={deferCalendarItem}
+                  deleteCalendarItem={deleteCalendarItem}
                 />
               ))}
             </div>

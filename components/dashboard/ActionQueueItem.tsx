@@ -4,12 +4,11 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isBefore, addDays, isAfter, startOfToday, isValid } from 'date-fns';
 import toast from 'react-hot-toast';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { showDeleteConfirmation } from '../../utils/toastHelpers';
 import {
   ActionQueueItem, isCalendarQueueItem, isTodoQueueItem, isTransactionQueueItem
 } from '../../hooks/useActionQueue';
-import { HouseholdMember } from '../../types/schema';
+import { HouseholdMember, BudgetBucket, Habit, Transaction, ToDo } from '../../types/schema';
 import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
 import Input from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -19,6 +18,22 @@ interface ActionQueueItemProps {
   isExpanded: boolean;
   setExpandedId: (id: string | null) => void;
   setPayModalItemId: (id: string | null) => void;
+
+  // Data props passed down from parent to avoid consuming context
+  buckets: BudgetBucket[];
+  habits: Habit[];
+  transactions: Transaction[];
+  members: HouseholdMember[];
+
+  // Action props passed down from parent
+  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  updateToDo: (id: string, updates: Partial<ToDo>) => Promise<void>;
+  deleteToDo: (id: string) => Promise<void>;
+  completeToDo: (id: string) => Promise<void>;
+  deferCalendarItem: (itemId: string) => Promise<void>;
+  deleteCalendarItem: (id: string) => Promise<void>;
 }
 
 const areActionQueueItemPropsEqual = (
@@ -30,6 +45,28 @@ const areActionQueueItemPropsEqual = (
       prev.setExpandedId !== next.setExpandedId ||
       prev.setPayModalItemId !== next.setPayModalItemId) {
     return false;
+  }
+
+  // Check data dependencies (shallow comparison)
+  // This ensures that if the parent passes the same array references, we don't re-render
+  // unless the item itself changed.
+  if (prev.buckets !== next.buckets ||
+      prev.habits !== next.habits ||
+      prev.transactions !== next.transactions ||
+      prev.members !== next.members) {
+      return false;
+  }
+
+  // Check action handlers (should be stable if from context)
+  if (prev.updateTransactionCategory !== next.updateTransactionCategory ||
+      prev.updateTransaction !== next.updateTransaction ||
+      prev.deleteTransaction !== next.deleteTransaction ||
+      prev.updateToDo !== next.updateToDo ||
+      prev.deleteToDo !== next.deleteToDo ||
+      prev.completeToDo !== next.completeToDo ||
+      prev.deferCalendarItem !== next.deferCalendarItem ||
+      prev.deleteCalendarItem !== next.deleteCalendarItem) {
+      return false;
   }
 
   // Check ID
@@ -48,7 +85,8 @@ const areActionQueueItemPropsEqual = (
   if (isCalendarQueueItem(prev.item) && isCalendarQueueItem(next.item)) {
        return prev.item.amount === next.item.amount &&
              prev.item.title === next.item.title &&
-             prev.item.date === next.item.date;
+             prev.item.date === next.item.date &&
+             prev.item.type === next.item.type;
   }
 
   if (isTodoQueueItem(prev.item) && isTodoQueueItem(next.item)) {
@@ -62,23 +100,22 @@ const areActionQueueItemPropsEqual = (
 
 // Optimization: Memoized to prevent re-renders of unexpanded items when one item is expanded/collapsed.
 // We use isExpanded boolean instead of passing expandedId string to ensure stable props for unexpanded items.
+// Updated 2026-02-19: Accepts context values as props to avoid re-rendering on unrelated context updates.
 export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
-  item, isExpanded, setExpandedId, setPayModalItemId
+  item, isExpanded, setExpandedId, setPayModalItemId,
+  buckets,
+  habits,
+  transactions,
+  members,
+  updateTransactionCategory,
+  updateTransaction,
+  deleteTransaction,
+  updateToDo,
+  deleteToDo,
+  completeToDo,
+  deferCalendarItem,
+  deleteCalendarItem,
 }) => {
-  const {
-    buckets,
-    habits,
-    transactions,
-    updateTransactionCategory,
-    updateTransaction,
-    deleteTransaction,
-    updateToDo,
-    deleteToDo,
-    completeToDo,
-    deferCalendarItem,
-    deleteCalendarItem,
-    members
-  } = useHousehold();
 
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
