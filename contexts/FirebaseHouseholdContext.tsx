@@ -189,6 +189,7 @@ export interface HouseholdContextType {
   // Shopping List Actions
   addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
+  reorderShoppingItems: (items: ShoppingItem[]) => Promise<void>;
   deleteShoppingItem: (id: string) => Promise<void>;
   toggleShoppingItemPurchased: (id: string) => Promise<void>;
   clearPurchasedShoppingItems: () => Promise<void>;
@@ -2688,6 +2689,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  const reorderShoppingItems = useCallback(async (items: ShoppingItem[]) => {
+    if (!householdId) return;
+    try {
+      const batch = writeBatch(db);
+      items.forEach((item, index) => {
+        const ref = doc(db, `households/${householdId}/shoppingList`, item.id);
+        batch.update(ref, { order: index });
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error('[reorderShoppingItems] Failed:', error);
+      toast.error('Failed to reorder items');
+    }
+  }, [householdId]);
+
   const deleteShoppingItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
@@ -3219,6 +3235,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteMeal,
     addShoppingItem,
     updateShoppingItem,
+    reorderShoppingItems,
     deleteShoppingItem,
     toggleShoppingItemPurchased,
     clearPurchasedShoppingItems,
@@ -3254,7 +3271,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMember, updateMember, removeMember,
     addPantryItem, updatePantryItem, deletePantryItem,
     addMeal, updateMeal, deleteMeal,
-    addShoppingItem, updateShoppingItem, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    addShoppingItem, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
     addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
