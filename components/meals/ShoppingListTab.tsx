@@ -140,6 +140,9 @@ const ShoppingListTab: React.FC = () => {
     }
   };
 
+  // Derive hasPendingItems to optimize render loop for disabled state
+  const hasPendingItems = shoppingList.some(i => !i.isPurchased);
+
   const handleReorder = (newOrder: ShoppingItem[]) => {
     setItems(newOrder);
     // Debounce or just call it?
@@ -246,7 +249,7 @@ const ShoppingListTab: React.FC = () => {
             <div className="flex gap-2">
                 <button
                     onClick={handleShareList}
-                    disabled={shoppingList.filter(i => !i.isPurchased).length === 0}
+                    disabled={!hasPendingItems}
                     className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
                     title="Copy list to clipboard"
                     aria-label="Copy list to clipboard"
