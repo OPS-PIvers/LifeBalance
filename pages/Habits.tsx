@@ -5,11 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
-import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
+import SmartHabitReorderModal from '../components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '../components/habits/HabitCoach';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
@@ -20,16 +21,25 @@ const Habits: React.FC = () => {
   const { habits } = useHousehold();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
+  const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
 
   // Check if there are habits that need migration
   const habitsNeedingMigration = habits.filter(
     h => !h.hasSubmissionTracking && h.completedDates && h.completedDates.length > 0
   );
 
-  // Group Habits by Category
-  const categories: string[] = Array.from(new Set(habits.map(h => h.category)));
+  // Group Habits by Category (with Sorting)
+  // Sort habits by order first
+  const sortedHabits = [...habits].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+  // Extract categories from sorted habits (Set preserves insertion order which is now sorted order)
+  const categories: string[] = Array.from(new Set(sortedHabits.map(h => h.category)));
+
   const groupedHabits: Record<string, Habit[]> = categories.reduce((acc, category) => {
-    acc[category] = habits.filter(h => h.category === category);
+    // Sort habits within category too
+    acc[category] = habits
+      .filter(h => h.category === category)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     return acc;
   }, {} as Record<string, Habit[]>);
 
@@ -100,6 +110,16 @@ const Habits: React.FC = () => {
                 title="Smart Adjust"
               >
                 <span className="hidden sm:inline">Adjust</span>
+              </Button>
+              <Button
+                onClick={() => setIsSmartReorderOpen(true)}
+                disabled={habits.length === 0}
+                variant="secondary"
+                size="sm"
+                leftIcon={<ListOrdered size={16} />}
+                title="Smart Reorder"
+              >
+                <span className="hidden sm:inline">Reorder</span>
               </Button>
               <Button
                 onClick={() => setIsWizardOpen(true)}
@@ -181,6 +201,7 @@ const Habits: React.FC = () => {
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
       <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
+      <SmartHabitReorderModal isOpen={isSmartReorderOpen} onClose={() => setIsSmartReorderOpen(false)} />
     </div>
   );
 };

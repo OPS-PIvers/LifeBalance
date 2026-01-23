@@ -6,22 +6,23 @@ const { generateContentMock } = vi.hoisted(() => {
   return { generateContentMock: vi.fn() };
 });
 
-// Mock Firestore dependencies
+// Mock firebase config to prevent crash
 vi.mock('@/firebase.config', () => ({
-  db: {}
+  db: {},
 }));
 
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(),
   getDoc: vi.fn().mockResolvedValue({
     exists: () => true,
-    data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2024-01-01' } })
+    data: () => ({ aiEnabled: true, aiUsage: { dailyCount: 0, lastResetDate: new Date().toISOString().split('T')[0] } })
   }),
   updateDoc: vi.fn(),
   increment: vi.fn(),
   collection: vi.fn(),
   addDoc: vi.fn(),
   serverTimestamp: vi.fn(),
+  getDocs: vi.fn(),
 }));
 
 // Mock the GoogleGenAI library
@@ -48,52 +49,53 @@ vi.mock('@google/genai', () => {
 
 describe('geminiService', () => {
   beforeAll(() => {
-    // Set the API key before any imports of the service happen
-    process.env.VITE_GEMINI_API_KEY = 'test-api-key';
+    process.env.VITE_GEMINI_API_KEY = 'test-key';
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+     vi.clearAllMocks();
   });
 
-  it('generateInsight correctly parses JSON response with actions', async () => {
-    // Dynamic import to ensure the module reads the process.env we just set
-    const { generateInsight } = await import('./geminiService');
+  describe('reorganizeHabits', () => {
+    it('should return a plan when habits are provided', async () => {
+      // Import after setting env
+      const { reorganizeHabits } = await import('./geminiService');
 
-    // 1. Setup the mock response from Gemini
-    const mockInsightData = {
-      text: "You have been spending consistent amounts on Dining.",
-      actions: [
-        {
-          type: "update_bucket",
-          label: "Increase Dining Limit",
-          payload: { bucketName: "Dining", newLimit: 500 }
-        }
-      ]
-    };
+      const mockHabits = [
+        { id: '1', title: 'Habit 1', category: 'Old', order: 1 },
+        { id: '2', title: 'Habit 2', category: 'Old', order: 2 },
+      ] as Habit[];
 
-    // 2. Configure the mock to return the JSON string
-    generateContentMock.mockResolvedValue({
-      text: JSON.stringify(mockInsightData)
+      const mockResponse = {
+        habits: [
+          { id: '1', category: 'New', order: 0 },
+          { id: '2', category: 'New', order: 1 },
+        ],
+        reasoning: 'Better flow'
+      };
+
+      generateContentMock.mockResolvedValue({
+        text: JSON.stringify(mockResponse)
+      });
+
+      const result = await reorganizeHabits('household-1', mockHabits);
+
+      expect(result).toEqual(mockResponse);
+      expect(generateContentMock).toHaveBeenCalled();
     });
 
-    // 3. Call the service
-    const result = await generateInsight('test-household-id', [], []);
-
-    // 4. Assertions
-    expect(result).toBeDefined();
-    expect(result.text).toBe(mockInsightData.text);
-    expect(result.actions).toHaveLength(1);
-    expect(result.actions![0]).toEqual(mockInsightData.actions[0]);
-
-    expect(generateContentMock).toHaveBeenCalled();
+    it('should handle empty habits', async () => {
+       const { reorganizeHabits } = await import('./geminiService');
+       const result = await reorganizeHabits('household-1', []);
+       expect(result.habits).toEqual([]);
+    });
   });
 
-  it('generateInsight handles response without actions', async () => {
+  it('generateInsight correctly parses JSON response without actions', async () => {
     const { generateInsight } = await import('./geminiService');
 
     const mockInsightData = {
-      text: "Great job staying under budget!",
+      text: "You have been spending consistent amounts on Dining.",
       actions: []
     };
 

@@ -177,6 +177,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habit deleted');
   }, []);
 
+  const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
+    setHabits(prev => prev.map(h => {
+      const update = updates.find(u => u.id === h.id);
+      if (update) {
+        return { ...h, order: update.order, category: update.category || h.category };
+      }
+      return h;
+    }));
+    toast.success('Mock: Habits reordered');
+  }, []);
+
   const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
     setHabits(prev => prev.map(h => {
       if (h.id !== id) return h;
@@ -431,6 +442,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addHabit,
     updateHabit,
     deleteHabit,
+    reorderHabits,
     toggleHabit,
     resetHabit: noOp,
     addHabitSubmission: noOp,
