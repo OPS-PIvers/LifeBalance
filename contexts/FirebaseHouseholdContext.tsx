@@ -1461,23 +1461,60 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addTransaction = useCallback(async (tx: Transaction) => {
     if (!householdId) {
-      throw new Error('No household selected. Please create or join a household first.');
+      throw new Error('No household selected');
     }
     if (!user) {
-      throw new Error('User not authenticated. Please sign in again.');
+      throw new Error('Not authenticated');
+    }
+
+    // Validate required fields before attempting Firestore write
+    if (!tx.amount || typeof tx.amount !== 'number') {
+      throw new Error('Invalid amount');
+    }
+    if (!tx.merchant || typeof tx.merchant !== 'string' || !tx.merchant.trim()) {
+      throw new Error('Invalid merchant');
+    }
+    if (!tx.category || typeof tx.category !== 'string') {
+      throw new Error('Invalid category');
+    }
+    if (!tx.date || typeof tx.date !== 'string') {
+      throw new Error('Invalid date');
+    }
+    if (!['verified', 'pending_review'].includes(tx.status)) {
+      throw new Error('Invalid status');
+    }
+    if (typeof tx.isRecurring !== 'boolean') {
+      throw new Error('isRecurring must be boolean');
+    }
+    if (typeof tx.autoCategorized !== 'boolean') {
+      throw new Error('autoCategorized must be boolean');
     }
 
     try {
       // Assign pay period ID based on paycheck approval
       const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
-      const sanitizedTx = sanitizeFirestoreData(tx);
-      await addDoc(collection(db, `households/${householdId}/transactions`), {
-        ...sanitizedTx,
-        payPeriodId,
+      // Build the document data explicitly to ensure compliance with Firestore rules
+      const docData: Record<string, unknown> = {
+        amount: tx.amount,
+        merchant: tx.merchant.trim(),
+        category: tx.category,
+        date: tx.date,
+        status: tx.status,
+        isRecurring: tx.isRecurring,
+        source: tx.source || 'manual',
+        autoCategorized: tx.autoCategorized,
+        payPeriodId: payPeriodId || null,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
-      });
+      };
+
+      // Add optional fields only if they exist
+      if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) {
+        docData.relatedHabitIds = tx.relatedHabitIds;
+      }
+
+      await addDoc(collection(db, `households/${householdId}/transactions`), docData);
 
       // Update checking account balance
       const checkingAcc = accounts.find(a => a.type === 'checking');

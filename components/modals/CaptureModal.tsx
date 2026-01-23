@@ -426,10 +426,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       category,
       date: transactionDate,
       status: isFuture ? 'pending_review' : 'verified',
-      isRecurring,
+      isRecurring: isRecurring, // Ensure boolean, not undefined
       source: 'manual',
       autoCategorized: false,
-      relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined
+      ...(selectedHabitIds.length > 0 && { relatedHabitIds: selectedHabitIds })
     };
 
     try {
@@ -438,7 +438,18 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       handleClose();
     } catch (error) {
       console.error("Failed to save transaction:", error);
-      toast.error(`Failed to save transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      // Extract meaningful error message
+      let errorMsg = 'Unknown error';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMsg = String((error as { message: unknown }).message);
+      }
+
+      // Show first 100 chars of error to fit on mobile
+      const displayMsg = errorMsg.length > 100 ? errorMsg.substring(0, 97) + '...' : errorMsg;
+      toast.error(displayMsg, { duration: 5000 });
     }
   };
 
