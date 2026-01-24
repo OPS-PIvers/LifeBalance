@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive';
   size?: 'sm' | 'md' | 'lg' | 'icon';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -18,6 +18,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       ghost: 'bg-transparent text-brand-600 hover:bg-brand-100',
       danger: 'bg-red-50 text-red-700 border-2 border-red-200 hover:bg-red-100',
       outline: 'bg-transparent border-2 border-brand-200 text-brand-600 hover:bg-brand-50',
+      dashed: 'bg-transparent border-2 border-dashed border-brand-200 text-brand-400 font-bold hover:bg-brand-50 hover:border-brand-300 shadow-none',
       subtle: 'bg-brand-100 text-brand-700 hover:bg-brand-200',
       'ghost-danger': 'bg-transparent text-red-400 hover:text-red-600 hover:bg-red-50',
       success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm',

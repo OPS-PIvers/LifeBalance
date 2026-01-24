@@ -70,6 +70,7 @@ vi.mock('lucide-react', () => ({
   GripVertical: () => <span data-testid="grip-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
   Loader2: () => <span data-testid="loader-icon" />,
+  ChevronDown: () => <span data-testid="chevron-down-icon" />,
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests

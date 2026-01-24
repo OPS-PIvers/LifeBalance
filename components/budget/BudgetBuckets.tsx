@@ -6,6 +6,8 @@ import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import Select from '../ui/Select';
 import { BudgetBucketCard } from './BudgetBucketCard';
 
 const BudgetBuckets: React.FC = () => {
@@ -211,12 +213,14 @@ const BudgetBuckets: React.FC = () => {
       })}
 
       {/* Add Bucket Button */}
-      <button 
+      <Button
+        variant="dashed"
         onClick={handleAddBucket}
-        className="w-full py-4 border-2 border-dashed border-brand-200 rounded-2xl flex items-center justify-center text-brand-400 font-bold hover:bg-brand-50 hover:border-brand-300 transition-colors"
+        className="w-full py-4 rounded-2xl"
+        leftIcon={<Plus size={20} />}
       >
-        <Plus size={20} className="mr-2" /> Add Bucket
-      </button>
+        Add Bucket
+      </Button>
 
       {/* Bucket Form Modal (Add/Edit) */}
       <BucketFormModal
@@ -250,9 +254,8 @@ const BudgetBuckets: React.FC = () => {
 
         <div className="space-y-3">
           <div>
-            <label className="text-xs font-bold text-brand-400 uppercase">Source of Funds</label>
-            <select
-              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+            <Select
+              label="Source of Funds"
               onChange={(e) => setReallocateModal(prev => prev ? ({ ...prev, sourceId: e.target.value }) : null)}
               defaultValue=""
             >
@@ -284,7 +287,7 @@ const BudgetBuckets: React.FC = () => {
                   })}
                 </optgroup>
               )}
-            </select>
+            </Select>
           </div>
 
           {/* Dynamic Balance Preview */}
@@ -298,19 +301,21 @@ const BudgetBuckets: React.FC = () => {
           )}
 
           <div className="pt-4 flex gap-3">
-            <button
+            <Button
+              variant="subtle"
               onClick={() => setReallocateModal(null)}
-              className="flex-1 py-3 text-brand-500 font-bold bg-brand-100 rounded-xl"
+              className="flex-1 py-3"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={handleReallocateConfirm}
               disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
-              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-3"
             >
               Confirm
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

@@ -1,9 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, Loader2 } from 'lucide-react';
+import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
 import { Account } from '../../types/schema';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
@@ -329,12 +332,14 @@ const BudgetAccounts: React.FC = () => {
       )}
 
        {/* Add Account Button */}
-       <button
+       <Button
+        variant="dashed"
         onClick={() => setIsAddModalOpen(true)}
-        className="w-full py-4 border-2 border-dashed border-brand-200 rounded-2xl flex items-center justify-center text-brand-400 font-bold hover:bg-brand-50 hover:border-brand-300 transition-colors"
+        className="w-full py-4 rounded-2xl"
+        leftIcon={<Plus size={20} />}
       >
-        <Plus size={20} className="mr-2" /> Add Account
-      </button>
+        Add Account
+      </Button>
 
       {/* Add Account Modal */}
       {isAddModalOpen && (
@@ -346,35 +351,32 @@ const BudgetAccounts: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-               <input
-                 type="text"
+               <Input
                  placeholder="Account Name"
                  value={newName}
                  onChange={e => setNewName(e.target.value)}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
               />
-              <select
+              <Select
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as Account['type'])}
-                className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
               >
                 <option value="checking">Checking</option>
                 <option value="savings">Savings</option>
                 <option value="credit">Credit Card</option>
-              </select>
-              <input
+              </Select>
+              <Input
                  type="number"
                  placeholder="Current Balance"
                  value={newBalance}
                  onChange={e => setNewBalance(e.target.value)}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
+                 className="font-mono"
               />
-               <button
+               <Button
                  onClick={handleAddAccount}
-                 className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl mt-2"
+                 className="w-full py-3 mt-2"
                >
                  Save Account
-               </button>
+               </Button>
             </div>
            </div>
         </div>
@@ -391,20 +393,20 @@ const BudgetAccounts: React.FC = () => {
              <p className="text-sm text-brand-500 mb-4">
                What is your target balance for this account?
              </p>
-             <input
+             <Input
                  type="number"
                  placeholder="Goal Amount"
                  value={goalAmount}
                  onChange={e => setGoalAmount(e.target.value)}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono mb-4"
+                 className="font-mono mb-4"
                  autoFocus
               />
-              <button
+              <Button
                  onClick={handleSetGoal}
-                 className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl"
+                 className="w-full py-3"
                >
                  Set Goal
-               </button>
+               </Button>
            </div>
         </div>
       )}
@@ -434,21 +436,24 @@ const BudgetAccounts: React.FC = () => {
               Are you sure you want to delete this account? This action cannot be undone.
             </p>
             <div className="flex gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setDeletingId(null)}
-                className="flex-1 py-3 border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors disabled:opacity-50"
+                className="flex-1 py-3"
                 disabled={isDeleting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
                 onClick={handleDeleteAccount}
-                className="flex-1 py-3 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 py-3"
                 disabled={isDeleting}
+                isLoading={isDeleting}
+                leftIcon={!isDeleting ? <Trash2 size={18} /> : undefined}
               >
-                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
-              </button>
+                Delete
+              </Button>
             </div>
           </div>
         </Modal>
