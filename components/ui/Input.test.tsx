@@ -68,4 +68,15 @@ describe('Input', () => {
     expect(error.id).toBeDefined();
     expect(error.id).toContain('error');
   });
+
+  it('associates error message with input via ARIA attributes when no label/id provided', () => {
+    render(<Input error="Invalid input" />);
+    const input = screen.getByRole('textbox');
+    const error = screen.getByText('Invalid input');
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', error.id);
+    expect(error.id).toBeDefined();
+    expect(error.id).toContain('error');
+  });
 });

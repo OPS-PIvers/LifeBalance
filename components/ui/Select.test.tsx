@@ -109,4 +109,19 @@ describe('Select', () => {
     expect(error.id).toBeDefined();
     expect(error.id).toContain('error');
   });
+
+  it('associates error message with select via ARIA attributes when no label/id provided', () => {
+    render(
+      <Select error="Invalid selection">
+        <option value="1">Option 1</option>
+      </Select>
+    );
+    const select = screen.getByRole('combobox');
+    const error = screen.getByText('Invalid selection');
+
+    expect(select).toHaveAttribute('aria-invalid', 'true');
+    expect(select).toHaveAttribute('aria-describedby', error.id);
+    expect(error.id).toBeDefined();
+    expect(error.id).toContain('error');
+  });
 });
