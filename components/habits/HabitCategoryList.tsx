@@ -36,7 +36,13 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
   };
 
   return (
-    <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-3">
+    <Reorder.Group
+      axis="y"
+      values={items}
+      onReorder={handleReorder}
+      className="space-y-3"
+      aria-label={`Habit list for ${category}`}
+    >
       {items.map((habit) => (
         <ReorderableHabitItem
           key={habit.id}
