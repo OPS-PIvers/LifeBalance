@@ -198,7 +198,7 @@ export function processToggleHabit(
 /**
  * Reset a stale habit to 0 count while preserving history
  */
-export function resetStaleHabit(habit: Habit): Partial<Habit> {
+export function resetStaleHabit(_habit: Habit): Partial<Habit> {
   return {
     count: 0,
     lastUpdated: new Date().toISOString(),

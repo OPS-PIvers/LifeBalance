@@ -4,7 +4,7 @@
   "description": "Firebase Cloud Functions for LifeBalance notifications",
   "main": "lib/index.js",
   "scripts": {
-    "lint": "tsc --noEmit",
+    "lint": "tsc --noEmit && eslint .",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "serve": "pnpm run build && firebase emulators:start --only functions",
@@ -26,7 +26,11 @@
     "firebase-functions": "^7.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.6",
-    "typescript": "^5.9.3"
+    "eslint": "^9.39.2",
+    "globals": "^17.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.53.1"
   }
 }
