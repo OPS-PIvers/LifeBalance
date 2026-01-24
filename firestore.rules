@@ -243,14 +243,25 @@ service cloud.firestore {
       // Accounts subcollection
       match /accounts/{accountId} {
         allow read: if isMemberOf(householdId);
+
+        // Helper to validate account schema
+        function isValidAccount() {
+          return isValidString(request.resource.data.name, 50) &&
+                 request.resource.data.type in ['checking', 'savings', 'credit'] &&
+                 isValidNumber(request.resource.data.balance) &&
+                 request.resource.data.lastUpdated is timestamp &&
+                 isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
+                 isValidOptionalNumber(request.resource.data.get('order', null));
+        }
+
         // 🛡️ SENTINEL SECURITY FIX: Enforce schema validation for accounts
-        allow create, update: if isMemberOf(householdId) &&
-                              isValidString(request.resource.data.name, 50) &&
-                              request.resource.data.type in ['checking', 'savings', 'credit'] &&
-                              isValidNumber(request.resource.data.balance) &&
-                              isValidString(request.resource.data.lastUpdated, 30) &&
-                              isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
-                              isValidOptionalNumber(request.resource.data.get('order', null));
+        allow create: if isMemberOf(householdId) &&
+                      isValidAccount() &&
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidAccount() &&
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy']);
 
         allow delete: if isMemberOf(householdId);
       }
