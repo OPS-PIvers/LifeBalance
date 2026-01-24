@@ -79,3 +79,10 @@
 **Vulnerability:** The `accounts` subcollection was covered by a generic wildcard match (`match /{subcollection}/{document}`) which allowed writing arbitrary data without schema validation. This could lead to storage exhaustion (massive strings) or data corruption (invalid types causing frontend crashes).
 **Learning:** Wildcard rules are convenient but dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
 **Prevention:** Explicitly define `match` blocks for all core collections (`accounts`) with strict schema validation using helper functions like `isValidString` and `isValidNumber`, and explicitly exclude them from generic wildcard matches. Separate validation for create (all required fields) vs update (partial fields) to support operations like `setAccountGoal` that only update specific fields.
+
+## 2026-02-07 - [Client Writes to Server-Only Collection] Pending Items Exposure
+**Vulnerability:** The `pendingItems` collection, intended solely for Cloud Functions (server-side) to queue items for processing, was accessible to client writes via a generic wildcard match (`match /{subcollection}/{document}`) in `firestore.rules`. This allowed malicious clients to write garbage data, bypassing the Cloud Function's validation and potentially causing issues for the processing logic.
+**Learning:** Generic wildcard rules often inadvertently expose internal/system collections to client access. Collections intended for server-side use only (like queues, logs, configs) must be explicitly protected.
+**Prevention:**
+1. Explicitly exclude system collections (`pendingItems`) from generic wildcard write rules.
+2. Define specific `match` blocks for these collections that allow `read` (if needed for UI) but explicitly deny `write` (allowing only Admin SDK/Cloud Functions to write).

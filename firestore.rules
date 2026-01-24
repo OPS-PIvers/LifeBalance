@@ -281,6 +281,12 @@ service cloud.firestore {
       // All other subcollections (buckets, calendarItems, pantry, meals, etc.)
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded below
+      // 🛡️ SENTINEL SECURITY FIX: Explicitly deny write to pendingItems (Cloud Functions only)
+      match /pendingItems/{itemId} {
+        allow read: if isMemberOf(householdId);
+        allow write: if false;
+      }
+
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
         allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
@@ -291,7 +297,8 @@ service cloud.firestore {
                      subcollection != 'apiKeys' &&
                      subcollection != 'apiUsage' &&
                      subcollection != 'transactions' &&
-                     subcollection != 'accounts';
+                     subcollection != 'accounts' &&
+                     subcollection != 'pendingItems';
       }
     }
 
