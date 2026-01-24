@@ -52,10 +52,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
+    // Enforce non-empty category
+    const finalCategory = category.trim() || CATEGORIES[0];
+
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,
-      category,
+      category: finalCategory,
       type,
       scoringType,
       period,

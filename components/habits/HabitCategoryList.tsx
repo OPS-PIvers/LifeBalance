@@ -27,9 +27,19 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
   const handleSave = () => {
     // Calculate new orders and save
     // We use the current 'items' state
+
+    // To preserve global ordering structure:
+    // 1. Get the list of 'order' values currently assigned to these habits (sorted)
+    // 2. Assign these values to the new habit arrangement in sequence
+    // This effectively swaps the habits into the existing 'slots' for this category
+
+    const existingOrders = items
+      .map(h => h.order ?? 999)
+      .sort((a, b) => a - b);
+
     const updates = items.map((h, index) => ({
       id: h.id,
-      order: index,
+      order: existingOrders[index] ?? index, // Fallback to index if orders ran out (unlikely)
       // We don't change category here, just order within category
     }));
     reorderHabits(updates).catch(console.error);
@@ -76,8 +86,11 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
         dragHandle={
           <div
             onPointerDown={(e) => controls.start(e)}
-            className="cursor-grab active:cursor-grabbing touch-none p-1"
+            className="cursor-grab active:cursor-grabbing touch-none p-1 focus:outline-none focus:ring-2 focus:ring-brand-400 rounded"
             title="Drag to reorder"
+            tabIndex={0}
+            role="button"
+            aria-label="Drag handle"
           >
             <GripVertical size={16} />
           </div>
