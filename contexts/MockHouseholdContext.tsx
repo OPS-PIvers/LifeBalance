@@ -104,6 +104,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
   const [groceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
@@ -411,6 +412,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     mealPlan,
     todos,
     groceryCatalog,
+    bucketHistory,
     insightsHistory,
     insight,
     stores,
