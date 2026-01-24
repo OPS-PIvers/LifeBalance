@@ -7,6 +7,8 @@ import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
 import toast from 'react-hot-toast';
 
 const BudgetCalendar: React.FC = () => {
@@ -379,35 +381,37 @@ const BudgetCalendar: React.FC = () => {
                >Income</button>
              </div>
 
-             <input
+             <Input
+               label="Title"
                type="text"
                placeholder="Title (e.g. Rent)"
                value={title}
                onChange={e => setTitle(e.target.value)}
-               className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
              />
 
-             <input
+             <Input
+               label="Amount"
                type="number"
                placeholder="Amount"
                value={amount}
                onChange={e => setAmount(e.target.value)}
-               className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono"
+               className="font-mono"
              />
 
-             <div>
-               <label className="text-xs font-bold text-brand-400 uppercase ml-1 mb-1 block">Date</label>
-               <input
-                 type="date"
-                 value={date}
-                 onChange={e => setDate(e.target.value)}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl font-medium"
-               />
-             </div>
+             <Input
+               label="Date"
+               type="date"
+               value={date}
+               onChange={e => setDate(e.target.value)}
+               className="font-medium"
+             />
 
              <div className="flex items-center justify-between">
-               <label className="text-sm font-bold text-brand-600">Recurring?</label>
+               <label id="recurring-label" className="text-sm font-bold text-brand-600">Recurring?</label>
                <button
+                role="switch"
+                aria-checked={isRecurring}
+                aria-labelledby="recurring-label"
                 onClick={() => setIsRecurring(!isRecurring)}
                 className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-brand-800' : 'bg-brand-200'}`}
                >
@@ -416,15 +420,15 @@ const BudgetCalendar: React.FC = () => {
              </div>
 
              {isRecurring && (
-               <select
+               <Select
+                 label="Frequency"
                  value={frequency}
                  onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
-                 className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl"
                >
                  <option value="monthly">Monthly</option>
                  <option value="bi-weekly">Bi-Weekly</option>
                  <option value="weekly">Weekly</option>
-               </select>
+               </Select>
              )}
 
              <div className="flex gap-2 mt-2">
