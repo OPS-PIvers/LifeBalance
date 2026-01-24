@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import MealPlanTab from './MealPlanTab';
-import { addDays, format } from 'date-fns';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
