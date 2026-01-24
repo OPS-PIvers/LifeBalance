@@ -1826,9 +1826,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       updates.forEach(({ id, order, category }) => {
         const habitRef = doc(db, `households/${householdId}/habits`, id);
         const updateData: { order: number; category?: string } = { order };
-        if (category) {
-          updateData.category = category;
+
+        // Ensure category is a valid non-empty string if present
+        if (category && typeof category === 'string' && category.trim().length > 0) {
+          updateData.category = category.trim();
         }
+
         batch.update(habitRef, updateData);
       });
       await batch.commit();
@@ -3153,7 +3156,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } finally {
       setIsGeneratingInsight(false);
     }
-  }, [householdId, isGeneratingInsight, transactions, habits]);
+  }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
   // Check for freeze bank rollover on 1st of month (or first login)
   const checkFreezeBankRollover = useCallback(async () => {

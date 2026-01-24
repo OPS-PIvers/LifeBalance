@@ -14,9 +14,10 @@ function cn(...inputs: ClassValue[]) {
 
 interface HabitCardProps {
   habit: Habit;
+  dragHandle?: React.ReactNode;
 }
 
-const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
+const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -169,21 +170,27 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit }) => {
               </h3>
             </div>
             
-            {/* Context Menu Trigger */}
-            <button 
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMenuOpen(!isMenuOpen);
-                setFocusedMenuIndex(0); // Reset focus to first item
-              }}
-              className="p-1 text-brand-300 hover:text-brand-600 -mr-2 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400 pointer-events-auto"
-              aria-label="Habit options menu"
-              aria-haspopup="true"
-              aria-expanded={isMenuOpen}
-              style={{ zIndex: 3, position: 'relative' }}
-            >
-              <MoreVertical size={16} />
-            </button>
+            {/* Context Menu Trigger & Drag Handle */}
+            <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
+              {dragHandle && (
+                <div className="text-brand-300 hover:text-brand-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
+                  {dragHandle}
+                </div>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(!isMenuOpen);
+                  setFocusedMenuIndex(0); // Reset focus to first item
+                }}
+                className="p-1 text-brand-300 hover:text-brand-600 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400 pointer-events-auto"
+                aria-label="Habit options menu"
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen}
+              >
+                <MoreVertical size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Badges */}
