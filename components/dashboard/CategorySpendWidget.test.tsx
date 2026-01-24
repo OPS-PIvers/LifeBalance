@@ -17,7 +17,10 @@ const mockTransactions = [
     category: 'Groceries',
     date: format(new Date(), 'yyyy-MM-dd'),
     status: 'verified',
-    type: 'expense'
+    merchant: 'Safeway',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false
   },
   {
     id: '2',
@@ -25,7 +28,10 @@ const mockTransactions = [
     category: 'Dining',
     date: format(new Date(), 'yyyy-MM-dd'),
     status: 'verified',
-    type: 'expense'
+    merchant: 'McDonalds',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false
   },
   {
     id: '3',
@@ -33,7 +39,10 @@ const mockTransactions = [
     category: 'Groceries',
     date: format(new Date(), 'yyyy-MM-dd'),
     status: 'verified',
-    type: 'expense'
+    merchant: 'Whole Foods',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false
   },
   // Previous month (should be ignored)
   {
@@ -42,7 +51,10 @@ const mockTransactions = [
     category: 'Rent',
     date: '2020-01-01', // Definitely old
     status: 'verified',
-    type: 'expense'
+    merchant: 'Landlord',
+    isRecurring: true,
+    source: 'recurring',
+    autoCategorized: true
   },
   // Income (should be ignored)
   {
@@ -51,7 +63,10 @@ const mockTransactions = [
     category: 'Income',
     date: format(new Date(), 'yyyy-MM-dd'),
     status: 'verified',
-    type: 'income'
+    merchant: 'Employer',
+    isRecurring: true,
+    source: 'manual',
+    autoCategorized: true
   }
 ];
 
