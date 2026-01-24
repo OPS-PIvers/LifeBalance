@@ -99,7 +99,7 @@ const MealPlanTab: React.FC = () => {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   // Calendar Logic
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 0 }); // Sunday start
+  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 }); // Monday start
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
