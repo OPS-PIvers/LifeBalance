@@ -66,3 +66,16 @@
 2.  Length limits (`merchant` max 100 chars, `category` max 50 chars, `notes` max 500 chars).
 3.  Enum validation (`status` must be 'verified' or 'pending_review').
 4.  Explicitly excluded `transactions` from the generic wildcard match to ensure the new validation rules cannot be bypassed.
+
+## 2026-02-06 - [Sensitive Data in Logs] Cloud Function Log Exposure
+**Vulnerability:** Unsanitized logging of API request bodies in Cloud Functions (`quickAdd*`) exposed sensitive user data (potential passwords, tokens, PII) in plain text to the `logs/api_calls` Firestore collection.
+**Learning:** Generic logging wrappers often default to full object dumping. Without explicit filtering, any field sent by the user (even unexpected ones like `password` injected into a JSON body) gets persisted forever in logs.
+**Prevention:** Implemented a `sanitizeForLogging` utility in `apiKeyValidation.ts` that:
+1.  Recursively traverses request bodies.
+2.  Redacts values for keys matching sensitive patterns (password, token, secret, auth, creditcard, etc.).
+3.  Truncates long string values (>500 chars) to prevent log flooding.
+
+## 2026-02-06 - [DoS/Data Integrity] Accounts Schema Enforcement
+**Vulnerability:** The `accounts` subcollection was covered by a generic wildcard match (`match /{subcollection}/{document}`) which allowed writing arbitrary data without schema validation. This could lead to storage exhaustion (massive strings) or data corruption (invalid types causing frontend crashes).
+**Learning:** Wildcard rules are convenient but dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
+**Prevention:** Explicitly define `match` blocks for all core collections (`accounts`) with strict schema validation using helper functions like `isValidString` and `isValidNumber`, and explicitly exclude them from generic wildcard matches. Separate validation for create (all required fields) vs update (partial fields) to support operations like `setAccountGoal` that only update specific fields.

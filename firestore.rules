@@ -35,6 +35,10 @@ service cloud.firestore {
       return num is number;
     }
 
+    function isValidOptionalNumber(num) {
+      return num == null || num is number;
+    }
+
     function isValidBoolean(val) {
       return val is bool;
     }
@@ -236,7 +240,45 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (accounts, buckets, calendarItems, pantry, meals, etc.)
+      // Accounts subcollection
+      match /accounts/{accountId} {
+        allow read: if isMemberOf(householdId);
+
+        // Helper to validate account schema on create (all required fields)
+        function isValidAccountCreate() {
+          return isValidString(request.resource.data.name, 50) &&
+                 request.resource.data.type in ['checking', 'savings', 'credit'] &&
+                 isValidNumber(request.resource.data.balance) &&
+                 request.resource.data.lastUpdated is timestamp &&
+                 isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
+                 isValidOptionalNumber(request.resource.data.get('order', null)) &&
+                 request.resource.data.createdBy is string;
+        }
+
+        // Helper to validate account fields on update (only validate changed fields)
+        function isValidAccountUpdate() {
+          let data = request.resource.data;
+          return (!data.keys().hasAny(['name']) || isValidString(data.name, 50)) &&
+                 (!data.keys().hasAny(['type']) || data.type in ['checking', 'savings', 'credit']) &&
+                 (!data.keys().hasAny(['balance']) || isValidNumber(data.balance)) &&
+                 (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp) &&
+                 (!data.keys().hasAny(['monthlyGoal']) || isValidOptionalNumber(data.monthlyGoal)) &&
+                 (!data.keys().hasAny(['order']) || isValidOptionalNumber(data.order));
+        }
+
+        // 🛡️ SENTINEL SECURITY FIX: Enforce schema validation for accounts
+        allow create: if isMemberOf(householdId) &&
+                      isValidAccountCreate() &&
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidAccountUpdate() &&
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'id']);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // All other subcollections (buckets, calendarItems, pantry, meals, etc.)
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded below
       match /{subcollection}/{document} {
@@ -248,7 +290,8 @@ service cloud.firestore {
                      subcollection != 'shoppingList' &&
                      subcollection != 'apiKeys' &&
                      subcollection != 'apiUsage' &&
-                     subcollection != 'transactions';
+                     subcollection != 'transactions' &&
+                     subcollection != 'accounts';
       }
     }
 

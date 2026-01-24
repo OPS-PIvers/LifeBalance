@@ -3,8 +3,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import HabitCard from '../components/habits/HabitCard';
 import { Habit } from '../types/schema';
+import HabitCategoryList from '../components/habits/HabitCategoryList';
 import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
@@ -185,11 +185,7 @@ const Habits: React.FC = () => {
                 <h2 className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-3 ml-2">
                   {category}
                 </h2>
-                <div className="space-y-3">
-                  {groupedHabits[category].map((habit) => (
-                    <HabitCard key={habit.id} habit={habit} />
-                  ))}
-                </div>
+                <HabitCategoryList category={category} habits={groupedHabits[category]} />
               </div>
             ))}
           </TabsContent>
