@@ -55,6 +55,7 @@ const BudgetHistory: React.FC = () => {
   };
 
   const getProgressColor = (spent: number, limit: number) => {
+    if (limit === 0) return 'bg-money-neg';
     const ratio = spent / limit;
     if (ratio >= 1) return 'bg-money-neg';
     if (ratio >= 0.85) return 'bg-amber-500';
@@ -80,7 +81,9 @@ const BudgetHistory: React.FC = () => {
       {historyGroups.map(group => {
         const isExpanded = expandedPeriodId === group.periodId;
         const savings = group.totalLimit - group.totalSpent;
-        const percentUsed = Math.min(100, Math.max(0, (group.totalSpent / group.totalLimit) * 100));
+        const percentUsed = group.totalLimit > 0
+          ? Math.min(100, Math.max(0, (group.totalSpent / group.totalLimit) * 100))
+          : 100;
 
         return (
           <Card key={group.periodId} className="overflow-hidden border border-brand-100 shadow-sm">
@@ -140,7 +143,9 @@ const BudgetHistory: React.FC = () => {
                 </h4>
                 {group.snapshots.sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent)).map(bucket => {
                   const bucketSavings = bucket.limit - bucket.totalSpent;
-                  const bucketPercent = Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100));
+                  const bucketPercent = bucket.limit > 0
+                    ? Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100))
+                    : 100;
 
                   return (
                     <div key={bucket.id} className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm">
