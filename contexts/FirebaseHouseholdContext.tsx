@@ -96,6 +96,7 @@ export interface HouseholdContextType {
   mealPlan: MealPlanItem[];
   todos: ToDo[];
   groceryCatalog: GroceryCatalogItem[];
+  bucketHistory: BucketPeriodSnapshot[];
 
   // Natural Language Processing
   pendingItemsCount: number;
@@ -251,6 +252,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [bucketHistory, setBucketHistory] = useState<BucketPeriodSnapshot[]>([]);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
 
@@ -319,6 +321,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(bucketsQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BudgetBucket));
         setBuckets(data);
+      })
+    );
+
+    // Bucket History listener (Ordered by most recent period first)
+    // NOTE: This might require an index on periodStartDate desc
+    const historyQuery = query(collection(db, `households/${householdId}/bucketHistory`), orderBy('periodStartDate', 'desc'));
+    unsubscribers.push(
+      onSnapshot(historyQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot));
+        setBucketHistory(data);
+      }, (error) => {
+        console.error('Error listening to bucketHistory:', error);
       })
     );
 
@@ -3206,6 +3220,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     mealPlan,
     todos,
     groceryCatalog,
+    bucketHistory,
     pendingItemsCount,
     stores,
     groceryCategories,
@@ -3284,7 +3299,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
     currentPeriodId, bucketSpentMap, householdSettings, pantry, meals, shoppingList, mealPlan, todos,
-    groceryCatalog, pendingItemsCount, stores, groceryCategories, apiKeys,
+    groceryCatalog, bucketHistory, pendingItemsCount, stores, groceryCategories, apiKeys,
     addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
