@@ -336,8 +336,9 @@ const BudgetAccounts: React.FC = () => {
         variant="dashed"
         onClick={() => setIsAddModalOpen(true)}
         className="w-full py-4 rounded-2xl"
+        leftIcon={<Plus size={20} />}
       >
-        <Plus size={20} /> Add Account
+        Add Account
       </Button>
 
       {/* Add Account Modal */}

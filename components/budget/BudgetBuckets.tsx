@@ -217,8 +217,9 @@ const BudgetBuckets: React.FC = () => {
         variant="dashed"
         onClick={handleAddBucket}
         className="w-full py-4 rounded-2xl"
+        leftIcon={<Plus size={20} />}
       >
-        <Plus size={20} /> Add Bucket
+        Add Bucket
       </Button>
 
       {/* Bucket Form Modal (Add/Edit) */}
