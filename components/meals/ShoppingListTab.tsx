@@ -140,6 +140,9 @@ const ShoppingListTab: React.FC = () => {
     }
   };
 
+  // Derive hasPendingItems to optimize render loop for disabled state
+  const hasPendingItems = shoppingList.some(i => !i.isPurchased);
+
   const handleReorder = (newOrder: ShoppingItem[]) => {
     setItems(newOrder);
     // Debounce or just call it?
@@ -241,31 +244,34 @@ const ShoppingListTab: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
-        <div className="flex justify-end gap-2">
-            <button
-                onClick={handleShareList}
-                disabled={shoppingList.filter(i => !i.isPurchased).length === 0}
-                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
-                title="Copy list to clipboard"
-                aria-label="Copy list to clipboard"
-            >
-                <Share2 className="w-5 h-5" />
-            </button>
-            <button
-                onClick={handleExport}
-                disabled={shoppingList.length === 0}
-                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
-                aria-label="Export to CSV"
-            >
-                <Download className="w-5 h-5" />
-            </button>
-            <button
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
-                aria-label="Settings"
-            >
-                <Settings className="w-5 h-5" />
-            </button>
+        <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-semibold">Shopping List</h1>
+            <div className="flex gap-2">
+                <button
+                    onClick={handleShareList}
+                    disabled={!hasPendingItems}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                    title="Copy list to clipboard"
+                    aria-label="Copy list to clipboard"
+                >
+                    <Share2 className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={handleExport}
+                    disabled={shoppingList.length === 0}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                    aria-label="Export to CSV"
+                >
+                    <Download className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                    aria-label="Settings"
+                >
+                    <Settings className="w-5 h-5" />
+                </button>
+            </div>
         </div>
 
         {/* Quick Add Input */}

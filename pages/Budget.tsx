@@ -4,6 +4,7 @@ import BudgetCalendar from '../components/budget/BudgetCalendar';
 import BudgetBuckets from '../components/budget/BudgetBuckets';
 import BudgetAccounts from '../components/budget/BudgetAccounts';
 import TransactionMasterList from '../components/budget/TransactionMasterList';
+import BudgetHistory from '../components/budget/BudgetHistory';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 const Budget: React.FC = () => {
@@ -22,6 +23,9 @@ const Budget: React.FC = () => {
             <TabsTrigger value="accounts" className="min-w-[80px]">
               Accounts
             </TabsTrigger>
+            <TabsTrigger value="transactions" className="min-w-[80px]">
+              Transactions
+            </TabsTrigger>
             <TabsTrigger value="history" className="min-w-[80px]">
               History
             </TabsTrigger>
@@ -38,8 +42,11 @@ const Budget: React.FC = () => {
             <TabsContent value="accounts">
               <BudgetAccounts />
             </TabsContent>
-            <TabsContent value="history">
+            <TabsContent value="transactions">
               <TransactionMasterList />
+            </TabsContent>
+            <TabsContent value="history">
+              <BudgetHistory />
             </TabsContent>
           </div>
         </div>

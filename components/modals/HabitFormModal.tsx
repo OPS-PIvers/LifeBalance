@@ -52,10 +52,13 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
 
+    // Enforce non-empty category
+    const finalCategory = category.trim() || CATEGORIES[0];
+
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,
-      category,
+      category: finalCategory,
       type,
       scoringType,
       period,
@@ -133,15 +136,32 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="text-xs font-bold text-brand-400 uppercase" htmlFor="habit-category">Category</label>
-            <select
+            <input
               id="habit-category"
+              type="text"
               value={category}
               onChange={e => setCategory(e.target.value)}
+              placeholder="Select or type..."
               className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
               disabled={isSaving}
-            >
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            />
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {CATEGORIES.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategory(c)}
+                  disabled={isSaving}
+                  className={`text-xxs px-2 py-1 rounded-lg border transition-all ${
+                    category === c
+                      ? 'bg-brand-200 border-brand-300 text-brand-800 font-bold'
+                      : 'bg-white border-brand-100 text-brand-400 hover:bg-brand-50'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
           </div>
           <div>
             <label className="text-xs font-bold text-brand-400 uppercase">Type</label>
