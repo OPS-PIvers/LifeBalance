@@ -222,6 +222,57 @@ export async function checkRateLimit(
 }
 
 /**
+ * Recursively sanitize objects for logging
+ * - Redacts sensitive keys
+ * - Truncates long strings
+ * - Limits recursion depth
+ */
+export function sanitizeForLogging(obj: unknown, depth = 0): unknown {
+  if (depth > 5) return "[DEPTH_EXCEEDED]";
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === "string") {
+    if (obj.length > 500) return obj.substring(0, 500) + "... [TRUNCATED]";
+    return obj;
+  }
+  if (typeof obj === "number" || typeof obj === "boolean") return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map((item: unknown) => sanitizeForLogging(item, depth + 1));
+  }
+
+  if (typeof obj === "object") {
+    const newObj: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      const lowerKey = key.toLowerCase();
+      // Redact sensitive keys
+      if (
+        lowerKey.includes("password") ||
+        lowerKey.includes("token") ||
+        lowerKey.includes("secret") ||
+        lowerKey.includes("auth") ||
+        lowerKey.includes("creditcard") ||
+        lowerKey.includes("cvv") ||
+        lowerKey === "image" ||
+        // Redact keys that are likely API keys (but not keyPrefix/keyId)
+        (lowerKey.includes("key") &&
+          !lowerKey.includes("prefix") &&
+          !lowerKey.includes("id"))
+      ) {
+        newObj[key] = "[REDACTED]";
+      } else {
+        newObj[key] = sanitizeForLogging(
+          (obj as Record<string, unknown>)[key],
+          depth + 1
+        );
+      }
+    }
+    return newObj;
+  }
+
+  return "[UNKNOWN_TYPE]";
+}
+
+/**
  * Log an API call for audit purposes
  */
 export async function logApiCall(
@@ -233,11 +284,8 @@ export async function logApiCall(
   ipAddress?: string
 ): Promise<void> {
   try {
-    // Sanitize request body (remove sensitive data like images)
-    const sanitizedBody = { ...requestBody };
-    if (sanitizedBody.image) {
-      sanitizedBody.image = "[BASE64_IMAGE_REDACTED]";
-    }
+    // Sanitize request body (remove sensitive data like images, truncate long strings)
+    const sanitizedBody = sanitizeForLogging(requestBody);
 
     await db.collection("logs/api_calls/requests").add({
       householdId,
