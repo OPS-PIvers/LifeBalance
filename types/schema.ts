@@ -237,19 +237,8 @@ export interface FreezeBank {
   history: FreezeBankHistoryEntry[]; // Audit trail
 }
 
-export interface PantryItem {
-  id: string;
-  name: string;
-  quantity: string; // "2 boxes", "500g"
-  category: string; // "Produce", "Pantry", etc.
-  purchaseDate?: string; // YYYY-MM-DD
-  notes?: string;
-  location?: string; // "Fridge", "Freezer", "Pantry"
-}
-
 export interface MealIngredient {
-  pantryItemId?: string; // If linked to a pantry item
-  name: string; // Fallback or if not in pantry
+  name: string;
   quantity?: string; // Amount needed
 }
 
@@ -334,7 +323,6 @@ export interface Household {
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate
 
   // Optional references for type awareness, though these are subcollections
-  pantry?: PantryItem[];
   meals?: Meal[];
   shoppingList?: ShoppingItem[];
   todos?: ToDo[];

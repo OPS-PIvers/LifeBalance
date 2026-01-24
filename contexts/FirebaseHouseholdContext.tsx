@@ -38,7 +38,6 @@ import {
   YearlyGoal,
   FreezeBank,
   FreezeBankHistoryEntry,
-  PantryItem,
   Meal,
   ShoppingItem,
   MealPlanItem,
@@ -90,7 +89,6 @@ export interface HouseholdContextType {
   insight: string;
   insightsHistory: Insight[];
   isGeneratingInsight: boolean;
-  pantry: PantryItem[];
   meals: Meal[];
   shoppingList: ShoppingItem[];
   mealPlan: MealPlanItem[];
@@ -178,11 +176,6 @@ export interface HouseholdContextType {
   updateMember: (memberId: string, updates: Partial<HouseholdMember>) => Promise<void>;
   removeMember: (memberId: string) => Promise<void>;
 
-  // Pantry Actions
-  addPantryItem: (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => Promise<void>;
-  updatePantryItem: (item: PantryItem) => Promise<void>;
-  deletePantryItem: (id: string) => Promise<void>;
-
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -246,7 +239,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
-  const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
@@ -479,15 +471,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             setFreezeBank(data.freezeBank as FreezeBank);
           }
         }
-      })
-    );
-
-    // Pantry listener
-    const pantryQuery = query(collection(db, `households/${householdId}/pantry`));
-    unsubscribers.push(
-      onSnapshot(pantryQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as PantryItem));
-        setPantry(data);
       })
     );
 
@@ -2596,59 +2579,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
-  // --- ACTIONS: PANTRY ---
-
-  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id'>, options?: { suppressToast?: boolean }) => {
-    if (!householdId || !user) return;
-    try {
-      // Default purchaseDate to today if not present
-      const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
-      const itemWithDate = { ...item, purchaseDate };
-
-      const sanitizedItem = sanitizeFirestoreData(itemWithDate);
-      await addDoc(collection(db, `households/${householdId}/pantry`), {
-        ...sanitizedItem,
-        createdAt: serverTimestamp(),
-      });
-      if (!options?.suppressToast) {
-        toast.success('Added to pantry');
-      }
-    } catch (error) {
-      console.error('[addPantryItem] Failed:', error);
-      if (!options?.suppressToast) {
-        toast.error('Failed to add item');
-      }
-      throw error; // Rethrow so Promise.allSettled can track failures
-    }
-  }, [householdId, user]);
-
-  const updatePantryItem = useCallback(async (item: PantryItem) => {
-    if (!householdId) return;
-    try {
-      const { id, ...itemData } = item;
-      const sanitizedData = sanitizeFirestoreData(itemData);
-      await updateDoc(doc(db, `households/${householdId}/pantry`, id), {
-        ...sanitizedData,
-        updatedAt: serverTimestamp(),
-      });
-      toast.success('Pantry item updated');
-    } catch (error) {
-      console.error('[updatePantryItem] Failed:', error);
-      toast.error('Failed to update item');
-    }
-  }, [householdId]);
-
-  const deletePantryItem = useCallback(async (id: string) => {
-    if (!householdId) return;
-    try {
-      await deleteDoc(doc(db, `households/${householdId}/pantry`, id));
-      toast.success('Removed from pantry');
-    } catch (error) {
-      console.error('[deletePantryItem] Failed:', error);
-      toast.error('Failed to delete item');
-    }
-  }, [householdId]);
-
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>): Promise<string> => {
@@ -2800,46 +2730,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           await addDoc(collection(db, `households/${householdId}/groceryCatalog`), sanitizeFirestoreData(newCatalogItem));
         }
 
-        // 2. Add to pantry if not already exists (robust check by normalized name/category)
-        // This prevents massive duplicates if user toggles aggressively while still
-        // tolerating minor differences in casing/spacing and quantity formatting.
-        // Precompute a Set of normalized pantry keys for O(1) lookup
-        const pantryKeySet = new Set(
-            pantry.map(p => `${normalizeToKey(p.name)}||${normalizeToKey(p.category)}`)
-        );
-
-        const itemKey = `${normalizedItemName}||${normalizedItemCategory}`;
-        const alreadyInPantry = pantryKeySet.has(itemKey);
-
-        if (!alreadyInPantry) {
-            const newPantryItem = {
-                name: item.name,
-                category: item.category,
-                quantity: item.quantity || '1',
-                purchaseDate: new Date().toISOString().split('T')[0],
-            };
-            await addDoc(collection(db, `households/${householdId}/pantry`), {
-                ...sanitizeFirestoreData(newPantryItem),
-                createdAt: serverTimestamp(),
-            });
-            toast.success('Added to Pantry');
-        } else {
-            toast('Marked purchased (already in pantry)', { icon: '✅' });
-        }
+        toast.success('Marked as purchased');
 
       } else {
         // Unmark (undo)
         await updateDoc(doc(db, `households/${householdId}/shoppingList`, id), {
           isPurchased: false,
         });
-        toast('Marked as not purchased. Pantry items are not changed automatically.', { icon: 'ℹ️' });
+        toast('Marked as not purchased', { icon: 'ℹ️' });
       }
 
     } catch (error) {
       console.error('[toggleShoppingItemPurchased] Failed:', error);
       toast.error('Failed to update status');
     }
-  }, [householdId, shoppingList, groceryCatalog, pantry]);
+  }, [householdId, shoppingList, groceryCatalog]);
 
   const clearPurchasedShoppingItems = useCallback(async () => {
     if (!householdId) return;
@@ -3214,7 +3119,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     bucketSpentMap,
     householdSettings,
     household: householdSettings, // Provide alias
-    pantry,
     meals,
     shoppingList,
     mealPlan,
@@ -3268,9 +3172,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMember,
     updateMember,
     removeMember,
-    addPantryItem,
-    updatePantryItem,
-    deletePantryItem,
     addMeal,
     updateMeal,
     deleteMeal,
@@ -3298,7 +3199,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpend, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
     calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
-    currentPeriodId, bucketSpentMap, householdSettings, pantry, meals, shoppingList, mealPlan, todos,
+    currentPeriodId, bucketSpentMap, householdSettings, meals, shoppingList, mealPlan, todos,
     groceryCatalog, bucketHistory, pendingItemsCount, stores, groceryCategories, apiKeys,
     addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
@@ -3310,7 +3211,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
     useFreezeBankToken, rolloverFreezeBankTokens,
     addMember, updateMember, removeMember,
-    addPantryItem, updatePantryItem, deletePantryItem,
     addMeal, updateMeal, deleteMeal,
     addShoppingItem, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,

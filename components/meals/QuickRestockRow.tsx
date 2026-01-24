@@ -5,23 +5,18 @@ import { normalizeToKey } from '@/utils/stringNormalizer';
 import { Plus } from 'lucide-react';
 
 export const QuickRestockRow: React.FC = () => {
-  const { groceryCatalog, shoppingList, pantry, addShoppingItem } = useHousehold();
+  const { groceryCatalog, shoppingList, addShoppingItem } = useHousehold();
 
   // Logic:
   // 1. Get frequent items from catalog
   // 2. Filter out items currently in Shopping List (not purchased yet)
-  // 3. Filter out items currently in Pantry (optional, but good for "Restock" logic)
-  // 4. Sort by purchase count
-  // 5. Take top 15
+  // 3. Sort by purchase count
+  // 4. Take top 15
 
-  // Create lookup sets for fast filtering
+  // Create lookup set for fast filtering
   // We check normalized names
   const shoppingListNames = new Set(
     shoppingList.filter(i => !i.isPurchased).map(i => normalizeToKey(i.name))
-  );
-
-  const pantryNames = new Set(
-    pantry.map(i => normalizeToKey(i.name))
   );
 
   const suggestions = groceryCatalog
@@ -29,10 +24,6 @@ export const QuickRestockRow: React.FC = () => {
       const name = normalizeToKey(item.name);
       // Exclude if already in list
       if (shoppingListNames.has(name)) return false;
-      // Exclude if currently in pantry (we assume if it's in pantry, you don't need it yet)
-      // NOTE: This can be debated. You might want to stock up even if you have some.
-      // But for "Smart Restock", assuming "out of stock" is safer to avoid clutter.
-      if (pantryNames.has(name)) return false;
 
       return true;
     })

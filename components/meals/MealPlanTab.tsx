@@ -14,7 +14,6 @@ const MealPlanTab: React.FC = () => {
     meals,
     addMeal,
     updateMeal,
-    pantry,
     addShoppingItem,
     shoppingList,
     mealPlan,
@@ -52,25 +51,6 @@ const MealPlanTab: React.FC = () => {
   // Ingredient management
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
-  const [pantrySearch, setPantrySearch] = useState('');
-
-  // Reset pantry search when modal closes
-  useEffect(() => {
-    if (!isAddModalOpen) {
-      setPantrySearch('');
-    }
-  }, [isAddModalOpen]);
-
-  // Optimize: Memoize sorted pantry items once
-  const sortedPantry = useMemo(() => {
-      return [...pantry].sort((a, b) => a.name.localeCompare(b.name));
-  }, [pantry]);
-
-  // Memoize filtered pantry items
-  const filteredPantryItems = useMemo(() => {
-    const searchLower = normalizeToKey(pantrySearch);
-    return sortedPantry.filter(item => normalizeToKey(item.name).includes(searchLower));
-  }, [sortedPantry, pantrySearch]);
 
   const handleAddTag = () => {
     const trimmedInput = tagInput.trim();
@@ -112,11 +92,9 @@ const MealPlanTab: React.FC = () => {
 
   // AI Options
   const [aiOptions, setAiOptions] = useState({
-    usePantry: true,
     cheap: false,
     quick: false,
     new: false,
-    prioritizeExpiring: false,
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
@@ -127,16 +105,14 @@ const MealPlanTab: React.FC = () => {
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const ingredientsToAdd = mealIngredients.filter(ing => {
           const ingName = normalizeToKey(ing.name);
-          // Check if we have it in pantry (exact match normalized)
-          const inPantry = pantry.some(p => normalizeToKey(p.name) === ingName);
           // Check if already in shopping list
           const inList = shoppingList.some(s => normalizeToKey(s.name) === ingName && !s.isPurchased);
 
-          return !inPantry && !inList;
+          return !inList;
       });
 
       if (ingredientsToAdd.length === 0) {
-          toast.success('No new ingredients needed - check your pantry and list!');
+          toast.success('All ingredients already in shopping list!');
           return;
       }
 
@@ -389,12 +365,9 @@ const MealPlanTab: React.FC = () => {
     try {
         const { suggestMeal } = await import('@/services/geminiService');
         const suggestion = await suggestMeal(householdId, {
-            usePantry: aiOptions.usePantry,
             cheap: aiOptions.cheap,
             quick: aiOptions.quick,
             new: aiOptions.new,
-            prioritizeExpiring: aiOptions.prioritizeExpiring,
-            pantryItems: pantry,
             previousMeals: meals
         });
 
@@ -769,69 +742,9 @@ const MealPlanTab: React.FC = () => {
                            )}
 
                            <div className="space-y-4">
-                               {/* Section 1: From Pantry */}
-                               <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                                   <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
-                                       <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">From Pantry</span>
-                                       <span className="text-xs text-gray-400 font-medium">{pantry.length} items</span>
-                                   </div>
-
-                                   <div className="p-2 border-b border-gray-200 bg-white">
-                                        <input
-                                           type="text"
-                                           placeholder="Search pantry..."
-                                           aria-label="Search pantry items"
-                                           value={pantrySearch}
-                                           onChange={(e) => setPantrySearch(e.target.value)}
-                                           className="w-full text-xs py-2 px-3 rounded-lg border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-brand-500 transition-all outline-none"
-                                        />
-                                   </div>
-
-                                   <div className="max-h-[160px] overflow-y-auto p-2 space-y-1 bg-white">
-                                       {filteredPantryItems.map(item => {
-                                               const isSelected = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === item.name.toLowerCase());
-                                               return (
-                                                   <label key={item.id} className={`flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer group transition-colors ${isSelected ? 'bg-brand-50' : ''}`}>
-                                                       <input
-                                                           type="checkbox"
-                                                           checked={isSelected}
-                                                           onChange={(e) => {
-                                                               if (e.target.checked) {
-                                                                   // Add to ingredients
-                                                                   setCurrentMeal(prev => ({
-                                                                       ...prev,
-                                                                       ingredients: [...(prev.ingredients || []), { name: item.name, quantity: item.quantity || '1' }]
-                                                                   }));
-                                                               } else {
-                                                                   // Remove from ingredients
-                                                                   setCurrentMeal(prev => ({
-                                                                       ...prev,
-                                                                       ingredients: prev.ingredients?.filter(ing => ing.name.toLowerCase() !== item.name.toLowerCase())
-                                                                   }));
-                                                               }
-                                                           }}
-                                                           className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-4 h-4"
-                                                           aria-label={`Select ${item.name}`}
-                                                       />
-                                                       <div className="flex-1">
-                                                           <div className={`text-sm font-medium ${isSelected ? 'text-brand-900' : 'text-gray-700'}`}>{item.name}</div>
-                                                           <div className="text-xs text-gray-400">{item.quantity} in stock</div>
-                                                       </div>
-                                                       {isSelected && <span className="text-xs text-brand-600 font-bold bg-brand-100 px-2 py-0.5 rounded-full">Added</span>}
-                                                   </label>
-                                               );
-                                           })
-                                       }
-                                       {pantry.length === 0 && <div className="p-4 text-center text-xs text-gray-400">Pantry is empty</div>}
-                                       {pantry.length > 0 && filteredPantryItems.length === 0 && (
-                                           <div className="p-4 text-center text-xs text-gray-400">No items match your search</div>
-                                       )}
-                                   </div>
-                               </div>
-
-                               {/* Section 2: Manual Entry */}
+                               {/* Ingredient Entry */}
                                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Add Missing Item</label>
+                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Add Ingredient</label>
                                     <div className="flex gap-2">
                                         <input
                                             id="ingredient-name"
@@ -861,7 +774,7 @@ const MealPlanTab: React.FC = () => {
                                         </button>
                                     </div>
                                     <p className="text-xxs text-gray-400 mt-2 pl-1">
-                                        Items not in your pantry will be added to the shopping list when creating a new meal plan.
+                                        Ingredients will be added to the shopping list when creating a new meal plan.
                                     </p>
                                </div>
                            </div>
@@ -945,32 +858,6 @@ const MealPlanTab: React.FC = () => {
                   </h3>
 
                   <div className="space-y-3 mb-8">
-                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.usePantry}
-                              onChange={e => setAiOptions({...aiOptions, usePantry: e.target.checked})}
-                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div>
-                              <div className="font-bold text-gray-800">Use Pantry Items</div>
-                              <div className="text-xs text-gray-500 mt-0.5">Prioritize ingredients you have</div>
-                          </div>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.prioritizeExpiring}
-                              onChange={e => setAiOptions({...aiOptions, prioritizeExpiring: e.target.checked})}
-                              className="rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div>
-                              <div className="font-medium">Reduce Waste</div>
-                              <div className="text-xs text-gray-500">Prioritize expiring items</div>
-                          </div>
-                      </label>
-
                       <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
                           <input
                               type="checkbox"

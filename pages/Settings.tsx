@@ -117,7 +117,6 @@ const Settings: React.FC = () => {
     householdSettings,
     transactions,
     buckets,
-    pantry,
     meals,
     shoppingList,
     calendarItems,
@@ -255,7 +254,6 @@ const Settings: React.FC = () => {
         transactions,
         buckets,
         calendarItems,
-        pantry,
         meals,
         shoppingList
       };

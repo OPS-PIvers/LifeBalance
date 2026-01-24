@@ -46,7 +46,7 @@ VITE_FIREBASE_VAPID_KEY=your_vapid_key_here
 **Required for:**
 - Firebase Authentication (Google Sign-In)
 - Firestore database persistence and real-time sync
-- AI features (Gemini API): receipt scanning, pantry image analysis, meal suggestions, grocery receipt parsing
+- AI features (Gemini API): receipt scanning, meal suggestions, grocery receipt parsing
 - Push notifications (FCM): habit reminders, budget alerts, streak warnings, bill reminders
 
 **Note:** `.env.local` is git-ignored to protect your credentials.
@@ -60,7 +60,7 @@ The entire application state is managed through a single **React Context**: `Fir
 This context provides:
 - **Finance**: Accounts, budget buckets, transactions, calendar items, pay periods
 - **Gamification**: Habits, points (daily/weekly/total), challenges, rewards
-- **Meals**: Pantry inventory, meal recipes, weekly meal planning, shopping lists
+- **Meals**: Meal recipes, weekly meal planning, shopping lists
 - **Safe-to-Spend Calculation**: Real-time financial health metric
 
 All data is persisted in **Firestore** with real-time synchronization across devices using Firebase's `onSnapshot` listeners.
@@ -104,9 +104,7 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
   - Returns: merchant, amount, category, date
 - **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
   - Returns: array of transactions with dates, descriptions, amounts
-- **Pantry Image Analysis**: `analyzePantryImage()` - Identifies food items from photos (model: `gemini-3-flash-preview`)
-  - Returns: array of items with name, quantity, category, expiry date
-- **Meal Suggestions**: `suggestMeal()` - AI-powered meal planning based on pantry, budget, time constraints
+- **Meal Suggestions**: `suggestMeal()` - AI-powered meal planning based on budget and time constraints
   - Returns: meal name, description, ingredients, tags, reasoning
 - **Grocery Receipt Parsing**: `parseGroceryReceipt()` - Extracts grocery items from receipt photos
   - Returns: array of items with name, category, quantity
@@ -127,14 +125,14 @@ components/
   ├── budget/       # Budget-specific UI components
   ├── habits/       # Habit tracking UI components
   ├── layout/       # TopToolbar, BottomNav
-  ├── meals/        # Meal planning components (PantryTab, MealPlanTab, ShoppingListTab)
+  ├── meals/        # Meal planning components (MealPlanTab, ShoppingListTab)
   └── modals/       # Modal dialogs for forms
 
 pages/              # Route-level page components
   ├── Dashboard.tsx      # Main overview with AI insights
   ├── Budget.tsx         # Finance management
   ├── Habits.tsx         # Habit tracker
-  ├── MealsPage.tsx      # Meal planning, pantry, and shopping
+  ├── MealsPage.tsx      # Meal planning and shopping
   ├── Settings.tsx       # App settings and preferences
   ├── Login.tsx          # Authentication
   ├── HouseholdSetup.tsx # Household creation/joining
@@ -173,7 +171,6 @@ All TypeScript interfaces defined in [types/schema.ts](types/schema.ts):
 - **FreezeBank**: Allows users to patch missed habit days with earned tokens
 
 ### Meals & Nutrition
-- **PantryItem**: Food inventory with quantity, category, and expiry tracking
 - **Meal**: Recipes with ingredients, tags, and ratings
 - **MealPlanItem**: Weekly meal calendar entries linking to meals
 - **ShoppingItem**: Grocery list items with category and purchase status
@@ -186,35 +183,28 @@ All TypeScript interfaces defined in [types/schema.ts](types/schema.ts):
 
 The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensive meal planning and grocery management:
 
-### Pantry Management
-- Manual item entry with category, quantity, and expiry dates
-- **AI-powered image analysis**: Upload photos of your pantry/fridge to automatically identify and add items
-- Track food inventory across categories (Produce, Dairy, Meat, Grains, etc.)
-- Visual organization with category grouping
-
 ### Meal Planning
 - Weekly calendar view for meal planning
 - Create new meals or reuse previous recipes from your cookbook
 - **AI meal suggestions**: Get personalized meal ideas based on:
-  - Available pantry items
   - Budget constraints (cheap option)
   - Time constraints (quick 30-min meals)
   - Novelty (new meals vs. favorites)
 - Link meals to dates with meal type (breakfast, lunch, dinner, snack)
-- Ingredient management with pantry autocomplete
+- Ingredient management
 - One-click shopping list generation from meal ingredients
 
 ### Shopping List
 - Manual item entry with category grouping
-- **AI receipt scanning**: Upload grocery receipt photos to auto-populate pantry
-- Mark items as purchased → automatically adds to pantry
-- Duplicate prevention when marking items purchased
-- Smart filtering: only adds ingredients to shopping list if not in pantry or list
+- **AI receipt scanning**: Upload grocery receipt photos to auto-populate shopping list
+- Mark items as purchased to track what you've bought
+- Duplicate prevention when adding items
+- Smart filtering: only adds ingredients to shopping list if not already in list
 
 **Implementation:**
-- Components: [PantryTab.tsx](components/meals/PantryTab.tsx), [MealPlanTab.tsx](components/meals/MealPlanTab.tsx), [ShoppingListTab.tsx](components/meals/ShoppingListTab.tsx)
-- AI Services: `analyzePantryImage()`, `suggestMeal()`, `parseGroceryReceipt()` in [geminiService.ts](services/geminiService.ts)
-- Data stored in Firestore subcollections: `pantry`, `meals`, `mealPlan`, `shoppingList`
+- Components: [MealPlanTab.tsx](components/meals/MealPlanTab.tsx), [ShoppingListTab.tsx](components/meals/ShoppingListTab.tsx)
+- AI Services: `suggestMeal()`, `parseGroceryReceipt()` in [geminiService.ts](services/geminiService.ts)
+- Data stored in Firestore subcollections: `meals`, `mealPlan`, `shoppingList`
 
 ## Important Notes
 
@@ -225,8 +215,7 @@ The Meals page ([pages/MealsPage.tsx](pages/MealsPage.tsx)) provides comprehensi
 - **Mobile-optimized**: Designed for mobile-first with bottom navigation and touch-friendly UI
 - **AI-powered features**:
   - Receipt/statement scanning for quick transaction entry
-  - Pantry image analysis for instant inventory updates
-  - AI meal suggestions based on available ingredients, budget, and time
+  - AI meal suggestions based on budget and time constraints
   - Dashboard insights (currently randomized, expandable for future AI integration)
 
 ## Code Quality Standards
@@ -374,7 +363,6 @@ LifeBalance includes a **secure test mode** specifically designed for AI coding 
 - **Budget Buckets**: 4 categories (Groceries, Entertainment, Utilities, Gas)
 - **Transactions**: 2 sample transactions
 - **Habits**: 2 health habits ready for tracking
-- **Pantry**: 2 sample items (Milk, Eggs)
 - **Stores**: 2 stores (Safeway, Costco)
 - **Members**: 1 test user with points
 
@@ -382,7 +370,7 @@ LifeBalance includes a **secure test mode** specifically designed for AI coding 
 All context methods are fully implemented with **in-memory persistence**:
 - ✅ Add/Update/Delete accounts, buckets, transactions
 - ✅ Add/Update/Delete habits, calendar items
-- ✅ Add/Update/Delete pantry items, meals, shopping items
+- ✅ Add/Update/Delete meals, shopping items
 - ✅ Add/Update/Delete todos, stores
 - ✅ Toggle habits, update balances
 - ✅ All operations show toast notifications

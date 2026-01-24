@@ -44,7 +44,7 @@ const hasChanges = <T extends object>(original: T, updated: T): boolean => {
 };
 
 /**
- * Custom hook for optimizing grocery/pantry lists with AI.
+ * Custom hook for optimizing grocery lists with AI.
  * Handles the complete optimization flow including error handling, progress tracking,
  * and partial failure resilience.
  * 

@@ -1,21 +1,19 @@
 import React from 'react';
-import PantryTab from '@/components/meals/PantryTab';
 import MealPlanTab from '@/components/meals/MealPlanTab';
 import ShoppingListTab from '@/components/meals/ShoppingListTab';
-import { ChefHat, Calendar, ShoppingCart } from 'lucide-react';
+import { Calendar, ShoppingCart } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 const MealsPage: React.FC = () => {
   // Mobile-first tab navigation
   const tabs = [
-    { id: 'pantry', label: 'Pantry', icon: ChefHat },
     { id: 'meal-plan', label: 'Meal Plan', icon: Calendar },
     { id: 'shopping-list', label: 'Shopping List', shortLabel: 'Shop', icon: ShoppingCart },
   ];
 
   return (
     <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
-      <Tabs defaultValue="pantry">
+      <Tabs defaultValue="meal-plan">
         {/* Tab Navigation */}
         <TabsList className="mb-6">
           {tabs.map((tab) => {
@@ -32,9 +30,6 @@ const MealsPage: React.FC = () => {
 
         {/* Tab Content */}
         <div className="min-h-[60vh]">
-          <TabsContent value="pantry">
-            <PantryTab />
-          </TabsContent>
           <TabsContent value="meal-plan">
             <MealPlanTab />
           </TabsContent>

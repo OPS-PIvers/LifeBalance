@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
-import { PantryItem, Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
+import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
 import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -161,9 +161,9 @@ export interface GroceryItem {
 
 /**
  * Interface for items that can be optimized by AI.
- * Used to normalize grocery/pantry items across components.
+ * Used to normalize grocery items across components.
  * The optional fields allow for flexibility in what data is available
- * for optimization (e.g., pantry items don't have stores).
+ * for optimization.
  */
 export interface OptimizableItem {
   id: string;
@@ -396,68 +396,17 @@ export const parseBankStatement = async (
   }
 };
 
-/**
- * Analyzes a pantry image and extracts food items
- * @param householdId - The household ID for quota tracking
- * @param base64Image - Base64 encoded image data
- * @param availableCategories - List of available categories for smart matching
- * @param _aiClient - Optional injected AI client for testing purposes.
- */
-export const analyzePantryImage = async (
-  householdId: string,
-  base64Image: string,
-  availableCategories: string[] = [...GROCERY_CATEGORIES],
-  _aiClient?: Pick<typeof ai, 'models'>
-): Promise<Omit<PantryItem, 'id'>[]> => {
-  try {
-    const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
-
-    const prompt = `Analyze this image of a pantry, fridge, or food items. Identify all distinct food items visible.
-                For each item:
-                1. Provide a clear, concise 'name' (normalized, user-friendly, fix typos).
-                2. Estimate 'quantity' visible (e.g., "1 box", "approx 500g", "half full").
-                3. Assign the most appropriate 'category' from this list: ${categoriesStr}.
-
-                Return a JSON array of these items.`;
-
-    return await generateJsonContent<Omit<PantryItem, 'id'>[]>(
-      householdId,
-      prepareImageContent(base64Image, prompt),
-      {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            quantity: { type: Type.STRING },
-            category: { type: Type.STRING },
-          },
-          required: ["name", "quantity", "category"]
-        }
-      },
-      _aiClient
-    );
-  } catch (error) {
-    console.error("Gemini Pantry Analysis Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to analyze pantry image. Please try manual entry.");
-  }
-};
-
 export interface MealSuggestionRequest {
-  usePantry: boolean;
   cheap: boolean;
   quick: boolean;
   new: boolean;
-  prioritizeExpiring?: boolean;
-  pantryItems: PantryItem[];
   previousMeals: Meal[];
 }
 
 export interface MealSuggestionResponse {
   name: string;
   description: string;
-  ingredients: { name: string; quantity: string; pantryItemId?: string }[];
+  ingredients: { name: string; quantity: string }[];
   instructions: string[];
   recipeUrl: string;
   tags: string[];
@@ -465,7 +414,7 @@ export interface MealSuggestionResponse {
 }
 
 /**
- * Suggests a meal based on preferences and pantry
+ * Suggests a meal based on preferences
  * @param householdId - The household ID for quota tracking
  * @param options - Options for meal suggestion
  * @param _aiClient - Optional injected AI client for testing purposes.
@@ -476,27 +425,17 @@ export const suggestMeal = async (
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<MealSuggestionResponse> => {
   try {
-    // Include IDs for pantry items so AI can match them
-    const pantryList = options.pantryItems.map(p => {
-      // Sanitize inputs to prevent prompt injection
-      const safeName = sanitizeForPrompt(p.name);
-      const safeQuantity = p.quantity ? sanitizeForPrompt(p.quantity) : '';
-      return `ID:${p.id} - ${safeName} (${safeQuantity})`;
-    }).join(', ');
     const previousMealsList = options.previousMeals.map(m => sanitizeForPrompt(m.name)).join(', ');
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
-    if (options.usePantry) prompt += `- MUST use available pantry items as much as possible.\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
     if (options.quick) prompt += `- Should be quick to prepare (under 30 mins).\n`;
     if (options.new) prompt += `- Should be DIFFERENT from these previous meals: ${previousMealsList}\n`;
 
-    prompt += `\nAvailable Pantry Items (with IDs): ${pantryList || "None provided"}\n`;
-
     prompt += `\nReturn a JSON object with:
     - name: Meal name (Real dish name)
     - description: Short appetizing description
-    - ingredients: Array of objects { name, quantity, pantryItemId (if ingredient matches a provided pantry item ID exactly, otherwise null) }
+    - ingredients: Array of objects { name, quantity }
     - instructions: Array of strings (Step-by-step cooking instructions)
     - recipeUrl: A URL to a real recipe for this dish (or a valid search URL if specific one isn't known)
     - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
@@ -516,8 +455,7 @@ export const suggestMeal = async (
               type: Type.OBJECT,
               properties: {
                 name: { type: Type.STRING },
-                quantity: { type: Type.STRING },
-                pantryItemId: { type: Type.STRING, nullable: true }
+                quantity: { type: Type.STRING }
               },
               required: ["name", "quantity"]
             }
@@ -591,7 +529,7 @@ export const parseGroceryReceipt = async (
 };
 
 /**
- * Optimizes a list of grocery/pantry items by normalizing names and categories
+ * Optimizes a list of grocery items by normalizing names and categories
  * @param householdId - The household ID for quota tracking
  * @param items - List of items to optimize
  * @param availableCategories - List of valid categories (defaults to GROCERY_CATEGORIES)

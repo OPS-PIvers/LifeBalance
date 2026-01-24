@@ -10,7 +10,6 @@ import {
   Challenge,
   RewardItem,
   HouseholdMember,
-  PantryItem,
   Meal,
   ShoppingItem,
   MealPlanItem,
@@ -83,11 +82,6 @@ const SEED_STORES: Store[] = [
   { id: 's2', name: 'Costco', icon: 'Store' },
 ];
 
-const SEED_PANTRY: PantryItem[] = [
-  { id: 'p1', name: 'Milk', quantity: '1 gallon', category: 'Dairy' },
-  { id: 'p2', name: 'Eggs', quantity: '12 count', category: 'Protein' },
-];
-
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -99,7 +93,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards] = useState<RewardItem[]>([]);
   const [members] = useState<HouseholdMember[]>(SEED_MEMBERS);
-  const [pantry, setPantry] = useState<PantryItem[]>(SEED_PANTRY);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
@@ -214,25 +207,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const deleteCalendarItem = useCallback(async (id: string) => {
     setCalendarItems(prev => prev.filter(i => i.id !== id));
     toast.success('Mock: Calendar item deleted');
-  }, []);
-
-  // Pantry operations
-  const addPantryItem = useCallback(async (item: Omit<PantryItem, 'id' | 'addedAt' | 'addedBy'>, options?: { suppressToast?: boolean }) => {
-    const newItem = { ...item, id: generateId(), addedAt: new Date().toISOString(), addedBy: 'test-user-id' } as PantryItem;
-    setPantry(prev => [...prev, newItem]);
-    if (!options?.suppressToast) {
-      toast.success('Mock: Pantry item added');
-    }
-  }, []);
-
-  const updatePantryItem = useCallback(async (item: PantryItem) => {
-    setPantry(prev => prev.map(p => p.id === item.id ? item : p));
-    toast.success('Mock: Pantry item updated');
-  }, []);
-
-  const deletePantryItem = useCallback(async (id: string) => {
-    setPantry(prev => prev.filter(p => p.id !== id));
-    toast.success('Mock: Pantry item deleted');
   }, []);
 
   // Meal operations
@@ -407,7 +381,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     challenges,
     yearlyGoals,
     members,
-    pantry,
     meals,
     shoppingList,
     mealPlan,
@@ -452,9 +425,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateHabitSubmission: noOp,
     deleteHabitSubmission: noOp,
     getHabitSubmissions,
-    addPantryItem,
-    updatePantryItem,
-    deletePantryItem,
     addMeal,
     updateMeal,
     deleteMeal,

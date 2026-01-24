@@ -32,7 +32,6 @@ const ShoppingListTab: React.FC = () => {
     toggleShoppingItemPurchased,
     updateShoppingItem,
     reorderShoppingItems,
-    addPantryItem,
     clearPurchasedShoppingItems,
     stores,
     groceryCategories,
@@ -170,21 +169,21 @@ const ShoppingListTab: React.FC = () => {
         const { parseGroceryReceipt } = await import('@/services/geminiService');
         const items = await parseGroceryReceipt(householdId, base64, categories);
 
-        // Add all found items concurrently to Pantry
+        // Add all found items to shopping list as purchased
         const results = await Promise.allSettled(items.map(item =>
-          addPantryItem({
+          addShoppingItem({
             name: item.name,
             quantity: item.quantity || '1',
             category: item.category,
-            purchaseDate: new Date().toISOString().split('T')[0],
-          }, { suppressToast: true })
+            isPurchased: true,
+          })
         ));
 
         const successCount = results.filter(r => r.status === 'fulfilled').length;
         const failureCount = results.length - successCount;
 
         if (successCount > 0) {
-          toast.success(`Added ${successCount} items to Pantry from Receipt!`);
+          toast.success(`Added ${successCount} items from receipt!`);
         }
 
         if (failureCount > 0) {

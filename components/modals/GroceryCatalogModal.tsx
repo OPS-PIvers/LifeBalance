@@ -76,7 +76,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (window.confirm('Remove from history? This won\'t affect your current list or pantry.')) {
+    if (window.confirm('Remove from history? This won\'t affect your current list.')) {
       await deleteGroceryCatalogItem(id);
     }
   };
