@@ -122,7 +122,7 @@ export function isTimeToSend(
     // formatInTimeZone throws if timezone is invalid
     const hourStr = formatInTimeZone(now, timezone, "H");
     currentHour = parseInt(hourStr, 10);
-  } catch (e) {
+  } catch (_e) {
     logger.warn(`Invalid timezone '${timezone}', falling back to UTC`);
     const hourStr = formatInTimeZone(now, "UTC", "H");
     currentHour = parseInt(hourStr, 10);
