@@ -227,8 +227,7 @@ export async function checkRateLimit(
  * - Truncates long strings
  * - Limits recursion depth
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function sanitizeForLogging(obj: any, depth = 0): any {
+export function sanitizeForLogging(obj: unknown, depth = 0): unknown {
   if (depth > 5) return "[DEPTH_EXCEEDED]";
   if (obj === null || obj === undefined) return obj;
   if (typeof obj === "string") {
@@ -238,13 +237,11 @@ export function sanitizeForLogging(obj: any, depth = 0): any {
   if (typeof obj === "number" || typeof obj === "boolean") return obj;
 
   if (Array.isArray(obj)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return obj.map((item: any) => sanitizeForLogging(item, depth + 1));
+    return obj.map((item: unknown) => sanitizeForLogging(item, depth + 1));
   }
 
   if (typeof obj === "object") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newObj: Record<string, any> = {};
+    const newObj: Record<string, unknown> = {};
     for (const key of Object.keys(obj)) {
       const lowerKey = key.toLowerCase();
       // Redact sensitive keys
@@ -263,7 +260,10 @@ export function sanitizeForLogging(obj: any, depth = 0): any {
       ) {
         newObj[key] = "[REDACTED]";
       } else {
-        newObj[key] = sanitizeForLogging(obj[key], depth + 1);
+        newObj[key] = sanitizeForLogging(
+          (obj as Record<string, unknown>)[key],
+          depth + 1
+        );
       }
     }
     return newObj;
