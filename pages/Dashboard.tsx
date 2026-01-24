@@ -10,6 +10,7 @@ import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
 import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidget';
 import { InsightWidget } from '../components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
+import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
 
 const Dashboard: React.FC = () => {
   const {
@@ -119,6 +120,9 @@ const Dashboard: React.FC = () => {
 
         {/* Widget: Money Pulse */}
         <MoneyPulseWidget />
+
+        {/* Widget: Category Spend */}
+        <CategorySpendWidget />
 
         {/* Widget B: Monthly Challenge (Enhanced) */}
         {activeChallenge ? (
