@@ -70,7 +70,6 @@ const mockTransactions = [
   }
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockUseHousehold = vi.fn(() => ({
   transactions: mockTransactions,
 }));
@@ -100,8 +99,7 @@ describe('CategorySpendWidget', () => {
 
   it('renders nothing if no spending', () => {
     mockUseHousehold.mockReturnValueOnce({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      transactions: [] as any,
+      transactions: [],
     });
     const { container } = render(<CategorySpendWidget />);
     expect(container).toBeEmptyDOMElement();

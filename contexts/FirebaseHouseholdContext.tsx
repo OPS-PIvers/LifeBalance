@@ -3153,7 +3153,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } finally {
       setIsGeneratingInsight(false);
     }
-  }, [householdId, isGeneratingInsight, transactions, habits]);
+  }, [householdId, isGeneratingInsight, transactions, habits, insightsHistory]);
 
   // Check for freeze bank rollover on 1st of month (or first login)
   const checkFreezeBankRollover = useCallback(async () => {
