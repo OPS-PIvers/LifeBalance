@@ -57,4 +57,26 @@ describe('Input', () => {
       expect(input).toBeDisabled();
       expect(input).toHaveClass('disabled:opacity-70');
   });
+
+  it('associates error message with input via ARIA attributes', () => {
+    render(<Input error="Invalid input" label="Test Label" />);
+    const input = screen.getByLabelText('Test Label');
+    const error = screen.getByText('Invalid input');
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', error.id);
+    expect(error.id).toBeDefined();
+    expect(error.id).toContain('error');
+  });
+
+  it('associates error message with input via ARIA attributes when no label/id provided', () => {
+    render(<Input error="Invalid input" />);
+    const input = screen.getByRole('textbox');
+    const error = screen.getByText('Invalid input');
+
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', error.id);
+    expect(error.id).toBeDefined();
+    expect(error.id).toContain('error');
+  });
 });
