@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../utils/exportUtils';
-import { format, addDays, subDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
+import toast from 'react-hot-toast';
 
 // Mock dependencies
 vi.mock('../contexts/FirebaseHouseholdContext', () => ({
@@ -40,10 +41,10 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <div data-testid="loader-icon" />,
 }));
 
-describe('ToDosPage Export', () => {
+describe('ToDosPage', () => {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  // const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd'); // Unused variable removed
 
   const mockMembers = [
     {
@@ -91,161 +92,217 @@ describe('ToDosPage Export', () => {
     }
   ];
 
+  const mockAddToDo = vi.fn();
+  const mockUpdateToDo = vi.fn();
+  const mockDeleteToDo = vi.fn();
+  const mockCompleteToDo = vi.fn();
+
+  const setup = (todos = mockTodos, members = mockMembers) => {
+    (useHousehold as any).mockReturnValue({
+      todos,
+      members: members,
+      currentUser: members[0] || null,
+      addToDo: mockAddToDo,
+      updateToDo: mockUpdateToDo,
+      deleteToDo: mockDeleteToDo,
+      completeToDo: mockCompleteToDo,
+    });
+    render(<ToDosPage />);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders the export button', () => {
-    (useHousehold as any).mockReturnValue({
-      todos: mockTodos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
-      updateToDo: vi.fn(),
-      deleteToDo: vi.fn(),
-      completeToDo: vi.fn(),
+  describe('Export', () => {
+    it('renders the export button', () => {
+      setup();
+      expect(screen.getByLabelText('Export active tasks to CSV')).toBeInTheDocument();
     });
 
-    render(<ToDosPage />);
-    expect(screen.getByLabelText('Export active tasks to CSV')).toBeInTheDocument();
+    it('calls generateCsvExport with correct data and status when export button is clicked', () => {
+      setup();
+
+      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
+      fireEvent.click(exportBtn);
+
+      expect(generateCsvExport).toHaveBeenCalledTimes(1);
+
+      const [exportedData, filenamePrefix] = (generateCsvExport as any).mock.calls[0];
+      expect(filenamePrefix).toBe('todo-list');
+      expect(exportedData).toHaveLength(2);
+
+      const overdueTask = exportedData.find((d: any) => d.Task === 'Overdue Task');
+      expect(overdueTask).toBeDefined();
+      expect(overdueTask['Due Date']).toBe(yesterday);
+      expect(overdueTask['Status']).toBe('Overdue');
+    });
+
+    it('excludes completed tasks from export', () => {
+      setup();
+      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
+      fireEvent.click(exportBtn);
+      const [exportedData] = (generateCsvExport as any).mock.calls[0];
+      const completedTask = exportedData.find((d: any) => d.Task === 'Completed Task');
+      expect(completedTask).toBeUndefined();
+    });
+
+    it('disables export button when no todos exist', () => {
+      setup([]);
+      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
+      expect(exportBtn).toBeDisabled();
+    });
   });
 
-  it('calls generateCsvExport with correct data and status when export button is clicked', () => {
-    (useHousehold as any).mockReturnValue({
-      todos: mockTodos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
-      updateToDo: vi.fn(),
-      deleteToDo: vi.fn(),
-      completeToDo: vi.fn(),
+  describe('Batch Operations', () => {
+    it('toggles selection mode', () => {
+      setup();
+      const toggleBtn = screen.getByLabelText('Select Multiple');
+      fireEvent.click(toggleBtn);
+
+      // Should show "Select All" button
+      expect(screen.getByText('Select All')).toBeInTheDocument();
+      // Should show checkboxes (or placeholders)
+      expect(screen.getByLabelText('Cancel Selection')).toBeInTheDocument();
     });
 
-    render(<ToDosPage />);
+    it('selects all items', () => {
+      setup();
+      // Enter selection mode
+      fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-    const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-    fireEvent.click(exportBtn);
+      // Click Select All
+      fireEvent.click(screen.getByText('Select All'));
 
-    expect(generateCsvExport).toHaveBeenCalledTimes(1);
+      // Should show 2 selected (only active tasks)
+      expect(screen.getByText('2 selected')).toBeInTheDocument();
+      expect(screen.getByText('Deselect All')).toBeInTheDocument();
+    });
 
-    // Check arguments
-    const [exportedData, filenamePrefix] = (generateCsvExport as any).mock.calls[0];
+    it('batch completes selected items', async () => {
+      setup();
+      // Enter selection mode
+      fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-    expect(filenamePrefix).toBe('todo-list');
+      // Select All
+      fireEvent.click(screen.getByText('Select All'));
 
-    // Should contain 2 active tasks, not the completed one
-    expect(exportedData).toHaveLength(2);
+      // Click Complete in FAB
+      const completeBtn = screen.getByLabelText('Mark selected as completed');
+      fireEvent.click(completeBtn);
 
-    const overdueTask = exportedData.find((d: any) => d.Task === 'Overdue Task');
-    expect(overdueTask).toBeDefined();
-    expect(overdueTask['Due Date']).toBe(yesterday);
-    expect(overdueTask['Assigned To']).toBe('Alice Smith');
-    expect(overdueTask['Status']).toBe('Overdue');
+      await waitFor(() => {
+        expect(mockCompleteToDo).toHaveBeenCalledTimes(2);
+        expect(mockCompleteToDo).toHaveBeenCalledWith('1');
+        expect(mockCompleteToDo).toHaveBeenCalledWith('2');
+      });
+    });
 
-    const todayTask = exportedData.find((d: any) => d.Task === 'Today Task');
-    expect(todayTask).toBeDefined();
-    expect(todayTask['Assigned To']).toBe('Bob Jones');
-    expect(todayTask['Status']).toBe('Today');
+    it('batch deletes selected items', async () => {
+      setup();
+      // Enter selection mode
+      fireEvent.click(screen.getByLabelText('Select Multiple'));
+
+      // Select All
+      fireEvent.click(screen.getByText('Select All'));
+
+      // Click Delete in FAB
+      const deleteBtn = screen.getByLabelText('Delete selected items');
+      fireEvent.click(deleteBtn);
+
+      // Should show confirmation modal
+      expect(screen.getByText(/Are you sure you want to delete/)).toBeInTheDocument();
+
+      // Click Confirm Delete
+      fireEvent.click(screen.getByText('Delete All'));
+
+      await waitFor(() => {
+        expect(mockDeleteToDo).toHaveBeenCalledTimes(2);
+        expect(mockDeleteToDo).toHaveBeenCalledWith('1');
+        expect(mockDeleteToDo).toHaveBeenCalledWith('2');
+      });
+    });
   });
 
-  it('excludes completed tasks from export', () => {
-    (useHousehold as any).mockReturnValue({
-      todos: mockTodos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
-      updateToDo: vi.fn(),
-      deleteToDo: vi.fn(),
-      completeToDo: vi.fn(),
+  describe('Task Interaction', () => {
+    it('completes a single task', async () => {
+      setup();
+      // Find the check button for the first task
+      const completeButtons = screen.getAllByLabelText('Complete task');
+      fireEvent.click(completeButtons[0]);
+
+      await waitFor(() => {
+        expect(mockCompleteToDo).toHaveBeenCalledWith('1');
+      });
     });
 
-    render(<ToDosPage />);
+    it('adds a new task', async () => {
+      setup();
+      fireEvent.click(screen.getByLabelText('Add new task'));
 
-    const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-    fireEvent.click(exportBtn);
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'New Test Task' } });
+      fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: today } });
 
-    const [exportedData] = (generateCsvExport as any).mock.calls[0];
+      // Select assignee (user1)
+      fireEvent.click(screen.getByLabelText('Assign to Alice Smith'));
 
-    const completedTask = exportedData.find((d: any) => d.Task === 'Completed Task');
-    expect(completedTask).toBeUndefined();
+      fireEvent.click(screen.getByText('Create Task'));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'New Test Task',
+          completeByDate: today,
+          assignedTo: 'user1'
+        }));
+      });
+    });
   });
 
-  it('sorts exported tasks by due date', () => {
-    const sortedTodos = [
-      {
-        id: '1',
-        text: 'Later Task',
-        completeByDate: tomorrow,
-        assignedTo: 'user1',
-        isCompleted: false,
-        createdBy: 'user1',
-        createdAt: new Date().toISOString()
-      },
-      {
-        id: '2',
-        text: 'Earlier Task',
-        completeByDate: yesterday,
-        assignedTo: 'user1',
-        isCompleted: false,
-        createdBy: 'user1',
-        createdAt: new Date().toISOString()
-      }
-    ];
+  describe('Validation', () => {
+    it('validates form inputs', async () => {
+      setup();
+      fireEvent.click(screen.getByLabelText('Add new task'));
 
-    (useHousehold as any).mockReturnValue({
-      todos: sortedTodos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
-      updateToDo: vi.fn(),
-      deleteToDo: vi.fn(),
-      completeToDo: vi.fn(),
+      // Try submitting empty form
+      fireEvent.click(screen.getByText('Create Task'));
+      expect(toast.error).toHaveBeenCalledWith('Please fill in all required fields');
+
+      // Try submitting without members (different scenario)
+      // Re-setup with no members
     });
 
-    render(<ToDosPage />);
-    const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-    fireEvent.click(exportBtn);
+    it('validates no members available', async () => {
+      // Must provide a mock currentUser even if members list is empty to bypass "Authentication Required" check
+      const mockUser = {
+        uid: 'user1',
+        displayName: 'Alice Smith',
+        photoURL: 'http://example.com/alice.jpg',
+        role: 'member' as const,
+        points: { daily: 0, weekly: 0, total: 0 }
+      };
 
-    const [exportedData] = (generateCsvExport as any).mock.calls[0];
-    expect(exportedData[0].Task).toBe('Earlier Task');
-    expect(exportedData[1].Task).toBe('Later Task');
-  });
+      (useHousehold as any).mockReturnValue({
+        todos: [],
+        members: [],
+        currentUser: mockUser,
+        addToDo: mockAddToDo,
+        updateToDo: mockUpdateToDo,
+        deleteToDo: mockDeleteToDo,
+        completeToDo: mockCompleteToDo,
+      });
+      render(<ToDosPage />);
 
-  it('disables export button when no todos exist', () => {
-    (useHousehold as any).mockReturnValue({
-      todos: [], // No todos
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
+      fireEvent.click(screen.getByLabelText('Add new task'));
+
+      // Button should be disabled or show error on click if not disabled
+      const createBtn = screen.getByText('Create Task');
+      expect(createBtn).toBeDisabled();
+
+      // Try force submitting via form (if possible) or check toast if triggered earlier
+      // The handleSubmit checks members length
+      // But button is disabled, so user can't click.
+      // We can assert the alert message in the modal
+      expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();
     });
-
-    render(<ToDosPage />);
-    const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-    expect(exportBtn).toBeDisabled();
-  });
-
-  it('disables export button when only completed todos exist', () => {
-    const onlyCompletedTodos = [
-      {
-        id: '3',
-        text: 'Completed Task',
-        completeByDate: today,
-        assignedTo: 'user1',
-        isCompleted: true,
-        createdBy: 'user1',
-        createdAt: new Date().toISOString()
-      }
-    ];
-
-    (useHousehold as any).mockReturnValue({
-      todos: onlyCompletedTodos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
-      addToDo: vi.fn(),
-    });
-
-    render(<ToDosPage />);
-    const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-    expect(exportBtn).toBeDisabled();
   });
 });

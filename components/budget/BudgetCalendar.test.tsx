@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -117,7 +117,7 @@ describe('BudgetCalendar', () => {
     expect(mockCompleteToDo).toHaveBeenCalledWith('todo-1');
   });
 
-  it('adds a new calendar item when save is clicked', () => {
+  it('adds a new calendar item when save is clicked', async () => {
     render(<BudgetCalendar />);
 
     // Open Modal
@@ -137,15 +137,17 @@ describe('BudgetCalendar', () => {
     const saveButtons = screen.getAllByText('Add Event');
     fireEvent.click(saveButtons[1]);
 
-    expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'New Job',
-      amount: 5000,
-      type: 'income',
-      isRecurring: false
-    }));
+    await waitFor(() => {
+      expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'New Job',
+        amount: 5000,
+        type: 'income',
+        isRecurring: false
+      }));
+    });
   });
 
-  it('duplicates a calendar item', () => {
+  it('duplicates a calendar item', async () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const item = {
@@ -175,14 +177,16 @@ describe('BudgetCalendar', () => {
     // Click Duplicate
     fireEvent.click(screen.getByText('Duplicate'));
 
-    expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Rent (Copy)',
-      amount: 1000,
-      type: 'expense'
-    }));
+    await waitFor(() => {
+      expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Rent (Copy)',
+        amount: 1000,
+        type: 'expense'
+      }));
+    });
   });
 
-  it('edits an existing calendar item', () => {
+  it('edits an existing calendar item', async () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const item = {
@@ -216,11 +220,13 @@ describe('BudgetCalendar', () => {
     // Click Save (Save Changes)
     fireEvent.click(screen.getByText('Save Changes'));
 
-    expect(mockUpdateCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'item-1',
-      title: 'Rent Updated',
-      amount: 1000
-    }));
+    await waitFor(() => {
+      expect(mockUpdateCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'item-1',
+        title: 'Rent Updated',
+        amount: 1000
+      }));
+    });
   });
 
   it('deletes a calendar item', () => {
