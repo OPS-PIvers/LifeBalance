@@ -19,6 +19,7 @@ import {
   GroceryCatalogItem,
   Store,
   YearlyGoal,
+  BucketPeriodSnapshot,
   Household
 } from '@/types/schema';
 import toast from 'react-hot-toast';
