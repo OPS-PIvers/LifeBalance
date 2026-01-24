@@ -14,15 +14,21 @@ function findNextPaycheckFromExpanded(
   afterDate: Date
 ): string | null {
   const upcomingPaychecks = expandedItems
-    .filter(item => {
-      const itemDate = parseISO(item.date);
+    // ⚡ Bolt Optimization: Map first to parse date ONCE, avoiding redundant parseISO calls
+    // during filter and sort (which calls it 2x per comparison).
+    .map(item => ({
+      item,
+      itemDate: parseISO(item.date),
+    }))
+    .filter(({ item, itemDate }) => {
       return (
         item.type === 'income' &&
         !item.isPaid &&
         isAfter(itemDate, afterDate)
       );
     })
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+    .sort((a, b) => a.itemDate.getTime() - b.itemDate.getTime())
+    .map(({ item }) => item);
 
   return upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
 }
