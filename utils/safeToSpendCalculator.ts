@@ -1,7 +1,79 @@
 import { Account, CalendarItem, BudgetBucket } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
-// import { calculateBucketSpent } from './bucketSpentCalculator';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
+
+/**
+ * Helper to find the next unpaid income item after a given date from a list of expanded items.
+ *
+ * @param expandedItems - Pre-expanded calendar items
+ * @param afterDate - Date to search after (exclusive)
+ * @returns The date of the next unpaid paycheck, or null if none found
+ */
+function findNextPaycheckFromExpanded(
+  expandedItems: CalendarItem[],
+  afterDate: Date
+): string | null {
+  const upcomingPaychecks = expandedItems
+    // ⚡ Bolt Optimization: Map first to parse date ONCE, avoiding redundant parseISO calls
+    // during filter and sort (which calls it 2x per comparison).
+    .map(item => ({
+      item,
+      itemDate: parseISO(item.date),
+    }))
+    .filter(({ item, itemDate }) => {
+      return (
+        item.type === 'income' &&
+        !item.isPaid &&
+        isAfter(itemDate, afterDate)
+      );
+    })
+    .sort((a, b) => a.itemDate.getTime() - b.itemDate.getTime())
+    .map(({ item }) => item);
+
+  return upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
+}
+
+/**
+ * Helper to calculate unpaid bills within a date range, excluding bucket-covered items.
+ *
+ * @param expandedItems - Pre-expanded calendar items
+ * @param startDate - Start of the range (exclusive)
+ * @param endDate - End of the range (inclusive)
+ * @param buckets - Budget buckets for exclusion logic
+ * @returns Total amount of unpaid bills in range
+ */
+function calculateUnpaidBillsInRange(
+  expandedItems: CalendarItem[],
+  startDate: Date,
+  endDate: Date,
+  buckets: BudgetBucket[]
+): number {
+  // ⚡ Bolt Optimization: Pre-calculate lowercased bucket names
+  // Prevents calling toLowerCase() N * M times inside the loop
+  const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
+
+  return expandedItems
+    .filter(item => {
+      const itemDate = parseISO(item.date);
+      const itemTitleLower = item.title.toLowerCase();
+
+      // Exclude bills covered by buckets to avoid double-counting
+      // Optimized check using pre-calculated bucket names
+      const isCoveredByBucket = normalizedBuckets.some(bucketName =>
+        itemTitleLower.includes(bucketName) ||
+        bucketName.includes(itemTitleLower)
+      );
+
+      return (
+        item.type === 'expense' &&
+        !item.isPaid &&
+        isAfter(itemDate, startDate) && // AFTER start date (exclusive)
+        (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) && // Up to range end (inclusive)
+        !isCoveredByBucket
+      );
+    })
+    .reduce((sum, item) => sum + item.amount, 0);
+}
 
 /**
  * Find the date of the next unpaid paycheck (income calendar item)
@@ -15,26 +87,15 @@ export function findNextPaycheckDate(
   calendarItems: CalendarItem[],
   lastPaycheckDate: string
 ): string | null {
-  const searchWindowEnd = addMonths(parseISO(lastPaycheckDate), 2); // 60-day search window
+  const parsedLastPaycheckDate = parseISO(lastPaycheckDate);
+  const searchWindowEnd = addMonths(parsedLastPaycheckDate, 2); // 60-day search window
   const expandedItems = expandCalendarItems(
     calendarItems,
-    parseISO(lastPaycheckDate),
+    parsedLastPaycheckDate,
     searchWindowEnd
   );
 
-  // Filter for unpaid income items after lastPaycheckDate
-  const upcomingPaychecks = expandedItems
-    .filter(item => {
-      const itemDate = parseISO(item.date);
-      return (
-        item.type === 'income' &&
-        !item.isPaid &&
-        isAfter(itemDate, parseISO(lastPaycheckDate))
-      );
-    })
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-
-  return upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
+  return findNextPaycheckFromExpanded(expandedItems, parsedLastPaycheckDate);
 }
 
 /**
@@ -68,18 +129,7 @@ export const calculateSafeToSpendFromExpanded = (
   const paycheckA = parseISO(currentPeriodId); // lastPaycheckDate
 
   // Find next paycheck (Paycheck B) from the already expanded list
-  const upcomingPaychecks = allExpandedItems
-    .filter(item => {
-      const itemDate = parseISO(item.date);
-      return (
-        item.type === 'income' &&
-        !item.isPaid &&
-        isAfter(itemDate, paycheckA)
-      );
-    })
-    .sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
-
-  const paycheckBDate = upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
+  const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
 
   let rangeEndDate: Date;
   if (paycheckBDate) {
@@ -90,33 +140,12 @@ export const calculateSafeToSpendFromExpanded = (
   }
 
   // 3. Calculate unpaid bills in the range (AFTER paycheck A, up to and including range end)
-  // Reuse allExpandedItems, filtering by date range
-
-  // ⚡ Bolt Optimization: Pre-calculate lowercased bucket names
-  // Prevents calling toLowerCase() N * M times inside the loop
-  const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
-
-  const unpaidBills = allExpandedItems
-    .filter(item => {
-      const itemDate = parseISO(item.date);
-      const itemTitleLower = item.title.toLowerCase();
-
-      // Exclude bills covered by buckets to avoid double-counting
-      // Optimized check using pre-calculated bucket names
-      const isCoveredByBucket = normalizedBuckets.some(bucketName =>
-        itemTitleLower.includes(bucketName) ||
-        bucketName.includes(itemTitleLower)
-      );
-
-      return (
-        item.type === 'expense' &&
-        !item.isPaid &&
-        isAfter(itemDate, paycheckA) && // AFTER paycheck A (exclusive)
-        (isBefore(itemDate, rangeEndDate) || itemDate.getTime() === rangeEndDate.getTime()) && // Up to range end (inclusive)
-        !isCoveredByBucket
-      );
-    })
-    .reduce((sum, item) => sum + item.amount, 0);
+  const unpaidBills = calculateUnpaidBillsInRange(
+    allExpandedItems,
+    paycheckA,
+    rangeEndDate,
+    buckets
+  );
 
   // 4. Final calculation: Checking - Bills (NO bucket liabilities)
   return checkingBalance - unpaidBills;
