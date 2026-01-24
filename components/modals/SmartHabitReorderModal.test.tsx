@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SmartHabitReorderModal from './SmartHabitReorderModal';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -36,7 +36,7 @@ describe('SmartHabitReorderModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    (useHousehold as unknown as Mock).mockReturnValue({
       habits: mockHabits,
       reorderHabits: mockReorderHabits,
       householdId: 'house-123',
@@ -50,7 +50,7 @@ describe('SmartHabitReorderModal', () => {
 
   it('starts loading and analyzing when opened', async () => {
     // Return a promise that doesn't resolve immediately to test loading state
-    (reorganizeHabits as any).mockReturnValue(new Promise(() => {}));
+    (reorganizeHabits as unknown as Mock).mockReturnValue(new Promise(() => {}));
 
     render(<SmartHabitReorderModal isOpen={true} onClose={vi.fn()} />);
 
@@ -67,7 +67,7 @@ describe('SmartHabitReorderModal', () => {
       ],
       reasoning: 'Moved Habit 2 to morning for better flow.',
     };
-    (reorganizeHabits as any).mockResolvedValue(mockPlan);
+    (reorganizeHabits as unknown as Mock).mockResolvedValue(mockPlan);
 
     render(<SmartHabitReorderModal isOpen={true} onClose={vi.fn()} />);
 
@@ -89,7 +89,7 @@ describe('SmartHabitReorderModal', () => {
   });
 
   it('displays error when analysis fails', async () => {
-    (reorganizeHabits as any).mockRejectedValue(new Error('AI Busy'));
+    (reorganizeHabits as unknown as Mock).mockRejectedValue(new Error('AI Busy'));
 
     render(<SmartHabitReorderModal isOpen={true} onClose={vi.fn()} />);
 
@@ -105,7 +105,7 @@ describe('SmartHabitReorderModal', () => {
       ],
       reasoning: 'Good plan',
     };
-    (reorganizeHabits as any).mockResolvedValue(mockPlan);
+    (reorganizeHabits as unknown as Mock).mockResolvedValue(mockPlan);
     const mockOnClose = vi.fn();
 
     render(<SmartHabitReorderModal isOpen={true} onClose={mockOnClose} />);

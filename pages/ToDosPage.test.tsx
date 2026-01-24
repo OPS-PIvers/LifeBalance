@@ -4,7 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../utils/exportUtils';
-import { format, addDays, subDays } from 'date-fns';
+import { format, subDays } from 'date-fns';
 
 // Mock dependencies
 vi.mock('../contexts/FirebaseHouseholdContext', () => ({
@@ -43,7 +43,7 @@ vi.mock('lucide-react', () => ({
 describe('ToDosPage', () => {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-  const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+  // const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd'); // Unused variable removed
 
   const mockMembers = [
     {
