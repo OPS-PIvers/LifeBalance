@@ -5,6 +5,7 @@ import ToDosPage from './ToDosPage';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../utils/exportUtils';
 import { format, subDays } from 'date-fns';
+import toast from 'react-hot-toast';
 
 // Mock dependencies
 vi.mock('../contexts/FirebaseHouseholdContext', () => ({
@@ -96,11 +97,11 @@ describe('ToDosPage', () => {
   const mockDeleteToDo = vi.fn();
   const mockCompleteToDo = vi.fn();
 
-  const setup = (todos = mockTodos) => {
+  const setup = (todos = mockTodos, members = mockMembers) => {
     (useHousehold as any).mockReturnValue({
       todos,
-      members: mockMembers,
-      currentUser: mockMembers[0],
+      members: members,
+      currentUser: members[0] || null,
       addToDo: mockAddToDo,
       updateToDo: mockUpdateToDo,
       deleteToDo: mockDeleteToDo,
@@ -254,6 +255,54 @@ describe('ToDosPage', () => {
           assignedTo: 'user1'
         }));
       });
+    });
+  });
+
+  describe('Validation', () => {
+    it('validates form inputs', async () => {
+      setup();
+      fireEvent.click(screen.getByLabelText('Add new task'));
+
+      // Try submitting empty form
+      fireEvent.click(screen.getByText('Create Task'));
+      expect(toast.error).toHaveBeenCalledWith('Please fill in all required fields');
+
+      // Try submitting without members (different scenario)
+      // Re-setup with no members
+    });
+
+    it('validates no members available', async () => {
+      // Must provide a mock currentUser even if members list is empty to bypass "Authentication Required" check
+      const mockUser = {
+        uid: 'user1',
+        displayName: 'Alice Smith',
+        photoURL: 'http://example.com/alice.jpg',
+        role: 'member' as const,
+        points: { daily: 0, weekly: 0, total: 0 }
+      };
+
+      (useHousehold as any).mockReturnValue({
+        todos: [],
+        members: [],
+        currentUser: mockUser,
+        addToDo: mockAddToDo,
+        updateToDo: mockUpdateToDo,
+        deleteToDo: mockDeleteToDo,
+        completeToDo: mockCompleteToDo,
+      });
+      render(<ToDosPage />);
+
+      fireEvent.click(screen.getByLabelText('Add new task'));
+
+      // Button should be disabled or show error on click if not disabled
+      const createBtn = screen.getByText('Create Task');
+      expect(createBtn).toBeDisabled();
+
+      // Try force submitting via form (if possible) or check toast if triggered earlier
+      // The handleSubmit checks members length
+      // But button is disabled, so user can't click.
+      // We can assert the alert message in the modal
+      expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();
     });
   });
 });

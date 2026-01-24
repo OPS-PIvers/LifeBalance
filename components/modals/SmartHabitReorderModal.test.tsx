@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SmartHabitReorderModal from './SmartHabitReorderModal';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { reorganizeHabits } from '../../services/geminiService';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { reorganizeHabits } from '@/services/geminiService';
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHousehold: vi.fn(),
 }));
 
-vi.mock('../../services/geminiService', () => ({
+vi.mock('@/services/geminiService', () => ({
   reorganizeHabits: vi.fn(),
 }));
 
