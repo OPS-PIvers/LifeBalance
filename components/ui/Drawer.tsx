@@ -32,8 +32,9 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   // Handle Escape key
   useEffect(() => {
+    if (!isOpen) return;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         onClose();
       }
     };
@@ -54,6 +55,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-sm"
             onClick={onClose}
             data-testid="drawer-backdrop"
+            aria-hidden="true"
           />
 
           {/* Drawer Content */}
@@ -75,6 +77,9 @@ export const Drawer: React.FC<DrawerProps> = ({
               }
             }}
             data-testid="drawer-content"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? "drawer-title" : undefined}
           >
              {/* Handle bar for visual cue */}
              <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
@@ -82,7 +87,7 @@ export const Drawer: React.FC<DrawerProps> = ({
              </div>
 
              {/* Header */}
-             {(title) && (
+             {title && (
                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
                  <h3 className="font-bold text-lg text-slate-800">{title}</h3>
                  <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer">

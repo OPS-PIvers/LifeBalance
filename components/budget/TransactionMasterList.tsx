@@ -556,43 +556,47 @@ const TransactionMasterList: React.FC = () => {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
+                leftIcon={<Edit className="text-brand-500" />}
                 onClick={() => {
                   handleEdit(actionTransaction);
                   setActionTransaction(null);
                 }}
               >
-                <Edit className="mr-3 text-brand-500" /> Edit Transaction
+                Edit Transaction
               </Button>
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
+                leftIcon={<Copy className="text-brand-500" />}
                 onClick={() => {
                   handleDuplicate(actionTransaction);
                   setActionTransaction(null);
                 }}
               >
-                <Copy className="mr-3 text-brand-500" /> Duplicate
+                Duplicate
               </Button>
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
+                leftIcon={<Scissors className="text-brand-500" />}
                 onClick={() => {
                   handleSplitClick(actionTransaction);
                   setActionTransaction(null);
                 }}
               >
-                <Scissors className="mr-3 text-brand-500" /> Split Transaction
+                Split Transaction
               </Button>
               <div className="h-px bg-gray-100 my-2" />
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
                 onClick={() => {
                   handleDeleteClick(actionTransaction);
                   setActionTransaction(null);
                 }}
               >
-                <Trash2 className="mr-3" /> Delete
+                Delete
               </Button>
             </>
           )}
