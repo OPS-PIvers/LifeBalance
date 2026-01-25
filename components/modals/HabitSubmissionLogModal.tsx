@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3 } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { format, parseISO, startOfWeek, endOfWeek, subWeeks } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 
@@ -23,7 +23,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [editingSubmission, setEditingSubmission] = useState<HabitSubmission | null>(null);
   const [isAddMode, setIsAddMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'log' | 'stats'>('log');
+  const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Form state
   const [formDate, setFormDate] = useState('');
@@ -167,6 +168,24 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     }, {} as Record<string, HabitSubmission[]>);
   }, [submissions]);
 
+  // Calendar Logic
+  const calendarData = useMemo(() => {
+    const monthStart = startOfMonth(calendarDate);
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart);
+    const endDate = endOfWeek(monthEnd);
+
+    const days = eachDayOfInterval({ start: startDate, end: endDate });
+    const completionsInMonth = habit.completedDates.filter(d =>
+      d.startsWith(format(calendarDate, 'yyyy-MM'))
+    ).length;
+
+    // Convert to Set for O(1) lookup in render loop
+    const completedDatesSet = new Set(habit.completedDates);
+
+    return { days, completionsInMonth, completedDatesSet };
+  }, [calendarDate, habit.completedDates]);
+
   return (
     <Modal
       isOpen={isOpen}
@@ -214,6 +233,17 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             <BarChart3 className="inline-block w-4 h-4 mr-1.5" />
             Stats
           </button>
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'calendar'
+                ? 'bg-white text-brand-800 shadow-sm'
+                : 'text-brand-400 hover:text-brand-600'
+            }`}
+          >
+            <Calendar className="inline-block w-4 h-4 mr-1.5" />
+            Calendar
+          </button>
         </div>
       </div>
 
@@ -223,6 +253,94 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           <div className="text-center py-12 text-brand-400">
             <div className="animate-spin w-8 h-8 border-4 border-brand-200 border-t-brand-600 rounded-full mx-auto mb-3"></div>
             Loading...
+          </div>
+        ) : activeTab === 'calendar' ? (
+          <div className="p-4 space-y-4">
+            {/* Calendar Controls */}
+            <div className="flex items-center justify-between bg-white p-2 rounded-xl border border-brand-100 shadow-sm">
+              <button
+                onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
+                className="p-2 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 transition-colors"
+                aria-label="Previous month"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <h3 className="text-lg font-bold text-brand-800">
+                {format(calendarDate, 'MMMM yyyy')}
+              </h3>
+              <button
+                onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
+                className="p-2 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 transition-colors"
+                aria-label="Next month"
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+
+            {/* Calendar Grid */}
+            <div
+              className="bg-white rounded-xl border border-brand-100 p-4 shadow-sm"
+              role="grid"
+              aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
+            >
+              <div className="grid grid-cols-7 mb-2" role="row">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                  <div key={i} className="text-center text-xs font-bold text-brand-300 py-2" role="columnheader">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1" role="presentation">
+                {calendarData.days.map((day) => {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  // Use O(1) Set lookup
+                  const isCompleted = calendarData.completedDatesSet.has(dateStr);
+                  const isCurrentMonth = isSameMonth(day, calendarDate);
+                  const isTodayDate = isSameDay(day, new Date());
+
+                  // Accessibility label
+                  const label = `${format(day, 'MMMM do')}, ${isCompleted ? 'completed' : 'not completed'}`;
+
+                  return (
+                    <div
+                      key={dateStr}
+                      role="gridcell"
+                      aria-label={label}
+                      className={`
+                        aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
+                        ${!isCurrentMonth ? 'opacity-30' : ''}
+                        ${isCompleted
+                          ? (habit.type === 'positive' ? 'bg-emerald-100 text-emerald-700 font-bold' : 'bg-rose-100 text-rose-700 font-bold')
+                          : 'bg-brand-50 text-brand-400 hover:bg-brand-100'
+                        }
+                        ${isTodayDate && !isCompleted ? 'ring-2 ring-brand-400' : ''}
+                      `}
+                      title={dateStr}
+                    >
+                      {format(day, 'd')}
+                      {isCompleted && (
+                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${habit.type === 'positive' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div className="bg-brand-50 rounded-xl p-4 flex items-center gap-4">
+              <div className={`p-3 rounded-full ${habit.type === 'positive' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                <CheckCircle2 size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-brand-400 uppercase tracking-wide">
+                  {format(calendarDate, 'MMMM')} Performance
+                </p>
+                <p className="text-xl font-bold text-brand-800">
+                  {calendarData.completionsInMonth} day{calendarData.completionsInMonth !== 1 ? 's' : ''} completed
+                </p>
+              </div>
+            </div>
           </div>
         ) : activeTab === 'stats' ? (
           <div className="p-4 space-y-4">

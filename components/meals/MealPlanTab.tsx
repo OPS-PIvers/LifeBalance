@@ -493,20 +493,20 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
                                             >
-                                                <Edit2 className="w-4 h-4" />
+                                                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                             <button
                                                 onClick={() => deleteMealPlanItem(planItem.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
                                             >
-                                                <Trash2 className="w-4 h-4" />
+                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                         </div>
                                     </div>

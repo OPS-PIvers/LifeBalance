@@ -290,6 +290,12 @@ export interface Store {
   icon?: string; // Lucide icon name
 }
 
+export interface QuickStockList {
+  id: string;
+  name: string;
+  items: string[]; // List of catalog item IDs (reference to GroceryCatalogItem.id)
+}
+
 export interface GroceryCatalogItem {
   id: string;
   name: string;
@@ -306,6 +312,7 @@ export interface Household {
   inviteCode: string;
   groceryCategories?: string[]; // Custom categories
   stores?: Store[]; // User-defined stores
+  quickStockLists?: QuickStockList[]; // User-defined shopping templates
   members: HouseholdMember[];
   points?: { daily: number; weekly: number; total: number }; // Shared household points
   lastDailyPointsReset?: string; // YYYY-MM-DD format

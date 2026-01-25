@@ -17,6 +17,7 @@ import {
   Insight,
   GroceryCatalogItem,
   Store,
+  QuickStockList,
   YearlyGoal,
   BucketPeriodSnapshot,
   Household
@@ -103,6 +104,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
+  const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -254,6 +256,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Shopping item added');
   }, []);
 
+  const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
+    const newItems = items.map(item => ({ ...item, id: generateId() } as ShoppingItem));
+    setShoppingList(prev => [...prev, ...newItems]);
+    toast.success('Mock: Shopping items added');
+  }, []);
+
   const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
     setShoppingList(prev => prev.map(s => s.id === item.id ? item : s));
     toast.success('Mock: Shopping item updated');
@@ -326,6 +334,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const updateGroceryCategories = useCallback(async (categories: string[]) => {
     setGroceryCategories(categories);
     toast.success('Mock: Categories updated');
+  }, []);
+
+  // Quick Stock Lists
+  const addQuickStockList = useCallback(async (list: Omit<QuickStockList, 'id'>) => {
+    const newList = { ...list, id: generateId() } as QuickStockList;
+    setQuickStockLists(prev => [...prev, newList]);
+    toast.success('Mock: Template created');
+  }, []);
+
+  const updateQuickStockList = useCallback(async (list: QuickStockList) => {
+    setQuickStockLists(prev => prev.map(l => l.id === list.id ? list : l));
+    toast.success('Mock: Template updated');
+  }, []);
+
+  const deleteQuickStockList = useCallback(async (id: string) => {
+    setQuickStockLists(prev => prev.filter(l => l.id !== id));
+    toast.success('Mock: Template deleted');
   }, []);
 
   // No-op functions for features not critical to testing
@@ -410,6 +435,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     insight,
     stores,
     groceryCategories,
+    quickStockLists,
     apiKeys: [], // iOS Shortcuts - empty in test mode
     pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
@@ -449,6 +475,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateMeal,
     deleteMeal,
     addShoppingItem,
+    addShoppingItems,
     updateShoppingItem,
     reorderShoppingItems,
     deleteShoppingItem,
@@ -465,6 +492,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateStore,
     deleteStore,
     updateGroceryCategories,
+    addQuickStockList,
+    updateQuickStockList,
+    deleteQuickStockList,
     addGroceryCatalogItem: noOp,
     updateGroceryCatalogItem: noOp,
     deleteGroceryCatalogItem: noOp,
