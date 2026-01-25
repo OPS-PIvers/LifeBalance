@@ -11,7 +11,16 @@ const apiKey =
   (typeof process !== "undefined" && process.env?.VITE_GEMINI_API_KEY) ||
   "";
 
-const ai = new GoogleGenAI({ apiKey });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+  if (aiInstance) return aiInstance;
+  if (!apiKey) {
+    throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY in your environment.");
+  }
+  aiInstance = new GoogleGenAI({ apiKey });
+  return aiInstance;
+};
 
 /**
  * Validates that the Gemini API key is configured
@@ -234,7 +243,7 @@ async function generateJsonContent<T>(
   householdId: string,
   promptOrParts: string | Part[],
   schema: Schema,
-  _aiClient?: Pick<typeof ai, 'models'>,
+  _aiClient?: Pick<GoogleGenAI, 'models'>,
   modelName: string = 'gemini-3-flash-preview'
 ): Promise<T> {
   validateApiKey();
@@ -242,7 +251,7 @@ async function generateJsonContent<T>(
   // 1. Check Circuit Breaker & Quota
   await checkAiAvailability(householdId);
 
-  const client = _aiClient || ai;
+  const client = _aiClient || getAiClient();
 
   const contents = typeof promptOrParts === 'string'
     ? { parts: [{ text: promptOrParts }] }
@@ -284,7 +293,7 @@ export const analyzeReceipt = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<ReceiptData> => {
   try {
     const categoryList = availableCategories?.length
@@ -339,7 +348,7 @@ export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<BankTransactionData[]> => {
   try {
     const categoryList = availableCategories?.length
@@ -422,7 +431,7 @@ export interface MealSuggestionResponse {
 export const suggestMeal = async (
   householdId: string,
   options: MealSuggestionRequest,
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<MealSuggestionResponse> => {
   try {
     const previousMealsList = options.previousMeals.map(m => sanitizeForPrompt(m.name)).join(', ');
@@ -488,7 +497,7 @@ export const parseGroceryReceipt = async (
   householdId: string,
   base64Image: string,
   availableCategories: string[] = [...GROCERY_CATEGORIES],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<GroceryItem[]> => {
   try {
     const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
@@ -539,7 +548,7 @@ export const optimizeGroceryList = async (
   householdId: string,
   items: OptimizableItem[],
   availableCategories: string[] = [...GROCERY_CATEGORIES],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<OptimizableItem[]> => {
   if (items.length === 0) return [];
 
@@ -632,7 +641,7 @@ export const generateInsight = async (
   habits: Habit[],
   previousInsights: string[] = [],
   options?: { includeMerchantNames?: boolean },
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
   try {
     // Anonymize and simplify data
@@ -742,7 +751,7 @@ export const parseMagicAction = async (
     groceryCategories: string[] | readonly string[];
     todayDate: string;
   },
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<MagicActionResponse> => {
   try {
     const sanitizedInput = sanitizeForPrompt(input);
@@ -819,7 +828,7 @@ export interface HabitPointAdjustmentSuggestion {
 export const analyzeHabitPoints = async (
   householdId: string,
   habits: Habit[],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<HabitPointAdjustmentSuggestion[]> => {
   if (habits.length === 0) return [];
 
@@ -962,7 +971,7 @@ export interface HabitPatternInsight {
 export const analyzeHabitPatterns = async (
   householdId: string,
   habits: Habit[],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<HabitPatternInsight[]> => {
   if (habits.length === 0) return [];
 
@@ -1074,7 +1083,7 @@ export const parseNaturalLanguageCommand = async (
     shopping?: string[];
     expense?: string[];
   },
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<NaturalLanguageResult> => {
   try {
     const sanitizedText = sanitizeForPrompt(text);
@@ -1304,7 +1313,7 @@ export interface HabitReorganizationPlan {
 export const reorganizeHabits = async (
   householdId: string,
   habits: Habit[],
-  _aiClient?: Pick<typeof ai, 'models'>
+  _aiClient?: Pick<GoogleGenAI, 'models'>
 ): Promise<HabitReorganizationPlan> => {
   // Test Mode Bypass
   if (import.meta.env.VITE_ENABLE_TEST_MODE === 'true' && !_aiClient) {
