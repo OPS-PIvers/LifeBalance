@@ -9,3 +9,7 @@
 ## 2026-01-24 - Standardizing Dashed Buttons and Inputs
 **Drift:** "Add New Item" buttons were using hardcoded `border-dashed` classes across multiple files, and modal inputs/selects were using raw HTML elements instead of shared components.
 **Fix:** Added `dashed` variant to `Button` component and refactored `BudgetBuckets` and `BudgetAccounts` to use standard `Button`, `Input`, and `Select` components.
+
+## 2026-01-25 - Standardizing Icon Buttons
+**Drift:** Icon-only action buttons (Edit, Delete, Navigation) were implemented as raw `<button>` tags with scattered styles (`p-1`, `p-2`, `rounded-lg`) and inconsistent hover effects across Budget components.
+**Fix:** Added `icon-sm` size and `ghost-destructive` variant to `<Button />` and refactored `TransactionItem`, `BudgetBucketCard`, and `BudgetCalendar` to use the standardized component.
