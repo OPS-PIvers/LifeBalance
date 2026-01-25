@@ -8,11 +8,12 @@ import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
+import { SavedViewChips, SavedViewFilters } from './SavedViewChips';
 
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,6 +74,17 @@ const TransactionMasterList: React.FC = () => {
         return 0;
       });
   }, [transactions, searchTerm, categoryFilter, sourceFilter]);
+
+  // Derived State: Total Amount for filtered view
+  const filteredTotal = useMemo(() => {
+    return filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+  }, [filteredTransactions]);
+
+  const handleApplySavedView = useCallback((filters: SavedViewFilters) => {
+    setSearchTerm(filters.search);
+    setCategoryFilter(filters.category);
+    setSourceFilter(filters.source);
+  }, []);
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {
@@ -260,6 +272,13 @@ const TransactionMasterList: React.FC = () => {
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
       <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+        {/* Saved Views */}
+        <SavedViewChips
+          currentFilters={{ search: searchTerm, category: categoryFilter, source: sourceFilter }}
+          onApply={handleApplySavedView}
+          householdId={householdId}
+        />
+
         {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
@@ -341,7 +360,27 @@ const TransactionMasterList: React.FC = () => {
             <Download size={16} />
             <span className="hidden sm:inline">Export</span>
           </button>
+
+          {/* Total Summary Badge */}
+          {filteredTransactions.length > 0 && (
+            <div className="hidden sm:flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg whitespace-nowrap">
+              <span className="text-xs font-bold text-brand-400 uppercase">Total</span>
+              <span className="text-sm font-bold text-brand-800 font-mono">
+                ${filteredTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
         </div>
+
+        {/* Mobile Total Summary (Only visible when filters active or list filtered) */}
+        {filteredTransactions.length > 0 && (
+          <div className="sm:hidden flex justify-end px-1">
+             <span className="text-xs font-bold text-brand-400 uppercase mr-2 mt-1">Total</span>
+             <span className="text-sm font-bold text-brand-800 font-mono">
+               ${filteredTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+             </span>
+          </div>
+        )}
       </div>
 
       {/* Select All Bar */}
