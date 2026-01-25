@@ -14,3 +14,8 @@
 **Weed:** `utils/safeToSpendCalculator.ts` contained duplicated logic for finding the next paycheck and commented-out "dead wood" imports. Logic for calculating unpaid bills was complex and inline.
 **Root Cause:** Optimization efforts ("Bolt Optimization") introduced complexity inline, and duplicated logic likely arose from needing similar calculations in different contexts (one-shot vs optimized hook usage).
 **Plan:** Extracted `findNextPaycheckFromExpanded` and `calculateUnpaidBillsInRange` helper functions. Removed dead imports. This standardizes the logic and makes the main calculation function much more readable while preserving performance optimizations.
+
+## 2026-01-25 - CaptureModal Refactoring
+**Weed:** `CaptureModal.tsx` was a "God Component" (> 1000 lines) handling multiple unrelated tabs and complex view states (Camera, Manual, Review) all in one file.
+**Root Cause:** Feature accumulation (Transactions, Todos, Shopping, Magic Action) without separation of concerns.
+**Plan:** Extracted `CaptureTransactionManual` into a separate component. Standardized manual entry logic and state management. Reduced complexity score of the parent modal.

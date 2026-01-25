@@ -155,6 +155,25 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Transaction deleted');
   }, []);
 
+  const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
+    setTransactions(prev => {
+      // Filter out original transaction
+      const filtered = prev.filter(t => t.id !== originalTransactionId);
+
+      // Create full Transaction objects for new splits
+      const newTxs = newTransactions.map(t => ({
+        ...t,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        payPeriodId: '2024-01-01', // Mock pay period
+        createdBy: 'test-user-id',
+      } as Transaction));
+
+      return [...filtered, ...newTxs];
+    });
+    toast.success('Mock: Transaction split');
+  }, []);
+
   // Habit operations
   const addHabit = useCallback(async (habit: Omit<Habit, 'id'>) => {
     const newHabit = { ...habit, id: generateId() } as Habit;
@@ -410,6 +429,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransaction,
     updateTransactionCategory: noOp,
     deleteTransaction,
+    splitTransaction,
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,
