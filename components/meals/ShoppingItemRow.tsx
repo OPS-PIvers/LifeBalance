@@ -128,7 +128,9 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                  )}
                  <div className="relative group">
                     <span className={clsx(
-                        "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors",
+                        "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                        // Focus ring logic for accessibility (when hidden select is focused)
+                        "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                         item.store && stores
                             ? (() => {
                                 const storeObj = stores.find(s => s.name === item.store);
@@ -148,7 +150,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                                 const newStore = e.target.value;
                                 onUpdate({ ...item, store: newStore || undefined });
                             }}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                             aria-label="Select store"
                             onClick={(e) => e.stopPropagation()}
                         >

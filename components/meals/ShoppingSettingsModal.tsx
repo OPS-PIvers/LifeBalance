@@ -366,7 +366,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${STORE_COLORS[store.color || DEFAULT_STORE_COLOR].iconBg}`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR]).iconBg}`}>
                                     <StoreIcon className="w-4 h-4" />
                                 </div>
                                 <span className="font-medium text-gray-800">{store.name}</span>

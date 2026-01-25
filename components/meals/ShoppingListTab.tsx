@@ -119,7 +119,8 @@ const ShoppingListTab: React.FC = () => {
 
     // 2. Add Item
     // Calculate new order (last + 1)
-    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
+    // Use full shoppingList to ensure correct ordering even when filtered
+    const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
 
     await addShoppingItem({
         name: rawName,
