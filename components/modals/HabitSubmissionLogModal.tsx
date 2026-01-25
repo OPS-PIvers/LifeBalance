@@ -180,7 +180,10 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       d.startsWith(format(calendarDate, 'yyyy-MM'))
     ).length;
 
-    return { days, completionsInMonth };
+    // Convert to Set for O(1) lookup in render loop
+    const completedDatesSet = new Set(habit.completedDates);
+
+    return { days, completionsInMonth, completedDatesSet };
   }, [calendarDate, habit.completedDates]);
 
   return (
@@ -258,6 +261,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               <button
                 onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
                 className="p-2 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 transition-colors"
+                aria-label="Previous month"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -267,30 +271,41 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               <button
                 onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
                 className="p-2 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 transition-colors"
+                aria-label="Next month"
               >
                 <ChevronRight size={20} />
               </button>
             </div>
 
             {/* Calendar Grid */}
-            <div className="bg-white rounded-xl border border-brand-100 p-4 shadow-sm">
-              <div className="grid grid-cols-7 mb-2">
+            <div
+              className="bg-white rounded-xl border border-brand-100 p-4 shadow-sm"
+              role="grid"
+              aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
+            >
+              <div className="grid grid-cols-7 mb-2" role="row">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                  <div key={i} className="text-center text-xs font-bold text-brand-300 py-2">
+                  <div key={i} className="text-center text-xs font-bold text-brand-300 py-2" role="columnheader">
                     {day}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
-                {calendarData.days.map((day, i) => {
+              <div className="grid grid-cols-7 gap-1" role="presentation">
+                {calendarData.days.map((day) => {
                   const dateStr = format(day, 'yyyy-MM-dd');
-                  const isCompleted = habit.completedDates.includes(dateStr);
+                  // Use O(1) Set lookup
+                  const isCompleted = calendarData.completedDatesSet.has(dateStr);
                   const isCurrentMonth = isSameMonth(day, calendarDate);
                   const isTodayDate = isSameDay(day, new Date());
 
+                  // Accessibility label
+                  const label = `${format(day, 'MMMM do')}, ${isCompleted ? 'completed' : 'not completed'}`;
+
                   return (
                     <div
-                      key={i}
+                      key={dateStr}
+                      role="gridcell"
+                      aria-label={label}
                       className={`
                         aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
                         ${!isCurrentMonth ? 'opacity-30' : ''}
