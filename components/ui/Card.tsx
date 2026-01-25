@@ -14,7 +14,7 @@ const Card: React.FC<CardProps> = ({ className, children, ...props }) => {
   return (
     <div
       className={cn(
-        'bg-white/80 backdrop-blur-xl rounded-card shadow-glass ring-1 ring-black/5',
+        'bg-white/90 backdrop-blur-xl rounded-card shadow-glass ring-1 ring-black/5',
         className
       )}
       {...props}

@@ -106,7 +106,7 @@ export const MoneyPulseWidget: React.FC = () => {
       </div>
 
       <div>
-        <h3 className="text-xs font-semibold text-slate-400 tracking-wider mb-3">Recent Activity</h3>
+        <h3 className="text-xs font-semibold text-slate-400 mb-3">Recent Activity</h3>
         <div className="space-y-3">
           {recentTransactions.map(tx => (
             <div key={tx.id} className="flex items-center justify-between group">
