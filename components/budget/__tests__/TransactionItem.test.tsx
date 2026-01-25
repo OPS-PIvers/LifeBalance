@@ -77,4 +77,22 @@ describe('TransactionItem', () => {
     expect(defaultProps.onToggleSelection).toHaveBeenCalledWith(mockTransaction.id);
     expect(defaultProps.onEdit).not.toHaveBeenCalled();
   });
+
+  it('triggers onEdit when pressing Enter key on the row', () => {
+    render(<TransactionItem {...defaultProps} />);
+
+    const row = screen.getByRole('button', { name: /View details for.*Test Merchant/i });
+    fireEvent.keyDown(row, { key: 'Enter', code: 'Enter' });
+
+    expect(defaultProps.onEdit).toHaveBeenCalledWith(mockTransaction);
+  });
+
+  it('triggers onEdit when pressing Space key on the row', () => {
+    render(<TransactionItem {...defaultProps} />);
+
+    const row = screen.getByRole('button', { name: /View details for.*Test Merchant/i });
+    fireEvent.keyDown(row, { key: ' ', code: 'Space' });
+
+    expect(defaultProps.onEdit).toHaveBeenCalledWith(mockTransaction);
+  });
 });

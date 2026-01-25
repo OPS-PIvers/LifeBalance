@@ -35,7 +35,16 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode ? onToggleSelection(tx.id) : onEdit(tx)}
-      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer active:bg-brand-50 ${
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          isSelectionMode ? onToggleSelection(tx.id) : onEdit(tx);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={getSanitizedLabel(tx.merchant, isSelectionMode ? 'Select' : 'View details for')}
+      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer active:bg-brand-50 outline-none focus:ring-2 focus:ring-brand-500 ${
         isSelected
           ? 'bg-brand-50 border-brand-300'
           : 'bg-white border-brand-100 hover:border-brand-300'
@@ -84,7 +93,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
 
         {/* Actions (hidden on mobile, visible on hover for desktop) - HIDDEN IN SELECTION MODE */}
         {!isSelectionMode && (
-          <div className="hidden sm:flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <div className="hidden sm:flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:pointer-events-none sm:group-hover:pointer-events-auto transition-opacity">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
               className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
