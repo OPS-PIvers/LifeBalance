@@ -27,6 +27,7 @@ vi.mock('lucide-react', () => ({
   Copy: () => <div data-testid="copy" />,
   CheckSquare: () => <div data-testid="check-square" />,
   Download: () => <div data-testid="download" />,
+  ChevronDown: () => <div data-testid="chevron-down" />,
 }));
 
 describe('BudgetCalendar', () => {
@@ -286,5 +287,25 @@ describe('BudgetCalendar', () => {
     const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     expect(screen.getByText(prevMonth)).toBeInTheDocument();
+  });
+
+  it('toggles recurring switch with accessibility attributes', () => {
+    render(<BudgetCalendar />);
+
+    // Open Modal
+    fireEvent.click(screen.getByText('Add Event'));
+
+    // Find the toggle
+    const toggle = screen.getByRole('switch', { name: /recurring/i });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    // Click it
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    // Click again
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
   });
 });

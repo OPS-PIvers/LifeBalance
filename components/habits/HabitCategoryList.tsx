@@ -79,7 +79,8 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
       dragControls={controls}
       onDragEnd={onSave}
       style={{ position: 'relative' }} // ensure z-index works
-      className="touch-none" // Prevents scrolling while dragging? No, usually handled by dragListener
+      // Removed touch-none to allow vertical scrolling on the card itself.
+      // Dragging is handled via the grip handle which has touch-none.
     >
       <HabitCard
         habit={habit}

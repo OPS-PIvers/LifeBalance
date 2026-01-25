@@ -11,9 +11,9 @@ import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
-import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
+import { CaptureTransactionManual } from './CaptureTransactionManual';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -31,6 +31,13 @@ interface ParsedTransaction {
   date: string;
   selected: boolean;
   relatedHabitIds?: string[];
+}
+
+interface ManualInitialData {
+  amount?: string;
+  merchant?: string;
+  category?: string;
+  date?: string;
 }
 
 /**
@@ -56,13 +63,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // --- Transaction State ---
   const [view, setView] = useState<ModalView>('menu');
   const [processingMessage, setProcessingMessage] = useState('Processing...');
-  const [amount, setAmount] = useState('');
-  const [merchant, setMerchant] = useState('');
-  const [category, setCategory] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [transactionDate, setTransactionDate] = useState('');
+
+  // Manual Entry State
+  const [manualInitialData, setManualInitialData] = useState<ManualInitialData | undefined>(undefined);
+
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
-  const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,12 +77,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // Dynamic Categories from buckets (Transaction)
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
   const habitTitles = habits.map(h => h.title);
-
-  // Smart habit suggestions for manual entry (based on merchant name)
-  const suggestedHabits = useMemo(() => {
-    if (!merchant.trim() || habits.length === 0) return [];
-    return suggestHabitsForTransaction(merchant, habits, transactions, 5);
-  }, [merchant, habits, transactions]);
 
   // --- To-Do State ---
   const [todoText, setTodoText] = useState('');
@@ -112,11 +111,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
       if (result.type === 'transaction') {
         setActiveTab('transaction');
+        setManualInitialData({
+          amount: result.data.amount?.toString(),
+          merchant: result.data.merchant,
+          category: result.data.category ? matchCategory(result.data.category) : undefined,
+          date: result.data.date
+        });
         setView('manual');
-        if (result.data.amount) setAmount(result.data.amount.toString());
-        if (result.data.merchant) setMerchant(result.data.merchant);
-        if (result.data.category) setCategory(matchCategory(result.data.category));
-        if (result.data.date) setTransactionDate(result.data.date);
         toast.success("Transaction details found!");
       } else if (result.type === 'todo') {
         setActiveTab('todo');
@@ -145,19 +146,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   };
 
   // Initialize Defaults when modal opens
-  // Use ref to track if we've initialized to avoid dependency loops
   const hasInitialized = useRef(false);
 
   useEffect(() => {
     if (isOpen && !hasInitialized.current) {
-      // Transaction defaults
-      if (!category && dynamicCategories.length > 0) {
-        setCategory(dynamicCategories[0]);
-      }
-      if (!transactionDate) {
-        setTransactionDate(getLocalDateString());
-      }
-
       // To-Do defaults
       if (!todoDate) {
         setTodoDate(getLocalDateString());
@@ -174,22 +166,17 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (!isOpen) {
       hasInitialized.current = false;
     }
-  }, [isOpen, dynamicCategories, currentUser, members]);
+  }, [isOpen, currentUser, members]);
 
   // Reset state when closing
   const handleClose = () => {
     stopCamera();
     setView('menu');
-    setActiveTab('transaction'); // Reset tab to default? Maybe better to keep user pref? Sticking to default for now.
+    setActiveTab('transaction');
 
     // Reset Transaction State
-    setAmount('');
-    setMerchant('');
-    if (dynamicCategories.length > 0) setCategory(dynamicCategories[0]);
-    setIsRecurring(false);
-    setTransactionDate('');
+    setManualInitialData(undefined);
     setParsedTransactions([]);
-    setSelectedHabitIds([]);
 
     // Reset To-Do State
     setTodoText('');
@@ -399,89 +386,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     else toast.error('Failed to add transactions');
     handleClose();
-  };
-
-  const handleManualSave = async () => {
-    if (!amount || !merchant) {
-      toast.error("Please fill in required fields");
-      return;
-    }
-
-    // Validate merchant is not just whitespace
-    const trimmedMerchant = merchant.trim();
-    if (!trimmedMerchant) {
-      toast.error("Please enter a merchant name");
-      return;
-    }
-
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Please enter a valid amount");
-      return;
-    }
-    if (!transactionDate) {
-      toast.error("Please select a date");
-      return;
-    }
-    // Future dates are allowed - logic sets status to pending_review if future
-    const isFuture = transactionDate > getLocalDateString();
-
-    if (!category || !dynamicCategories.includes(category)) {
-      toast.error("Please select a valid category");
-      return;
-    }
-
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      amount: parsedAmount,
-      merchant: trimmedMerchant,
-      category,
-      date: transactionDate,
-      status: isFuture ? 'pending_review' : 'verified',
-      isRecurring: isRecurring, // Ensure boolean, not undefined
-      source: 'manual',
-      autoCategorized: false,
-      relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined
-    };
-
-    // Debug log before adding
-    console.log('[CaptureModal] Adding manual transaction:', {
-      amount: parsedAmount,
-      merchant: trimmedMerchant,
-      category,
-      date: transactionDate,
-      status: newTransaction.status,
-      isRecurring: newTransaction.isRecurring,
-      relatedHabitIds: newTransaction.relatedHabitIds
-    });
-
-    try {
-      await addTransaction(newTransaction);
-      toast.success("Transaction saved!");
-      handleClose();
-    } catch (error) {
-      console.error("Failed to save transaction:", error, newTransaction);
-
-      // Extract ALL error details for debugging
-      let errorMsg = 'Unknown error';
-      if (error instanceof Error) {
-        errorMsg = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        if ('message' in error) {
-          errorMsg = String((error as { message: unknown }).message);
-        }
-        // Check for Firestore errors
-        if ('code' in error) {
-          errorMsg = `[${(error as { code: unknown }).code}] ${errorMsg}`;
-        }
-      }
-
-      // Show error in parts if too long
-      toast.error(errorMsg, { duration: 10000 });
-
-      // Also show transaction data for debugging
-      toast.error(`Data: amt=${parsedAmount} merch=${trimmedMerchant.substring(0, 20)} cat=${category}`, { duration: 10000 });
-    }
   };
 
   // --- To-Do Logic ---
@@ -864,194 +768,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
               {/* Manual Form View */}
               {view === 'manual' && (
-                <div className="space-y-6">
-                  <div className="flex justify-center">
-                    <div className="relative">
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400">$</span>
-                      <input
-                        type="number"
-                        value={amount}
-                        aria-label="Amount"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || parseFloat(value) >= 0) setAmount(value);
-                        }}
-                        onKeyDown={(e) => {
-                          if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-                        }}
-                        placeholder="0.00"
-                        autoFocus
-                        step="0.01"
-                        min="0"
-                        className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 placeholder:text-brand-200 outline-none text-center bg-transparent"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="manual-merchant" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Merchant</label>
-                    <input
-                      id="manual-merchant"
-                      type="text"
-                      value={merchant}
-                      onChange={(e) => setMerchant(e.target.value)}
-                      placeholder="e.g. Starbucks"
-                      className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="manual-date" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Date</label>
-                    <input
-                      id="manual-date"
-                      type="date"
-                      value={transactionDate}
-                      onChange={(e) => setTransactionDate(e.target.value)}
-                      className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">Category</label>
-                    <div
-                      className="flex gap-2 overflow-x-auto pb-2 no-scrollbar"
-                      role="radiogroup"
-                      aria-labelledby="manual-category-label"
-                    >
-                      {dynamicCategories.length === 0 && <span className="text-sm text-brand-400">No buckets found.</span>}
-                      {dynamicCategories.map(cat => (
-                        <button
-                          key={cat}
-                          onClick={() => setCategory(cat)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                            category === cat
-                              ? 'bg-brand-800 text-white'
-                              : 'bg-brand-50 text-brand-600 border border-brand-200 hover:bg-brand-100'
-                          }`}
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Habit Tagging Section */}
-                  {habits.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <label className="block text-xs font-semibold text-brand-400 uppercase tracking-wider">
-                          Connect Habits (Optional)
-                        </label>
-                        {suggestedHabits.some(s => s.confidence !== 'low') && (
-                          <Sparkles size={12} className="text-violet-500" />
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {/* Show suggested habits first */}
-                        {suggestedHabits
-                          .filter(s => s.confidence === 'high' || s.confidence === 'medium')
-                          .map(({ habit, confidence }) => {
-                            const isSelected = selectedHabitIds.includes(habit.id);
-                            return (
-                              <button
-                                key={habit.id}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedHabitIds(prev =>
-                                    isSelected
-                                      ? prev.filter(id => id !== habit.id)
-                                      : [...prev, habit.id]
-                                  );
-                                }}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
-                                  isSelected
-                                    ? 'bg-habit-green text-white shadow-sm'
-                                    : confidence === 'high'
-                                    ? 'bg-violet-50 border-2 border-violet-300 text-violet-700 hover:bg-violet-100'
-                                    : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100'
-                                }`}
-                              >
-                                {isSelected && <Check size={12} strokeWidth={3} />}
-                                {habit.title}
-                                {!isSelected && confidence === 'high' && (
-                                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
-                                )}
-                              </button>
-                            );
-                          })}
-
-                        {/* Show selected non-suggested habits */}
-                        {suggestedHabits
-                          .filter(s => s.confidence === 'low' && selectedHabitIds.includes(s.habit.id))
-                          .map(({ habit }) => (
-                            <button
-                              key={habit.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
-                              }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-sm"
-                            >
-                              <Check size={12} strokeWidth={3} />
-                              {habit.title}
-                            </button>
-                          ))}
-
-                        {/* "More" button to show all habits */}
-                        {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
-                          <details className="inline">
-                            <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100 cursor-pointer inline-flex items-center gap-1">
-                              + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
-                            </summary>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {suggestedHabits
-                                .filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id))
-                                .map(({ habit }) => (
-                                  <button
-                                    key={habit.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedHabitIds(prev => [...prev, habit.id]);
-                                    }}
-                                    className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100"
-                                  >
-                                    {habit.title}
-                                  </button>
-                                ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between p-4 bg-brand-50 rounded-xl border border-brand-100">
-                    <span id="recurring-label" className="text-sm font-medium text-brand-700">Recurring Transaction</span>
-                    <button
-                      role="switch"
-                      aria-checked={isRecurring}
-                      aria-labelledby="recurring-label"
-                      onClick={() => setIsRecurring(!isRecurring)}
-                      className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300'}`}
-                    >
-                      <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : 'translate-x-0'}`} />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl border border-green-200">
-                    <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-                    <p className="text-xs text-green-700">
-                      Manual entries update your budget immediately without review.
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleManualSave}
-                    className="w-full py-4 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-brand-700"
-                  >
-                    Save Transaction
-                  </button>
-                </div>
+                <CaptureTransactionManual
+                  initialData={manualInitialData}
+                  onAddTransaction={addTransaction}
+                  onClose={handleClose}
+                  dynamicCategories={dynamicCategories}
+                  habits={habits}
+                  transactions={transactions}
+                />
               )}
             </>
           )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { ShoppingItem } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
 import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw } from 'lucide-react';
@@ -11,7 +11,7 @@ interface ShoppingItemRowProps {
   onEdit: (item: ShoppingItem) => void;
 }
 
-export const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -133,12 +133,6 @@ export const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({ item, onCheck,
                         {item.store}
                     </span>
                  )}
-                 {/* Category as optional metadata if needed, but user said not to display store categories.
-                     Assuming they meant grouping. I'll hide category chip for cleaner look unless essential.
-                     Maybe show it if it's not "Uncategorized" and not redundant?
-                     User said: "store chip [store chip] [any other store chips]".
-                     I'll stick to store for now.
-                  */}
             </div>
         </div>
 
@@ -155,3 +149,27 @@ export const ShoppingItemRow: React.FC<ShoppingItemRowProps> = ({ item, onCheck,
     </Reorder.Item>
   );
 };
+
+const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) => {
+  const prevItem = prev.item;
+  const nextItem = next.item;
+
+  // Deep compare item fields to handle Firestore reference instability
+  const isItemEqual =
+    prevItem.id === nextItem.id &&
+    prevItem.name === nextItem.name &&
+    prevItem.category === nextItem.category &&
+    prevItem.store === nextItem.store &&
+    prevItem.quantity === nextItem.quantity &&
+    prevItem.isPurchased === nextItem.isPurchased &&
+    prevItem.notes === nextItem.notes &&
+    prevItem.addedFromMealId === nextItem.addedFromMealId &&
+    prevItem.order === nextItem.order;
+
+  return isItemEqual &&
+         prev.onCheck === next.onCheck &&
+         prev.onDelete === next.onDelete &&
+         prev.onEdit === next.onEdit;
+};
+
+export const ShoppingItemRow = memo(ShoppingItemRowComponent, arePropsEqual);
