@@ -47,6 +47,17 @@ vi.mock('../ui/Modal', () => ({
   )
 }));
 
+// Mock Drawer
+vi.mock('../ui/Drawer', () => ({
+  Drawer: ({ isOpen, onClose, children, title }: { isOpen: boolean; onClose: () => void; children: React.ReactNode; title?: string }) => isOpen ? (
+    <div data-testid="drawer">
+      {title && <h3>{title}</h3>}
+      {children}
+      <button onClick={onClose} aria-label="Close drawer">Close</button>
+    </div>
+  ) : null
+}));
+
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   Search: () => <div data-testid="search-icon" />,
@@ -348,6 +359,73 @@ describe('TransactionMasterList', () => {
         ]),
         'transactions-export'
       );
+    });
+  });
+
+  describe('Mobile Actions (Drawer)', () => {
+    it('opens drawer when clicking "More" button', () => {
+      render(<TransactionMasterList />);
+
+      // Find the mobile "More" button for "Bus Ticket" (first item)
+      const moreButton = screen.getByLabelText('Open options for transaction from Bus Ticket');
+      expect(moreButton).toBeInTheDocument();
+
+      fireEvent.click(moreButton);
+
+      expect(screen.getByTestId('drawer')).toBeInTheDocument();
+      expect(screen.getByText('Transaction Options')).toBeInTheDocument();
+
+      const drawer = screen.getByTestId('drawer');
+      expect(within(drawer).getByText('Bus Ticket')).toBeInTheDocument();
+      expect(within(drawer).getByText('Edit Transaction')).toBeInTheDocument();
+      expect(within(drawer).getByText('Duplicate')).toBeInTheDocument();
+      expect(within(drawer).getByText('Delete')).toBeInTheDocument();
+    });
+
+    it('handles Edit action from Drawer', () => {
+      render(<TransactionMasterList />);
+      const moreButton = screen.getByLabelText('Open options for transaction from Bus Ticket');
+      fireEvent.click(moreButton);
+
+      const editButton = screen.getByText('Edit Transaction').closest('button');
+      if (editButton) fireEvent.click(editButton);
+
+      // Should close drawer and open edit modal
+      expect(screen.queryByTestId('drawer')).not.toBeInTheDocument();
+      expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    });
+
+    it('handles Duplicate action from Drawer', async () => {
+      render(<TransactionMasterList />);
+      const moreButton = screen.getByLabelText('Open options for transaction from Bus Ticket');
+      fireEvent.click(moreButton);
+
+      const dupButton = screen.getByText('Duplicate').closest('button');
+      if (dupButton) fireEvent.click(dupButton);
+
+      await waitFor(() => {
+        expect(mockAddTransaction).toHaveBeenCalledWith(expect.objectContaining({
+          merchant: 'Bus Ticket'
+        }));
+      });
+      // Drawer should close
+      expect(screen.queryByTestId('drawer')).not.toBeInTheDocument();
+    });
+
+    it('handles Delete action from Drawer', () => {
+      render(<TransactionMasterList />);
+      const moreButton = screen.getByLabelText('Open options for transaction from Bus Ticket');
+      fireEvent.click(moreButton);
+
+      // The Delete button in Drawer
+      // Note: There are other delete buttons in the DOM (the inline ones), so we should search within drawer
+      const drawer = screen.getByTestId('drawer');
+      const deleteButton = within(drawer).getByText('Delete').closest('button');
+      if (deleteButton) fireEvent.click(deleteButton);
+
+      // Should show confirmation modal
+      expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
+      expect(screen.queryByTestId('drawer')).not.toBeInTheDocument();
     });
   });
 });

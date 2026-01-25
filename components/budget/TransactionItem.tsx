@@ -91,7 +91,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
               <button
                 onClick={(e) => { e.stopPropagation(); onOpenActions(tx); }}
                 className="p-2 text-brand-300 active:text-brand-600 active:bg-brand-50 rounded-lg transition-colors"
-                aria-label={getSanitizedLabel(tx.merchant, 'Options for')}
+                aria-label={getSanitizedLabel(tx.merchant, 'Open options for')}
               >
                 <MoreVertical size={20} />
               </button>

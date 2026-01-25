@@ -7,6 +7,7 @@ interface DrawerProps {
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -15,6 +16,7 @@ export const Drawer: React.FC<DrawerProps> = ({
   onClose,
   children,
   title,
+  ariaLabel,
   className
 }) => {
   // Lock body scroll when drawer is open
@@ -66,11 +68,17 @@ export const Drawer: React.FC<DrawerProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? "drawer-title" : undefined}
+            aria-label={!title ? ariaLabel : undefined}
           >
             {/* Handle/Pill for visual cue */}
-            <div className="w-full flex justify-center pt-3 pb-1" onClick={onClose}>
+            <button
+              type="button"
+              className="w-full flex justify-center pt-3 pb-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-t-2xl"
+              onClick={onClose}
+              aria-label="Close drawer"
+            >
               <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
-            </div>
+            </button>
 
             {/* Header */}
             {title && (

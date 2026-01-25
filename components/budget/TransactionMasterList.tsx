@@ -528,6 +528,7 @@ const TransactionMasterList: React.FC = () => {
         isOpen={!!actionTransaction}
         onClose={() => setActionTransaction(null)}
         title="Transaction Options"
+        ariaLabel={!actionTransaction ? "Transaction Options" : undefined}
       >
         {actionTransaction && (
           <div className="space-y-3">
