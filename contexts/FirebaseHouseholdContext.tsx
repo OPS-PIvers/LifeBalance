@@ -185,6 +185,7 @@ export interface HouseholdContextType {
 
   // Shopping List Actions
   addShoppingItem: (item: Omit<ShoppingItem, 'id'>) => Promise<void>;
+  addShoppingItems: (items: Omit<ShoppingItem, 'id'>[]) => Promise<void>;
   updateShoppingItem: (item: ShoppingItem) => Promise<void>;
   reorderShoppingItems: (items: ShoppingItem[]) => Promise<void>;
   deleteShoppingItem: (id: string) => Promise<void>;
@@ -2649,6 +2650,30 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
+    if (!householdId) return;
+    try {
+      const batch = writeBatch(db);
+      const collectionRef = collection(db, `households/${householdId}/shoppingList`);
+
+      items.forEach(item => {
+        const docRef = doc(collectionRef); // Generate new ID
+        const sanitizedItem = sanitizeFirestoreData(item);
+        batch.set(docRef, {
+          ...sanitizedItem,
+          createdAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+      // Toast handled by caller or generic success
+    } catch (error) {
+      console.error('[addShoppingItems] Failed:', error);
+      toast.error('Failed to add items');
+      throw error;
+    }
+  }, [householdId]);
+
   const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
     if (!householdId) return;
     try {
@@ -3229,6 +3254,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateMeal,
     deleteMeal,
     addShoppingItem,
+    addShoppingItems,
     updateShoppingItem,
     reorderShoppingItems,
     deleteShoppingItem,
@@ -3268,7 +3294,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     useFreezeBankToken, rolloverFreezeBankTokens,
     addMember, updateMember, removeMember,
     addMeal, updateMeal, deleteMeal,
-    addShoppingItem, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
+    addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,

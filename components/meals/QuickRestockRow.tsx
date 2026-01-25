@@ -5,18 +5,20 @@ import { normalizeToKey } from '@/utils/stringNormalizer';
 import { List } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { ShoppingItem } from '@/types/schema';
+
 export const QuickRestockRow: React.FC = () => {
-  const { quickStockLists, groceryCatalog, shoppingList, addShoppingItem } = useHousehold();
+  const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useHousehold();
 
   if (!quickStockLists || quickStockLists.length === 0) return null;
 
   const handleRestock = async (list: QuickStockList) => {
-    let addedCount = 0;
-
     // Create lookup for existing items (pending only)
     const existingNames = new Set(
       shoppingList.filter(i => !i.isPurchased).map(i => normalizeToKey(i.name))
     );
+
+    const itemsToAdd: Omit<ShoppingItem, 'id'>[] = [];
 
     // Process each item in the template
     for (const itemName of list.items) {
@@ -28,19 +30,18 @@ export const QuickRestockRow: React.FC = () => {
         c => normalizeToKey(c.name) === normalizeToKey(itemName)
       );
 
-      await addShoppingItem({
+      itemsToAdd.push({
         name: itemName, // Use the name from the list
         category: catalogItem?.category || 'Uncategorized',
         quantity: catalogItem?.defaultQuantity,
         store: catalogItem?.defaultStore,
         isPurchased: false
       });
-
-      addedCount++;
     }
 
-    if (addedCount > 0) {
-      toast.success(`Added ${addedCount} items from ${list.name}`);
+    if (itemsToAdd.length > 0) {
+      await addShoppingItems(itemsToAdd);
+      toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
     } else {
       toast('All items already in list', { icon: 'ℹ️' });
     }

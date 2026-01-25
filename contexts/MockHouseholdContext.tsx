@@ -237,6 +237,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Shopping item added');
   }, []);
 
+  const addShoppingItems = useCallback(async (items: Omit<ShoppingItem, 'id'>[]) => {
+    const newItems = items.map(item => ({ ...item, id: generateId() } as ShoppingItem));
+    setShoppingList(prev => [...prev, ...newItems]);
+    toast.success('Mock: Shopping items added');
+  }, []);
+
   const updateShoppingItem = useCallback(async (item: ShoppingItem) => {
     setShoppingList(prev => prev.map(s => s.id === item.id ? item : s));
     toast.success('Mock: Shopping item updated');
@@ -449,6 +455,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateMeal,
     deleteMeal,
     addShoppingItem,
+    addShoppingItems,
     updateShoppingItem,
     reorderShoppingItems,
     deleteShoppingItem,
