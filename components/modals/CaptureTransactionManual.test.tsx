@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
-import { Transaction, Habit } from '../../types/schema';
+import { Transaction, Habit, BudgetBucket } from '../../types/schema';
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({
@@ -30,6 +30,7 @@ describe('CaptureTransactionManual', () => {
   const mockCategories = ['Food', 'Transport', 'Utilities'];
   const mockHabits: Habit[] = [];
   const mockTransactions: Transaction[] = [];
+  const mockBuckets: BudgetBucket[] = [];
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,6 +44,7 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
+        buckets={mockBuckets}
       />
     );
 
@@ -60,6 +62,7 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
+        buckets={mockBuckets}
       />
     );
 
@@ -94,6 +97,7 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
+        buckets={mockBuckets}
       />
     );
 
@@ -126,6 +130,7 @@ describe('CaptureTransactionManual', () => {
         dynamicCategories={mockCategories}
         habits={mockHabits}
         transactions={mockTransactions}
+        buckets={mockBuckets}
       />
     );
 

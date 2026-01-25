@@ -151,6 +151,7 @@ export interface BankTransactionData {
   category: string;
   date: string;
   suggestedHabits?: string[];
+  subBucket?: string;
 }
 
 export interface GroceryItem {
