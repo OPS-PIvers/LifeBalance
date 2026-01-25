@@ -114,7 +114,7 @@ describe('CaptureTransactionManual', () => {
   });
 
   it('populates from initialData', async () => {
-     render(
+    render(
       <CaptureTransactionManual
         initialData={{
             amount: '50',
