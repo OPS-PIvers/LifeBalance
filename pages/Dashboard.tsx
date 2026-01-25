@@ -46,24 +46,24 @@ const Dashboard: React.FC = () => {
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen bg-brand-50 pb-28">
+    <div className="min-h-screen bg-brand-50 pb-32">
       
       {/* Dashboard Header */}
-      <div className="px-4 py-6 flex items-center justify-between">
+      <div className="px-6 py-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-brand-800">Hi, {currentUser?.displayName || 'there'}</h1>
-          <p className="text-sm text-brand-400">Let&apos;s make today count.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Hi, {currentUser?.displayName || 'there'}</h1>
+          <p className="text-base text-slate-500 font-medium mt-1">Let&apos;s make today count.</p>
         </div>
         <button 
           onClick={() => setIsAnalyticsOpen(true)}
-          className="p-3 bg-white border border-brand-100 rounded-xl shadow-sm text-brand-600 hover:bg-brand-50 active:scale-95 transition-all"
+          className="p-3 bg-white/80 backdrop-blur-xl border border-white/20 ring-1 ring-black/5 rounded-2xl shadow-sm text-slate-500 hover:text-slate-900 hover:bg-white active:scale-95 transition-all"
           aria-label="Open Analytics"
         >
-          <BarChart2 size={20} />
+          <BarChart2 size={24} />
         </button>
       </div>
 
-      <div className="px-4 space-y-6">
+      <div className="px-4 space-y-8">
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
@@ -84,15 +84,15 @@ const Dashboard: React.FC = () => {
 
         {/* Widget A: Action Queue */}
         {actionQueue.length > 0 && (
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-brand-100 animate-in fade-in slide-in-from-top-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-brand-800 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-money-neg animate-pulse"></span>
+          <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm"></span>
                 Action Queue ({actionQueue.length})
               </h2>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-4">
               {actionQueue.map(item => (
                 <ActionQueueItemCard
                   key={item.id}
