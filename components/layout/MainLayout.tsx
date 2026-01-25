@@ -13,7 +13,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <TopToolbar />
       </div>
 
-      <main className="flex-1 overflow-y-auto relative scroll-smooth w-full">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth w-full">
         <div className="pb-8">
             {children}
         </div>
