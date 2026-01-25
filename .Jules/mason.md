@@ -11,3 +11,7 @@
 ## 2026-01-24 - Functions Linting Gap
 **Bottleneck:** The `functions` workspace had no ESLint configuration, meaning backend code quality was not being enforced in CI despite the `lint` script existing (it only ran `tsc`).
 **Fix:** Added ESLint configuration to `functions`, updated `tsconfig.json` to target ES2022, and fixed existing lint errors.
+
+## 2026-01-25 - Tailwind CDN Migration
+**Bottleneck:** Tailwind CSS was loaded via CDN, causing runtime parsing performance penalty and large download size.
+**Fix:** Migrated to PostCSS/Tailwind build process (v3.4) for optimized production builds.

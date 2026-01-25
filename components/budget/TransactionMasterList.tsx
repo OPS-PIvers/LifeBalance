@@ -3,6 +3,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
+import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
 import toast from 'react-hot-toast';
@@ -27,6 +28,10 @@ const TransactionMasterList: React.FC = () => {
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  // Split Modal State
+  const [transactionToSplit, setTransactionToSplit] = useState<Transaction | null>(null);
+  const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
 
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
@@ -78,6 +83,11 @@ const TransactionMasterList: React.FC = () => {
   const handleEdit = useCallback((tx: Transaction) => {
     setEditingTransaction(tx);
     setIsEditModalOpen(true);
+  }, []);
+
+  const handleSplitClick = useCallback((tx: Transaction) => {
+    setTransactionToSplit(tx);
+    setIsSplitModalOpen(true);
   }, []);
 
   const handleDeleteClick = useCallback((tx: Transaction) => {
@@ -376,6 +386,7 @@ const TransactionMasterList: React.FC = () => {
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
+              onSplit={handleSplitClick}
               isSelectionMode={isSelectionMode}
               isSelected={selectedIds.has(tx.id)}
               onToggleSelection={toggleSelection}
@@ -474,6 +485,15 @@ const TransactionMasterList: React.FC = () => {
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           transaction={editingTransaction}
+        />
+      )}
+
+      {/* Split Modal - Conditionally Rendered */}
+      {transactionToSplit && (
+        <SplitTransactionModal
+          isOpen={isSplitModalOpen}
+          onClose={() => setIsSplitModalOpen(false)}
+          transaction={transactionToSplit}
         />
       )}
 

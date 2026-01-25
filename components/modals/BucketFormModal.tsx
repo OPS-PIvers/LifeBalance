@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2 } from 'lucide-react';
-import { BudgetBucket } from '../../types/schema';
+import { X, Trash2, Plus } from 'lucide-react';
+import { BudgetBucket, SubBucket } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -25,6 +25,8 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
   const [color, setColor] = useState(COLORS[0]);
+  const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
+  const [newSubBucketName, setNewSubBucketName] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -34,13 +36,30 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         setName(editingBucket.name);
         setLimit(editingBucket.limit.toString());
         setColor(editingBucket.color);
+        setSubBuckets(editingBucket.subBuckets || []);
       } else {
         setName('');
         setLimit('');
         setColor(COLORS[0]);
+        setSubBuckets([]);
       }
+      setNewSubBucketName('');
     }
   }, [isOpen, editingBucket]);
+
+  const handleAddSubBucket = () => {
+    if (!newSubBucketName.trim()) return;
+    const newSubBucket: SubBucket = {
+      id: crypto.randomUUID(),
+      name: newSubBucketName.trim()
+    };
+    setSubBuckets([...subBuckets, newSubBucket]);
+    setNewSubBucketName('');
+  };
+
+  const handleRemoveSubBucket = (id: string) => {
+    setSubBuckets(subBuckets.filter(sb => sb.id !== id));
+  };
 
   const handleSave = () => {
     if (!name || !limit) return;
@@ -52,7 +71,8 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       spent: editingBucket ? editingBucket.spent : 0,
       color,
       isVariable: true,
-      isCore: true
+      isCore: true,
+      subBuckets
     };
 
     if (editingBucket) {
@@ -130,6 +150,47 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
                 />
               );
             })}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-brand-400 uppercase block mb-2">Sub-Categories (Optional)</label>
+          <div className="space-y-2 mb-2">
+            {subBuckets.map(sb => (
+              <div key={sb.id} className="flex justify-between items-center bg-brand-50 p-2 rounded-lg">
+                <span className="text-sm font-medium text-brand-700">{sb.name}</span>
+                <button
+                  onClick={() => handleRemoveSubBucket(sb.id)}
+                  className="text-brand-400 hover:text-money-neg"
+                  aria-label={`Remove ${sb.name} sub-category`}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSubBucketName}
+              onChange={e => setNewSubBucketName(e.target.value)}
+              placeholder="New sub-category..."
+              className="flex-1 px-3 py-2 bg-white border border-brand-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddSubBucket();
+                }
+              }}
+            />
+            <button
+              onClick={handleAddSubBucket}
+              disabled={!newSubBucketName.trim()}
+              className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200 disabled:opacity-50 transition-colors"
+              aria-label="Add sub-category"
+            >
+              <Plus size={20} />
+            </button>
           </div>
         </div>
 

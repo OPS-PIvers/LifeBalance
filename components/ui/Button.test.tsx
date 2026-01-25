@@ -62,6 +62,13 @@ describe('Button', () => {
     expect(button).toHaveClass('text-red-400');
   });
 
+  it('applies ghost-destructive variant classes', () => {
+    render(<Button variant="ghost-destructive">Ghost Destructive</Button>);
+    const button = screen.getByRole('button', { name: /ghost destructive/i });
+    expect(button).toHaveClass('bg-transparent');
+    expect(button).toHaveClass('text-brand-400');
+  });
+
   it('applies success variant classes', () => {
     render(<Button variant="success">Success</Button>);
     const button = screen.getByRole('button', { name: /success/i });
@@ -112,6 +119,12 @@ describe('Button', () => {
     render(<Button size="icon">Icon</Button>);
     const button = screen.getByRole('button', { name: /icon/i });
     expect(button).toHaveClass('p-2');
+  });
+
+  it('applies icon-sm size classes', () => {
+    render(<Button size="icon-sm">Icon SM</Button>);
+    const button = screen.getByRole('button', { name: /icon sm/i });
+    expect(button).toHaveClass('p-1');
   });
 
   // State & Icon tests
