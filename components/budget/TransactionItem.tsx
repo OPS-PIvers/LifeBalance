@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 
@@ -26,12 +26,13 @@ export interface TransactionItemProps {
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
+  onOpenActions: (tx: Transaction) => void;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
 }
 
-export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onOpenActions, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -82,31 +83,45 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           )}
         </div>
 
-        {/* Actions (visible on mobile, enhanced on hover for desktop) - HIDDEN IN SELECTION MODE */}
+        {/* Actions - HIDDEN IN SELECTION MODE */}
         {!isSelectionMode && (
-          <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-              aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
-            >
-              <Edit size={16} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-              aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
-            >
-              <Copy size={16} />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
-              className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
-              aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
+          <>
+            {/* Mobile Actions: More Button (Hidden on Desktop) */}
+            <div className="sm:hidden">
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenActions(tx); }}
+                className="p-2 text-brand-300 active:text-brand-600 active:bg-brand-50 rounded-lg transition-colors"
+                aria-label={getSanitizedLabel(tx.merchant, 'Options for')}
+              >
+                <MoreVertical size={20} />
+              </button>
+            </div>
+
+            {/* Desktop Actions: Hover Row (Hidden on Mobile) */}
+            <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
+                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
+              >
+                <Edit size={16} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
+                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
+              >
+                <Copy size={16} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
+                className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
+                aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -132,6 +147,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onDuplicate === nextProps.onDuplicate &&
+    prevProps.onOpenActions === nextProps.onOpenActions &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onToggleSelection === nextProps.onToggleSelection

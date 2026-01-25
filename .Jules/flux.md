@@ -1,0 +1,1 @@
+## 2024-05-23 - [Transaction Actions] **Squeeze:** [Inline actions (Edit/Copy/Delete) are too small (32px) and crowded on mobile] **Reflow:** [Move actions to a "More" button that opens a Bottom Sheet on mobile]

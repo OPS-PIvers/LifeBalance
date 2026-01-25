@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check } from 'lucide-react';
+import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
@@ -31,6 +32,9 @@ const TransactionMasterList: React.FC = () => {
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mobile Actions State
+  const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
 
   // Clear selection when mode is toggled off
   React.useEffect(() => {
@@ -102,6 +106,10 @@ const TransactionMasterList: React.FC = () => {
       toast.error('Failed to duplicate transaction');
     }
   }, [addTransaction]);
+
+  const handleOpenActions = useCallback((tx: Transaction) => {
+    setActionTransaction(tx);
+  }, []);
 
   const confirmDelete = async () => {
     if (!transactionToDelete || isDeleting) return;
@@ -376,6 +384,7 @@ const TransactionMasterList: React.FC = () => {
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
+              onOpenActions={handleOpenActions}
               isSelectionMode={isSelectionMode}
               isSelected={selectedIds.has(tx.id)}
               onToggleSelection={toggleSelection}
@@ -513,6 +522,61 @@ const TransactionMasterList: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Mobile Action Drawer */}
+      <Drawer
+        isOpen={!!actionTransaction}
+        onClose={() => setActionTransaction(null)}
+        title="Transaction Options"
+      >
+        {actionTransaction && (
+          <div className="space-y-3">
+             <div className="mb-4 p-3 bg-brand-50 rounded-xl border border-brand-100">
+                <p className="font-bold text-brand-800">{actionTransaction.merchant}</p>
+                <p className="text-sm text-brand-500">${actionTransaction.amount.toFixed(2)} • {actionTransaction.category}</p>
+             </div>
+
+             <button
+                onClick={() => {
+                  handleEdit(actionTransaction);
+                  setActionTransaction(null);
+                }}
+                className="w-full p-4 flex items-center gap-3 bg-white border border-brand-100 rounded-xl text-brand-800 font-bold shadow-sm hover:bg-brand-50 active:scale-[0.98] transition-all"
+              >
+                <div className="p-2 bg-brand-50 rounded-lg text-brand-600">
+                  <Edit size={20} />
+                </div>
+                Edit Transaction
+              </button>
+
+              <button
+                onClick={() => {
+                  handleDuplicate(actionTransaction);
+                  setActionTransaction(null);
+                }}
+                className="w-full p-4 flex items-center gap-3 bg-white border border-brand-100 rounded-xl text-brand-800 font-bold shadow-sm hover:bg-brand-50 active:scale-[0.98] transition-all"
+              >
+                <div className="p-2 bg-brand-50 rounded-lg text-brand-600">
+                  <Copy size={20} />
+                </div>
+                Duplicate
+              </button>
+
+              <button
+                onClick={() => {
+                  handleDeleteClick(actionTransaction);
+                  setActionTransaction(null);
+                }}
+                className="w-full p-4 flex items-center gap-3 bg-white border border-red-100 rounded-xl text-money-neg font-bold shadow-sm hover:bg-rose-50 active:scale-[0.98] transition-all"
+              >
+                <div className="p-2 bg-rose-50 rounded-lg text-money-neg">
+                  <Trash2 size={20} />
+                </div>
+                Delete
+              </button>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };
