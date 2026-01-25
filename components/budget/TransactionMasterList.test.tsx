@@ -27,6 +27,15 @@ vi.mock('../modals/EditTransactionModal', () => ({
   ) : null
 }));
 
+vi.mock('../modals/SplitTransactionModal', () => ({
+  default: ({ isOpen, onClose, transaction }: { isOpen: boolean; onClose: () => void; transaction: { merchant: string } }) => isOpen ? (
+    <div data-testid="split-modal">
+      Split Modal for {transaction.merchant}
+      <button onClick={onClose}>Close</button>
+    </div>
+  ) : null
+}));
+
 vi.mock('../modals/BatchCategorizeModal', () => ({
   default: ({ isOpen, onClose, onConfirm, count }: { isOpen: boolean; onClose: () => void; onConfirm: (category: string) => void; count: number }) => isOpen ? (
     <div data-testid="batch-categorize-modal">
@@ -65,12 +74,14 @@ vi.mock('lucide-react', () => ({
   Tag: () => <div data-testid="tag-icon" />,
   Check: () => <div data-testid="check-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
+  Scissors: () => <div data-testid="scissors-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
   const mockDeleteTransaction = vi.fn();
   const mockUpdateTransaction = vi.fn();
   const mockAddTransaction = vi.fn();
+  const mockSplitTransaction = vi.fn();
 
   const mockTransactions = [
     {
@@ -115,6 +126,7 @@ describe('TransactionMasterList', () => {
       deleteTransaction: mockDeleteTransaction,
       updateTransaction: mockUpdateTransaction,
       addTransaction: mockAddTransaction,
+      splitTransaction: mockSplitTransaction,
     } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm
@@ -223,6 +235,15 @@ describe('TransactionMasterList', () => {
       fireEvent.click(editButtons[0]); // Click first one
 
       expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
+    });
+
+    it('opens split modal', () => {
+      render(<TransactionMasterList />);
+
+      const splitButtons = screen.getAllByLabelText(/Split transaction from/);
+      fireEvent.click(splitButtons[0]); // Click first one
+
+      expect(screen.getByTestId('split-modal')).toBeInTheDocument();
     });
 
     it('duplicates a transaction', async () => {

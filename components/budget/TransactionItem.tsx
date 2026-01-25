@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import { Button } from '../ui/Button';
@@ -27,12 +27,13 @@ export interface TransactionItemProps {
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
+  onSplit: (tx: Transaction) => void;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
 }
 
-export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -105,6 +106,15 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
               <Copy size={16} />
             </Button>
             <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
+              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+              aria-label={getSanitizedLabel(tx.merchant, 'Split')}
+            >
+              <Scissors size={16} />
+            </Button>
+            <Button
               variant="ghost-destructive"
               size="icon"
               onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
@@ -139,6 +149,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onDuplicate === nextProps.onDuplicate &&
+    prevProps.onSplit === nextProps.onSplit &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onToggleSelection === nextProps.onToggleSelection

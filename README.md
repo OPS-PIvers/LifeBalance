@@ -28,7 +28,7 @@ LifeBalance is a comprehensive household management application designed to gami
 |-----------|------------|-------------|
 | **Frontend** | React 19 + Vite | Fast, modern UI library and build tool. |
 | **Language** | TypeScript | Strong typing for reliability. |
-| **Styling** | Tailwind CSS | Utility-first CSS framework (loaded via CDN). |
+| **Styling** | Tailwind CSS | Utility-first CSS framework (PostCSS build). |
 | **Backend** | Firebase | Auth, Firestore (NoSQL DB), and Hosting. |
 | **AI** | Google Gemini | Receipt OCR and statement parsing (`@google/genai`). |
 | **Routing** | react-router-dom | Hash-based routing for static hosting compatibility. |
@@ -38,8 +38,8 @@ LifeBalance is a comprehensive household management application designed to gami
 ## 🏁 Getting Started
 
 ### Prerequisites
-- Node.js (v18 or higher recommended)
-- npm
+- Node.js (v20 or higher recommended)
+- pnpm
 
 ### Installation
 
@@ -50,9 +50,8 @@ LifeBalance is a comprehensive household management application designed to gami
     ```
 
 2.  **Install dependencies:**
-    *Note: We use `legacy-peer-deps` due to some React 19 compatibility details.*
     ```bash
-    npm install --legacy-peer-deps
+    pnpm install
     ```
 
 ### Configuration
@@ -80,7 +79,7 @@ VITE_GEMINI_API_KEY=your_gemini_api_key
 Start the development server:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Access the app at `http://localhost:3000` (or the port shown in your terminal).
@@ -144,13 +143,13 @@ The app uses `HashRouter` (e.g., `/#/dashboard`) instead of `BrowserRouter`. Thi
 To build the application for production:
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 To deploy to Firebase Hosting (assuming you have the Firebase CLI installed and initialized):
 
 ```bash
-npm run deploy
+pnpm run deploy
 ```
 
 ## 🤖 AI Agent Guidelines
