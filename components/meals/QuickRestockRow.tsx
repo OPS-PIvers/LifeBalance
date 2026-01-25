@@ -1,45 +1,54 @@
 import React from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { GroceryCatalogItem } from '@/types/schema';
+import { QuickStockList } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { Plus } from 'lucide-react';
+import { List } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+import { ShoppingItem } from '@/types/schema';
 
 export const QuickRestockRow: React.FC = () => {
-  const { groceryCatalog, shoppingList, addShoppingItem } = useHousehold();
+  const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useHousehold();
 
-  // Logic:
-  // 1. Get frequent items from catalog
-  // 2. Filter out items currently in Shopping List (not purchased yet)
-  // 3. Sort by purchase count
-  // 4. Take top 15
+  if (!quickStockLists || quickStockLists.length === 0) return null;
 
-  // Create lookup set for fast filtering
-  // We check normalized names
-  const shoppingListNames = new Set(
-    shoppingList.filter(i => !i.isPurchased).map(i => normalizeToKey(i.name))
-  );
+  const handleRestock = async (list: QuickStockList) => {
+    // Create lookup for existing items (pending only)
+    const existingNames = new Set(
+      shoppingList.filter(i => !i.isPurchased).map(i => normalizeToKey(i.name))
+    );
 
-  const suggestions = groceryCatalog
-    .filter(item => {
-      const name = normalizeToKey(item.name);
-      // Exclude if already in list
-      if (shoppingListNames.has(name)) return false;
+    const itemsToAdd: Omit<ShoppingItem, 'id'>[] = [];
+    const addedNames = new Set<string>(); // Track items being added in this batch
 
-      return true;
-    })
-    .sort((a, b) => b.purchaseCount - a.purchaseCount)
-    .slice(0, 15); // Show top 15
+    // Process each item in the template (list.items now contains catalog IDs)
+    for (const itemId of list.items) {
+      // Find catalog item by ID
+      const catalogItem = groceryCatalog.find(c => c.id === itemId);
+      if (!catalogItem) continue; // Skip if catalog item no longer exists
 
-  if (suggestions.length === 0) return null;
+      const normalizedName = normalizeToKey(catalogItem.name);
 
-  const handleAdd = async (item: GroceryCatalogItem) => {
-    await addShoppingItem({
-      name: item.name,
-      category: item.category,
-      quantity: item.defaultQuantity,
-      store: item.defaultStore,
-      isPurchased: false
-    });
+      // Skip if already in shopping list or already added in this batch
+      if (existingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;
+
+      itemsToAdd.push({
+        name: catalogItem.name,
+        category: catalogItem.category || 'Uncategorized',
+        quantity: catalogItem.defaultQuantity,
+        store: catalogItem.defaultStore,
+        isPurchased: false
+      });
+
+      addedNames.add(normalizedName); // Track to prevent duplicates within this batch
+    }
+
+    if (itemsToAdd.length > 0) {
+      await addShoppingItems(itemsToAdd);
+      toast.success(`Added ${itemsToAdd.length} items from ${list.name}`);
+    } else {
+      toast('All items already in list', { icon: 'ℹ️' });
+    }
   };
 
   return (
@@ -52,19 +61,22 @@ export const QuickRestockRow: React.FC = () => {
       <div
         className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1"
         role="group"
-        aria-label="Frequently purchased items"
+        aria-label="Quick restock lists"
       >
-        {suggestions.map(item => (
+        {quickStockLists.map(list => (
           <button
-            key={item.id}
-            onClick={() => handleAdd(item)}
+            key={list.id}
+            onClick={() => handleRestock(list)}
             className="flex-shrink-0 flex items-center gap-1.5 pl-2 pr-3 py-1.5 bg-white border border-brand-100 rounded-full shadow-sm hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all group"
-            aria-label={`Quick add ${item.name}`}
+            aria-label={`Quick add items from ${list.name}`}
           >
             <div className="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200">
-              <Plus size={12} strokeWidth={3} />
+              <List size={12} strokeWidth={3} />
             </div>
-            <span className="text-xs font-medium text-brand-700">{item.name}</span>
+            <span className="text-xs font-medium text-brand-700">{list.name}</span>
+            <span className="text-[10px] text-brand-400 bg-brand-50 px-1 rounded-full">
+              {list.items.length}
+            </span>
           </button>
         ))}
       </div>
