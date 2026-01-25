@@ -19,24 +19,28 @@ export const QuickRestockRow: React.FC = () => {
     );
 
     const itemsToAdd: Omit<ShoppingItem, 'id'>[] = [];
+    const addedNames = new Set<string>(); // Track items being added in this batch
 
-    // Process each item in the template
-    for (const itemName of list.items) {
-      // Skip if already in list
-      if (existingNames.has(normalizeToKey(itemName))) continue;
+    // Process each item in the template (list.items now contains catalog IDs)
+    for (const itemId of list.items) {
+      // Find catalog item by ID
+      const catalogItem = groceryCatalog.find(c => c.id === itemId);
+      if (!catalogItem) continue; // Skip if catalog item no longer exists
 
-      // Find catalog details for defaults
-      const catalogItem = groceryCatalog.find(
-        c => normalizeToKey(c.name) === normalizeToKey(itemName)
-      );
+      const normalizedName = normalizeToKey(catalogItem.name);
+
+      // Skip if already in shopping list or already added in this batch
+      if (existingNames.has(normalizedName) || addedNames.has(normalizedName)) continue;
 
       itemsToAdd.push({
-        name: itemName, // Use the name from the list
-        category: catalogItem?.category || 'Uncategorized',
-        quantity: catalogItem?.defaultQuantity,
-        store: catalogItem?.defaultStore,
+        name: catalogItem.name,
+        category: catalogItem.category || 'Uncategorized',
+        quantity: catalogItem.defaultQuantity,
+        store: catalogItem.defaultStore,
         isPurchased: false
       });
+
+      addedNames.add(normalizedName); // Track to prevent duplicates within this batch
     }
 
     if (itemsToAdd.length > 0) {

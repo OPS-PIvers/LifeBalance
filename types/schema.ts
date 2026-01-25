@@ -286,7 +286,7 @@ export interface Store {
 export interface QuickStockList {
   id: string;
   name: string;
-  items: string[]; // List of item names (from groceryCatalog)
+  items: string[]; // List of catalog item IDs (reference to GroceryCatalogItem.id)
 }
 
 export interface GroceryCatalogItem {

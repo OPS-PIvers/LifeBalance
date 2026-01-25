@@ -92,16 +92,16 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
-  const toggleItemInTemplate = (itemName: string) => {
+  const toggleItemInTemplate = (itemId: string) => {
     if (!editingTemplate) return;
     const currentItems = editingTemplate.items || [];
-    const exists = currentItems.includes(itemName);
+    const exists = currentItems.includes(itemId);
 
     setEditingTemplate({
       ...editingTemplate,
       items: exists
-        ? currentItems.filter(i => i !== itemName)
-        : [...currentItems, itemName]
+        ? currentItems.filter(i => i !== itemId)
+        : [...currentItems, itemId]
     });
   };
 
@@ -442,8 +442,30 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                              <span className="text-xs font-medium">Edit</span>
                            </button>
                            <button
-                             onClick={async () => {
-                               if(confirm('Delete this template?')) await deleteQuickStockList(list.id);
+                             onClick={() => {
+                               toast((t) => (
+                                 <div className="flex flex-col gap-2">
+                                   <span className="text-sm font-medium">Delete template &quot;{list.name}&quot;?</span>
+                                   <div className="flex justify-end gap-2">
+                                     <button
+                                       className="px-2 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200"
+                                       onClick={() => toast.dismiss(t.id)}
+                                     >
+                                       Cancel
+                                     </button>
+                                     <button
+                                       className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                                       onClick={async () => {
+                                         toast.dismiss(t.id);
+                                         await deleteQuickStockList(list.id);
+                                         toast.success('Template deleted');
+                                       }}
+                                     >
+                                       Delete
+                                     </button>
+                                   </div>
+                                 </div>
+                               ));
                              }}
                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                            >
@@ -491,19 +513,19 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                            !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
                         )
                         .sort((a, b) => {
-                           const aSelected = editingTemplate.items?.includes(a.name);
-                           const bSelected = editingTemplate.items?.includes(b.name);
+                           const aSelected = editingTemplate.items?.includes(a.id);
+                           const bSelected = editingTemplate.items?.includes(b.id);
                            if (aSelected && !bSelected) return -1;
                            if (!aSelected && bSelected) return 1;
                            return b.purchaseCount - a.purchaseCount;
                         })
                         .slice(0, 50) // Limit render
                         .map(item => {
-                          const isSelected = editingTemplate.items?.includes(item.name);
+                          const isSelected = editingTemplate.items?.includes(item.id);
                           return (
                             <button
                               key={item.id}
-                              onClick={() => toggleItemInTemplate(item.name)}
+                              onClick={() => toggleItemInTemplate(item.id)}
                               className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${
                                 isSelected
                                   ? 'bg-brand-50 text-brand-800 border border-brand-200'
