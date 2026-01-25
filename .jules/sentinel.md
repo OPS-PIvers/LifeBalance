@@ -79,3 +79,8 @@
 **Vulnerability:** The `accounts` subcollection was covered by a generic wildcard match (`match /{subcollection}/{document}`) which allowed writing arbitrary data without schema validation. This could lead to storage exhaustion (massive strings) or data corruption (invalid types causing frontend crashes).
 **Learning:** Wildcard rules are convenient but dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
 **Prevention:** Explicitly define `match` blocks for all core collections (`accounts`) with strict schema validation using helper functions like `isValidString` and `isValidNumber`, and explicitly exclude them from generic wildcard matches. Separate validation for create (all required fields) vs update (partial fields) to support operations like `setAccountGoal` that only update specific fields.
+
+## 2026-01-25 - [Privilege Escalation/Data Integrity] Strict Member Profile Updates
+**Vulnerability:** The Firestore rule for `members/{memberId}` updates restricted only the `role` field. This implicitly allowed users to modify *any other field* in their own member document, including sensitive fields like `points` (gamification integrity), `uid` (identity), `joinedAt` (history), and `inviteCode` (security).
+**Learning:** Blacklisting sensitive fields (like `!hasAny(['role'])`) is fragile because new fields added to the schema (e.g., `points`, `isSuperUser`) are automatically mutable by default.
+**Prevention:** Use a strict allowlist (whitelist) approach for update rules using `changedKeys().hasOnly([...])`. Explicitly list every field the user is permitted to update (e.g., `displayName`, `email`, `preferences`) and deny everything else by default.
