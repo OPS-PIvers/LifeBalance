@@ -9,3 +9,7 @@
 ## 2026-01-23 - Standardizing Form Error Accessibility
 **Learning:** Visual error messages adjacent to inputs are insufficient for screen reader users without explicit programmatic association.
 **Action:** Enforce `aria-describedby` linking input to error message ID and `aria-invalid="true"` on all form inputs in the design system.
+
+## 2024-06-04 - Segmented Control Accessibility
+**Learning:** Ad-hoc toggle buttons (Expense/Income) were inaccessible and lacked keyboard support. Using `aria-pressed` in a `group` context is a simple, effective pattern for mutually exclusive options when full radio semantics are too heavy.
+**Action:** Use the new `SegmentedControl` component for any future toggle/choice groups to ensure consistent accessibility and focus management.
