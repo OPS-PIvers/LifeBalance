@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
@@ -240,6 +240,14 @@ const ShoppingListTab: React.FC = () => {
         }
     };
 
+    const handleCheck = useCallback((item: ShoppingItem) => {
+        toggleShoppingItemPurchased(item.id);
+    }, [toggleShoppingItemPurchased]);
+
+    const handleDelete = useCallback((item: ShoppingItem) => {
+        deleteShoppingItem(item.id);
+    }, [deleteShoppingItem]);
+
   return (
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
@@ -358,8 +366,8 @@ const ShoppingListTab: React.FC = () => {
                     <ShoppingItemRow
                         key={item.id}
                         item={item}
-                        onCheck={(i) => toggleShoppingItemPurchased(i.id)}
-                        onDelete={(i) => deleteShoppingItem(i.id)}
+                        onCheck={handleCheck}
+                        onDelete={handleDelete}
                         onEdit={setEditingItem}
                     />
                 ))}
