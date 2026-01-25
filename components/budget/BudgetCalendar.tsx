@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import toast from 'react-hot-toast';
@@ -173,29 +174,35 @@ const BudgetCalendar: React.FC = () => {
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={handleExport}
-              className="p-1 hover:bg-brand-50 rounded-lg text-brand-400 hover:text-brand-600 mr-2"
+              className="text-brand-400 hover:text-brand-600 mr-2 rounded-lg"
               title="Export this month to CSV"
               aria-label="Export this month to CSV"
             >
               <Download size={20} />
-            </button>
+            </Button>
             <div className="w-px h-6 bg-brand-100 my-auto mx-1" />
-            <button
-              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
-              className="p-1 hover:bg-brand-50 rounded-lg"
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+              className="text-brand-400 rounded-lg"
               aria-label="Previous month"
             >
-              <ChevronLeft size={20} className="text-brand-400" />
-            </button>
-            <button
-              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
-              className="p-1 hover:bg-brand-50 rounded-lg"
+              <ChevronLeft size={20} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+              className="text-brand-400 rounded-lg"
               aria-label="Next month"
             >
-              <ChevronRight size={20} className="text-brand-400" />
-            </button>
+              <ChevronRight size={20} />
+            </Button>
           </div>
         </div>
 
@@ -246,12 +253,14 @@ const BudgetCalendar: React.FC = () => {
           <h3 className="font-bold text-brand-800 text-sm uppercase tracking-wide">
             Events for {format(selectedDate, 'MMM d')}
           </h3>
-          <button 
+          <Button
+            variant="subtle"
+            size="sm"
             onClick={openAddModal}
-            className="flex items-center gap-1 text-xs font-bold text-brand-600 bg-brand-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+            className="text-xs py-1.5 rounded-lg"
           >
             Add Event <Plus size={14} />
-          </button>
+          </Button>
         </div>
 
         {selectedItems.length === 0 && selectedTodos.length === 0 ? (
@@ -276,7 +285,9 @@ const BudgetCalendar: React.FC = () => {
                 </div>
 
                 <div className="flex items-center">
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={async () => {
                       try {
                         await completeToDo(todo.id);
@@ -286,10 +297,10 @@ const BudgetCalendar: React.FC = () => {
                         toast.error('Failed to complete task');
                       }
                     }}
-                    className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg active:scale-95 transition-transform"
+                    className="bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs py-1.5 rounded-lg"
                   >
                     Complete
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -329,21 +340,25 @@ const BudgetCalendar: React.FC = () => {
 
                     {/* Edit/Delete (visible mostly on hover in desktop, but always accessible) */}
                     {!item.isPaid && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => openEditModal(item)}
-                        className="p-1 text-brand-300 hover:text-brand-600"
+                        className="text-brand-300 hover:text-brand-600"
                         aria-label={`Edit ${item.title}`}
                       >
                         <Edit2 size={14} />
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button
+                      variant="ghost-destructive"
+                      size="icon-sm"
                       onClick={() => deleteCalendarItem(item.id)}
-                      className="p-1 text-brand-300 hover:text-money-neg"
+                      className="text-brand-300 hover:text-money-neg"
                       aria-label={`Delete ${item.title}`}
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -363,9 +378,15 @@ const BudgetCalendar: React.FC = () => {
             <h3 className="font-bold text-lg text-brand-800">
               {editingItem ? 'Edit Event' : 'Add Calendar Item'}
             </h3>
-            <button onClick={() => setIsAddModalOpen(false)} aria-label="Close modal">
-              <X size={20} className="text-brand-400" />
-            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsAddModalOpen(false)}
+              aria-label="Close modal"
+              className="text-brand-400"
+            >
+              <X size={20} />
+            </Button>
           </div>
 
           <div className="space-y-4">
@@ -433,20 +454,22 @@ const BudgetCalendar: React.FC = () => {
 
              <div className="flex gap-2 mt-2">
                {editingItem && (
-                 <button
+                 <Button
+                   variant="secondary"
                    onClick={handleDuplicate}
-                   className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2"
+                   className="flex-1 py-3 h-auto"
                  >
                    <Copy size={18} />
                    Duplicate
-                 </button>
+                 </Button>
                )}
-               <button
+               <Button
+                 variant="primary"
                  onClick={handleSave}
-                 className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-all"
+                 className="flex-1 py-3 h-auto shadow-lg"
                >
                  {editingItem ? 'Save Changes' : 'Add Event'}
-               </button>
+               </Button>
              </div>
           </div>
         </div>

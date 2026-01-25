@@ -1,7 +1,8 @@
-import React, { useState, useEffect, memo, useMemo } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
+import { Button } from '../ui/Button';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -63,31 +64,6 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   // Local state for limit editing to prevent parent re-renders on keystroke
   // We initialize it directly from props so it has a valid value immediately
   const [localLimit, setLocalLimit] = useState(bucket.limit.toString());
-  const [expandedSubBucketId, setExpandedSubBucketId] = useState<string | null>(null);
-
-  // Group transactions by sub-bucket
-  const subBucketGroups = useMemo(() => {
-    if (!bucket.subBuckets || bucket.subBuckets.length === 0) return null;
-
-    const groups: Record<string, { transactions: Transaction[]; total: number }> = {};
-    const generalTransactions: Transaction[] = [];
-
-    // Initialize groups
-    bucket.subBuckets.forEach(sb => {
-      groups[sb.id] = { transactions: [], total: 0 };
-    });
-
-    bucketTransactions.forEach(tx => {
-      if (tx.subBucketId && groups[tx.subBucketId]) {
-        groups[tx.subBucketId].transactions.push(tx);
-        groups[tx.subBucketId].total += tx.amount;
-      } else {
-        generalTransactions.push(tx);
-      }
-    });
-
-    return { groups, generalTransactions };
-  }, [bucket.subBuckets, bucketTransactions]);
 
   // To avoid the "setState in effect" warning while correctly syncing state:
   // We use a pattern where we key the state initialization off the editing mode.
@@ -160,13 +136,15 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleSaveLimit}
-                    className="text-money-pos"
+                    className="text-money-pos hover:bg-emerald-50"
                     aria-label="Save limit"
                   >
                     <Check size={14} />
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <span
@@ -195,13 +173,15 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           )}
 
           {/* Edit Button */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={(e) => { e.stopPropagation(); onEditBucket(bucket); }}
-            className="text-brand-300 hover:text-brand-600 p-1"
+            className="text-brand-300 hover:text-brand-600"
             aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -214,95 +194,56 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Expandable Transaction List */}
-      {isExpanded && (
+      {isExpanded && bucketTransactions.length > 0 && (
         <div className="mt-3 pt-3 border-t border-brand-100 space-y-2 animate-in fade-in slide-in-from-top-2">
-
-          {/* Sub-Buckets View */}
-          {subBucketGroups && bucket.subBuckets && (
-            <div className="space-y-2 mb-3">
-              {bucket.subBuckets.map(sb => {
-                const group = subBucketGroups.groups[sb.id];
-                const isSubExpanded = expandedSubBucketId === sb.id;
-                // Calculate percentage relative to bucket limit to show impact
-                // If limit is 0 (unlikely), avoid NaN
-                const subPercent = bucket.limit > 0
-                  ? Math.min(100, (group.total / bucket.limit) * 100)
-                  : 0;
-
-                return (
-                  <div key={sb.id} className="bg-brand-50 rounded-xl overflow-hidden border border-brand-100">
-                    <div
-                      className="flex items-center justify-between p-3 cursor-pointer hover:bg-brand-100 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedSubBucketId(prev => (prev === sb.id ? null : sb.id));
-                      }}
-                    >
-                      <div className="flex flex-col gap-1 w-full mr-4">
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-sm text-brand-700">{sb.name}</span>
-                          <span className="font-mono text-xs font-bold text-brand-600">${group.total.toFixed(2)}</span>
-                        </div>
-                        {/* Mini Meter */}
-                        <div className="h-1.5 w-full bg-brand-200 rounded-full overflow-hidden">
-                           <div className="h-full bg-brand-400 rounded-full" style={{ width: `${subPercent}%` }} />
-                        </div>
-                      </div>
-                      <ChevronDown size={14} className={`text-brand-400 shrink-0 transition-transform ${isSubExpanded ? 'rotate-180' : ''}`} />
-                    </div>
-
-                    {/* Sub-Bucket Transactions */}
-                    {isSubExpanded && (
-                      <div className="p-2 space-y-1 bg-white border-t border-brand-100 max-h-40 overflow-y-auto">
-                        {group.transactions.length === 0 ? (
-                          <p className="text-xs text-brand-400 text-center py-2">No transactions</p>
-                        ) : (
-                          group.transactions.map(tx => (
-                            <TransactionRow
-                              key={tx.id}
-                              tx={tx}
-                              onEdit={onEditTransaction}
-                              onDelete={onDeleteTransaction}
-                            />
-                          ))
-                        )}
-                      </div>
+          <p className="text-xs font-bold text-brand-400 uppercase mb-2">
+            Transactions This Period ({bucketTransactions.length})
+          </p>
+          <div className="space-y-1 max-h-48 overflow-y-auto">
+            {bucketTransactions.map(tx => (
+              <div
+                key={tx.id}
+                className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors group"
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-brand-800">{tx.merchant}</p>
+                  <p className="text-xs text-brand-400">
+                    {format(parseISO(tx.date), 'MMM d, yyyy')}
+                    {tx.status === 'pending_review' && (
+                      <span className="ml-2 text-amber-600">• Pending</span>
                     )}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono font-bold ${
+                    tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
+                  }`}>
+                    ${tx.amount}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => onEditTransaction(tx)}
+                      className="text-brand-400 hover:text-brand-600"
+                      title="Edit transaction"
+                    >
+                      <Edit size={14} />
+                    </Button>
+                    <Button
+                      variant="ghost-destructive"
+                      size="icon-sm"
+                      onClick={() => onDeleteTransaction(tx.id)}
+                      className="text-brand-400 hover:text-money-neg"
+                      title="Delete transaction"
+                    >
+                      <Trash2 size={14} />
+                    </Button>
                   </div>
-                );
-              })}
-
-              {subBucketGroups.generalTransactions.length > 0 && (
-                <p className="text-xs font-bold text-brand-400 uppercase mt-4 mb-2 pl-1">
-                  General Transactions ({subBucketGroups.generalTransactions.length})
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Transaction List (General or All) */}
-          {(!subBucketGroups || subBucketGroups.generalTransactions.length > 0) && (
-            <>
-              {!subBucketGroups && (
-                <p className="text-xs font-bold text-brand-400 uppercase mb-2">
-                  Transactions This Period ({bucketTransactions.length})
-                </p>
-              )}
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {(subBucketGroups ? subBucketGroups.generalTransactions : bucketTransactions).map(tx => (
-                  <TransactionRow
-                    key={tx.id}
-                    tx={tx}
-                    onEdit={onEditTransaction}
-                    onDelete={onDeleteTransaction}
-                  />
-                ))}
-                {subBucketGroups && subBucketGroups.generalTransactions.length === 0 && bucketTransactions.length === 0 && (
-                   <p className="text-xs text-brand-400 text-center py-4">No transactions yet.</p>
-                )}
+                </div>
               </div>
-            </>
-          )}
+            ))}
+          </div>
         </div>
       )}
 
@@ -313,61 +254,18 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             <AlertTriangle size={14} />
             <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={(e) => { e.stopPropagation(); onReallocate(bucket.id); }}
-            className="bg-white text-money-neg text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-200 shadow-sm active:scale-95 transition-transform"
+            className="bg-white text-money-neg border-rose-200 hover:bg-rose-50 text-xs py-1.5 rounded-lg"
           >
             Fix
-          </button>
+          </Button>
         </div>
       )}
     </div>
   );
 }, arePropsEqual);
-
-interface TransactionRowProps {
-  tx: Transaction;
-  onEdit: (tx: Transaction) => void;
-  onDelete: (id: string) => void;
-}
-
-const TransactionRow: React.FC<TransactionRowProps> = ({ tx, onEdit, onDelete }) => (
-  <div
-    className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors group"
-  >
-    <div className="flex-1">
-      <p className="font-medium text-brand-800">{tx.merchant}</p>
-      <p className="text-xs text-brand-400">
-        {format(parseISO(tx.date), 'MMM d, yyyy')}
-        {tx.status === 'pending_review' && (
-          <span className="ml-2 text-amber-600">• Pending</span>
-        )}
-      </p>
-    </div>
-    <div className="flex items-center gap-2">
-      <span className={`font-mono font-bold ${
-        tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
-      }`}>
-        ${tx.amount}
-      </span>
-      <div className="flex gap-1">
-        <button
-          onClick={() => onEdit(tx)}
-          className="text-brand-400 hover:text-brand-600 p-1"
-          title="Edit transaction"
-        >
-          <Edit size={14} />
-        </button>
-        <button
-          onClick={() => onDelete(tx.id)}
-          className="text-brand-400 hover:text-money-neg p-1"
-          title="Delete transaction"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    </div>
-  </div>
-);
 
 BudgetBucketCard.displayName = 'BudgetBucketCard';
