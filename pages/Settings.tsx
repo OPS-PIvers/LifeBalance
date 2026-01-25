@@ -19,7 +19,8 @@ import {
   FileJson,
   FileSpreadsheet,
   ChevronDown,
-  Smartphone
+  Smartphone,
+  Terminal
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -36,7 +37,6 @@ import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import DeveloperConsole from '@/components/modals/DeveloperConsole';
-import { Terminal } from 'lucide-react';
 
 const APP_VERSION = '0.8.0-alpha';
 
@@ -65,22 +65,22 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden bg-white/80 backdrop-blur-xl border-white/20">
       <button
         type="button"
         onClick={() => onToggle(id)}
         onKeyDown={handleKeyDown}
         aria-expanded={isOpen}
         aria-controls={`section-content-${id}`}
-        className="w-full flex items-center justify-between p-4 bg-white hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all duration-300 group"
       >
-        <div className="flex items-center gap-3">
-          {icon && <div className="text-brand-600">{icon}</div>}
-          <h3 id={`section-title-${id}`} className="text-lg font-bold text-brand-800">{title}</h3>
+        <div className="flex items-center gap-4">
+          {icon && <div className="text-brand-500 group-hover:text-brand-600 transition-colors">{icon}</div>}
+          <h3 id={`section-title-${id}`} className="text-lg font-semibold tracking-tight text-slate-900 group-hover:text-brand-900 transition-colors">{title}</h3>
         </div>
         <ChevronDown
-          className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${
-            isOpen ? 'rotate-180' : ''
+          className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-spring ${
+            isOpen ? 'rotate-180 text-brand-500' : ''
           }`}
         />
       </button>
@@ -88,13 +88,15 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         id={`section-content-${id}`}
         role="region"
         aria-labelledby={`section-title-${id}`}
-        className={`grid transition-[grid-template-rows,opacity] duration-200 ease-in-out ${
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
           isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         }`}
       >
         <div className="overflow-hidden">
-          <div className="p-4 border-t border-gray-100 space-y-4">
-            {children}
+          <div className="p-5 pt-0 border-t border-slate-100/50 space-y-6">
+            <div className="pt-4">
+              {children}
+            </div>
           </div>
         </div>
       </div>
@@ -159,7 +161,7 @@ const Settings: React.FC = () => {
 
   if (!householdSettings) {
     return (
-      <div className="min-h-screen bg-brand-50 flex items-center justify-center pb-24">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center pb-24">
         <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
       </div>
     );
@@ -295,20 +297,20 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-50 pb-24 px-4 pt-6">
+    <div className="min-h-screen bg-slate-50 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
 
         {isGlobalAdmin && (
-          <Card className="overflow-hidden border-2 border-indigo-100">
+          <Card className="overflow-hidden border border-indigo-200/50 shadow-indigo-100/50">
             <button
               onClick={() => setIsDevConsoleOpen(true)}
-              className="w-full flex items-center justify-between p-4 bg-indigo-50 hover:bg-indigo-100 transition-colors group"
+              className="w-full flex items-center justify-between p-4 bg-indigo-50/50 hover:bg-indigo-50 transition-colors group"
             >
               <div className="flex items-center gap-3">
                 <Terminal className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-lg font-bold text-indigo-900">Developer Console</h3>
+                <h3 className="text-lg font-bold text-indigo-900 tracking-tight">Developer Console</h3>
               </div>
-              <span className="text-xs font-bold text-indigo-600 bg-white px-2 py-1 rounded border border-indigo-200 group-hover:border-indigo-300">
+              <span className="text-xs font-bold text-indigo-600 bg-white px-2 py-1 rounded border border-indigo-200 group-hover:border-indigo-300 shadow-sm">
                 ADMIN
               </span>
             </button>
@@ -324,32 +326,32 @@ const Settings: React.FC = () => {
         >
           {/* User Profile Card */}
           <div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5">
               {user?.photoURL ? (
                 <img
                   src={user.photoURL}
                   alt={user.displayName || 'User'}
-                  className="w-16 h-16 rounded-full"
+                  className="w-16 h-16 rounded-full shadow-sm ring-2 ring-white"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-brand-200 flex items-center justify-center">
-                  <User className="w-8 h-8 text-brand-600" />
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center shadow-inner">
+                  <User className="w-8 h-8 text-slate-400" />
                 </div>
               )}
               <div className="flex-1">
-                <h2 className="text-xl font-bold text-brand-800">
+                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
                   {user?.displayName || 'User'}
                 </h2>
-                <p className="text-sm text-brand-500">{user?.email}</p>
+                <p className="text-sm text-slate-500 font-medium">{user?.email}</p>
                 {currentUser && (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-2">
                     {currentUser.role === 'admin' ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full shadow-sm">
                         <Crown size={12} />
                         Admin
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2.5 py-0.5 rounded-full shadow-sm">
                         <Shield size={12} />
                         Member
                       </span>
@@ -359,11 +361,11 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-brand-100">
+            <div className="mt-6 pt-6 border-t border-slate-100">
               <button
                 onClick={handleEnableNotifications}
                 disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
-                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-between p-3.5 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors group disabled:opacity-70 disabled:cursor-not-allowed border border-transparent hover:border-slate-200"
                 aria-label={
                   notificationStatus === 'granted'
                     ? 'Push notifications enabled'
@@ -373,25 +375,25 @@ const Settings: React.FC = () => {
                 }
                 aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                    notificationStatus === 'granted' ? 'bg-green-100' : 'bg-brand-200 group-hover:bg-brand-300'
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm ${
+                    notificationStatus === 'granted' ? 'bg-green-100 text-green-600' : 'bg-white text-slate-400 group-hover:text-brand-500'
                   }`}>
-                    <Bell size={16} className={notificationStatus === 'granted' ? 'text-green-600' : 'text-brand-600'} />
+                    <Bell size={18} />
                   </div>
                   <div className="text-left">
-                    <p className="font-semibold text-brand-800 text-sm">Push Notifications</p>
-                    <p className="text-xs text-brand-500">
+                    <p className="font-semibold text-slate-900 text-sm tracking-tight">Push Notifications</p>
+                    <p className="text-xs text-slate-500">
                       {notificationStatus === 'granted' ? 'Notifications enabled' :
                        notificationStatus === 'denied' ? 'Notifications denied in browser' :
                        'Enable alerts on this device'}
                     </p>
                   </div>
                 </div>
-                <span className={`text-xs font-medium px-2 py-1 rounded-md ${
-                  notificationStatus === 'granted' ? 'text-green-700 bg-green-100' :
-                  notificationStatus === 'denied' ? 'text-red-700 bg-red-100' :
-                  'text-brand-600 bg-brand-200'
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm ${
+                  notificationStatus === 'granted' ? 'text-green-700 bg-green-100 border border-green-200' :
+                  notificationStatus === 'denied' ? 'text-rose-700 bg-rose-100 border border-rose-200' :
+                  'text-brand-600 bg-white border border-brand-200'
                 }`}>
                   {notificationStatus === 'granted' ? 'Enabled' :
                    notificationStatus === 'denied' ? 'Denied' : 'Enable'}
@@ -407,11 +409,14 @@ const Settings: React.FC = () => {
 
           {/* Notification Settings - Only show if notifications are granted */}
           {notificationStatus === 'granted' && householdId && user && (
-            <NotificationSettings
-              householdId={householdId}
-              currentPreferences={currentUser?.notificationPreferences}
-              onSave={handleSaveNotificationPreferences}
-            />
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-4 tracking-tight">Notification Preferences</h4>
+              <NotificationSettings
+                householdId={householdId}
+                currentPreferences={currentUser?.notificationPreferences}
+                onSave={handleSaveNotificationPreferences}
+              />
+            </div>
           )}
         </SettingsSection>
 
@@ -423,16 +428,16 @@ const Settings: React.FC = () => {
           onToggle={handleToggleSection}
         >
           {/* Household Info */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-brand-600" />
+          <div className="space-y-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center shadow-inner">
+                <Users className="w-7 h-7 text-slate-500" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-brand-800">
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight">
                   {householdSettings.name}
                 </h3>
-                <p className="text-sm text-brand-500">
+                <p className="text-sm text-slate-500 font-medium">
                   {members.length} {members.length === 1 ? 'member' : 'members'}
                 </p>
               </div>
@@ -442,52 +447,53 @@ const Settings: React.FC = () => {
             <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
             {/* Shared Household Points */}
-            <div className="mt-4 p-4 bg-gradient-to-r from-brand-50 to-habit-blue-50 rounded-xl border border-brand-200">
-              <h4 className="text-sm font-bold text-brand-700 mb-3">Shared Household Points</h4>
+            <div className="p-5 bg-gradient-to-r from-slate-50 to-blue-50/50 rounded-2xl border border-slate-200/60 shadow-sm">
+              <h4 className="text-sm font-bold text-slate-700 mb-4 tracking-tight">Shared Household Points</h4>
               <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={() => setActivePointsView('daily')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  className="text-center hover:bg-white/80 p-3 rounded-xl transition-all active:scale-[0.98] group"
                   aria-label="View daily points breakdown"
                 >
-                  <p className="text-xs text-brand-600 mb-1">Daily</p>
-                  <p className="text-lg font-bold text-brand-800">{dailyPoints}</p>
+                  <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider group-hover:text-brand-600">Daily</p>
+                  <p className="text-xl font-bold text-slate-900 group-hover:text-brand-700">{dailyPoints}</p>
                 </button>
                 <button
                   onClick={() => setActivePointsView('weekly')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  className="text-center hover:bg-white/80 p-3 rounded-xl transition-all active:scale-[0.98] group"
                   aria-label="View weekly points breakdown"
                 >
-                  <p className="text-xs text-brand-600 mb-1">Weekly</p>
-                  <p className="text-lg font-bold text-brand-800">{weeklyPoints}</p>
+                  <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider group-hover:text-brand-600">Weekly</p>
+                  <p className="text-xl font-bold text-slate-900 group-hover:text-brand-700">{weeklyPoints}</p>
                 </button>
                 <button
                   onClick={() => setActivePointsView('total')}
-                  className="text-center hover:bg-white/50 p-2 rounded-lg transition-colors active:scale-95"
+                  className="text-center hover:bg-white/80 p-3 rounded-xl transition-all active:scale-[0.98] group"
                   aria-label="View total points breakdown"
                 >
-                  <p className="text-xs text-brand-600 mb-1">Total</p>
-                  <p className="text-lg font-bold text-brand-800">{totalPoints.toLocaleString()}</p>
+                  <p className="text-xs text-slate-500 mb-1 font-semibold uppercase tracking-wider group-hover:text-brand-600">Total</p>
+                  <p className="text-xl font-bold text-slate-900 group-hover:text-brand-700">{totalPoints.toLocaleString()}</p>
                 </button>
               </div>
             </div>
           </div>
 
           {/* Members List */}
-          <div>
+          <div className="pt-2">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-brand-800">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight">
                 Household Members
               </h3>
               {currentUser?.role === 'admin' && (
                 <Button
                   onClick={handleAddMember}
                   variant="subtle"
-                  size="icon"
+                  size="icon-sm"
                   title="Add Member"
                   aria-label="Add Member"
+                  className="rounded-full"
                 >
-                  <Plus size={20} />
+                  <Plus size={18} />
                 </Button>
               )}
             </div>
@@ -502,33 +508,33 @@ const Settings: React.FC = () => {
                 .map((member) => (
                   <div
                     key={member.uid}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow"
                   >
                     {member.photoURL ? (
                       <img
                         src={member.photoURL}
                         alt={member.displayName}
-                        className="w-10 h-10 rounded-full"
+                        className="w-10 h-10 rounded-full ring-2 ring-slate-50"
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-brand-200 flex items-center justify-center">
-                        <User className="w-5 h-5 text-brand-600" />
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                        <User className="w-5 h-5 text-slate-400" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-brand-800 truncate">
+                        <p className="font-bold text-slate-900 truncate tracking-tight">
                           {member.displayName}
                           {member.uid === user?.uid && (
-                            <span className="text-brand-500 font-normal ml-1">(You)</span>
+                            <span className="text-slate-400 font-normal ml-1 text-sm">(You)</span>
                           )}
                         </p>
                         {member.role === 'admin' && (
-                          <Crown size={14} className="text-amber-600 flex-shrink-0" />
+                          <Crown size={14} className="text-amber-500 flex-shrink-0" />
                         )}
                       </div>
                       {member.email && (
-                        <p className="text-xs text-brand-500 truncate">{member.email}</p>
+                        <p className="text-xs text-slate-500 truncate font-medium">{member.email}</p>
                       )}
                     </div>
                     {/* Admin Actions */}
@@ -571,15 +577,15 @@ const Settings: React.FC = () => {
         >
           {/* Data Management */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shadow-sm">
                 <Download className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-brand-800">
+                <h3 className="text-lg font-bold text-slate-900 tracking-tight">
                   Data Management
                 </h3>
-                <p className="text-sm text-brand-500">
+                <p className="text-sm text-slate-500 font-medium">
                   Export your household data
                 </p>
               </div>
@@ -588,36 +594,36 @@ const Settings: React.FC = () => {
             <div className="space-y-3">
               <button
                 onClick={handleExportJson}
-                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group"
                 aria-label="Export full household data backup as JSON file"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-brand-200 flex items-center justify-center group-hover:bg-brand-300 transition-colors">
-                    <FileJson size={16} className="text-brand-700" />
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <FileJson size={18} className="text-brand-600" />
                   </div>
                   <div className="text-left">
-                    <p className="font-semibold text-brand-800 text-sm">Export Full Backup</p>
-                    <p className="text-xs text-brand-500">Download all data as JSON</p>
+                    <p className="font-bold text-slate-900 text-sm tracking-tight">Export Full Backup</p>
+                    <p className="text-xs text-slate-500">Download all data as JSON</p>
                   </div>
                 </div>
-                <Download size={16} className="text-brand-400" />
+                <Download size={16} className="text-slate-400 group-hover:text-brand-600 transition-colors" />
               </button>
 
               <button
                 onClick={handleExportCsv}
-                className="w-full flex items-center justify-between p-3 bg-brand-50 rounded-xl hover:bg-brand-100 transition-colors group"
+                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group"
                 aria-label="Export transaction history as CSV file"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                    <FileSpreadsheet size={16} className="text-green-700" />
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                    <FileSpreadsheet size={18} className="text-emerald-600" />
                   </div>
                   <div className="text-left">
-                    <p className="font-semibold text-brand-800 text-sm">Export Transactions</p>
-                    <p className="text-xs text-brand-500">Download for Excel/Sheets (CSV)</p>
+                    <p className="font-bold text-slate-900 text-sm tracking-tight">Export Transactions</p>
+                    <p className="text-xs text-slate-500">Download for Excel/Sheets (CSV)</p>
                   </div>
                 </div>
-                <Download size={16} className="text-brand-400" />
+                <Download size={16} className="text-slate-400 group-hover:text-emerald-600 transition-colors" />
               </button>
             </div>
           </div>
@@ -631,10 +637,10 @@ const Settings: React.FC = () => {
           isOpen={openSection === 'shortcuts'}
           onToggle={handleToggleSection}
         >
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* API Key Management */}
             <div>
-              <h4 className="text-sm font-bold text-brand-700 mb-3">API Keys</h4>
+              <h4 className="text-sm font-bold text-slate-900 mb-4 tracking-tight uppercase text-xs text-slate-500">API Keys</h4>
               <ApiKeyManager
                 householdId={householdId || ''}
                 userId={user?.uid || ''}
@@ -644,8 +650,8 @@ const Settings: React.FC = () => {
             </div>
 
             {/* Setup Guide */}
-            <div className="border-t border-brand-100 pt-4">
-              <h4 className="text-sm font-bold text-brand-700 mb-3">Setup Guide</h4>
+            <div className="border-t border-slate-100 pt-6">
+              <h4 className="text-sm font-bold text-slate-900 mb-4 tracking-tight uppercase text-xs text-slate-500">Setup Guide</h4>
               <ShortcutSetupGuide />
             </div>
           </div>
@@ -659,18 +665,20 @@ const Settings: React.FC = () => {
           isOpen={openSection === 'account'}
           onToggle={handleToggleSection}
         >
-          <Button
-            onClick={handleSignOut}
-            variant="danger"
-            size="lg"
-            className="w-full"
-            leftIcon={<LogOut size={20} />}
-          >
-            Sign Out
-          </Button>
+          <div className="py-2">
+             <Button
+              onClick={handleSignOut}
+              variant="destructive"
+              size="lg"
+              className="w-full shadow-lg shadow-rose-500/20"
+              leftIcon={<LogOut size={20} />}
+            >
+              Sign Out
+            </Button>
 
-          <div className="pt-4 text-center">
-            <p className="text-xs text-brand-300 font-mono">v{APP_VERSION}</p>
+            <div className="pt-6 text-center">
+              <p className="text-xs text-slate-400 font-mono">v{APP_VERSION}</p>
+            </div>
           </div>
         </SettingsSection>
 
