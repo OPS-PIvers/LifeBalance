@@ -142,6 +142,7 @@ export interface ReceiptData {
   category: string;
   date?: string; // Optional - may not be visible on all receipts
   suggestedHabits?: string[];
+  subBucket?: string;
 }
 
 export interface BankTransactionData {
@@ -150,6 +151,7 @@ export interface BankTransactionData {
   category: string;
   date: string;
   suggestedHabits?: string[];
+  subBucket?: string;
 }
 
 export interface GroceryItem {
@@ -284,6 +286,7 @@ export const analyzeReceipt = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
+  availableSubBuckets?: Record<string, string[]>,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptData> => {
   try {
@@ -295,10 +298,23 @@ export const analyzeReceipt = async (
       ? availableHabits.map(sanitizeForPrompt).join(', ')
       : '';
 
+    // Prepare sub-bucket context
+    let subBucketContext = '';
+    if (availableSubBuckets && Object.keys(availableSubBuckets).length > 0) {
+      subBucketContext = 'Available Sub-Buckets for Categories:\n';
+      Object.entries(availableSubBuckets).forEach(([cat, subs]) => {
+        if (subs.length > 0) {
+          subBucketContext += `- ${cat}: [${subs.join(', ')}]\n`;
+        }
+      });
+      subBucketContext += 'If the selected category has sub-buckets, please choose the most appropriate one as "subBucket".';
+    }
+
     const now = new Date();
     const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
     const prompt = [
       `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''}`,
+      subBucketContext,
       `Today's date is ${today}. If the year is missing, infer it.`,
       'Return JSON.'
     ].join('\n');
@@ -313,7 +329,8 @@ export const analyzeReceipt = async (
           amount: { type: Type.NUMBER },
           category: { type: Type.STRING },
           date: { type: Type.STRING },
-          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
+          suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
+          subBucket: { type: Type.STRING }
         },
         required: ["merchant", "amount", "category"]
       },

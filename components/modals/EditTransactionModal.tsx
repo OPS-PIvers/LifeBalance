@@ -20,6 +20,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('');
+  const [subBucketId, setSubBucketId] = useState<string | undefined>(undefined);
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<'verified' | 'pending_review'>('verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -28,12 +29,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   // Dynamic Categories from buckets
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
 
+  // Find selected bucket and its sub-buckets
+  const selectedBucket = buckets.find(b => b.name === category);
+  const subBuckets = selectedBucket?.subBuckets || [];
+
   // Populate form when transaction changes
   useEffect(() => {
     if (transaction) {
       setAmount(transaction.amount.toString());
       setMerchant(transaction.merchant);
       setCategory(transaction.category);
+      setSubBucketId(transaction.subBucketId);
       setDate(transaction.date);
       setStatus(transaction.status);
     }
@@ -71,6 +77,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         amount: amountNum,
         merchant: merchant.trim(),
         category,
+        subBucketId: subBucketId || undefined,
         date,
         status,
       });
@@ -196,7 +203,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           label="Category"
           disabled={isSaving}
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setSubBucketId(undefined); // Reset sub-bucket when category changes
+          }}
         >
           {dynamicCategories.map((cat) => (
             <option key={cat} value={cat}>
@@ -204,6 +214,23 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             </option>
           ))}
         </Select>
+
+        {subBuckets.length > 0 && (
+          <Select
+            id="edit-sub-bucket"
+            label="Sub-Category"
+            disabled={isSaving}
+            value={subBucketId || ''}
+            onChange={(e) => setSubBucketId(e.target.value || undefined)}
+          >
+            <option value="">(None)</option>
+            {subBuckets.map((sb) => (
+              <option key={sb.id} value={sb.id}>
+                {sb.name}
+              </option>
+            ))}
+          </Select>
+        )}
 
         <Input
           id="edit-date"

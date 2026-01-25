@@ -14,6 +14,7 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
 vi.mock('lucide-react', () => ({
   X: () => <span>X</span>,
   Trash2: () => <span>Trash2</span>,
+  Plus: () => <span>Plus</span>,
 }));
 
 describe('BucketFormModal', () => {
