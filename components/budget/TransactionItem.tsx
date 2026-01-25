@@ -34,8 +34,8 @@ export interface TransactionItemProps {
 export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
-      onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer ${
+      onClick={() => isSelectionMode ? onToggleSelection(tx.id) : onEdit(tx)}
+      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer active:bg-brand-50 ${
         isSelected
           ? 'bg-brand-50 border-brand-300'
           : 'bg-white border-brand-100 hover:border-brand-300'
@@ -82,9 +82,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           )}
         </div>
 
-        {/* Actions (visible on mobile, enhanced on hover for desktop) - HIDDEN IN SELECTION MODE */}
+        {/* Actions (hidden on mobile, visible on hover for desktop) - HIDDEN IN SELECTION MODE */}
         {!isSelectionMode && (
-          <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <div className="hidden sm:flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
               className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
