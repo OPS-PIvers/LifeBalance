@@ -45,6 +45,8 @@ export default {
       },
       boxShadow: {
         soft: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+        glass: '0 8px 30px rgba(0, 0, 0, 0.04)',
+        nav: '0 20px 40px -4px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05)',
       },
       spacing: {
         'safe': 'env(safe-area-inset-bottom)',
