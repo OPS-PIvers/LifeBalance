@@ -3,8 +3,8 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive';
-  size?: 'sm' | 'md' | 'lg' | 'icon';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive';
+  size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -21,6 +21,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       dashed: 'bg-transparent border-2 border-dashed border-brand-200 text-brand-400 font-bold hover:bg-brand-50 hover:border-brand-300 shadow-none',
       subtle: 'bg-brand-100 text-brand-700 hover:bg-brand-200',
       'ghost-danger': 'bg-transparent text-red-400 hover:text-red-600 hover:bg-red-50',
+      'ghost-destructive': 'bg-transparent text-brand-400 hover:text-rose-600 hover:bg-rose-50',
       success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm',
       warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-sm',
       destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-sm',
@@ -30,7 +31,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       sm: 'px-3 py-1 text-sm',
       md: 'px-4 py-2 text-sm',
       lg: 'px-6 py-3 text-base',
-      icon: 'p-2'
+      icon: 'p-2',
+      'icon-sm': 'p-1',
     };
 
     return (

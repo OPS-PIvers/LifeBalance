@@ -2,6 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
+import { Button } from '../ui/Button';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -135,13 +136,15 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={handleSaveLimit}
-                    className="text-money-pos"
+                    className="text-money-pos hover:bg-emerald-50"
                     aria-label="Save limit"
                   >
                     <Check size={14} />
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <span
@@ -170,13 +173,15 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           )}
 
           {/* Edit Button */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={(e) => { e.stopPropagation(); onEditBucket(bucket); }}
-            className="text-brand-300 hover:text-brand-600 p-1"
+            className="text-brand-300 hover:text-brand-600"
             aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -216,20 +221,24 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     ${tx.amount}
                   </span>
                   <div className="flex gap-1">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
                       onClick={() => onEditTransaction(tx)}
-                      className="text-brand-400 hover:text-brand-600 p-1"
+                      className="text-brand-400 hover:text-brand-600"
                       title="Edit transaction"
                     >
                       <Edit size={14} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost-destructive"
+                      size="icon-sm"
                       onClick={() => onDeleteTransaction(tx.id)}
-                      className="text-brand-400 hover:text-money-neg p-1"
+                      className="text-brand-400 hover:text-money-neg"
                       title="Delete transaction"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -245,12 +254,14 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             <AlertTriangle size={14} />
             <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
           </div>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={(e) => { e.stopPropagation(); onReallocate(bucket.id); }}
-            className="bg-white text-money-neg text-xs font-bold px-3 py-1.5 rounded-lg border border-rose-200 shadow-sm active:scale-95 transition-transform"
+            className="bg-white text-money-neg border-rose-200 hover:bg-rose-50 text-xs py-1.5 rounded-lg"
           >
             Fix
-          </button>
+          </Button>
         </div>
       )}
     </div>

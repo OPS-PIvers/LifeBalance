@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
+import { Button } from '../ui/Button';
 
 // --- Helper Functions ---
 
@@ -86,35 +87,42 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
         {/* Actions (visible on mobile, enhanced on hover for desktop) - HIDDEN IN SELECTION MODE */}
         {!isSelectionMode && (
           <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
               aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
             >
               <Edit size={16} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
               aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
             >
               <Copy size={16} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
               aria-label={getSanitizedLabel(tx.merchant, 'Split')}
-              title="Split Transaction"
             >
               <Scissors size={16} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost-destructive"
+              size="icon"
               onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
-              className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
+              className="text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
               aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
             >
               <Trash2 size={16} />
-            </button>
+            </Button>
           </div>
         )}
       </div>
