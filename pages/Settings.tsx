@@ -640,7 +640,7 @@ const Settings: React.FC = () => {
           <div className="space-y-8">
             {/* API Key Management */}
             <div>
-              <h4 className="text-sm font-bold text-slate-900 mb-4 tracking-tight uppercase text-xs text-slate-500">API Keys</h4>
+              <h4 className="font-bold mb-4 tracking-tight uppercase text-xs text-slate-500">API Keys</h4>
               <ApiKeyManager
                 householdId={householdId || ''}
                 userId={user?.uid || ''}
@@ -651,7 +651,7 @@ const Settings: React.FC = () => {
 
             {/* Setup Guide */}
             <div className="border-t border-slate-100 pt-6">
-              <h4 className="text-sm font-bold text-slate-900 mb-4 tracking-tight uppercase text-xs text-slate-500">Setup Guide</h4>
+              <h4 className="font-bold mb-4 tracking-tight uppercase text-xs text-slate-500">Setup Guide</h4>
               <ShortcutSetupGuide />
             </div>
           </div>
