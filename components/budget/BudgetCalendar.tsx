@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
@@ -174,7 +174,7 @@ const BudgetCalendar: React.FC = () => {
           <div className="flex gap-2">
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={handleExport}
               className="text-brand-400 hover:text-brand-600 mr-2 rounded-lg"
               title="Export this month to CSV"
@@ -185,8 +185,8 @@ const BudgetCalendar: React.FC = () => {
             <div className="w-px h-6 bg-brand-100 my-auto mx-1" />
             <Button
               variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
+              size="icon-sm"
+              onClick={() => setCurrentDate(subMonths(currentDate, 1))}
               className="text-brand-400 rounded-lg"
               aria-label="Previous month"
             >
@@ -194,8 +194,8 @@ const BudgetCalendar: React.FC = () => {
             </Button>
             <Button
               variant="ghost"
-              size="icon"
-              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
+              size="icon-sm"
+              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
               className="text-brand-400 rounded-lg"
               aria-label="Next month"
             >
