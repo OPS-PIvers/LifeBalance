@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { QuickStockList } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -16,10 +17,19 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     updateStore,
     deleteStore,
     groceryCategories,
-    updateGroceryCategories
+    updateGroceryCategories,
+    groceryCatalog,
+    quickStockLists,
+    addQuickStockList,
+    updateQuickStockList,
+    deleteQuickStockList
   } = useHousehold();
 
-  const [activeTab, setActiveTab] = useState<'stores' | 'categories'>('stores');
+  const [activeTab, setActiveTab] = useState<'stores' | 'categories' | 'templates'>('stores');
+
+  // Template Form State
+  const [editingTemplate, setEditingTemplate] = useState<Partial<QuickStockList> | null>(null);
+  const [itemSearch, setItemSearch] = useState('');
 
   // Store Form State
   const [newStoreName, setNewStoreName] = useState('');
@@ -63,6 +73,37 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
+
+  const handleSaveTemplate = async () => {
+    if (!editingTemplate || !editingTemplate.name?.trim()) return;
+
+    try {
+      if (editingTemplate.id) {
+        await updateQuickStockList(editingTemplate as QuickStockList);
+      } else {
+        await addQuickStockList({
+          name: editingTemplate.name.trim(),
+          items: editingTemplate.items || []
+        });
+      }
+      setEditingTemplate(null);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const toggleItemInTemplate = (itemName: string) => {
+    if (!editingTemplate) return;
+    const currentItems = editingTemplate.items || [];
+    const exists = currentItems.includes(itemName);
+
+    setEditingTemplate({
+      ...editingTemplate,
+      items: exists
+        ? currentItems.filter(i => i !== itemName)
+        : [...currentItems, itemName]
+    });
+  };
 
   const handleAddStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,6 +266,17 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500" />
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'templates' ? 'text-brand-600 bg-brand-50/50' : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            Templates
+            {activeTab === 'templates' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500" />
+            )}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
@@ -360,6 +412,123 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                         ))}
                     </div>
                 </div>
+            </div>
+          )}
+
+          {activeTab === 'templates' && (
+            <div className="space-y-6">
+              {!editingTemplate ? (
+                <>
+                  <button
+                    onClick={() => setEditingTemplate({ name: '', items: [] })}
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-medium hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create New Template
+                  </button>
+
+                  <div className="space-y-3">
+                    {quickStockLists.map(list => (
+                      <div key={list.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
+                        <div>
+                          <h4 className="font-bold text-gray-800">{list.name}</h4>
+                          <p className="text-xs text-gray-500">{list.items.length} items</p>
+                        </div>
+                        <div className="flex gap-2">
+                           <button
+                             onClick={() => setEditingTemplate(list)}
+                             className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                           >
+                             <span className="text-xs font-medium">Edit</span>
+                           </button>
+                           <button
+                             onClick={async () => {
+                               if(confirm('Delete this template?')) await deleteQuickStockList(list.id);
+                             }}
+                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                        </div>
+                      </div>
+                    ))}
+                    {quickStockLists.length === 0 && (
+                      <p className="text-center text-gray-400 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full max-h-[60vh]">
+                  <div className="p-4 border-b border-gray-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                       <h4 className="font-bold text-gray-800">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
+                       <button onClick={() => setEditingTemplate(null)}><X className="w-5 h-5 text-gray-400" /></button>
+                    </div>
+                    <input
+                      type="text"
+                      value={editingTemplate.name}
+                      onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
+                      placeholder="Template Name (e.g. Weekly Basics)"
+                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      autoFocus
+                    />
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        value={itemSearch}
+                        onChange={e => setItemSearch(e.target.value)}
+                        placeholder="Search items to add..."
+                        className="w-full pl-9 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-2 min-h-[200px]">
+                    <div className="space-y-1">
+                      {groceryCatalog
+                        .filter(item =>
+                           !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
+                        )
+                        .sort((a, b) => {
+                           const aSelected = editingTemplate.items?.includes(a.name);
+                           const bSelected = editingTemplate.items?.includes(b.name);
+                           if (aSelected && !bSelected) return -1;
+                           if (!aSelected && bSelected) return 1;
+                           return b.purchaseCount - a.purchaseCount;
+                        })
+                        .slice(0, 50) // Limit render
+                        .map(item => {
+                          const isSelected = editingTemplate.items?.includes(item.name);
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => toggleItemInTemplate(item.name)}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${
+                                isSelected
+                                  ? 'bg-brand-50 text-brand-800 border border-brand-200'
+                                  : 'hover:bg-gray-50 text-gray-700 border border-transparent'
+                              }`}
+                            >
+                              <span>{item.name}</span>
+                              {isSelected && <Check className="w-4 h-4 text-brand-600" />}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  <div className="p-4 border-t border-gray-100 bg-gray-50">
+                    <button
+                      onClick={handleSaveTemplate}
+                      disabled={!editingTemplate.name?.trim()}
+                      className="w-full py-2 bg-brand-800 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
+                    >
+                      Save Template
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
