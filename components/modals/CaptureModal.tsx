@@ -322,7 +322,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         setView('manual');
       }
     }
-  }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits]);
+  }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits, buckets, householdId, stopCamera, matchCategory, matchHabits, matchSubBucket, handleClose]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
