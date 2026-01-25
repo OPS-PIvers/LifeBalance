@@ -37,9 +37,9 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive }) =
   };
 
   return (
-    <div className="bg-indigo-50 rounded-2xl p-5 border border-indigo-100 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="p-2 bg-white rounded-xl shadow-sm text-indigo-500">
+    <div className="bg-gradient-to-br from-indigo-50/80 to-white/80 backdrop-blur-md border border-indigo-100/50 shadow-sm rounded-3xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="p-2.5 bg-white/80 backdrop-blur-sm rounded-xl shadow-sm text-indigo-500 ring-1 ring-indigo-100">
           <Sparkles size={20} />
         </div>
         <div className="flex-1">
