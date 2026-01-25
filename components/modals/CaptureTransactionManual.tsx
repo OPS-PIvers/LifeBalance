@@ -53,12 +53,11 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const currentBucket = useMemo(() => buckets.find(b => b.name === category), [buckets, category]);
   const availableSubBuckets = useMemo(() => currentBucket?.subBuckets || [], [currentBucket]);
 
-  // Reset sub-bucket when category changes
-  useEffect(() => {
-    if (!availableSubBuckets.find(sb => sb.id === subBucketId)) {
-      setSubBucketId(undefined);
-    }
-  }, [availableSubBuckets, subBucketId]);
+  // Compute validated subBucketId (only valid if it exists in current bucket)
+  const validatedSubBucketId = useMemo(() => {
+    if (!subBucketId) return undefined;
+    return availableSubBuckets.find(sb => sb.id === subBucketId)?.id;
+  }, [subBucketId, availableSubBuckets]);
 
   // Default category update (if dynamicCategories loads late)
   useEffect(() => {
@@ -116,7 +115,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
-      subBucketId: subBucketId || undefined
+      subBucketId: validatedSubBucketId
     };
 
     try {
@@ -192,7 +191,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           {dynamicCategories.map(cat => (
             <button
               key={cat}
-              onClick={() => setCategory(cat)}
+              onClick={() => { setCategory(cat); setSubBucketId(undefined); }}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 category === cat
                   ? 'bg-brand-800 text-white'
