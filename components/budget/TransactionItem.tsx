@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 
@@ -26,12 +26,13 @@ export interface TransactionItemProps {
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
+  onSplit: (tx: Transaction) => void;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
 }
 
-export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -100,6 +101,14 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
               <Copy size={16} />
             </button>
             <button
+              onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
+              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors hidden sm:block"
+              aria-label={getSanitizedLabel(tx.merchant, 'Split')}
+              title="Split Transaction"
+            >
+              <Scissors size={16} />
+            </button>
+            <button
               onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
               className="p-2 text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg transition-colors"
               aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
@@ -132,6 +141,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onDuplicate === nextProps.onDuplicate &&
+    prevProps.onSplit === nextProps.onSplit &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onToggleSelection === nextProps.onToggleSelection
