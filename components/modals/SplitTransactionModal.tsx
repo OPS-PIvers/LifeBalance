@@ -21,7 +21,7 @@ interface SplitItem {
 }
 
 const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { addTransaction, deleteTransaction, buckets } = useHousehold();
+  const { splitTransaction, buckets } = useHousehold();
   const [splits, setSplits] = useState<SplitItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -107,31 +107,23 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
 
     setIsProcessing(true);
     try {
-      // 1. Create new transactions
-      const promises = splits.map(split =>
-        addTransaction({
-          amount: parseFloat(split.amount),
-          merchant: split.merchant.trim(),
-          category: split.category,
-          date: transaction.date,
-          status: 'verified', // Auto-verify splits as they are explicit user actions
-          isRecurring: false,
-          source: 'manual',
-          autoCategorized: false,
-          // Explicitly do not inherit IDs or timestamps
-        } as unknown as Transaction)
-      );
+      const newTransactions = splits.map(split => ({
+        amount: parseFloat(split.amount),
+        merchant: split.merchant.trim(),
+        category: split.category,
+        date: transaction.date,
+        status: 'verified', // Auto-verify splits as they are explicit user actions
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        relatedHabitIds: [], // Don't carry over habit links
+      } as unknown as Transaction)); // Type casting to satisfy Omit constraints in context
 
-      await Promise.all(promises);
-
-      // 2. Delete original transaction
-      await deleteTransaction(transaction.id);
-
-      toast.success('Transaction split successfully');
+      await splitTransaction(transaction.id, newTransactions);
       onClose();
     } catch (error) {
       console.error('Failed to split transaction:', error);
-      toast.error('Failed to split transaction');
+      // Context already handles error toast
     } finally {
       setIsProcessing(false);
     }
@@ -157,7 +149,8 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         <button
           onClick={onClose}
           disabled={isProcessing}
-          className="text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors"
+          className="text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          aria-label="Close modal"
         >
           <X size={20} />
         </button>
@@ -185,6 +178,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
                 onClick={() => handleRemoveSplit(split.id)}
                 className="absolute top-2 right-2 text-gray-300 hover:text-money-neg p-1 hover:bg-rose-50 rounded transition-colors"
                 title="Remove split"
+                aria-label={`Remove split ${index + 1}`}
               >
                 <Trash2 size={16} />
               </button>
@@ -197,6 +191,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
                   id={`split-amount-${split.id}`}
                   label="Amount"
                   type="number"
+                  step="0.01"
                   value={split.amount}
                   onChange={(e) => updateSplit(split.id, 'amount', e.target.value)}
                   placeholder="0.00"

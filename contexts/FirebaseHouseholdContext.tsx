@@ -140,6 +140,7 @@ export interface HouseholdContextType {
   updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
 
   // Habit Actions
   addHabit: (habit: Habit) => Promise<void>;
@@ -1750,6 +1751,47 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, transactions, accounts]);
 
+  const splitTransaction = useCallback(async (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => {
+    if (!householdId || !user) return;
+
+    try {
+      const batch = writeBatch(db);
+      const originalTx = transactions.find(t => t.id === originalTransactionId);
+
+      if (!originalTx) {
+        throw new Error('Original transaction not found');
+      }
+
+      // 1. Delete original transaction
+      const originalTxRef = doc(db, `households/${householdId}/transactions`, originalTransactionId);
+      batch.delete(originalTxRef);
+
+      // 2. Create new transactions
+      newTransactions.forEach(tx => {
+        const newTxRef = doc(collection(db, `households/${householdId}/transactions`));
+        const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
+
+        batch.set(newTxRef, {
+          ...tx,
+          payPeriodId: payPeriodId || null,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+        });
+      });
+
+      // 3. Commit batch
+      // Note: We don't need to update account balance because the sum of new transactions
+      // equals the original transaction amount, so the net change is 0.
+      await batch.commit();
+
+      toast.success('Transaction split successfully');
+    } catch (error) {
+      console.error('[splitTransaction] Failed:', error);
+      toast.error('Failed to split transaction');
+      throw error;
+    }
+  }, [householdId, user, transactions, householdSettings]);
+
   // --- ACTIONS: HABITS ---
 
   const addHabit = useCallback(async (habit: Habit) => {
@@ -3149,6 +3191,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransactionCategory,
     updateTransaction,
     deleteTransaction,
+    splitTransaction,
     addHabit,
     updateHabit,
     deleteHabit,
@@ -3204,7 +3247,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
-    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction,
+    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
     addHabit, updateHabit, deleteHabit, reorderHabits, toggleHabit, resetHabit,
     addHabitSubmission, updateHabitSubmission, deleteHabitSubmission, getHabitSubmissions,
     updateChallenge, markChallengeComplete, redeemReward, refreshInsight,

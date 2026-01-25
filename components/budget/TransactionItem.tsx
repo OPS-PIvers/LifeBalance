@@ -102,7 +102,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
-              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors hidden sm:block"
+              className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
               aria-label={getSanitizedLabel(tx.merchant, 'Split')}
               title="Split Transaction"
             >
