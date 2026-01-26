@@ -15,3 +15,7 @@
 ## 2026-01-25 - Tailwind CDN Migration
 **Bottleneck:** Tailwind CSS was loaded via CDN, causing runtime parsing performance penalty and large download size.
 **Fix:** Migrated to PostCSS/Tailwind build process (v3.4) for optimized production builds.
+
+## 2026-01-26 - Test Script Standardization
+**Bottleneck:** `npm test` behavior was ambiguous (watch vs run) depending on environment, and developers lacked a single command to lint the entire monorepo.
+**Fix:** Standardized `test` to `vitest run` (CI-safe), added `test:watch` for dev, and introduced `lint:all` to run lint across all workspace packages recursively.
