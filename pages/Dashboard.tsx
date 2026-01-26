@@ -11,6 +11,7 @@ import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidg
 import { InsightWidget } from '../components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import { HorizonCommandBar } from '../components/dashboard/HorizonCommandBar';
 
 const Dashboard: React.FC = () => {
   const {
@@ -64,6 +65,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="px-4 space-y-8">
+
+        {/* Horizon Command Bar */}
+        <HorizonCommandBar />
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
