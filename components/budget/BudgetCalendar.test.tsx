@@ -322,7 +322,7 @@ describe('BudgetCalendar', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'false');
   });
 
-  it('shows mobile actions drawer when more button is clicked', () => {
+  it('shows mobile actions drawer and handles actions', async () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const item = {
@@ -345,12 +345,70 @@ describe('BudgetCalendar', () => {
 
     render(<BudgetCalendar />);
 
-    // Click More button
-    const moreButton = screen.getByTestId('more-vertical').parentElement;
-    fireEvent.click(moreButton!);
+    // Click More button (finding by new aria-label)
+    const moreButton = screen.getByLabelText('More actions for Rent');
+    fireEvent.click(moreButton);
 
-    // Check if Drawer opens (Delete Event button should be visible)
+    // Verify Drawer opens
     expect(screen.getByText('Delete Event')).toBeInTheDocument();
     expect(screen.getByText('Edit Event')).toBeInTheDocument();
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
+
+    // Test Delete Action
+    fireEvent.click(screen.getByText('Delete Event'));
+    expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');
+
+    // Re-open drawer for next test (since it closes on action)
+    fireEvent.click(moreButton);
+
+    // Test Edit Action (Should open Edit Modal)
+    fireEvent.click(screen.getByText('Edit Event'));
+
+    // The modal title changes to "Edit Event"
+    // Note: Modal component needs ariaLabelledBy for name query to work with getByRole,
+    // so we check for presence of dialog and the specific title text.
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Edit Event', { selector: 'h3' })).toBeInTheDocument();
+
+    // Re-open drawer for Cancel test
+    fireEvent.click(screen.getByLabelText('Close modal')); // Close edit modal first
+    fireEvent.click(moreButton);
+
+    // Test Cancel Action
+    fireEvent.click(screen.getByText('Cancel'));
+    // Drawer content should disappear
+    expect(screen.queryByText('Delete Event')).not.toBeInTheDocument();
+  });
+
+  it('hides edit option for paid items in mobile drawer', () => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const item = {
+      id: 'item-paid',
+      title: 'Paid Bill',
+      amount: 50,
+      date: todayStr,
+      type: 'expense',
+      isPaid: true
+    };
+
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      calendarItems: [item],
+      addCalendarItem: mockAddCalendarItem,
+      updateCalendarItem: mockUpdateCalendarItem,
+      deleteCalendarItem: mockDeleteCalendarItem,
+      todos: [],
+      completeToDo: vi.fn(),
+    });
+
+    render(<BudgetCalendar />);
+
+    // Click More button
+    const moreButton = screen.getByLabelText('More actions for Paid Bill');
+    fireEvent.click(moreButton);
+
+    // Verify Edit is hidden but Delete is shown
+    expect(screen.queryByText('Edit Event')).not.toBeInTheDocument();
+    expect(screen.getByText('Delete Event')).toBeInTheDocument();
   });
 });

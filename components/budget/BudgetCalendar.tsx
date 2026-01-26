@@ -371,7 +371,7 @@ const BudgetCalendar: React.FC = () => {
                       size="icon-sm"
                       className="md:hidden text-brand-300"
                       onClick={() => setActiveActionItem(item)}
-                      aria-label="Actions"
+                      aria-label={`More actions for ${item.title}`}
                     >
                       <MoreVertical size={16} />
                     </Button>
