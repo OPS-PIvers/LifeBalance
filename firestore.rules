@@ -59,6 +59,32 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
                     request.resource.data.keys().hasAny(['name']) &&
                     isValidString(request.resource.data.name, 50);
+
+      // 🛡️ SENTINEL SECURITY FIX: Protect AI Usage from manipulation (Quota Bypass Prevention)
+      function isValidAiUsageUpdate() {
+        // If aiUsage is not touched, it's fine.
+        if (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['aiUsage'])) {
+            return true;
+        }
+
+        // If aiUsage is being removed (present in resource but not in request), DENY.
+        if (!request.resource.data.keys().hasAny(['aiUsage'])) {
+             return false;
+        }
+
+        let oldUsage = resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''});
+        let newUsage = request.resource.data.aiUsage;
+
+        return newUsage.keys().hasOnly(['dailyCount', 'lastResetDate']) &&
+               newUsage.dailyCount is number &&
+               newUsage.lastResetDate is string &&
+               newUsage.lastResetDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+               (
+                 (newUsage.lastResetDate == oldUsage.lastResetDate && newUsage.dailyCount == oldUsage.dailyCount + 1) ||
+                 (newUsage.lastResetDate > oldUsage.lastResetDate && newUsage.dailyCount == 1)
+               );
+      }
+
       // Allow update if member (but cannot modify immutable fields).
       // 🛡️ SECURITY FIX: Updates are ONLY allowed if isMemberOf(householdId) returns true.
       // This implicitly requires the user to have a valid member document in the members/ subcollection.
@@ -69,6 +95,8 @@ service cloud.firestore {
                         isValidOptionalString(request.resource.data.get('name', null), 50) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
+                        // 🛡️ SENTINEL FIX: Protect AI Usage Quota
+                        isValidAiUsageUpdate() &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
                         // 1. Adding members: Only allow adding YOURSELF (request.auth.uid). Prevents adding unauthorized users.
                         (
