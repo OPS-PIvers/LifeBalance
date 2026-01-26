@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import { Habit, EffortLevel } from '@/types/schema';
 import {
   EFFORT_POINTS,
@@ -66,24 +67,16 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
         <div>
           <label className="text-xs font-bold text-brand-400 uppercase">Type</label>
-          <div className="flex bg-brand-50 p-1 rounded-xl mt-1 border border-brand-200">
-            <button
-              onClick={() => onFormChange({ type: 'positive' })}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                formData.type === 'positive' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'
-              }`}
-            >
-              Good
-            </button>
-            <button
-              onClick={() => onFormChange({ type: 'negative' })}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                formData.type === 'negative' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'
-              }`}
-            >
-              Bad
-            </button>
-          </div>
+          <SegmentedControl
+            value={formData.type}
+            onChange={(val) => onFormChange({ type: val as 'positive' | 'negative' })}
+            name="Habit Type"
+            options={[
+              { value: 'positive', label: 'Good', activeClassName: 'text-money-pos' },
+              { value: 'negative', label: 'Bad', activeClassName: 'text-money-neg' },
+            ]}
+            className="mt-1"
+          />
         </div>
       </div>
 
@@ -155,24 +148,16 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
         </div>
         <div>
           <label className="text-xs font-bold text-brand-400 uppercase">Period</label>
-          <div className="flex bg-brand-50 p-1 rounded-xl mt-1 border border-brand-200">
-            <button
-              onClick={() => onFormChange({ period: 'daily' })}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                formData.period === 'daily' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'
-              }`}
-            >
-              Daily
-            </button>
-            <button
-              onClick={() => onFormChange({ period: 'weekly' })}
-              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                formData.period === 'weekly' ? 'bg-white shadow-sm text-brand-800' : 'text-brand-400'
-              }`}
-            >
-              Weekly
-            </button>
-          </div>
+          <SegmentedControl
+            value={formData.period}
+            onChange={(val) => onFormChange({ period: val as 'daily' | 'weekly' })}
+            name="Frequency Period"
+            options={[
+              { value: 'daily', label: 'Daily', activeClassName: 'text-brand-800' },
+              { value: 'weekly', label: 'Weekly', activeClassName: 'text-brand-800' },
+            ]}
+            className="mt-1"
+          />
         </div>
       </div>
 
