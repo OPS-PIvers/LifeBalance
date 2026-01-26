@@ -1,23 +1,39 @@
-import React, { memo } from 'react';
-import { ShoppingItem, Store as StoreType } from '@/types/schema';
+import React, { memo, useMemo } from 'react';
+import { ShoppingItem, Store as StoreType, QuickStockList, GroceryCatalogItem } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
-import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw } from 'lucide-react';
+import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw, ShoppingBag, Coffee, Baby, Home, Utensils, Zap, Car, Dog, Gift, Briefcase } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import clsx from 'clsx';
 
 interface ShoppingItemRowProps {
   item: ShoppingItem;
   stores?: StoreType[];
+  quickStockLists?: QuickStockList[];
+  groceryCatalog?: GroceryCatalogItem[];
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
   onUpdate?: (item: ShoppingItem) => void;
+  onQuickListChange?: (item: ShoppingItem, newListId: string) => void;
   isReorderable?: boolean;
   onReorderDragStart?: () => void;
   onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const TEMPLATE_ICONS = [
+  { id: 'ShoppingBag', icon: ShoppingBag, label: 'Shopping' },
+  { id: 'Home', icon: Home, label: 'Home' },
+  { id: 'Utensils', icon: Utensils, label: 'Food' },
+  { id: 'Coffee', icon: Coffee, label: 'Coffee' },
+  { id: 'Baby', icon: Baby, label: 'Baby' },
+  { id: 'Zap', icon: Zap, label: 'Quick' },
+  { id: 'Car', icon: Car, label: 'Trip' },
+  { id: 'Dog', icon: Dog, label: 'Pet' },
+  { id: 'Gift', icon: Gift, label: 'Party' },
+  { id: 'Briefcase', icon: Briefcase, label: 'Work' },
+];
+
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, groceryCatalog, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -50,6 +66,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
       }
     }
   };
+
+  // Determine active Quick List
+  const activeList = useMemo(() => {
+    if (!quickStockLists || !groceryCatalog) return null;
+    const catalogItem = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
+    if (!catalogItem) return null;
+    return quickStockLists.find(list => list.items?.includes(catalogItem.id));
+  }, [quickStockLists, groceryCatalog, item.name]);
+
+  const ActiveIcon = activeList
+    ? (TEMPLATE_ICONS.find(i => i.id === activeList.icon)?.icon || ShoppingBag)
+    : ShoppingBag;
 
   const Content = (
     <>
@@ -163,6 +191,40 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                         </select>
                     )}
                  </div>
+
+                 {/* Quick List Chip */}
+                 {quickStockLists && onQuickListChange && (
+                   <div className="relative group">
+                      <span className={clsx(
+                          "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                          "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
+                          activeList
+                              ? (() => {
+                                  const colorKey = activeList.color || 'slate';
+                                  const color = STORE_COLORS[colorKey] || STORE_COLORS.slate;
+                                  return `${color.bg} ${color.text} ${color.border}`;
+                              })()
+                              : "bg-gray-50 text-gray-400 border-gray-200 border-dashed"
+                      )}>
+                          <ActiveIcon size={10} />
+                          {activeList ? activeList.name : "Add to Quick List"}
+                      </span>
+                      <select
+                          value={activeList ? activeList.id : ""}
+                          onChange={(e) => {
+                              onQuickListChange(item, e.target.value);
+                          }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                          aria-label="Select Quick List"
+                          onClick={(e) => e.stopPropagation()}
+                      >
+                          <option value="">{activeList ? "Remove from List" : "Add to Quick List"}</option>
+                          {quickStockLists.map(list => (
+                              <option key={list.id} value={list.id}>{list.name}</option>
+                          ))}
+                      </select>
+                   </div>
+                 )}
             </div>
         </div>
 
@@ -224,7 +286,10 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onDelete === next.onDelete &&
          prev.onEdit === next.onEdit &&
          prev.stores === next.stores &&
+         prev.quickStockLists === next.quickStockLists &&
+         prev.groceryCatalog === next.groceryCatalog &&
          prev.onUpdate === next.onUpdate &&
+         prev.onQuickListChange === next.onQuickListChange &&
          prev.isReorderable === next.isReorderable &&
          prev.onReorderDragStart === next.onReorderDragStart &&
          prev.onReorderDragEnd === next.onReorderDragEnd;

@@ -26,6 +26,9 @@ const ShoppingListTab: React.FC = () => {
     stores,
     groceryCategories,
     groceryCatalog,
+    quickStockLists,
+    addGroceryCatalogItem,
+    updateQuickStockList,
     householdId
   } = useHousehold();
 
@@ -223,6 +226,62 @@ const ShoppingListTab: React.FC = () => {
         updateShoppingItem(item);
     }, [updateShoppingItem]);
 
+    const handleQuickListChange = useCallback(async (item: ShoppingItem, newListId: string) => {
+        if (!householdId) return;
+
+        try {
+            // 1. Find or Create Catalog Item
+            let catalogItemId: string;
+            const match = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
+
+            if (match) {
+                catalogItemId = match.id;
+            } else {
+                const newItem = {
+                    name: item.name,
+                    category: item.category || 'Uncategorized',
+                    lastPurchased: new Date().toISOString(),
+                    purchaseCount: 0
+                };
+                catalogItemId = await addGroceryCatalogItem(newItem);
+            }
+
+            // 2. Update Membership using Context Actions (compatible with Mock Mode)
+
+            // First, remove from any OTHER lists
+            for (const list of quickStockLists) {
+                const hasItem = list.items?.includes(catalogItemId);
+
+                if (list.id === newListId) {
+                    // This is the target list.
+                    // If it doesn't have it, add it.
+                    if (!hasItem) {
+                        await updateQuickStockList({
+                            ...list,
+                            items: [...(list.items || []), catalogItemId]
+                        });
+                    }
+                } else {
+                    // This is NOT the target list.
+                    // If it has it, remove it.
+                    if (hasItem) {
+                        await updateQuickStockList({
+                            ...list,
+                            items: (list.items || []).filter(id => id !== catalogItemId)
+                        });
+                    }
+                }
+            }
+
+            // Note: If newListId is empty string, the loop correctly just removes from all.
+
+            toast.success(newListId ? 'List updated' : 'Removed from list');
+        } catch (error) {
+            console.error('Failed to update quick list:', error);
+            toast.error('Failed to update list');
+        }
+    }, [householdId, groceryCatalog, quickStockLists, addGroceryCatalogItem, updateQuickStockList]);
+
   return (
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
@@ -398,10 +457,13 @@ const ShoppingListTab: React.FC = () => {
                         key={item.id}
                         item={item}
                         stores={stores}
+                        quickStockLists={quickStockLists}
+                        groceryCatalog={groceryCatalog}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
                         onUpdate={handleUpdateItem}
+                        onQuickListChange={handleQuickListChange}
                         isReorderable={false}
                     />
                 ))}
@@ -413,10 +475,13 @@ const ShoppingListTab: React.FC = () => {
                         key={item.id}
                         item={item}
                         stores={stores}
+                        quickStockLists={quickStockLists}
+                        groceryCatalog={groceryCatalog}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
                         onUpdate={handleUpdateItem}
+                        onQuickListChange={handleQuickListChange}
                         onReorderDragStart={handleReorderDragStart}
                         onReorderDragEnd={handleReorderDragEnd}
                     />

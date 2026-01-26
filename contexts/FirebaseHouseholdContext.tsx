@@ -203,7 +203,7 @@ export interface HouseholdContextType {
   deleteQuickStockList: (id: string) => Promise<void>;
 
   // Grocery Catalog Actions
-  addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<void>;
+  addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<string>;
   updateGroceryCatalogItem: (id: string, updates: Partial<GroceryCatalogItem>) => Promise<void>;
   deleteGroceryCatalogItem: (id: string) => Promise<void>;
 
@@ -2972,13 +2972,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: GROCERY CATALOG ---
 
-  const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>) => {
-    if (!householdId) return;
+  const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
+    if (!householdId) throw new Error("Household ID missing");
     try {
-      await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
+      const docRef = await addDoc(collection(db, `households/${householdId}/groceryCatalog`), item);
+      return docRef.id;
     } catch (error) {
       console.error('[addGroceryCatalogItem] Failed:', error);
       toast.error('Failed to add to history');
+      throw error;
     }
   }, [householdId]);
 
