@@ -118,7 +118,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 weatherSensitive: false
             });
 
-            if (newHabitId) {
+            if (newHabitId && typeof newHabitId === 'string') {
                 finalRelatedHabitIds.push(newHabitId);
             }
         } catch (e) {
