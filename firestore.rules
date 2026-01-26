@@ -451,11 +451,13 @@ service cloud.firestore {
         allow create: if false;
 
         allow update: if isMemberOf(householdId) &&
-                      // Schema validation
+                      // Strict Schema validation
+                      request.resource.data.keys().hasOnly(['text', 'type', 'source', 'processed', 'createdAt', 'processedAt', 'error']) &&
                       isValidString(request.resource.data.text, 500) &&
                       (request.resource.data.get('type', null) == null || isValidString(request.resource.data.type, 20)) &&
                       isValidString(request.resource.data.source, 20) &&
                       isValidBoolean(request.resource.data.processed) &&
+                      request.resource.data.createdAt is timestamp &&
                       (request.resource.data.get('processedAt', null) == null || request.resource.data.processedAt is timestamp) &&
                       (request.resource.data.get('error', null) == null || isValidString(request.resource.data.error, 500));
 
