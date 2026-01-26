@@ -402,6 +402,16 @@ export interface CreateTodoPayload {
   completeByDate: string;
 }
 
+export interface CreateChallengePayload {
+  title: string;
+  description?: string;
+  targetType: 'count' | 'percentage';
+  targetValue: number;
+  duration?: string;
+  suggestedHabit?: CreateHabitPayload;
+  relatedHabitId?: string;
+}
+
 export type InsightAction =
   | {
       type: 'update_bucket';
@@ -417,6 +427,11 @@ export type InsightAction =
       type: 'create_todo';
       label: string;
       payload: CreateTodoPayload;
+    }
+  | {
+      type: 'create_challenge';
+      label: string;
+      payload: CreateChallengePayload;
     };
 
 export interface Insight {

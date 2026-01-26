@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Check, Plus } from 'lucide-react';
-import { Challenge } from '@/types/schema';
+import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
@@ -10,14 +10,16 @@ import YearlyGoalFormModal from './YearlyGoalFormModal';
 interface ChallengeHubModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: CreateChallengePayload | null;
 }
 
 type TabType = 'challenge' | 'yearly' | 'freeze';
 
-const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }) => {
+const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, initialData }) => {
   const {
     activeChallenge,
     habits,
+    addHabit,
     updateChallenge,
     yearlyGoals,
     activeYearlyGoals,
@@ -36,20 +38,51 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [selectedYearlyGoalId, setSelectedYearlyGoalId] = useState<string>('');
 
+  // New state for implicit habit creation
+  const [suggestedHabit, setSuggestedHabit] = useState<CreateChallengePayload['suggestedHabit'] | null>(null);
+
   // Freeze Bank Tab State
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHabitForFreeze, setSelectedHabitForFreeze] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeChallenge) {
+    if (initialData) {
+      setTitle(initialData.title);
+      setDescription(initialData.description || '');
+      setTargetType(initialData.targetType);
+      setTargetValue(initialData.targetValue);
+
+      if (initialData.relatedHabitId) {
+           setSelectedHabitIds([initialData.relatedHabitId]);
+           setSuggestedHabit(null);
+      } else if (initialData.suggestedHabit) {
+           setSuggestedHabit(initialData.suggestedHabit);
+           setSelectedHabitIds(['suggested-habit']); // Use placeholder ID
+      } else {
+           setSelectedHabitIds([]);
+           setSuggestedHabit(null);
+      }
+      // Reset yearly goal for new challenge suggestions
+      setSelectedYearlyGoalId('');
+    } else if (activeChallenge) {
       setTitle(activeChallenge.title);
       setDescription(activeChallenge.description || '');
       setTargetType(activeChallenge.targetType || 'count');
       setTargetValue(activeChallenge.targetValue || activeChallenge.targetTotalCount || 100);
       setSelectedHabitIds(activeChallenge.relatedHabitIds || []);
       setSelectedYearlyGoalId(activeChallenge.yearlyGoalId || '');
+      setSuggestedHabit(null);
+    } else {
+      // Reset if no active challenge and no initial data
+      setTitle('');
+      setDescription('');
+      setTargetType('count');
+      setTargetValue(100);
+      setSelectedHabitIds([]);
+      setSuggestedHabit(null);
+      setSelectedYearlyGoalId('');
     }
-  }, [activeChallenge, isOpen]);
+  }, [activeChallenge, isOpen, initialData]);
 
   const toggleHabitSelection = (habitId: string) => {
     setSelectedHabitIds((prev) =>
@@ -60,14 +93,48 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
   const handleSaveChallenge = async () => {
     if (!title) return;
 
-    const updatedChallenge: Challenge = activeChallenge
+    let finalRelatedHabitIds = [...selectedHabitIds];
+
+    // Handle suggested habit creation
+    if (suggestedHabit && finalRelatedHabitIds.includes('suggested-habit')) {
+        try {
+            // Remove placeholder
+            finalRelatedHabitIds = finalRelatedHabitIds.filter(id => id !== 'suggested-habit');
+
+            const newHabitId = await addHabit({
+                id: '', // Generated
+                title: suggestedHabit.title,
+                category: suggestedHabit.category,
+                type: suggestedHabit.type || 'positive',
+                period: suggestedHabit.period || 'daily',
+                basePoints: 10,
+                scoringType: 'threshold',
+                targetCount: 1,
+                count: 0,
+                totalCount: 0,
+                completedDates: [],
+                streakDays: 0,
+                lastUpdated: new Date().toISOString(),
+                weatherSensitive: false
+            });
+
+            if (newHabitId) {
+                finalRelatedHabitIds.push(newHabitId);
+            }
+        } catch (e) {
+            console.error("Failed to create suggested habit", e);
+            return; // Stop if habit creation failed
+        }
+    }
+
+    const updatedChallenge: Challenge = activeChallenge && !initialData
       ? {
           ...activeChallenge,
           title,
           description,
           targetType,
           targetValue,
-          relatedHabitIds: selectedHabitIds,
+          relatedHabitIds: finalRelatedHabitIds,
           yearlyGoalId: selectedYearlyGoalId || undefined,
         }
       : {
@@ -78,7 +145,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
           description,
           targetType,
           targetValue,
-          relatedHabitIds: selectedHabitIds,
+          relatedHabitIds: finalRelatedHabitIds,
           yearlyGoalId: selectedYearlyGoalId || undefined,
           yearlyRewardLabel: 'Badge', // Default reward
         };
@@ -244,6 +311,43 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose }
                 <div className="bg-brand-50 p-4 rounded-xl border border-brand-100">
                   <h3 className="text-sm font-bold text-brand-700 mb-3">Linked Habits</h3>
                   <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {/* Suggested New Habit */}
+                    {suggestedHabit && (
+                        <div
+                          key="suggested-habit"
+                          onClick={() => toggleHabitSelection('suggested-habit')}
+                          className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedHabitIds.includes('suggested-habit')
+                              ? 'bg-white border-brand-400 shadow-sm'
+                              : 'bg-transparent border-transparent hover:bg-white/50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-5 h-5 rounded flex items-center justify-center ${
+                                selectedHabitIds.includes('suggested-habit')
+                                  ? 'bg-brand-800 text-white'
+                                  : 'border border-brand-300 bg-white'
+                              }`}
+                            >
+                              {selectedHabitIds.includes('suggested-habit') && <Check size={14} strokeWidth={3} />}
+                            </div>
+                            <span className="text-sm font-medium text-brand-700">
+                              {suggestedHabit.title} <span className="ml-2 text-xxs font-bold text-brand-500 bg-brand-100 px-2 py-0.5 rounded-full">NEW</span>
+                            </span>
+                          </div>
+                          <div
+                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
+                              (suggestedHabit.type || 'positive') === 'positive'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
+                            {(suggestedHabit.type || 'positive') === 'positive' ? 'Good' : 'Bad'}
+                          </div>
+                        </div>
+                    )}
+
                     {habits.map((habit) => {
                       const isSelected = selectedHabitIds.includes(habit.id);
                       return (

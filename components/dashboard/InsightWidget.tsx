@@ -1,13 +1,15 @@
 import React from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useInsightActions } from '../../hooks/useInsightActions';
-import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus } from 'lucide-react';
+import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
+import { CreateChallengePayload } from '@/types/schema';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
+  onCreateChallenge?: (payload: CreateChallengePayload) => void;
 }
 
-export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive }) => {
+export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onCreateChallenge }) => {
   const {
     insight,
     refreshInsight,
@@ -32,6 +34,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive }) =
       case 'update_bucket': return <Wallet size={14} />;
       case 'create_habit': return <Plus size={14} />;
       case 'create_todo': return <CheckCircle2 size={14} />;
+      case 'create_challenge': return <Trophy size={14} />;
       default: return <ArrowRight size={14} />;
     }
   };
@@ -73,7 +76,13 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive }) =
               {insightActions.map((action, idx) => (
                 <button
                   key={idx}
-                  onClick={() => handleAction(action)}
+                  onClick={() => {
+                    if (action.type === 'create_challenge' && onCreateChallenge) {
+                      onCreateChallenge(action.payload);
+                    } else {
+                      handleAction(action);
+                    }
+                  }}
                   className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100 shadow-sm active:scale-95 transition-all"
                 >
                   {getActionIcon(action.type)}

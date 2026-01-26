@@ -1801,10 +1801,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: HABITS ---
 
-  const addHabit = useCallback(async (habit: Habit) => {
-    if (!householdId || !user) return;
+  const addHabit = useCallback(async (habit: Habit): Promise<string> => {
+    if (!householdId || !user) throw new Error("Not authenticated");
     try {
-      await addDoc(collection(db, `households/${householdId}/habits`), {
+      const docRef = await addDoc(collection(db, `households/${householdId}/habits`), {
         ...habit,
         createdBy: user.uid,
         isShared: habit.isShared ?? true,
@@ -1812,6 +1812,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         lastUpdated: serverTimestamp(),
       });
       toast.success('Habit created');
+      return docRef.id;
     } catch (error) {
       console.error('[addHabit] Failed to create habit:', error);
       toast.error('Failed to create habit. Please try again.');
