@@ -427,8 +427,8 @@ export const sendbudgetalerts = onDocumentUpdated(
     // Calculate safe-to-spend (simplified)
     const accounts = newData.accounts || [];
     const checkingBalance = accounts
-      .filter((acc: any) => acc.type === "checking")
-      .reduce((sum: number, acc: any) => sum + acc.balance, 0);
+      .filter((acc: { type: string; balance: number }) => acc.type === "checking")
+      .reduce((sum: number, acc: { balance: number }) => sum + acc.balance, 0);
 
     for (const member of members) {
       const prefs = member.notificationPreferences;

@@ -40,6 +40,7 @@ export function isHabitStale(
 
     const now = new Date();
     let lastUpdate: Date | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawLastUpdated = habit.lastUpdated as any;
 
     // Normalize date from various possible inputs

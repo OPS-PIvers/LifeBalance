@@ -27,6 +27,7 @@ const db = admin.firestore();
 
 // Common response helpers
 function jsonResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   res: any,
   status: number,
   data: Record<string, unknown>
@@ -35,6 +36,7 @@ function jsonResponse(
 }
 
 function errorResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   res: any,
   status: number,
   message: string,
