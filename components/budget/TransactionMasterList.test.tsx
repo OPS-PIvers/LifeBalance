@@ -75,6 +75,8 @@ vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="check-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
   Scissors: () => <div data-testid="scissors-icon" />,
+  Bookmark: () => <div data-testid="bookmark-icon" />,
+  Plus: () => <div data-testid="plus-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
@@ -127,6 +129,7 @@ describe('TransactionMasterList', () => {
       updateTransaction: mockUpdateTransaction,
       addTransaction: mockAddTransaction,
       splitTransaction: mockSplitTransaction,
+      householdId: 'test-household',
     } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm
