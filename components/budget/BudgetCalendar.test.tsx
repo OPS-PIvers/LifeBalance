@@ -28,6 +28,19 @@ vi.mock('lucide-react', () => ({
   CheckSquare: () => <div data-testid="check-square" />,
   Download: () => <div data-testid="download" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
+  MoreVertical: () => <div data-testid="more-vertical" />,
+}));
+
+// Mock framer-motion for Drawer
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, className, onClick, ...props }: { children: React.ReactNode, className?: string, onClick?: () => void, [key: string]: unknown }) => (
+      <div className={className} onClick={onClick} {...props}>
+        {children}
+      </div>
+    ),
+  },
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 describe('BudgetCalendar', () => {
@@ -307,5 +320,37 @@ describe('BudgetCalendar', () => {
     // Click again
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('shows mobile actions drawer when more button is clicked', () => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    const item = {
+      id: 'item-1',
+      title: 'Rent',
+      amount: 1000,
+      date: todayStr,
+      type: 'expense',
+      isPaid: false
+    };
+
+    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      calendarItems: [item],
+      addCalendarItem: mockAddCalendarItem,
+      updateCalendarItem: mockUpdateCalendarItem,
+      deleteCalendarItem: mockDeleteCalendarItem,
+      todos: [],
+      completeToDo: vi.fn(),
+    });
+
+    render(<BudgetCalendar />);
+
+    // Click More button
+    const moreButton = screen.getByTestId('more-vertical').parentElement;
+    fireEvent.click(moreButton!);
+
+    // Check if Drawer opens (Delete Event button should be visible)
+    expect(screen.getByText('Delete Event')).toBeInTheDocument();
+    expect(screen.getByText('Edit Event')).toBeInTheDocument();
   });
 });
