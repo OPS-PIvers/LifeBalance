@@ -69,7 +69,7 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium tracking-tight rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+        'flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold tracking-tight rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
         isActive
           ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
           : 'text-slate-500 hover:text-slate-700 hover:bg-white/50',

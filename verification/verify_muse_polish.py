@@ -1,4 +1,4 @@
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright
 
 def run(playwright):
     browser = playwright.chromium.launch(headless=True)
@@ -18,8 +18,8 @@ def run(playwright):
     print("Waiting for dashboard...")
     try:
         page.wait_for_selector("text=Money Pulse", timeout=20000)
-    except:
-        print("Timeout waiting for Money Pulse. Dumping content:")
+    except Exception as exc:
+        print(f"Timeout or error waiting for Money Pulse: {exc}")
         # print(page.content())
         page.screenshot(path="verification_error.png")
         browser.close()
