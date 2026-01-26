@@ -75,12 +75,13 @@ service cloud.firestore {
         let oldUsage = resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''});
         let newUsage = request.resource.data.aiUsage;
 
-        return newUsage.dailyCount is number &&
+        return newUsage.keys().hasOnly(['dailyCount', 'lastResetDate']) &&
+               newUsage.dailyCount is number &&
                newUsage.lastResetDate is string &&
-               newUsage.lastResetDate.size() == 10 &&
+               newUsage.lastResetDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
                (
-                 (newUsage.lastResetDate == oldUsage.lastResetDate && newUsage.dailyCount > oldUsage.dailyCount) ||
-                 (newUsage.lastResetDate > oldUsage.lastResetDate && newUsage.dailyCount >= 1)
+                 (newUsage.lastResetDate == oldUsage.lastResetDate && newUsage.dailyCount == oldUsage.dailyCount + 1) ||
+                 (newUsage.lastResetDate > oldUsage.lastResetDate && newUsage.dailyCount == 1)
                );
       }
 
