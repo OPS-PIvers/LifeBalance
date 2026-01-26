@@ -45,7 +45,7 @@ export const TabsList: React.FC<{ children: React.ReactNode; className?: string 
   className,
 }) => {
   return (
-    <div className={cn('bg-brand-100 p-1 rounded-xl flex gap-1', className)} role="tablist">
+    <div className={cn('bg-slate-100/80 p-1.5 rounded-xl flex gap-1', className)} role="tablist">
       {children}
     </div>
   );
@@ -69,10 +69,10 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'flex-1 flex items-center justify-center gap-2 py-2 text-sm font-bold rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+        'flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium tracking-tight rounded-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
         isActive
-          ? 'bg-white text-brand-800 shadow-sm'
-          : 'text-brand-500 hover:text-brand-700 hover:bg-white/50',
+          ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+          : 'text-slate-500 hover:text-slate-700 hover:bg-white/50',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
