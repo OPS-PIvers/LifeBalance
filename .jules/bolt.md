@@ -23,3 +23,7 @@
 ## 2026-02-19 - [Conditional Prop Dependency in Memoization]
 **Learning:** Components receiving frequent global updates (e.g., `transactions` list from Firestore) will re-render constantly even if `React.memo` is used, because the global array reference changes. If the component only displays this data in a specific state (e.g., `isExpanded`), validating it in `arePropsEqual` unconditionally defeats the optimization.
 **Action:** In `arePropsEqual`, strictly ignore changes to expensive data props if the component's state (e.g., `!isExpanded`) makes them invisible. Only check them when the data is actually being rendered. This prevents background updates from thrashing the UI for collapsed list items.
+
+## 2026-02-23 - [Date Object Reference Instability]
+**Learning:** Helper functions like `startOfWeek(new Date())` return new Date object instances on every render. If these are passed as dependencies to `useMemo` (e.g., for expensive list filtering), they break memoization and force re-calculation on every render.
+**Action:** Memoize date range boundaries (start/end dates) using `useMemo` dependent on the stable anchor date (e.g., `currentMonth`), or pass primitive timestamps to dependency arrays.
