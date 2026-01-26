@@ -148,11 +148,21 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                 </div>
               ) : (
                 <span
+                  role="button"
+                  tabIndex={0}
                   onClick={(e) => {
                     e.stopPropagation();
                     onStartEditingLimit(bucket.id);
                   }}
-                  className="text-slate-400 border-b border-dashed border-slate-200 cursor-pointer hover:text-slate-600"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onStartEditingLimit(bucket.id);
+                    }
+                  }}
+                  aria-label={`Edit limit for ${bucket.name}, currently $${bucket.limit}`}
+                  className="text-slate-400 border-b border-dashed border-slate-200 cursor-pointer hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-sm"
                 >
                   ${bucket.limit}
                 </span>
