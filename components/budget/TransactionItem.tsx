@@ -161,10 +161,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.status === n.status &&
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
-    p.autoCategorized === n.autoCategorized &&
-    p.payPeriodId === n.payPeriodId &&
-    // Shallow check for relatedHabitIds since they are typically replaced not mutated in Firestore
-    p.relatedHabitIds === n.relatedHabitIds &&
+    // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
+    // These fields do not affect the rendering of this component.
+    // Excluding them prevents unnecessary re-renders when backend-only fields change
+    // or when Firestore returns new array references for relatedHabitIds.
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onDuplicate === nextProps.onDuplicate &&
