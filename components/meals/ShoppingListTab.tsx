@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
@@ -41,8 +41,15 @@ const ShoppingListTab: React.FC = () => {
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  // Use a ref for drag state to prevent re-renders and potential race conditions
+  // caused by the dependency array in useEffect.
+  const isDraggingRef = useRef(false);
+
   // Sync local items with context shoppingList, respecting order
   useEffect(() => {
+    // Avoid resetting items while user is dragging
+    if (isDraggingRef.current) return;
+
     // Sort items by order field, then by creation or name as fallback
     let sorted = [...shoppingList].sort((a, b) => {
       const orderA = a.order ?? 9999;
@@ -155,6 +162,14 @@ const ShoppingListTab: React.FC = () => {
     // But for a shopping list reorder, it's acceptable.
     reorderShoppingItems(newOrder);
   };
+
+  const handleReorderDragStart = useCallback(() => {
+    isDraggingRef.current = true;
+  }, []);
+
+  const handleReorderDragEnd = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
 
     const handleSaveEdit = async () => {
         if (!editingItem) return;
@@ -402,6 +417,8 @@ const ShoppingListTab: React.FC = () => {
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
                         onUpdate={handleUpdateItem}
+                        onReorderDragStart={handleReorderDragStart}
+                        onReorderDragEnd={handleReorderDragEnd}
                     />
                 ))}
             </Reorder.Group>

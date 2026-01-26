@@ -13,9 +13,11 @@ interface ShoppingItemRowProps {
   onEdit: (item: ShoppingItem) => void;
   onUpdate?: (item: ShoppingItem) => void;
   isReorderable?: boolean;
+  onReorderDragStart?: () => void;
+  onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -186,6 +188,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             dragControls={dragControls}
             className="relative overflow-hidden mb-2 rounded-xl"
             style={{ touchAction: 'pan-y' }}
+            onDragStart={onReorderDragStart}
+            onDragEnd={onReorderDragEnd}
         >
             {Content}
         </Reorder.Item>
@@ -221,7 +225,9 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onEdit === next.onEdit &&
          prev.stores === next.stores &&
          prev.onUpdate === next.onUpdate &&
-         prev.isReorderable === next.isReorderable;
+         prev.isReorderable === next.isReorderable &&
+         prev.onReorderDragStart === next.onReorderDragStart &&
+         prev.onReorderDragEnd === next.onReorderDragEnd;
 };
 
 export const ShoppingItemRow = memo(ShoppingItemRowComponent, arePropsEqual);
