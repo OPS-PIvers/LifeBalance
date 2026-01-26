@@ -80,14 +80,14 @@ const Habits: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-50 pb-28 pt-6">
+    <div className="min-h-screen bg-slate-50 pb-28 pt-6">
       <Tabs defaultValue="track">
         {/* Page Title & Action */}
         <div className="px-4 mb-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-brand-800">Daily Habits</h1>
-              <p className="text-sm text-brand-400">Build your streak, earn rewards.</p>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Daily Habits</h1>
+              <p className="text-sm text-slate-500 leading-relaxed">Build your streak, earn rewards.</p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -174,7 +174,7 @@ const Habits: React.FC = () => {
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
             {categories.length === 0 && (
-              <div className="text-center py-12 border-2 border-dashed border-brand-200 rounded-2xl text-brand-400">
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400">
                 <p>No habits yet.</p>
                 <p className="text-xs mt-1">Tap "New" to start tracking.</p>
               </div>
@@ -182,7 +182,7 @@ const Habits: React.FC = () => {
 
             {categories.map((category) => (
               <div key={category}>
-                <h2 className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-3 ml-2">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-2">
                   {category}
                 </h2>
                 <HabitCategoryList category={category} habits={groupedHabits[category]} />

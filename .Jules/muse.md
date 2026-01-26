@@ -12,3 +12,11 @@
 ## 2024-05-23 - Settings & Base Components Audit
 **Critique:** "Developer UI" detected in Base Components and Settings. Buttons lack depth (flat colors), Inputs use standard borders, and Settings page feels "boxy" with heavy use of `bg-brand-50` and `border-brand-200`. Typography lacks sophistication (missing `tracking-tight`).
 **Polish:** Elevating to "Muse" standards. 1) **Depth**: Adding inner glows and layered shadows to Buttons. 2) **Refinement**: Softening Input borders to `slate-200` and adding `backdrop-blur`. 3) **Hierarchy**: Using `slate-900` for headings and `slate-500` for metadata in Settings, along with `tracking-tight` for a premium feel.
+
+## 2025-05-23 - Budget & Habit Cards Polish
+**Critique:** "Developer UI" persisted in card components. `BudgetBucketCard` and `HabitCard` relied on generic `border-brand-100` and flat `bg-white`. Typography was too heavy (`font-bold`) and lacked sophistication. Active states in habits were too harsh (`bg-emerald-50`).
+**Polish:** Implemented full "Glassmorphism" suite.
+- **Surface:** Upgraded to `bg-white/80 backdrop-blur-xl` with `ring-1 ring-black/5`.
+- **Depth:** Applied `shadow-glass` for a floated feel.
+- **Typography:** Refined to `tracking-tight` headings and `text-slate-500` metadata.
+- **Palette:** Shifted from generic `brand` to cool `slate` and softened active states (e.g., `bg-emerald-50/50`).
