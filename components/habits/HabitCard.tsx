@@ -43,19 +43,19 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
 
   const containerClasses = cn(
-    "relative flex items-center justify-between p-4 rounded-card border shadow-soft transition-all duration-300 select-none group/card",
-    !isActive && "bg-white border-brand-100",
-    isActive && isPositive && "bg-emerald-50 border-emerald-200",
-    isActive && !isPositive && "bg-rose-50 border-rose-200"
+    "relative flex items-center justify-between p-5 rounded-2xl transition-all duration-300 select-none group/card shadow-glass",
+    !isActive && "bg-white/80 backdrop-blur-xl ring-1 ring-black/5",
+    isActive && isPositive && "bg-emerald-50/50 ring-1 ring-emerald-500/20",
+    isActive && !isPositive && "bg-rose-50/50 ring-1 ring-rose-500/20"
   );
 
   const buttonClasses = cn(
     "relative flex items-center justify-center w-14 h-14 rounded-2xl shadow-sm transition-all duration-200 z-10",
-    !isActive && "bg-brand-50 border-2 border-brand-200 text-brand-300 group-hover/card:border-brand-300 group-hover/card:bg-brand-100",
-    isActive && isPositive && "bg-money-pos text-white shadow-emerald-200 border-transparent",
-    isActive && !isPositive && "bg-money-neg text-white shadow-rose-200 border-transparent",
+    !isActive && "bg-slate-50 ring-1 ring-slate-200 text-slate-300 group-hover/card:ring-slate-300 group-hover/card:bg-slate-100",
+    isActive && isPositive && "bg-money-pos text-white shadow-emerald-200/50 ring-0",
+    isActive && !isPositive && "bg-money-neg text-white shadow-rose-200/50 ring-0",
     // Threshold visual overrides
-    isActive && isThreshold && !isCompleted && isPositive && "bg-emerald-100 text-emerald-600 border-emerald-200"
+    isActive && isThreshold && !isCompleted && isPositive && "bg-emerald-100 text-emerald-600 ring-1 ring-emerald-200"
   );
 
   const handleCardClick = () => {
@@ -152,7 +152,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white border border-brand-200 rounded-full w-6 h-6 flex items-center justify-center text-brand-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 20 }}
             >
@@ -165,7 +165,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
           <div className="flex justify-between items-start">
             <div>
-              <h3 className={cn("font-bold text-sm truncate", isActive ? "text-brand-800" : "text-brand-700")}>
+              <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-slate-900" : "text-slate-600")}>
                 {habit.title}
               </h3>
             </div>
@@ -173,7 +173,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             {/* Context Menu Trigger & Drag Handle */}
             <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
               {dragHandle && (
-                <div className="text-brand-300 hover:text-brand-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
+                <div className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
                   {dragHandle}
                 </div>
               )}
@@ -183,7 +183,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   setIsMenuOpen(!isMenuOpen);
                   setFocusedMenuIndex(0); // Reset focus to first item
                 }}
-                className="p-1 text-brand-300 hover:text-brand-600 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-brand-400 pointer-events-auto"
+                className="p-1 text-slate-300 hover:text-slate-600 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-slate-400 pointer-events-auto"
                 aria-label="Habit options menu"
                 aria-haspopup="true"
                 aria-expanded={isMenuOpen}

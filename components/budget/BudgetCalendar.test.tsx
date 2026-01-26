@@ -29,6 +29,10 @@ vi.mock('lucide-react', () => ({
   Download: () => <div data-testid="download" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
   MoreVertical: () => <div data-testid="more-vertical" />,
+  Repeat: () => <div data-testid="repeat" />,
+  TrendingUp: () => <div data-testid="trending-up" />,
+  TrendingDown: () => <div data-testid="trending-down" />,
+  Check: () => <div data-testid="check" />,
 }));
 
 // Mock framer-motion for Drawer
@@ -410,5 +414,19 @@ describe('BudgetCalendar', () => {
     // Verify Edit is hidden but Delete is shown
     expect(screen.queryByText('Edit Event')).not.toBeInTheDocument();
     expect(screen.getByText('Delete Event')).toBeInTheDocument();
+  });
+
+  it('opens recurring manager modal when repeat button is clicked', () => {
+    render(<BudgetCalendar />);
+
+    const repeatButton = screen.getByLabelText('Manage Recurring Bills');
+    fireEvent.click(repeatButton);
+
+    // Since we can't test the internal state of the modal easily without it being rendered,
+    // and the modal is rendered conditionally inside the component:
+    // <RecurringBillsModal isOpen={isRecurringModalOpen} ... />
+    // We expect the modal text to appear.
+    // The modal has text "Recurring Manager"
+    expect(screen.getByText('Recurring Manager')).toBeInTheDocument();
   });
 });

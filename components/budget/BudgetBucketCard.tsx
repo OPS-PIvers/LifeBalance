@@ -93,7 +93,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   };
 
   return (
-    <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative group">
+    <div className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative group">
       {/* Header - Clickable for toggle */}
       <div
         className="flex items-center justify-between mb-3 cursor-pointer"
@@ -111,19 +111,19 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       >
         <div className="flex items-center gap-3">
           <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
-          <span className="font-bold text-brand-800">{bucket.name}</span>
+          <span className="font-semibold tracking-tight text-slate-900">{bucket.name}</span>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="text-sm font-mono flex flex-col items-end">
-            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-brand-600'}`}>
+            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-slate-600'}`}>
               <span>${spent.verified.toFixed(2)}</span>
               {spent.pending > 0 && (
-                <span className="text-brand-400">
+                <span className="text-slate-400">
                   +${spent.pending.toFixed(2)}*
                 </span>
               )}
-              <span className="text-brand-300">/</span>
+              <span className="text-slate-300">/</span>
 
               {isEditingLimit ? (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -132,7 +132,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-brand-50 border border-brand-200 rounded text-right font-bold"
+                    className="w-16 p-1 bg-slate-50 border border-slate-200 rounded text-right font-bold"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
@@ -152,14 +152,14 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     e.stopPropagation();
                     onStartEditingLimit(bucket.id);
                   }}
-                  className="text-brand-400 border-b border-dashed border-brand-200 cursor-pointer hover:text-brand-600"
+                  className="text-slate-400 border-b border-dashed border-slate-200 cursor-pointer hover:text-slate-600"
                 >
                   ${bucket.limit}
                 </span>
               )}
             </div>
             {spent.pending > 0 && (
-              <span className="text-xxs text-brand-400">
+              <span className="text-xxs text-slate-400">
                 *pending review
               </span>
             )}
@@ -167,7 +167,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
 
           {/* Expand Indicator */}
           {bucketTransactions.length > 0 && (
-            <div className="text-brand-400 p-1" aria-hidden="true">
+            <div className="text-slate-400 p-1" aria-hidden="true">
               {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </div>
           )}
@@ -177,7 +177,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="ghost"
             size="icon-sm"
             onClick={(e) => { e.stopPropagation(); onEditBucket(bucket); }}
-            className="text-brand-300 hover:text-brand-600"
+            className="text-slate-300 hover:text-slate-600"
             aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />
@@ -186,7 +186,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-brand-100 rounded-full overflow-hidden mb-2">
+      <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
         <div
           className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}
@@ -195,19 +195,19 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
 
       {/* Expandable Transaction List */}
       {isExpanded && bucketTransactions.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-brand-100 space-y-2 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs font-bold text-brand-400 uppercase mb-2">
+        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">
             Transactions This Period ({bucketTransactions.length})
           </p>
           <div className="space-y-1 max-h-48 overflow-y-auto">
             {bucketTransactions.map(tx => (
               <div
                 key={tx.id}
-                className="flex justify-between items-center text-sm py-2 px-3 bg-brand-50 rounded-lg hover:bg-brand-100 transition-colors group"
+                className="flex justify-between items-center text-sm py-2 px-3 bg-slate-50/50 rounded-lg hover:bg-slate-100 transition-colors group"
               >
                 <div className="flex-1">
-                  <p className="font-medium text-brand-800">{tx.merchant}</p>
-                  <p className="text-xs text-brand-400">
+                  <p className="font-medium text-slate-900">{tx.merchant}</p>
+                  <p className="text-xs text-slate-400">
                     {format(parseISO(tx.date), 'MMM d, yyyy')}
                     {tx.status === 'pending_review' && (
                       <span className="ml-2 text-amber-600">• Pending</span>
@@ -216,7 +216,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`font-mono font-bold ${
-                    tx.status === 'pending_review' ? 'text-brand-400' : 'text-brand-800'
+                    tx.status === 'pending_review' ? 'text-slate-400' : 'text-slate-800'
                   }`}>
                     ${tx.amount}
                   </span>
@@ -225,7 +225,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => onEditTransaction(tx)}
-                      className="text-brand-400 hover:text-brand-600"
+                      className="text-slate-400 hover:text-slate-600"
                       title="Edit transaction"
                     >
                       <Edit size={14} />
@@ -234,7 +234,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                       variant="ghost-destructive"
                       size="icon-sm"
                       onClick={() => onDeleteTransaction(tx.id)}
-                      className="text-brand-400 hover:text-money-neg"
+                      className="text-slate-400 hover:text-money-neg"
                       title="Delete transaction"
                     >
                       <Trash2 size={14} />

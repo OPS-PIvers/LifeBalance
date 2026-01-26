@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
@@ -13,6 +13,7 @@ import { SegmentedControl } from '../ui/SegmentedControl';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import toast from 'react-hot-toast';
+import RecurringBillsModal from './RecurringBillsModal';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo } = useHousehold();
@@ -21,6 +22,7 @@ const BudgetCalendar: React.FC = () => {
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
 
@@ -177,6 +179,16 @@ const BudgetCalendar: React.FC = () => {
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setIsRecurringModalOpen(true)}
+              className="text-brand-400 hover:text-brand-600 rounded-lg"
+              title="Manage Recurring Bills"
+              aria-label="Manage Recurring Bills"
+            >
+              <Repeat size={20} />
+            </Button>
             <Button
               variant="ghost"
               size="icon-sm"
@@ -538,6 +550,11 @@ const BudgetCalendar: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      <RecurringBillsModal
+        isOpen={isRecurringModalOpen}
+        onClose={() => setIsRecurringModalOpen(false)}
+      />
     </div>
   );
 };

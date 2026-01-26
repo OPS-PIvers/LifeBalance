@@ -89,3 +89,10 @@
 **Vulnerability:** The AI usage quota (`aiUsage`) stored in the `households` document was vulnerable to manipulation by any household member. Since members had `update` permission on the document, they could reset the `dailyCount` to 0 or change the `lastResetDate` to bypass the daily limit enforcement.
 **Learning:** Client-side quota enforcement relying on client-initiated updates to a shared document is insecure if the update logic is not strictly enforced by server-side rules. "Honest client" logic is not a security control.
 **Prevention:** Implemented a custom validation function `isValidAiUsageUpdate` in `firestore.rules` that strictly enforces monotonic increment of the usage counter and prevents resetting it within the same day.
+
+## 2026-03-05 - [DoS/Data Integrity] Catch-All Wildcard Rule
+**Vulnerability:** A catch-all wildcard rule (`match /{subcollection}/{document}`) allowed any household member to write arbitrary data to collections like `todos`, `meals`, `buckets`, and `calendarItems`. This bypassed schema validation, allowing potential storage exhaustion (massive payloads) or data corruption (invalid types).
+**Learning:** Catch-all rules are dangerous placeholders that should be replaced with explicit, schema-enforcing rules before production. They create a false sense of security by handling access control (`isMemberOf`) but ignoring data integrity.
+**Prevention:**
+1. Implemented explicit `match` blocks for `todos`, `meals`, `calendarItems`, `buckets`, and `groceryCatalog` with strict type and length validation.
+2. Updated the catch-all rule to explicitly *exclude* these collections, ensuring the strict rules are the only valid write path.
