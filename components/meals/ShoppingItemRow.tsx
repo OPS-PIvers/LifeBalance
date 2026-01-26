@@ -13,11 +13,11 @@ interface ShoppingItemRowProps {
   onEdit: (item: ShoppingItem) => void;
   onUpdate?: (item: ShoppingItem) => void;
   isReorderable?: boolean;
-  onDragStart?: () => void;
-  onDragEnd?: () => void;
+  onReorderDragStart?: () => void;
+  onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true, onDragStart, onDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -188,8 +188,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             dragControls={dragControls}
             className="relative overflow-hidden mb-2 rounded-xl"
             style={{ touchAction: 'pan-y' }}
-            onDragStart={onDragStart}
-            onDragEnd={onDragEnd}
+            onDragStart={onReorderDragStart}
+            onDragEnd={onReorderDragEnd}
         >
             {Content}
         </Reorder.Item>
@@ -226,8 +226,8 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.stores === next.stores &&
          prev.onUpdate === next.onUpdate &&
          prev.isReorderable === next.isReorderable &&
-         prev.onDragStart === next.onDragStart &&
-         prev.onDragEnd === next.onDragEnd;
+         prev.onReorderDragStart === next.onReorderDragStart &&
+         prev.onReorderDragEnd === next.onReorderDragEnd;
 };
 
 export const ShoppingItemRow = memo(ShoppingItemRowComponent, arePropsEqual);

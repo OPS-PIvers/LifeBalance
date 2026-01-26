@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
@@ -40,12 +40,15 @@ const ShoppingListTab: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
+
+  // Use a ref for drag state to prevent re-renders and potential race conditions
+  // caused by the dependency array in useEffect.
+  const isDraggingRef = useRef(false);
 
   // Sync local items with context shoppingList, respecting order
   useEffect(() => {
     // Avoid resetting items while user is dragging
-    if (isDragging) return;
+    if (isDraggingRef.current) return;
 
     // Sort items by order field, then by creation or name as fallback
     let sorted = [...shoppingList].sort((a, b) => {
@@ -62,7 +65,7 @@ const ShoppingListTab: React.FC = () => {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(sorted);
-  }, [shoppingList, filterStore, isDragging]);
+  }, [shoppingList, filterStore]);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
@@ -160,12 +163,12 @@ const ShoppingListTab: React.FC = () => {
     reorderShoppingItems(newOrder);
   };
 
-  const handleDragStart = useCallback(() => {
-    setIsDragging(true);
+  const handleReorderDragStart = useCallback(() => {
+    isDraggingRef.current = true;
   }, []);
 
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
+  const handleReorderDragEnd = useCallback(() => {
+    isDraggingRef.current = false;
   }, []);
 
     const handleSaveEdit = async () => {
@@ -414,8 +417,8 @@ const ShoppingListTab: React.FC = () => {
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
                         onUpdate={handleUpdateItem}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
+                        onReorderDragStart={handleReorderDragStart}
+                        onReorderDragEnd={handleReorderDragEnd}
                     />
                 ))}
             </Reorder.Group>
