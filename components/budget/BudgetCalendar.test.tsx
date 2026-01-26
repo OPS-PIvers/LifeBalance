@@ -28,6 +28,10 @@ vi.mock('lucide-react', () => ({
   CheckSquare: () => <div data-testid="check-square" />,
   Download: () => <div data-testid="download" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
+  Repeat: () => <div data-testid="repeat" />,
+  TrendingUp: () => <div data-testid="trending-up" />,
+  TrendingDown: () => <div data-testid="trending-down" />,
+  Check: () => <div data-testid="check" />,
 }));
 
 describe('BudgetCalendar', () => {
@@ -307,5 +311,19 @@ describe('BudgetCalendar', () => {
     // Click again
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('opens recurring manager modal when repeat button is clicked', () => {
+    render(<BudgetCalendar />);
+
+    const repeatButton = screen.getByLabelText('Manage Recurring Bills');
+    fireEvent.click(repeatButton);
+
+    // Since we can't test the internal state of the modal easily without it being rendered,
+    // and the modal is rendered conditionally inside the component:
+    // <RecurringBillsModal isOpen={isRecurringModalOpen} ... />
+    // We expect the modal text to appear.
+    // The modal has text "Recurring Manager"
+    expect(screen.getByText('Recurring Manager')).toBeInTheDocument();
   });
 });
