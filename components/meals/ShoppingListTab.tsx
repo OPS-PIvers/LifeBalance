@@ -40,9 +40,13 @@ const ShoppingListTab: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Sync local items with context shoppingList, respecting order
   useEffect(() => {
+    // Avoid resetting items while user is dragging
+    if (isDragging) return;
+
     // Sort items by order field, then by creation or name as fallback
     let sorted = [...shoppingList].sort((a, b) => {
       const orderA = a.order ?? 9999;
@@ -58,7 +62,7 @@ const ShoppingListTab: React.FC = () => {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(sorted);
-  }, [shoppingList, filterStore]);
+  }, [shoppingList, filterStore, isDragging]);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
@@ -155,6 +159,14 @@ const ShoppingListTab: React.FC = () => {
     // But for a shopping list reorder, it's acceptable.
     reorderShoppingItems(newOrder);
   };
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
     const handleSaveEdit = async () => {
         if (!editingItem) return;
@@ -402,6 +414,8 @@ const ShoppingListTab: React.FC = () => {
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
                         onUpdate={handleUpdateItem}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
                     />
                 ))}
             </Reorder.Group>
