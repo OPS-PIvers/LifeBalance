@@ -14,6 +14,7 @@ export interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
   className?: string;
   name?: string; // for aria-label
+  showBorder?: boolean;
 }
 
 export const SegmentedControl = <T extends string>({
@@ -22,12 +23,17 @@ export const SegmentedControl = <T extends string>({
   onChange,
   className,
   name,
+  showBorder = true,
 }: SegmentedControlProps<T>) => {
   return (
     <div
       role="group"
       aria-label={name}
-      className={cn("flex bg-brand-50 p-1 rounded-xl border border-brand-200", className)}
+      className={cn(
+        "flex bg-brand-50 p-1 rounded-xl",
+        showBorder && "border border-brand-200",
+        className
+      )}
     >
       {options.map((option) => {
         const isActive = value === option.value;

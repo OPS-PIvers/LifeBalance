@@ -45,4 +45,18 @@ describe('SegmentedControl', () => {
     const group = screen.getByRole('group', { name: /my group/i });
     expect(group).toBeInTheDocument();
   });
+
+  it('conditionally applies border based on showBorder prop', () => {
+    const { rerender } = render(
+      <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={true} name="Border Group" />
+    );
+    let group = screen.getByRole('group', { name: /border group/i });
+    expect(group).toHaveClass('border');
+
+    rerender(
+      <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={false} name="Border Group" />
+    );
+    group = screen.getByRole('group', { name: /border group/i });
+    expect(group).not.toHaveClass('border');
+  });
 });

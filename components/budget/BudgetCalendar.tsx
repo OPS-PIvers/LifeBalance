@@ -400,7 +400,8 @@ const BudgetCalendar: React.FC = () => {
                  { value: 'expense', label: 'Expense', activeClassName: 'text-money-neg' },
                  { value: 'income', label: 'Income', activeClassName: 'text-money-pos' },
                ]}
-               className="mb-4 border-none"
+               className="mb-4"
+               showBorder={false}
              />
 
              <Input
