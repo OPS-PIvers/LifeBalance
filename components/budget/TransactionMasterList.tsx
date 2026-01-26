@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check } from 'lucide-react';
+import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
+import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
@@ -37,6 +39,9 @@ const TransactionMasterList: React.FC = () => {
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mobile Action Drawer State
+  const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
 
   // Clear selection when mode is toggled off
   React.useEffect(() => {
@@ -93,6 +98,10 @@ const TransactionMasterList: React.FC = () => {
 
   const handleDeleteClick = useCallback((tx: Transaction) => {
     setTransactionToDelete(tx);
+  }, []);
+
+  const handleMoreClick = useCallback((tx: Transaction) => {
+    setActionTransaction(tx);
   }, []);
 
   const handleDuplicate = useCallback(async (tx: Transaction) => {
@@ -403,6 +412,7 @@ const TransactionMasterList: React.FC = () => {
               onDelete={handleDeleteClick}
               onDuplicate={handleDuplicate}
               onSplit={handleSplitClick}
+              onMore={handleMoreClick}
               isSelectionMode={isSelectionMode}
               isSelected={selectedIds.has(tx.id)}
               onToggleSelection={toggleSelection}
@@ -549,6 +559,65 @@ const TransactionMasterList: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionTransaction}
+        onClose={() => setActionTransaction(null)}
+        title="Transaction Options"
+      >
+        <div className="space-y-2">
+          {actionTransaction && (
+            <>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Edit className="text-brand-500" />}
+                onClick={() => {
+                  handleEdit(actionTransaction);
+                  setActionTransaction(null);
+                }}
+              >
+                Edit Transaction
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Copy className="text-brand-500" />}
+                onClick={() => {
+                  handleDuplicate(actionTransaction);
+                  setActionTransaction(null);
+                }}
+              >
+                Duplicate
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Scissors className="text-brand-500" />}
+                onClick={() => {
+                  handleSplitClick(actionTransaction);
+                  setActionTransaction(null);
+                }}
+              >
+                Split Transaction
+              </Button>
+              <div className="h-px bg-gray-100 my-2" />
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                  handleDeleteClick(actionTransaction);
+                  setActionTransaction(null);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 };

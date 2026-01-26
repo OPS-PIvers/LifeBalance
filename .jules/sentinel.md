@@ -77,10 +77,15 @@
 
 ## 2026-02-06 - [DoS/Data Integrity] Accounts Schema Enforcement
 **Vulnerability:** The `accounts` subcollection was covered by a generic wildcard match (`match /{subcollection}/{document}`) which allowed writing arbitrary data without schema validation. This could lead to storage exhaustion (massive strings) or data corruption (invalid types causing frontend crashes).
-**Learning:** Wildcard rules are convenient but dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
+**Learning:** Wildcard rules are dangerous for core business data. They bypass the "whitelist" philosophy of security rules.
 **Prevention:** Explicitly define `match` blocks for all core collections (`accounts`) with strict schema validation using helper functions like `isValidString` and `isValidNumber`, and explicitly exclude them from generic wildcard matches. Separate validation for create (all required fields) vs update (partial fields) to support operations like `setAccountGoal` that only update specific fields.
 
 ## 2026-01-25 - [Privilege Escalation/Data Integrity] Strict Member Profile Updates
 **Vulnerability:** The Firestore rule for `members/{memberId}` updates restricted only the `role` field. This implicitly allowed users to modify *any other field* in their own member document, including sensitive fields like `points` (gamification integrity), `uid` (identity), `joinedAt` (history), and `inviteCode` (security).
 **Learning:** Blacklisting sensitive fields (like `!hasAny(['role'])`) is fragile because new fields added to the schema (e.g., `points`, `isSuperUser`) are automatically mutable by default.
 **Prevention:** Use a strict allowlist (whitelist) approach for update rules using `changedKeys().hasOnly([...])`. Explicitly list every field the user is permitted to update (e.g., `displayName`, `email`, `preferences`) and deny everything else by default.
+
+## 2026-02-27 - [Security/Quota Bypass] Client-Side Quota Manipulation
+**Vulnerability:** The AI usage quota (`aiUsage`) stored in the `households` document was vulnerable to manipulation by any household member. Since members had `update` permission on the document, they could reset the `dailyCount` to 0 or change the `lastResetDate` to bypass the daily limit enforcement.
+**Learning:** Client-side quota enforcement relying on client-initiated updates to a shared document is insecure if the update logic is not strictly enforced by server-side rules. "Honest client" logic is not a security control.
+**Prevention:** Implemented a custom validation function `isValidAiUsageUpdate` in `firestore.rules` that strictly enforces monotonic increment of the usage counter and prevents resetting it within the same day.

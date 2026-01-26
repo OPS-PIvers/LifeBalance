@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors } from 'lucide-react';
+import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction } from '../../types/schema';
 import { Button } from '../ui/Button';
@@ -28,12 +28,13 @@ export interface TransactionItemProps {
   onDelete: (tx: Transaction) => void;
   onDuplicate: (tx: Transaction) => void;
   onSplit: (tx: Transaction) => void;
+  onMore?: (tx: Transaction) => void;
   isSelectionMode: boolean;
   isSelected: boolean;
   onToggleSelection: (id: string) => void;
 }
 
-export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -84,46 +85,64 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           )}
         </div>
 
-        {/* Actions (visible on mobile, enhanced on hover for desktop) - HIDDEN IN SELECTION MODE */}
+        {/* Actions - HIDDEN IN SELECTION MODE */}
         {!isSelectionMode && (
-          <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
-              aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
-            >
-              <Edit size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
-              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
-              aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
-            >
-              <Copy size={16} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
-              className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
-              aria-label={getSanitizedLabel(tx.merchant, 'Split')}
-            >
-              <Scissors size={16} />
-            </Button>
-            <Button
-              variant="ghost-destructive"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
-              className="text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
-              aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
-            >
-              <Trash2 size={16} />
-            </Button>
-          </div>
+          <>
+            {/* Desktop: Hover Actions */}
+            <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
+                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
+              >
+                <Edit size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
+                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
+              >
+                <Copy size={16} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
+                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                aria-label={getSanitizedLabel(tx.merchant, 'Split')}
+              >
+                <Scissors size={16} />
+              </Button>
+              <Button
+                variant="ghost-destructive"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
+                className="text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
+                aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
+              >
+                <Trash2 size={16} />
+              </Button>
+            </div>
+
+            {/* Mobile: More Button */}
+            {onMore && (
+              <div className="flex sm:hidden">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => { e.stopPropagation(); onMore(tx); }}
+                  className="text-brand-400 active:bg-brand-100 rounded-lg"
+                  aria-label={getSanitizedLabel(tx.merchant, 'More options')}
+                >
+                  <MoreVertical size={20} />
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -142,14 +161,15 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.status === n.status &&
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
-    p.autoCategorized === n.autoCategorized &&
-    p.payPeriodId === n.payPeriodId &&
-    // Shallow check for relatedHabitIds since they are typically replaced not mutated in Firestore
-    p.relatedHabitIds === n.relatedHabitIds &&
+    // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
+    // These fields do not affect the rendering of this component.
+    // Excluding them prevents unnecessary re-renders when backend-only fields change
+    // or when Firestore returns new array references for relatedHabitIds.
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&
     prevProps.onDuplicate === nextProps.onDuplicate &&
     prevProps.onSplit === nextProps.onSplit &&
+    prevProps.onMore === nextProps.onMore &&
     prevProps.isSelectionMode === nextProps.isSelectionMode &&
     prevProps.isSelected === nextProps.isSelected &&
     prevProps.onToggleSelection === nextProps.onToggleSelection

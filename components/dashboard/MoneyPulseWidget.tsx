@@ -68,40 +68,31 @@ export const MoneyPulseWidget: React.FC = () => {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-white/50 rounded-2xl p-4 border border-white/40 shadow-sm ring-1 ring-black/5">
-           <p className="text-xs text-slate-500 font-medium mb-1">Spent This Week</p>
-           <p className="text-2xl font-bold tracking-tight text-slate-900">${spendingStats.thisWeek.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
-        </div>
-
-        <div className="bg-white/50 rounded-2xl p-4 border border-white/40 shadow-sm ring-1 ring-black/5 flex flex-col justify-center">
-           <div
-             className={`flex items-center gap-1.5 text-xs font-bold ${
-               spendingStats.percentChange === 0 && spendingStats.isHigher
-                 ? 'text-slate-400'
-                 : spendingStats.isHigher
-                   ? 'text-rose-500'
-                   : 'text-emerald-500'
-             }`}
-           >
-             {spendingStats.percentChange === 0 && spendingStats.isHigher ? (
-               <ArrowRight size={16} />
-             ) : spendingStats.isHigher ? (
-               <TrendingUp size={16} />
-             ) : (
-               <TrendingDown size={16} />
-             )}
-             <span>
-               {spendingStats.percentChange === 0 && spendingStats.isHigher
-                 ? 'N/A'
-                 : `${Math.abs(spendingStats.percentChange).toFixed(0)}%`}
-             </span>
-           </div>
-           <p className="text-xxs text-slate-400 font-medium mt-1">
-             {spendingStats.percentChange === 0 && spendingStats.isHigher
-               ? 'No spending last week to compare'
-               : 'vs Last Week'}
-           </p>
+      <div className="mb-6 px-1">
+        <p className="text-xs text-slate-500 font-medium mb-1">Spent This Week</p>
+        <div className="flex items-baseline gap-3">
+          <p className="text-3xl font-bold tracking-tight text-slate-900">
+            ${spendingStats.thisWeek.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          </p>
+          <div
+            className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
+              spendingStats.percentChange === 0 && spendingStats.isHigher
+                ? 'bg-slate-100 text-slate-500'
+                : spendingStats.isHigher
+                  ? 'bg-rose-100 text-rose-600'
+                  : 'bg-emerald-100 text-emerald-600'
+            }`}
+          >
+            {spendingStats.percentChange === 0 && spendingStats.isHigher ? (
+              <span className="font-medium">No prior data</span>
+            ) : (
+              <>
+                {spendingStats.isHigher ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                <span>{Math.abs(spendingStats.percentChange).toFixed(0)}%</span>
+                <span className="opacity-60 font-medium">vs last week</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

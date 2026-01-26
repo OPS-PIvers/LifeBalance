@@ -288,6 +288,7 @@ export interface Store {
   id: string;
   name: string;
   icon?: string; // Lucide icon name
+  color?: string; // Key from STORE_COLORS
 }
 
 export interface QuickStockList {

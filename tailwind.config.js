@@ -6,6 +6,7 @@ export default {
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./contexts/**/*.{js,ts,jsx,tsx}",
     "./hooks/**/*.{js,ts,jsx,tsx}",
+    "./data/**/*.{js,ts,jsx,tsx}",
     "./App.tsx",
     "./index.tsx"
   ],
@@ -59,6 +60,9 @@ export default {
         dropdown: '50',
         modal: '60',
         popover: '70',
+      },
+      transitionTimingFunction: {
+        'spring': 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',
       },
     },
   },

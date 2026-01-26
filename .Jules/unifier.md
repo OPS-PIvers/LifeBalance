@@ -13,3 +13,7 @@
 ## 2026-01-25 - Standardizing Icon Buttons
 **Drift:** Icon-only action buttons (Edit, Delete, Navigation) were implemented as raw `<button>` tags with scattered styles (`p-1`, `p-2`, `rounded-lg`) and inconsistent hover effects across Budget components.
 **Fix:** Added `icon-sm` size and `ghost-destructive` variant to `<Button />` and refactored `TransactionItem`, `BudgetBucketCard`, and `BudgetCalendar` to use the standardized component.
+
+## 2025-02-28 - Standardizing Toggle Switches
+**Drift:** `NotificationSettings` contained 5 instances of a complex, hardcoded toggle switch pattern with repeated Tailwind classes, creating maintenance overhead and inconsistency risks.
+**Fix:** Created `components/ui/Switch.tsx` encapsulating the toggle logic and styles, and refactored `NotificationSettings` to use this shared component.

@@ -8,6 +8,7 @@ import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../util
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { SegmentedControl } from '../ui/SegmentedControl';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 import toast from 'react-hot-toast';
@@ -391,16 +392,17 @@ const BudgetCalendar: React.FC = () => {
 
           <div className="space-y-4">
              {/* Type Toggle */}
-             <div className="flex bg-brand-50 p-1 rounded-xl">
-               <button
-                 onClick={() => setType('expense')}
-                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'expense' ? 'bg-white shadow-sm text-money-neg' : 'text-brand-400'}`}
-               >Expense</button>
-               <button
-                 onClick={() => setType('income')}
-                 className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${type === 'income' ? 'bg-white shadow-sm text-money-pos' : 'text-brand-400'}`}
-               >Income</button>
-             </div>
+             <SegmentedControl
+               value={type}
+               onChange={(val) => setType(val as 'income' | 'expense')}
+               name="Transaction Type"
+               options={[
+                 { value: 'expense', label: 'Expense', activeClassName: 'text-money-neg' },
+                 { value: 'income', label: 'Income', activeClassName: 'text-money-pos' },
+               ]}
+               className="mb-4"
+               showBorder={false}
+             />
 
              <Input
                label="Title"
