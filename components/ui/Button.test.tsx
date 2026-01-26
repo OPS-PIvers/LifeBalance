@@ -22,7 +22,7 @@ describe('Button', () => {
     render(<Button variant="secondary">Secondary</Button>);
     const button = screen.getByRole('button', { name: /secondary/i });
     expect(button).toHaveClass('bg-white');
-    expect(button).toHaveClass('text-brand-600');
+    expect(button).toHaveClass('text-slate-700');
     expect(button).toHaveClass('border');
   });
 
@@ -30,7 +30,7 @@ describe('Button', () => {
     render(<Button variant="ghost">Ghost</Button>);
     const button = screen.getByRole('button', { name: /ghost/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-brand-600');
+    expect(button).toHaveClass('text-slate-600');
   });
 
   it('applies danger variant classes', () => {
@@ -44,14 +44,14 @@ describe('Button', () => {
     render(<Button variant="outline">Outline</Button>);
     const button = screen.getByRole('button', { name: /outline/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('border-2');
-    expect(button).toHaveClass('text-brand-600');
+    expect(button).toHaveClass('border');
+    expect(button).toHaveClass('text-slate-600');
   });
 
   it('applies subtle variant classes', () => {
     render(<Button variant="subtle">Subtle</Button>);
     const button = screen.getByRole('button', { name: /subtle/i });
-    expect(button).toHaveClass('bg-brand-100');
+    expect(button).toHaveClass('bg-brand-50');
     expect(button).toHaveClass('text-brand-700');
   });
 
@@ -59,14 +59,14 @@ describe('Button', () => {
     render(<Button variant="ghost-danger">Ghost Danger</Button>);
     const button = screen.getByRole('button', { name: /ghost danger/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-red-400');
+    expect(button).toHaveClass('text-rose-500');
   });
 
   it('applies ghost-destructive variant classes', () => {
     render(<Button variant="ghost-destructive">Ghost Destructive</Button>);
     const button = screen.getByRole('button', { name: /ghost destructive/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-brand-400');
+    expect(button).toHaveClass('text-slate-400');
   });
 
   it('applies success variant classes', () => {
@@ -96,7 +96,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /small/i });
     expect(button).toHaveClass('px-3');
     expect(button).toHaveClass('py-1');
-    expect(button).toHaveClass('text-sm');
+    expect(button).toHaveClass('text-xs');
   });
 
   it('applies md size classes by default', () => {
@@ -158,7 +158,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /focus me/i });
     expect(button).toHaveClass('focus:outline-none');
     expect(button).toHaveClass('focus-visible:ring-2');
-    expect(button).toHaveClass('focus-visible:ring-brand-500');
+    expect(button).toHaveClass('focus-visible:ring-brand-500/20');
     expect(button).toHaveClass('focus-visible:ring-offset-2');
   });
 });

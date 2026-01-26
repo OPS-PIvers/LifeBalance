@@ -55,7 +55,7 @@ describe('Input', () => {
       render(<Input disabled placeholder="Disabled" />);
       const input = screen.getByPlaceholderText('Disabled');
       expect(input).toBeDisabled();
-      expect(input).toHaveClass('disabled:opacity-70');
+      expect(input).toHaveClass('disabled:opacity-50');
   });
 
   it('associates error message with input via ARIA attributes', () => {
