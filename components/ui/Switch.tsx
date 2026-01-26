@@ -1,10 +1,5 @@
 import React from 'react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '@/utils/cn';
 
 interface SwitchProps {
   checked: boolean;
@@ -45,7 +40,7 @@ export const Switch: React.FC<SwitchProps> = ({
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
         "after:bg-white after:border-gray-300 after:border after:rounded-full",
-        "after:h-5 after:w-5 after:transition-all duration-200",
+        "after:h-5 after:w-5 after:transition-all after:duration-200",
         // Knob checked state
         "peer-checked:after:translate-x-full peer-checked:after:border-white"
       )}></div>
