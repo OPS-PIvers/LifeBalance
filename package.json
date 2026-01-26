@@ -17,7 +17,9 @@
     "deploy:rules": "firebase deploy --only firestore:rules",
     "deploy:all": "pnpm run build && firebase deploy",
     "migrate:submissions": "tsx --env-file=.env.local scripts/migrateHabitSubmissions.ts",
-    "test": "vitest",
+    "lint:all": "pnpm -r run lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
