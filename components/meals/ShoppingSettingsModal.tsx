@@ -3,6 +3,7 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
+import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -33,8 +34,10 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
   // Store Form State
   const [newStoreName, setNewStoreName] = useState('');
+  const [newStoreColor, setNewStoreColor] = useState(DEFAULT_STORE_COLOR);
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
   const [editStoreName, setEditStoreName] = useState('');
+  const [editStoreColor, setEditStoreColor] = useState(DEFAULT_STORE_COLOR);
 
   // Category Form State
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -111,9 +114,11 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     await addStore({
       name: newStoreName.trim(),
-      icon: 'Store' // Default icon for now
+      icon: 'Store', // Default icon for now
+      color: newStoreColor
     });
     setNewStoreName('');
+    setNewStoreColor(DEFAULT_STORE_COLOR);
   };
 
   const handleUpdateStore = async () => {
@@ -125,7 +130,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     await updateStore({
       ...existing,
-      name: editStoreName.trim()
+      name: editStoreName.trim(),
+      color: editStoreColor
     });
     setEditingStoreId(null);
   };
@@ -286,22 +292,38 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
               {/* Add Store */}
               <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
                 <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Add New Store</h4>
-                <form onSubmit={handleAddStore} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newStoreName}
-                    onChange={(e) => setNewStoreName(e.target.value)}
-                    placeholder="Store Name (e.g. Costco)"
-                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!newStoreName.trim()}
-                    className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add
-                  </button>
+                <form onSubmit={handleAddStore} className="space-y-3">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {Object.values(STORE_COLORS).map((color) => (
+                      <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => setNewStoreColor(color.id)}
+                        className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
+                          newStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
+                        }`}
+                        title={color.label}
+                        aria-label={`Select color ${color.label}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newStoreName}
+                      onChange={(e) => setNewStoreName(e.target.value)}
+                      placeholder="Store Name (e.g. Costco)"
+                      className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!newStoreName.trim()}
+                      className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add
+                    </button>
+                  </div>
                 </form>
               </div>
 
@@ -315,20 +337,36 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     {stores.map(store => (
                       <div key={store.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                         {editingStoreId === store.id ? (
-                           <div className="flex-1 flex gap-2 mr-2">
-                             <input
-                                autoFocus
-                                type="text"
-                                value={editStoreName}
-                                onChange={e => setEditStoreName(e.target.value)}
-                                className="flex-1 p-1.5 border border-brand-300 rounded text-sm outline-none"
-                             />
-                             <button onClick={handleUpdateStore} className="text-green-600 p-1 hover:bg-green-50 rounded" aria-label="Save store name"><Save className="w-4 h-4"/></button>
-                             <button onClick={() => setEditingStoreId(null)} className="text-gray-400 p-1 hover:bg-gray-100 rounded" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
+                           <div className="flex-1 space-y-2 mr-2">
+                             <div className="flex gap-2 overflow-x-auto pb-1">
+                                {Object.values(STORE_COLORS).map((color) => (
+                                  <button
+                                    key={color.id}
+                                    type="button"
+                                    onClick={() => setEditStoreColor(color.id)}
+                                    className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
+                                      editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
+                                    }`}
+                                    title={color.label}
+                                    aria-label={`Select color ${color.label}`}
+                                  />
+                                ))}
+                             </div>
+                             <div className="flex gap-2">
+                               <input
+                                  autoFocus
+                                  type="text"
+                                  value={editStoreName}
+                                  onChange={e => setEditStoreName(e.target.value)}
+                                  className="flex-1 p-1.5 border border-brand-300 rounded text-sm outline-none"
+                               />
+                               <button onClick={handleUpdateStore} className="text-green-600 p-1 hover:bg-green-50 rounded" aria-label="Save store name"><Save className="w-4 h-4"/></button>
+                               <button onClick={() => setEditingStoreId(null)} className="text-gray-400 p-1 hover:bg-gray-100 rounded" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
+                             </div>
                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center text-brand-600">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR]).iconBg}`}>
                                     <StoreIcon className="w-4 h-4" />
                                 </div>
                                 <span className="font-medium text-gray-800">{store.name}</span>
@@ -341,6 +379,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                     onClick={() => {
                                         setEditingStoreId(store.id);
                                         setEditStoreName(store.name);
+                                        setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
                                     }}
                                     className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
                                 >

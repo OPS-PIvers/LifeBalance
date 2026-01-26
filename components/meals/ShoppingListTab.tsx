@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Camera, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
@@ -13,16 +13,6 @@ import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import toast from 'react-hot-toast';
-
-// Helper for image file to base64
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-};
 
 const ShoppingListTab: React.FC = () => {
   const {
@@ -48,19 +38,27 @@ const ShoppingListTab: React.FC = () => {
 
   // Local state for Reorder.Group
   const [items, setItems] = useState<ShoppingItem[]>([]);
+  const [filterStore, setFilterStore] = useState<string | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Sync local items with context shoppingList, respecting order
   useEffect(() => {
     // Sort items by order field, then by creation or name as fallback
-    const sorted = [...shoppingList].sort((a, b) => {
+    let sorted = [...shoppingList].sort((a, b) => {
       const orderA = a.order ?? 9999;
       const orderB = b.order ?? 9999;
       if (orderA !== orderB) return orderA - orderB;
       // Fallback to name
       return a.name.localeCompare(b.name);
     });
+
+    if (filterStore) {
+      sorted = sorted.filter(item => item.store === filterStore);
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems(sorted);
-  }, [shoppingList]);
+  }, [shoppingList, filterStore]);
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
@@ -69,7 +67,6 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isProcessingReceipt, setIsProcessingReceipt] = useState(false);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -122,7 +119,8 @@ const ShoppingListTab: React.FC = () => {
 
     // 2. Add Item
     // Calculate new order (last + 1)
-    const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order || 0)) : 0;
+    // Use full shoppingList to ensure correct ordering even when filtered
+    const maxOrder = shoppingList.length > 0 ? Math.max(...shoppingList.map(i => i.order || 0)) : 0;
 
     await addShoppingItem({
         name: rawName,
@@ -157,48 +155,6 @@ const ShoppingListTab: React.FC = () => {
     // But for a shopping list reorder, it's acceptable.
     reorderShoppingItems(newOrder);
   };
-
-  const handleReceiptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      try {
-        if (!householdId) throw new Error("Household ID not found");
-        setIsProcessingReceipt(true);
-        const base64 = await fileToBase64(file);
-        const { parseGroceryReceipt } = await import('@/services/geminiService');
-        const items = await parseGroceryReceipt(householdId, base64, categories);
-
-        // Add all found items to shopping list as purchased
-        const results = await Promise.allSettled(items.map(item =>
-          addShoppingItem({
-            name: item.name,
-            quantity: item.quantity || '1',
-            category: item.category,
-            isPurchased: true,
-          })
-        ));
-
-        const successCount = results.filter(r => r.status === 'fulfilled').length;
-        const failureCount = results.length - successCount;
-
-        if (successCount > 0) {
-          toast.success(`Added ${successCount} items from receipt!`);
-        }
-
-        if (failureCount > 0) {
-          console.error('Failed to add some items:', results.filter(r => r.status === 'rejected'));
-          toast.error(`Failed to add ${failureCount} items.`);
-        }
-
-      } catch (error) {
-         console.error(error);
-         toast.error("Failed to parse receipt");
-      } finally {
-        setIsProcessingReceipt(false);
-        e.target.value = ''; // Reset file input
-      }
-    };
 
     const handleSaveEdit = async () => {
         if (!editingItem) return;
@@ -247,6 +203,10 @@ const ShoppingListTab: React.FC = () => {
     const handleDelete = useCallback((item: ShoppingItem) => {
         deleteShoppingItem(item.id);
     }, [deleteShoppingItem]);
+
+    const handleUpdateItem = useCallback((item: ShoppingItem) => {
+        updateShoppingItem(item);
+    }, [updateShoppingItem]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -324,18 +284,69 @@ const ShoppingListTab: React.FC = () => {
                 <span>History</span>
              </button>
 
-             <label className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all cursor-pointer disabled:opacity-50">
-                {isProcessingReceipt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
-                <span>Scan Receipt</span>
-                <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleReceiptUpload}
-                    disabled={isProcessingReceipt}
-                />
-            </label>
+             <div className="relative flex-1">
+               <button
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-lg shadow-sm text-xs font-medium transition-all ${
+                    filterStore
+                      ? 'bg-brand-50 border-brand-200 text-brand-700'
+                      : 'bg-white border-gray-200 text-gray-600 hover:text-brand-600 hover:bg-gray-50'
+                  }`}
+               >
+                  <Filter className="w-3.5 h-3.5" />
+                  <span>{filterStore ? filterStore : 'Filter'}</span>
+               </button>
+
+               {isFilterOpen && (
+                 <>
+                   <div className="fixed inset-0 z-10" onClick={() => setIsFilterOpen(false)} />
+                   <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200">
+                     <div className="max-h-60 overflow-y-auto">
+                        <button
+                          onClick={() => {
+                            setFilterStore(null);
+                            setIsFilterOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50' : 'text-gray-700'}`}
+                        >
+                          All Items
+                          {!filterStore && <Filter size={14} />}
+                        </button>
+                        {stores.map(store => (
+                          <button
+                            key={store.id}
+                            onClick={() => {
+                              setFilterStore(store.name);
+                              setIsFilterOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50' : 'text-gray-700'}`}
+                          >
+                            {store.name}
+                            {filterStore === store.name && <Filter size={14} />}
+                          </button>
+                        ))}
+                        {stores.length === 0 && (
+                          <div className="px-4 py-2 text-xs text-gray-400 italic">No stores configured</div>
+                        )}
+                     </div>
+                   </div>
+                 </>
+               )}
+             </div>
         </div>
+
+        {/* Clear Filter Indicator */}
+        {filterStore && (
+            <div className="flex justify-center -mt-2">
+                <button
+                    onClick={() => setFilterStore(null)}
+                    className="flex items-center gap-1 text-xs text-brand-600 hover:underline bg-brand-50 px-2 py-1 rounded-full border border-brand-100"
+                >
+                    <X size={10} />
+                    Clear filter: {filterStore}
+                </button>
+            </div>
+        )}
 
         {/* Clear Checked */}
         {shoppingList.some(i => i.isPurchased) && (
@@ -358,7 +369,27 @@ const ShoppingListTab: React.FC = () => {
         {items.length === 0 ? (
              <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
                 <div className="mb-2 text-4xl">🛒</div>
-                <p>Shopping list is empty.</p>
+                <p>{filterStore ? `No items for ${filterStore}` : 'Shopping list is empty.'}</p>
+                {filterStore && (
+                    <button onClick={() => setFilterStore(null)} className="mt-2 text-brand-600 font-medium text-sm hover:underline">
+                        Clear Filter
+                    </button>
+                )}
+            </div>
+        ) : filterStore ? (
+             <div className="space-y-2">
+                {items.map(item => (
+                    <ShoppingItemRow
+                        key={item.id}
+                        item={item}
+                        stores={stores}
+                        onCheck={handleCheck}
+                        onDelete={handleDelete}
+                        onEdit={setEditingItem}
+                        onUpdate={handleUpdateItem}
+                        isReorderable={false}
+                    />
+                ))}
             </div>
         ) : (
             <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-2">
@@ -366,9 +397,11 @@ const ShoppingListTab: React.FC = () => {
                     <ShoppingItemRow
                         key={item.id}
                         item={item}
+                        stores={stores}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
+                        onUpdate={handleUpdateItem}
                     />
                 ))}
             </Reorder.Group>

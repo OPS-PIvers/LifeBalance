@@ -1,17 +1,21 @@
 import React, { memo } from 'react';
-import { ShoppingItem } from '@/types/schema';
+import { ShoppingItem, Store as StoreType } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
 import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw } from 'lucide-react';
+import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import clsx from 'clsx';
 
 interface ShoppingItemRowProps {
   item: ShoppingItem;
+  stores?: StoreType[];
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
+  onUpdate?: (item: ShoppingItem) => void;
+  isReorderable?: boolean;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onCheck, onDelete, onEdit }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, onCheck, onDelete, onEdit, onUpdate, isReorderable = true }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -45,15 +49,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
     }
   };
 
-  return (
-    <Reorder.Item
-      value={item}
-      id={item.id}
-      dragListener={false}
-      dragControls={dragControls}
-      className="relative overflow-hidden mb-2 rounded-xl"
-      style={{ touchAction: 'pan-y' }}
-    >
+  const Content = (
+    <>
       {/* Background Layer for Swipe Actions */}
       <motion.div
         className="absolute inset-0 flex items-center justify-between px-4 z-0 rounded-xl"
@@ -89,14 +86,16 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
           item.isPurchased && "opacity-60 bg-gray-50"
         )}
       >
-        {/* Drag Handle */}
-        <div
-            onPointerDown={(e) => dragControls.start(e)}
-            className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
-            aria-label="Drag to reorder"
-        >
-            <GripVertical size={20} />
-        </div>
+        {/* Drag Handle - Only render if reorderable */}
+        {isReorderable && (
+            <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+                aria-label="Drag to reorder"
+            >
+                <GripVertical size={20} />
+            </div>
+        )}
 
         {/* Checkbox (Alternative to Swipe) */}
         <button
@@ -127,12 +126,41 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
                         {item.quantity}
                     </span>
                  )}
-                 {item.store && (
-                    <span className="flex items-center gap-1 text-xs text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded border border-brand-100">
+                 <div className="relative group">
+                    <span className={clsx(
+                        "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                        // Focus ring logic for accessibility (when hidden select is focused)
+                        "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
+                        item.store && stores
+                            ? (() => {
+                                const storeObj = stores.find(s => s.name === item.store);
+                                const colorKey = storeObj?.color || DEFAULT_STORE_COLOR;
+                                const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
+                                return `${color.bg} ${color.text} ${color.border}`;
+                            })()
+                            : "bg-gray-100 text-gray-500 border-gray-200"
+                    )}>
                         <Store size={10} />
-                        {item.store}
+                        {item.store || "No store selected"}
                     </span>
-                 )}
+                    {stores && onUpdate && (
+                        <select
+                            value={item.store || ""}
+                            onChange={(e) => {
+                                const newStore = e.target.value;
+                                onUpdate({ ...item, store: newStore || undefined });
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            aria-label="Select store"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <option value="">No store selected</option>
+                            {stores.map(s => (
+                                <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                        </select>
+                    )}
+                 </div>
             </div>
         </div>
 
@@ -146,7 +174,28 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, onChec
         </button>
 
       </motion.div>
-    </Reorder.Item>
+    </>
+  );
+
+  if (isReorderable) {
+    return (
+        <Reorder.Item
+            value={item}
+            id={item.id}
+            dragListener={false}
+            dragControls={dragControls}
+            className="relative overflow-hidden mb-2 rounded-xl"
+            style={{ touchAction: 'pan-y' }}
+        >
+            {Content}
+        </Reorder.Item>
+    );
+  }
+
+  return (
+    <div className="relative overflow-hidden mb-2 rounded-xl">
+        {Content}
+    </div>
   );
 };
 
@@ -169,7 +218,10 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
   return isItemEqual &&
          prev.onCheck === next.onCheck &&
          prev.onDelete === next.onDelete &&
-         prev.onEdit === next.onEdit;
+         prev.onEdit === next.onEdit &&
+         prev.stores === next.stores &&
+         prev.onUpdate === next.onUpdate &&
+         prev.isReorderable === next.isReorderable;
 };
 
 export const ShoppingItemRow = memo(ShoppingItemRowComponent, arePropsEqual);
