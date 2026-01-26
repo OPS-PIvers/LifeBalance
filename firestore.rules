@@ -318,6 +318,12 @@ service cloud.firestore {
       match /buckets/{bucketId} {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
+                              // Allow only expected fields to prevent storage abuse
+                              request.resource.data.keys().hasOnly([
+                                'name', 'limit', 'color', 'isVariable', 'isCore',
+                                'currentPeriodId', 'lastResetDate', 'subBuckets',
+                                'createdBy'
+                              ]) &&
                               isValidString(request.resource.data.name, 50) &&
                               isValidNumber(request.resource.data.limit) &&
                               isValidString(request.resource.data.color, 20) &&
@@ -326,7 +332,9 @@ service cloud.firestore {
                               // Optional fields
                               isValidOptionalString(request.resource.data.get('currentPeriodId', null), 10) &&
                               isValidOptionalString(request.resource.data.get('lastResetDate', null), 10) &&
-                              (request.resource.data.get('subBuckets', null) == null || request.resource.data.subBuckets is list);
+                              (request.resource.data.get('subBuckets', null) == null || request.resource.data.subBuckets is list) &&
+                              // Metadata
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -334,6 +342,12 @@ service cloud.firestore {
       match /calendarItems/{itemId} {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
+                              // Allow only expected fields to prevent storage abuse
+                              request.resource.data.keys().hasOnly([
+                                'title', 'amount', 'date', 'type', 'isPaid',
+                                'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
+                                'createdBy'
+                              ]) &&
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.amount) &&
                               isValidString(request.resource.data.date, 10) && // YYYY-MM-DD
@@ -343,7 +357,9 @@ service cloud.firestore {
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               isValidOptionalString(request.resource.data.get('frequency', null), 20) &&
                               isValidOptionalString(request.resource.data.get('parentRecurringId', null), 50) &&
-                              (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted));
+                              (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted)) &&
+                              // Metadata
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -351,16 +367,26 @@ service cloud.firestore {
       match /meals/{mealId} {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
+                              // Allow only expected fields to prevent storage abuse
+                              request.resource.data.keys().hasOnly([
+                                'name', 'description', 'recipeUrl', 'rating', 'lastCooked',
+                                'ingredients', 'instructions', 'tags',
+                                'createdBy', 'createdAt', 'updatedAt'
+                              ]) &&
                               isValidString(request.resource.data.name, 100) &&
                               // Optional fields
                               isValidOptionalString(request.resource.data.get('description', null), 1000) &&
                               isValidOptionalString(request.resource.data.get('recipeUrl', null), 500) &&
                               isValidOptionalNumber(request.resource.data.get('rating', null)) &&
                               isValidOptionalString(request.resource.data.get('lastCooked', null), 10) &&
-                              // Arrays (basic check)
-                              (request.resource.data.get('ingredients', null) == null || request.resource.data.ingredients is list) &&
+                              // Arrays
+                              // ingredients and tags are required lists per schema
+                              request.resource.data.ingredients is list &&
+                              request.resource.data.tags is list &&
+                              // instructions is optional, but must be a list if present
                               (request.resource.data.get('instructions', null) == null || request.resource.data.instructions is list) &&
-                              (request.resource.data.get('tags', null) == null || request.resource.data.tags is list);
+                              // Metadata
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -368,6 +394,12 @@ service cloud.firestore {
       match /todos/{todoId} {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
+                              // Allow only expected fields to prevent storage abuse
+                              request.resource.data.keys().hasOnly([
+                                'text', 'completeByDate', 'isCompleted', 'completedAt',
+                                'assignedTo', 'priority', 'notes', 'source',
+                                'createdBy', 'createdAt'
+                              ]) &&
                               isValidString(request.resource.data.text, 500) &&
                               isValidString(request.resource.data.completeByDate, 10) && // YYYY-MM-DD
                               (request.resource.data.get('isCompleted', null) == null || isValidBoolean(request.resource.data.isCompleted)) &&
@@ -375,26 +407,46 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('assignedTo', null), 50) &&
                               isValidOptionalString(request.resource.data.get('priority', null), 10) &&
                               isValidOptionalString(request.resource.data.get('notes', null), 1000) &&
-                              isValidOptionalString(request.resource.data.get('source', null), 20);
+                              isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              // Metadata
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
         allow delete: if isMemberOf(householdId);
       }
 
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Grocery Catalog
       match /groceryCatalog/{itemId} {
         allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
-                              isValidString(request.resource.data.name, 100) &&
-                              isValidString(request.resource.data.category, 50) &&
-                              isValidOptionalString(request.resource.data.get('defaultQuantity', null), 50) &&
-                              isValidOptionalString(request.resource.data.get('defaultStore', null), 50) &&
-                              isValidOptionalString(request.resource.data.get('lastPurchased', null), 30) && // ISO timestamp string
-                              isValidOptionalNumber(request.resource.data.get('purchaseCount', null));
+        allow create: if isMemberOf(householdId) &&
+                      // Only allow known fields on create
+                      request.resource.data.keys().hasOnly([
+                        'name', 'category', 'defaultQuantity', 'defaultStore',
+                        'lastPurchased', 'purchaseCount'
+                      ]) &&
+                      isValidString(request.resource.data.name, 100) &&
+                      isValidString(request.resource.data.category, 50) &&
+                      isValidOptionalString(request.resource.data.get('defaultQuantity', null), 50) &&
+                      isValidOptionalString(request.resource.data.get('defaultStore', null), 50) &&
+                      isValidOptionalString(request.resource.data.get('lastPurchased', null), 30) && // ISO timestamp string
+                      // purchaseCount is required on create
+                      (request.resource.data.purchaseCount is number);
+        allow update: if isMemberOf(householdId) &&
+                      // Constrain updates to the same known fields
+                      request.resource.data.keys().hasOnly([
+                        'name', 'category', 'defaultQuantity', 'defaultStore',
+                        'lastPurchased', 'purchaseCount'
+                      ]) &&
+                      isValidString(request.resource.data.name, 100) &&
+                      isValidString(request.resource.data.category, 50) &&
+                      isValidOptionalString(request.resource.data.get('defaultQuantity', null), 50) &&
+                      isValidOptionalString(request.resource.data.get('defaultStore', null), 50) &&
+                      isValidOptionalString(request.resource.data.get('lastPurchased', null), 30) && // ISO timestamp string
+                      isValidOptionalNumber(request.resource.data.get('purchaseCount', null));
         allow delete: if isMemberOf(householdId);
       }
 
-      // All other subcollections (buckets, calendarItems, pantry, meals, etc.)
+      // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
-      // Specific collections with custom rules are excluded below
+      // Specific collections with custom rules are excluded via the conditions below
       match /{subcollection}/{document} {
         // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
         allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
