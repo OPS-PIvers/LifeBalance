@@ -444,6 +444,24 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Pending Items (Voice Commands)
+      match /pendingItems/{itemId} {
+        allow read: if isMemberOf(householdId);
+        // Only Cloud Functions (Admin SDK) should create these
+        allow create: if false;
+
+        allow update: if isMemberOf(householdId) &&
+                      // Schema validation
+                      isValidString(request.resource.data.text, 500) &&
+                      (request.resource.data.get('type', null) == null || isValidString(request.resource.data.type, 20)) &&
+                      isValidString(request.resource.data.source, 20) &&
+                      isValidBoolean(request.resource.data.processed) &&
+                      (request.resource.data.get('processedAt', null) == null || request.resource.data.processedAt is timestamp) &&
+                      (request.resource.data.get('error', null) == null || isValidString(request.resource.data.error, 500));
+
+        allow delete: if isMemberOf(householdId); // Allow cleanup
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -463,7 +481,8 @@ service cloud.firestore {
                      subcollection != 'calendarItems' &&
                      subcollection != 'meals' &&
                      subcollection != 'todos' &&
-                     subcollection != 'groceryCatalog';
+                     subcollection != 'groceryCatalog' &&
+                     subcollection != 'pendingItems';
       }
     }
 

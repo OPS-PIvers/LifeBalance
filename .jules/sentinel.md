@@ -96,3 +96,10 @@
 **Prevention:**
 1. Implemented explicit `match` blocks for `todos`, `meals`, `calendarItems`, `buckets`, and `groceryCatalog` with strict type and length validation.
 2. Updated the catch-all rule to explicitly *exclude* these collections, ensuring the strict rules are the only valid write path.
+
+## 2026-03-08 - [DoS/Data Integrity] Unprotected Pending Items Collection
+**Vulnerability:** The `pendingItems` collection (used for voice commands) was not explicitly defined in `firestore.rules` and was missing from the catch-all exclusion list. This allowed any household member to write arbitrary data to it, bypassing schema validation and potentially abusing storage or causing frontend crashes.
+**Learning:** The "allowlist by denylist" pattern in the catch-all rule (`match /{subcollection}/{document}`) is fragile. New collections must be manually added to the exclusion list, which is easy to forget.
+**Prevention:**
+1. Added explicit `match /pendingItems/{itemId}` block with `create: if false` (only Admin SDK can create) and strict schema validation for `update`.
+2. Added `pendingItems` to the catch-all exclusion list to prevent bypass.
