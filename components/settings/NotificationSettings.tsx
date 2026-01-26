@@ -6,6 +6,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
 import Card from '@/components/ui/Card';
+import { Switch } from '@/components/ui/Switch';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -243,15 +244,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <p className="text-sm text-brand-500 mt-1">Remind me to complete my habits</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={preferences.habitReminders.enabled}
-                onChange={() => handleToggle('habitReminders')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-            </label>
+            <Switch
+              checked={preferences.habitReminders.enabled}
+              onCheckedChange={() => handleToggle('habitReminders')}
+            />
           </div>
           {preferences.habitReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
@@ -283,15 +279,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <p className="text-sm text-brand-500 mt-1">Get a summary of today's tasks</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={preferences.actionQueueReminders.enabled}
-                onChange={() => handleToggle('actionQueueReminders')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-            </label>
+            <Switch
+              checked={preferences.actionQueueReminders.enabled}
+              onCheckedChange={() => handleToggle('actionQueueReminders')}
+            />
           </div>
           {preferences.actionQueueReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
@@ -323,15 +314,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <p className="text-sm text-brand-500 mt-1">Alert when safe-to-spend is low</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={preferences.budgetAlerts.enabled}
-                onChange={() => handleToggle('budgetAlerts')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-            </label>
+            <Switch
+              checked={preferences.budgetAlerts.enabled}
+              onCheckedChange={() => handleToggle('budgetAlerts')}
+            />
           </div>
           {preferences.budgetAlerts.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
@@ -363,15 +349,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <p className="text-sm text-brand-500 mt-1">Remind me before my streak breaks</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={preferences.streakWarnings.enabled}
-                onChange={() => handleToggle('streakWarnings')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-            </label>
+            <Switch
+              checked={preferences.streakWarnings.enabled}
+              onCheckedChange={() => handleToggle('streakWarnings')}
+            />
           </div>
           {preferences.streakWarnings.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
@@ -403,15 +384,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 <p className="text-sm text-brand-500 mt-1">Remind me about upcoming bills</p>
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={preferences.billReminders.enabled}
-                onChange={() => handleToggle('billReminders')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-            </label>
+            <Switch
+              checked={preferences.billReminders.enabled}
+              onCheckedChange={() => handleToggle('billReminders')}
+            />
           </div>
           {preferences.billReminders.enabled && (
             <div className="ml-13 pl-3 border-l-2 border-brand-200 space-y-2">
