@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
 import { ParsedTransaction } from '../../types/ui';
@@ -41,6 +41,10 @@ describe('CaptureTransactionReview', () => {
   const mockOnToggleAll = vi.fn();
   const mockOnSubmit = vi.fn();
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders transactions list', () => {
     render(
       <CaptureTransactionReview
@@ -74,11 +78,70 @@ describe('CaptureTransactionReview', () => {
     );
 
     const selectButtons = screen.getAllByLabelText(/select transaction/i);
-    // Click the button for the first transaction (which is selected, so aria-label is Deselect)
-    // Click the button for the second transaction (which is NOT selected, so aria-label is Select)
-    const secondButton = selectButtons[1];
+    const [firstButton, secondButton] = selectButtons;
+
+    // Toggle second transaction (currently unselected)
     fireEvent.click(secondButton);
-    expect(mockOnToggle).toHaveBeenCalledWith('2');
+    expect(mockOnToggle).toHaveBeenNthCalledWith(1, '2');
+
+    // Toggle first transaction (currently selected)
+    fireEvent.click(firstButton);
+    expect(mockOnToggle).toHaveBeenNthCalledWith(2, '1');
+  });
+
+  it('calls onToggleAll when clicking Select/Deselect All', () => {
+    render(
+      <CaptureTransactionReview
+        parsedTransactions={mockTransactions}
+        onUpdateTransaction={mockOnUpdate}
+        onToggleSelection={mockOnToggle}
+        onToggleAll={mockOnToggleAll}
+        onSubmit={mockOnSubmit}
+        dynamicCategories={['Food', 'Transport']}
+        buckets={mockBuckets}
+      />
+    );
+
+    // Initial state: Not all selected, so button says "Select All"
+    const toggleAllBtn = screen.getByText('Select All');
+    fireEvent.click(toggleAllBtn);
+    expect(mockOnToggleAll).toHaveBeenCalled();
+  });
+
+  it('calls onSubmit when clicking Add button', () => {
+    render(
+      <CaptureTransactionReview
+        parsedTransactions={mockTransactions}
+        onUpdateTransaction={mockOnUpdate}
+        onToggleSelection={mockOnToggle}
+        onToggleAll={mockOnToggleAll}
+        onSubmit={mockOnSubmit}
+        dynamicCategories={['Food', 'Transport']}
+        buckets={mockBuckets}
+      />
+    );
+
+    const submitBtn = screen.getByText('Add 1 to Action Queue');
+    fireEvent.click(submitBtn);
+    expect(mockOnSubmit).toHaveBeenCalled();
+  });
+
+  it('disables Add button when no transactions selected', () => {
+    const noneSelected = mockTransactions.map(t => ({ ...t, selected: false }));
+    render(
+      <CaptureTransactionReview
+        parsedTransactions={noneSelected}
+        onUpdateTransaction={mockOnUpdate}
+        onToggleSelection={mockOnToggle}
+        onToggleAll={mockOnToggleAll}
+        onSubmit={mockOnSubmit}
+        dynamicCategories={['Food', 'Transport']}
+        buckets={mockBuckets}
+      />
+    );
+
+    const submitBtn = screen.getByText('Add 0 to Action Queue');
+    expect(submitBtn).toBeDisabled();
   });
 
   it('calls onUpdateTransaction when changing category', () => {
