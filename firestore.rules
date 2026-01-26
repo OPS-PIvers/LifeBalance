@@ -62,27 +62,30 @@ service cloud.firestore {
 
       // 🛡️ SENTINEL SECURITY FIX: Protect AI Usage from manipulation (Quota Bypass Prevention)
       function isValidAiUsageUpdate() {
-        // If aiUsage is not touched, it's fine.
-        if (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['aiUsage'])) {
-            return true;
-        }
-
-        // If aiUsage is being removed (present in resource but not in request), DENY.
-        if (!request.resource.data.keys().hasAny(['aiUsage'])) {
-             return false;
-        }
-
-        let oldUsage = resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''});
-        let newUsage = request.resource.data.aiUsage;
-
-        return newUsage.keys().hasOnly(['dailyCount', 'lastResetDate']) &&
-               newUsage.dailyCount is number &&
-               newUsage.lastResetDate is string &&
-               newUsage.lastResetDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
-               (
-                 (newUsage.lastResetDate == oldUsage.lastResetDate && newUsage.dailyCount == oldUsage.dailyCount + 1) ||
-                 (newUsage.lastResetDate > oldUsage.lastResetDate && newUsage.dailyCount == 1)
-               );
+        return (
+          // If aiUsage is not touched, it's fine.
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['aiUsage']) ||
+          (
+            // If aiUsage is being modified, ensure it's not being removed and validate the update
+            request.resource.data.keys().hasAny(['aiUsage']) &&
+            request.resource.data.aiUsage.keys().hasOnly(['dailyCount', 'lastResetDate']) &&
+            request.resource.data.aiUsage.dailyCount is number &&
+            request.resource.data.aiUsage.lastResetDate is string &&
+            request.resource.data.aiUsage.lastResetDate.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+            (
+              // Same day: increment by 1
+              (
+                request.resource.data.aiUsage.lastResetDate == resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''}).lastResetDate &&
+                request.resource.data.aiUsage.dailyCount == resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''}).dailyCount + 1
+              ) ||
+              // New day: reset to 1
+              (
+                request.resource.data.aiUsage.lastResetDate > resource.data.get('aiUsage', {'dailyCount': 0, 'lastResetDate': ''}).lastResetDate &&
+                request.resource.data.aiUsage.dailyCount == 1
+              )
+            )
+          )
+        );
       }
 
       // Allow update if member (but cannot modify immutable fields).
