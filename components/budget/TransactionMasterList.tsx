@@ -11,11 +11,12 @@ import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
+import SavedViewChips from './SavedViewChips';
 
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -361,6 +362,21 @@ const TransactionMasterList: React.FC = () => {
             <span className="hidden sm:inline">Export</span>
           </button>
         </div>
+
+        <SavedViewChips
+          key={householdId}
+          householdId={householdId}
+          currentFilters={{
+            searchTerm,
+            categoryFilter,
+            sourceFilter
+          }}
+          onApply={(filters) => {
+            setSearchTerm(filters.searchTerm);
+            setCategoryFilter(filters.categoryFilter);
+            setSourceFilter(filters.sourceFilter);
+          }}
+        />
       </div>
 
       {/* Select All Bar */}
