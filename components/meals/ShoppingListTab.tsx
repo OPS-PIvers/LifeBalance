@@ -241,7 +241,7 @@ const ShoppingListTab: React.FC = () => {
                     name: item.name,
                     category: item.category || 'Uncategorized',
                     lastPurchased: new Date().toISOString(),
-                    purchaseCount: 0
+                    purchaseCount: 1 // Start at 1 since we're explicitly adding it
                 };
                 catalogItemId = await addGroceryCatalogItem(newItem);
             }

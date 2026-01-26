@@ -1,28 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check, ShoppingBag, Coffee, Baby, Home, Utensils, Zap, Car, Dog, Gift, Briefcase } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check, ShoppingBag } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
+import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
 }
-
-const TEMPLATE_ICONS = [
-  { id: 'ShoppingBag', icon: ShoppingBag, label: 'Shopping' },
-  { id: 'Home', icon: Home, label: 'Home' },
-  { id: 'Utensils', icon: Utensils, label: 'Food' },
-  { id: 'Coffee', icon: Coffee, label: 'Coffee' },
-  { id: 'Baby', icon: Baby, label: 'Baby' },
-  { id: 'Zap', icon: Zap, label: 'Quick' },
-  { id: 'Car', icon: Car, label: 'Trip' },
-  { id: 'Dog', icon: Dog, label: 'Pet' },
-  { id: 'Gift', icon: Gift, label: 'Party' },
-  { id: 'Briefcase', icon: Briefcase, label: 'Work' },
-];
 
 const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const {
@@ -143,7 +131,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
         name: rawName,
         category: 'Uncategorized',
         lastPurchased: new Date().toISOString(),
-        purchaseCount: 0
+        purchaseCount: 1 // Start at 1 since we're explicitly adding it
       };
 
       const newId = await addGroceryCatalogItem(newItem);

@@ -1,8 +1,9 @@
 import React, { memo, useMemo } from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList, GroceryCatalogItem } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
-import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw, ShoppingBag, Coffee, Baby, Home, Utensils, Zap, Car, Dog, Gift, Briefcase } from 'lucide-react';
+import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
+import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import clsx from 'clsx';
 
 interface ShoppingItemRowProps {
@@ -19,19 +20,6 @@ interface ShoppingItemRowProps {
   onReorderDragStart?: () => void;
   onReorderDragEnd?: () => void;
 }
-
-const TEMPLATE_ICONS = [
-  { id: 'ShoppingBag', icon: ShoppingBag, label: 'Shopping' },
-  { id: 'Home', icon: Home, label: 'Home' },
-  { id: 'Utensils', icon: Utensils, label: 'Food' },
-  { id: 'Coffee', icon: Coffee, label: 'Coffee' },
-  { id: 'Baby', icon: Baby, label: 'Baby' },
-  { id: 'Zap', icon: Zap, label: 'Quick' },
-  { id: 'Car', icon: Car, label: 'Trip' },
-  { id: 'Dog', icon: Dog, label: 'Pet' },
-  { id: 'Gift', icon: Gift, label: 'Party' },
-  { id: 'Briefcase', icon: Briefcase, label: 'Work' },
-];
 
 const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, groceryCatalog, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
