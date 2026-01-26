@@ -72,11 +72,17 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   const saveEditing = async (originalItem: CalendarItem) => {
     if (!editTitle || !editAmount) return;
 
+    const parsedAmount = parseFloat(editAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
     try {
       await updateCalendarItem({
         ...originalItem,
         title: editTitle,
-        amount: parseFloat(editAmount),
+        amount: parsedAmount,
         frequency: editFrequency
       });
       toast.success('Updated recurring item');
@@ -111,7 +117,11 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               <p className="text-xs text-gray-500">Manage your subscriptions and bills</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:bg-gray-100 rounded-full">
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:bg-gray-100 rounded-full"
+            aria-label="Close modal"
+          >
             <X size={20} />
           </button>
         </div>

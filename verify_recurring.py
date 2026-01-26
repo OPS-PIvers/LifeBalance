@@ -1,5 +1,4 @@
 import os
-import time
 from playwright.sync_api import sync_playwright
 
 def verify_recurring_bills():
@@ -10,6 +9,9 @@ def verify_recurring_bills():
 
         # Init script for test mode
         context.add_init_script("sessionStorage.setItem('LIFEBALANCE_TEST_MODE', 'true');")
+
+        # Ensure verification directory exists
+        os.makedirs("/home/jules/verification", exist_ok=True)
 
         page = context.new_page()
 
@@ -52,7 +54,6 @@ def verify_recurring_bills():
             print("Modal opened")
 
             # 5. Screenshot
-            os.makedirs("/home/jules/verification", exist_ok=True)
             page.screenshot(path="/home/jules/verification/recurring_bills.png")
             print("Screenshot taken")
 
