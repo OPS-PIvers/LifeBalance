@@ -2,12 +2,13 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 import { SegmentedControl } from '../ui/SegmentedControl';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
@@ -23,6 +24,7 @@ const BudgetCalendar: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
+  const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
 
   // Form State
   const [title, setTitle] = useState('');
@@ -351,26 +353,39 @@ const BudgetCalendar: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Edit/Delete (visible mostly on hover in desktop, but always accessible) */}
-                    {!item.isPaid && (
+                    {/* Edit/Delete (Desktop) */}
+                    <div className="hidden md:flex items-center gap-1">
+                      {!item.isPaid && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openEditModal(item)}
+                          className="text-brand-300 hover:text-brand-600"
+                          aria-label={`Edit ${item.title}`}
+                        >
+                          <Edit2 size={14} />
+                        </Button>
+                      )}
                       <Button
-                        variant="ghost"
+                        variant="ghost-destructive"
                         size="icon-sm"
-                        onClick={() => openEditModal(item)}
-                        className="text-brand-300 hover:text-brand-600"
-                        aria-label={`Edit ${item.title}`}
+                        onClick={() => deleteCalendarItem(item.id)}
+                        className="text-brand-300 hover:text-money-neg"
+                        aria-label={`Delete ${item.title}`}
                       >
-                        <Edit2 size={14} />
+                        <Trash2 size={14} />
                       </Button>
-                    )}
+                    </div>
+
+                    {/* Mobile Actions */}
                     <Button
-                      variant="ghost-destructive"
+                      variant="ghost"
                       size="icon-sm"
-                      onClick={() => deleteCalendarItem(item.id)}
-                      className="text-brand-300 hover:text-money-neg"
-                      aria-label={`Delete ${item.title}`}
+                      className="md:hidden text-brand-300"
+                      onClick={() => setActiveActionItem(item)}
+                      aria-label={`More actions for ${item.title}`}
                     >
-                      <Trash2 size={14} />
+                      <MoreVertical size={16} />
                     </Button>
                   </div>
                 </div>
@@ -379,6 +394,53 @@ const BudgetCalendar: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!activeActionItem}
+        onClose={() => setActiveActionItem(null)}
+        title={activeActionItem?.title}
+      >
+        <div className="space-y-3 pb-6">
+          {!activeActionItem?.isPaid && (
+            <Button
+              variant="secondary"
+              className="w-full h-14 justify-start px-4 text-base"
+              leftIcon={<Edit2 size={20} />}
+              onClick={() => {
+                if (activeActionItem) {
+                  openEditModal(activeActionItem);
+                  setActiveActionItem(null);
+                }
+              }}
+            >
+              Edit Event
+            </Button>
+          )}
+
+          <Button
+            variant="ghost-destructive"
+            className="w-full h-14 justify-start px-4 text-base bg-rose-50"
+            leftIcon={<Trash2 size={20} />}
+            onClick={() => {
+              if (activeActionItem) {
+                deleteCalendarItem(activeActionItem.id);
+                setActiveActionItem(null);
+              }
+            }}
+          >
+            Delete Event
+          </Button>
+
+          <Button
+            variant="ghost"
+            className="w-full h-14"
+            onClick={() => setActiveActionItem(null)}
+          >
+            Cancel
+          </Button>
+        </div>
+      </Drawer>
 
       {/* Add/Edit Modal */}
       <Modal
