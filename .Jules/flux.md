@@ -1,1 +1,3 @@
 ## 2024-05-23 - [Meal Plan Edit Buttons Hidden on Mobile] **Squeeze:** On mobile (375px), users cannot see the Edit/Delete buttons for a meal because they rely on `group-hover:opacity-100` and `opacity-0`. **Reflow:** Change the visibility logic to be always visible on mobile (`opacity-100`) and only hidden on desktop until hover (`sm:opacity-0 sm:group-hover:opacity-100`). Also increase touch targets to 44px.
+
+## 2026-01-25 - [Transaction Actions Clutter] **Squeeze:** On mobile (375px), 4 small action buttons in `TransactionItem` were too small (32px) and cluttered the row. **Reflow:** Replaced individual buttons with a single "More" button that opens a Bottom Drawer with full-width, touch-friendly actions (48px+).
