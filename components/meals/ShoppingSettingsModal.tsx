@@ -50,8 +50,6 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   // Initialize local categories from context (or default if empty)
   useEffect(() => {
     if (isOpen) {
-      // Use setTimeout to avoid synchronous state update warning during render phase
-      // This ensures form state is initialized after the modal mounts/updates
       const timer = setTimeout(() => {
         if (groceryCategories && groceryCategories.length > 0) {
           setLocalCategories([...groceryCategories]);
@@ -59,19 +57,31 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           setLocalCategories([...GROCERY_CATEGORIES]);
         }
         setHasUnsavedCategoryChanges(false);
-
-        // Pre-fill template if provided (only if not already editing)
-        if (initialTemplateData && !editingTemplate) {
-          setActiveTab('templates');
-          setEditingTemplate(initialTemplateData);
-        }
       }, 0);
       return () => clearTimeout(timer);
-    } else {
-      // Reset editing state when modal closes
-      setEditingTemplate(null);
     }
-  }, [isOpen, groceryCategories, initialTemplateData]); // editingTemplate excluded to avoid loop
+  }, [isOpen, groceryCategories]);
+
+  // Pre-fill template if provided
+  useEffect(() => {
+    if (isOpen && initialTemplateData && !editingTemplate) {
+      const timer = setTimeout(() => {
+        setActiveTab('templates');
+        setEditingTemplate(initialTemplateData);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, initialTemplateData, editingTemplate]);
+
+  // Reset editing state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      const timer = setTimeout(() => {
+        setEditingTemplate(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   // Handle Escape key to close modal
   useEffect(() => {
