@@ -11,6 +11,7 @@ import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidg
 import { InsightWidget } from '../components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
   const {
@@ -37,6 +38,12 @@ const Dashboard: React.FC = () => {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
+  const [proposedChallenge, setProposedChallenge] = useState<CreateChallengePayload | null>(null);
+
+  const handleCreateChallenge = (payload: CreateChallengePayload) => {
+    setProposedChallenge(payload);
+    setIsChallengeModalOpen(true);
+  };
 
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
@@ -132,12 +139,24 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Widget C: Gemini Insight */}
-        <InsightWidget onOpenArchive={() => setIsArchiveOpen(true)} />
+        <InsightWidget
+          onOpenArchive={() => setIsArchiveOpen(true)}
+          onCreateChallenge={handleCreateChallenge}
+        />
 
       </div>
 
       {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
-      {isChallengeModalOpen && <ChallengeHubModal isOpen={isChallengeModalOpen} onClose={() => setIsChallengeModalOpen(false)} />}
+      {isChallengeModalOpen && (
+        <ChallengeHubModal
+          isOpen={isChallengeModalOpen}
+          onClose={() => {
+            setIsChallengeModalOpen(false);
+            setProposedChallenge(null);
+          }}
+          initialData={proposedChallenge}
+        />
+      )}
       {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
       
       {/* Pay Modal for Calendar Items */}

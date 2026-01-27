@@ -40,7 +40,7 @@ export const useInsightActions = () => {
       }
       else if (action.type === 'create_habit') {
         const payload = action.payload;
-        if (!payload.title || !payload.category) {
+        if (!payload.title) {
             toast.error("Missing habit details.");
             return;
         }
@@ -49,7 +49,7 @@ export const useInsightActions = () => {
         await addHabit({
           id: '', // Firestore will generate
           title: payload.title,
-          category: payload.category,
+          category: payload.category || 'General',
           type: payload.type || 'positive',
           period: payload.period || 'daily',
           basePoints: 10,

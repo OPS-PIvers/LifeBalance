@@ -145,7 +145,7 @@ export interface HouseholdContextType {
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
 
   // Habit Actions
-  addHabit: (habit: Habit) => Promise<void>;
+  addHabit: (habit: Habit) => Promise<string>;
   updateHabit: (habit: Habit) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
@@ -1801,10 +1801,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: HABITS ---
 
-  const addHabit = useCallback(async (habit: Habit) => {
-    if (!householdId || !user) return;
+  const addHabit = useCallback(async (habit: Habit): Promise<string> => {
+    if (!householdId || !user) throw new Error("Not authenticated");
     try {
-      await addDoc(collection(db, `households/${householdId}/habits`), {
+      const docRef = await addDoc(collection(db, `households/${householdId}/habits`), {
         ...habit,
         createdBy: user.uid,
         isShared: habit.isShared ?? true,
@@ -1812,6 +1812,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         lastUpdated: serverTimestamp(),
       });
       toast.success('Habit created');
+      return docRef.id;
     } catch (error) {
       console.error('[addHabit] Failed to create habit:', error);
       toast.error('Failed to create habit. Please try again.');

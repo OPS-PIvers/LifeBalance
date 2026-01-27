@@ -128,7 +128,8 @@ ${previousInsights}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
 - 'update_bucket': If spending consistently exceeds limits. Payload: { "bucketName": "CategoryName", "newLimit": number }
-- 'create_habit': If a new habit would help. Payload: { "title": "Habit Title", "category": "one of the existing habit categories (reuse an exact category from the Habits list if possible)", "type": "positive", "period": "daily" }
+- 'create_challenge': If a new habit would help, suggest a "Mini Challenge" (weekly goal). Payload: { "title": "Challenge Title", "description": "Why this challenge matters", "targetType": "count", "targetValue": number (e.g. 5), "duration": "7 days", "suggestedHabit": { "title": "Habit Title", "category": "Health, Productivity, Mindfulness, Chores, Finance", "type": "positive", "period": "daily" } }
+- 'create_habit': (Legacy/Secondary) If a simple habit is better than a challenge. Payload: { "title": "Habit Title", "category": "Health, Productivity, Mindfulness, Chores, Finance", "type": "positive", "period": "daily" }
 - 'create_todo': If a specific one-off task is needed. Payload: { "text": "Task description", "completeByDate": "YYYY-MM-DD" }
 
 Transactions (last 50): ${transactions}
@@ -690,7 +691,7 @@ export const generateInsight = async (
             items: {
               type: Type.OBJECT,
               properties: {
-                type: { type: Type.STRING, enum: ['update_bucket', 'create_habit', 'create_todo'] },
+                type: { type: Type.STRING, enum: ['update_bucket', 'create_habit', 'create_todo', 'create_challenge'] },
                 label: { type: Type.STRING },
                 payload: {
                   type: Type.OBJECT,
@@ -698,11 +699,25 @@ export const generateInsight = async (
                     bucketName: { type: Type.STRING },
                     newLimit: { type: Type.NUMBER },
                     title: { type: Type.STRING },
+                    description: { type: Type.STRING },
                     category: { type: Type.STRING },
                     type: { type: Type.STRING, enum: ['positive', 'negative'] },
                     period: { type: Type.STRING, enum: ['daily', 'weekly'] },
                     text: { type: Type.STRING },
-                    completeByDate: { type: Type.STRING }
+                    completeByDate: { type: Type.STRING },
+                    targetType: { type: Type.STRING, enum: ['count', 'percentage'] },
+                    targetValue: { type: Type.NUMBER },
+                    duration: { type: Type.STRING },
+                    suggestedHabit: {
+                      type: Type.OBJECT,
+                      properties: {
+                        title: { type: Type.STRING },
+                        category: { type: Type.STRING },
+                        type: { type: Type.STRING, enum: ['positive', 'negative'] },
+                        period: { type: Type.STRING, enum: ['daily', 'weekly'] }
+                      }
+                    },
+                    relatedHabitId: { type: Type.STRING }
                   }
                 }
               },

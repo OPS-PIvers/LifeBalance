@@ -178,9 +178,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Habit operations
   const addHabit = useCallback(async (habit: Omit<Habit, 'id'>) => {
-    const newHabit = { ...habit, id: generateId() } as Habit;
+    const id = generateId();
+    const newHabit = { ...habit, id } as Habit;
     setHabits(prev => [...prev, newHabit]);
     toast.success('Mock: Habit added');
+    return id;
   }, []);
 
   const updateHabit = useCallback(async (habit: Habit) => {
