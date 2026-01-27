@@ -79,4 +79,57 @@ describe('Input', () => {
     expect(error.id).toBeDefined();
     expect(error.id).toContain('error');
   });
+
+  it('renders character count when maxLength and showCount are provided', () => {
+    render(<Input maxLength={50} showCount placeholder="Counted Input" />);
+    // Initially 0/50
+    const counter = screen.getByText('0/50');
+    expect(counter).toBeInTheDocument();
+  });
+
+  it('updates character count on user input (uncontrolled)', async () => {
+    const user = userEvent.setup();
+    render(<Input maxLength={50} showCount placeholder="Counted Input" />);
+    const input = screen.getByPlaceholderText('Counted Input');
+
+    await user.type(input, 'Hello');
+    const counter = screen.getByText('5/50');
+    expect(counter).toBeInTheDocument();
+  });
+
+  it('updates character count in controlled mode', async () => {
+    const user = userEvent.setup();
+    const ControlledInput = () => {
+        const [val, setVal] = React.useState('');
+        return <Input maxLength={10} showCount value={val} onChange={(e) => setVal(e.target.value)} />;
+    };
+    render(<ControlledInput />);
+
+    const input = screen.getByRole('textbox');
+    await user.type(input, 'ABC');
+
+    expect(screen.getByText('3/10')).toBeInTheDocument();
+  });
+
+  it('renders character count with initial value', () => {
+    render(<Input maxLength={50} showCount defaultValue="Init" />);
+    const counter = screen.getByText('4/50');
+    expect(counter).toBeInTheDocument();
+  });
+
+  it('renders required indicator when required prop is present', () => {
+    render(<Input label="Required Field" required />);
+    const indicator = screen.getByText('*');
+    expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveClass('text-rose-500');
+    expect(indicator).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('does not render header div if no label and no showCount', () => {
+    const { container } = render(<Input placeholder="No Header" />);
+    // The header div has class 'flex justify-between items-end mb-1.5'
+    // We check that it does not exist
+    const header = container.querySelector('.flex.justify-between.items-end.mb-1\\.5');
+    expect(header).toBeNull();
+  });
 });
