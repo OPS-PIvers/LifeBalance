@@ -19,9 +19,28 @@ interface ShoppingItemRowProps {
   isReorderable?: boolean;
   onReorderDragStart?: () => void;
   onReorderDragEnd?: () => void;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: (item: ShoppingItem) => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, groceryCatalog, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({
+  item,
+  stores,
+  quickStockLists,
+  groceryCatalog,
+  onCheck,
+  onDelete,
+  onEdit,
+  onUpdate,
+  onQuickListChange,
+  isReorderable = true,
+  onReorderDragStart,
+  onReorderDragEnd,
+  isSelectionMode = false,
+  isSelected = false,
+  onToggleSelection
+}) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -39,6 +58,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const rightIconScale = useTransform(x, [50, 100], [1, 1.2]);
 
   const handleDragEnd = (_: unknown, info: PanInfo) => {
+    if (isSelectionMode) return; // Disable swipe actions in selection mode
     const threshold = 80;
     if (info.offset.x > threshold) {
       // Swipe Right -> Check
@@ -69,43 +89,61 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
 
   const Content = (
     <>
-      {/* Background Layer for Swipe Actions */}
-      <motion.div
-        className="absolute inset-0 flex items-center justify-between px-4 z-0 rounded-xl"
-        style={{ backgroundColor: bgColor }}
-      >
-        <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-green-700 font-bold">
-           <Check size={20} />
-           <span>Purchased</span>
-        </motion.div>
+      {/* Background Layer for Swipe Actions (Hidden in Selection Mode) */}
+      {!isSelectionMode && (
+        <motion.div
+          className="absolute inset-0 flex items-center justify-between px-4 z-0 rounded-xl"
+          style={{ backgroundColor: bgColor }}
+        >
+          <motion.div style={{ opacity: rightIconOpacity, scale: rightIconScale }} className="flex items-center gap-2 text-green-700 font-bold">
+             <Check size={20} />
+             <span>Purchased</span>
+          </motion.div>
 
-        <motion.div style={{ opacity: leftIconOpacity, scale: leftIconScale }} className="flex items-center gap-2 font-bold ml-auto">
-           {item.isPurchased ? (
-             <span className="flex items-center gap-2 text-brand-600">
-                <RotateCcw size={20} /> Uncheck
-             </span>
-           ) : (
-             <span className="flex items-center gap-2 text-red-600">
-                <Trash2 size={20} /> Delete
-             </span>
-           )}
+          <motion.div style={{ opacity: leftIconOpacity, scale: leftIconScale }} className="flex items-center gap-2 font-bold ml-auto">
+             {item.isPurchased ? (
+               <span className="flex items-center gap-2 text-brand-600">
+                  <RotateCcw size={20} /> Uncheck
+               </span>
+             ) : (
+               <span className="flex items-center gap-2 text-red-600">
+                  <Trash2 size={20} /> Delete
+               </span>
+             )}
+          </motion.div>
         </motion.div>
-      </motion.div>
+      )}
 
       {/* Foreground Layer */}
       <motion.div
-        drag="x"
+        drag={isSelectionMode ? false : "x"}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.1} // Resistance feel
         onDragEnd={handleDragEnd}
-        style={{ x, touchAction: 'pan-y' }}
+        onClick={() => isSelectionMode && onToggleSelection?.(item)}
+        style={{ x: isSelectionMode ? 0 : x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100",
-          item.isPurchased && "opacity-60 bg-gray-50"
+          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border transition-colors",
+          item.isPurchased && !isSelectionMode ? "opacity-60 bg-gray-50 border-gray-100" : "border-gray-100",
+          isSelectionMode && isSelected && "bg-brand-50 border-brand-200",
+          isSelectionMode && !isSelected && "hover:bg-gray-50"
         )}
       >
-        {/* Drag Handle - Only render if reorderable */}
-        {isReorderable && (
+        {/* Selection Checkbox OR Drag Handle */}
+        {isSelectionMode ? (
+          <div className={clsx(
+            "w-6 h-6 flex items-center justify-center shrink-0 transition-colors",
+            isSelected ? "text-brand-600" : "text-gray-300"
+          )}>
+             {isSelected ? (
+               <div className="w-5 h-5 bg-brand-600 rounded flex items-center justify-center text-white">
+                 <Check size={14} strokeWidth={3} />
+               </div>
+             ) : (
+               <div className="w-5 h-5 border-2 border-gray-300 rounded" />
+             )}
+          </div>
+        ) : isReorderable ? (
             <div
                 onPointerDown={(e) => dragControls.start(e)}
                 className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
@@ -113,20 +151,22 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             >
                 <GripVertical size={20} />
             </div>
-        )}
+        ) : null}
 
-        {/* Checkbox (Alternative to Swipe) */}
-        <button
-            onClick={() => onCheck(item)}
-            className={clsx(
-                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
-                item.isPurchased
-                    ? "bg-green-500 border-green-500 text-white"
-                    : "border-gray-300 hover:border-brand-500 text-transparent"
-            )}
-        >
-            <Check size={14} strokeWidth={3} />
-        </button>
+        {/* Checkbox (Standard Mode) */}
+        {!isSelectionMode && (
+          <button
+              onClick={(e) => { e.stopPropagation(); onCheck(item); }}
+              className={clsx(
+                  "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                  item.isPurchased
+                      ? "bg-green-500 border-green-500 text-white"
+                      : "border-gray-300 hover:border-brand-500 text-transparent"
+              )}
+          >
+              <Check size={14} strokeWidth={3} />
+          </button>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -216,14 +256,16 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             </div>
         </div>
 
-        {/* Edit Action */}
-        <button
-            onClick={() => onEdit(item)}
-            className="p-2 text-gray-400 hover:text-brand-600 rounded-full hover:bg-brand-50 transition-colors"
-            aria-label="Edit item"
-        >
-            <Edit2 size={18} />
-        </button>
+        {/* Edit Action (Hidden in Selection Mode) */}
+        {!isSelectionMode && (
+          <button
+              onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+              className="p-2 text-gray-400 hover:text-brand-600 rounded-full hover:bg-brand-50 transition-colors"
+              aria-label="Edit item"
+          >
+              <Edit2 size={18} />
+          </button>
+        )}
 
       </motion.div>
     </>
@@ -234,7 +276,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         <Reorder.Item
             value={item}
             id={item.id}
-            dragListener={false}
+            dragListener={!isSelectionMode}
             dragControls={dragControls}
             className="relative overflow-hidden mb-2 rounded-xl"
             style={{ touchAction: 'pan-y' }}
@@ -280,7 +322,10 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onQuickListChange === next.onQuickListChange &&
          prev.isReorderable === next.isReorderable &&
          prev.onReorderDragStart === next.onReorderDragStart &&
-         prev.onReorderDragEnd === next.onReorderDragEnd;
+         prev.onReorderDragEnd === next.onReorderDragEnd &&
+         prev.isSelectionMode === next.isSelectionMode &&
+         prev.isSelected === next.isSelected &&
+         prev.onToggleSelection === next.onToggleSelection;
 };
 
 export const ShoppingItemRow = memo(ShoppingItemRowComponent, arePropsEqual);
