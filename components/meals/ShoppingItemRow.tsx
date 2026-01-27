@@ -188,8 +188,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                           "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                           activeList
                               ? (() => {
-                                  const colorKey = activeList.color || 'slate';
-                                  const color = STORE_COLORS[colorKey] || STORE_COLORS.slate;
+                                  const colorKey = activeList.color || DEFAULT_STORE_COLOR;
+                                  const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                   return `${color.bg} ${color.text} ${color.border}`;
                               })()
                               : "bg-gray-50 text-gray-400 border-gray-200 border-dashed"

@@ -511,7 +511,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   <div className="space-y-3">
                     {quickStockLists.map(list => {
                        const Icon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
-                       const color = STORE_COLORS[list.color || 'slate'] || STORE_COLORS.slate;
+                       const color = STORE_COLORS[list.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR];
 
                        return (
                       <div key={list.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
@@ -616,7 +616,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                                         key={color.id}
                                         onClick={() => setEditingTemplate({...editingTemplate, color: color.id})}
                                         className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
-                                            (editingTemplate.color || 'slate') === color.id
+                                            (editingTemplate.color || DEFAULT_STORE_COLOR) === color.id
                                                 ? 'border-brand-600 scale-110'
                                                 : 'border-transparent hover:scale-105'
                                         }`}
