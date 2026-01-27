@@ -578,12 +578,13 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                   </div>
                 </>
               ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full max-h-[60vh]">
-                  <div className="p-4 border-b border-gray-100 space-y-3">
-                    <div className="flex items-center justify-between">
-                       <h4 className="font-bold text-gray-800">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
-                       <button onClick={() => setEditingTemplate(null)}><X className="w-5 h-5 text-gray-400" /></button>
-                    </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                     <h4 className="font-bold text-gray-800">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
+                     <button onClick={() => setEditingTemplate(null)}><X className="w-5 h-5 text-gray-400" /></button>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -656,48 +657,36 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     )}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-2 min-h-[200px]">
-                    <div className="space-y-1">
-                      {groceryCatalog
-                        .filter(item =>
-                           !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
-                        )
-                        .sort((a, b) => {
-                           const aSelected = editingTemplate.items?.includes(a.id);
-                           const bSelected = editingTemplate.items?.includes(b.id);
-                           if (aSelected && !bSelected) return -1;
-                           if (!aSelected && bSelected) return 1;
-                           return b.purchaseCount - a.purchaseCount;
-                        })
-                        .slice(0, 50) // Limit render
-                        .map(item => {
-                          const isSelected = editingTemplate.items?.includes(item.id);
-                          return (
-                            <button
-                              key={item.id}
-                              onClick={() => toggleItemInTemplate(item.id)}
-                              className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors ${
-                                isSelected
-                                  ? 'bg-brand-50 text-brand-800 border border-brand-200'
-                                  : 'hover:bg-gray-50 text-gray-700 border border-transparent'
-                              }`}
-                            >
-                              <span>{item.name}</span>
-                              {isSelected && <Check className="w-4 h-4 text-brand-600" />}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-
-                  <div className="p-4 border-t border-gray-100 bg-gray-50">
-                    <button
-                      onClick={handleSaveTemplate}
-                      disabled={!editingTemplate.name?.trim()}
-                      className="w-full py-2 bg-brand-800 text-white font-bold rounded-lg shadow-sm disabled:opacity-50"
-                    >
-                      Save Template
-                    </button>
+                  <div className="space-y-1">
+                    {groceryCatalog
+                      .filter(item =>
+                         !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase())
+                      )
+                      .sort((a, b) => {
+                         const aSelected = editingTemplate.items?.includes(a.id);
+                         const bSelected = editingTemplate.items?.includes(b.id);
+                         if (aSelected && !bSelected) return -1;
+                         if (!aSelected && bSelected) return 1;
+                         return b.purchaseCount - a.purchaseCount;
+                      })
+                      .slice(0, 50) // Limit render
+                      .map(item => {
+                        const isSelected = editingTemplate.items?.includes(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => toggleItemInTemplate(item.id)}
+                            className={`w-full flex items-center justify-between p-2 rounded-lg text-sm transition-colors bg-white border ${
+                              isSelected
+                                ? 'border-brand-200 text-brand-800'
+                                : 'border-gray-100 hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <span>{item.name}</span>
+                            {isSelected && <Check className="w-4 h-4 text-brand-600" />}
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               )}
@@ -713,6 +702,18 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                 >
                     Save Category Changes
+                </button>
+            </div>
+        )}
+
+        {activeTab === 'templates' && editingTemplate && (
+            <div className="p-4 border-t border-gray-100 bg-white">
+                <button
+                  onClick={handleSaveTemplate}
+                  disabled={!editingTemplate.name?.trim()}
+                  className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                >
+                  Save Template
                 </button>
             </div>
         )}
