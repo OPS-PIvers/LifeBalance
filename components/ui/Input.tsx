@@ -17,12 +17,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
 
     // State for character count (only used for uncontrolled inputs)
     const [internalLength, setInternalLength] = useState(() => {
-      if (props.defaultValue !== undefined) return String(props.defaultValue).length;
+      if (props.defaultValue !== undefined) return String(props.defaultValue ?? '').length;
       return 0;
     });
 
     const isControlled = props.value !== undefined;
-    const length = isControlled ? String(props.value).length : internalLength;
+    const length = isControlled ? String(props.value ?? '').length : internalLength;
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (!isControlled) {
