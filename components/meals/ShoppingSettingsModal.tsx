@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check, ShoppingBag } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
+import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -23,7 +24,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
     quickStockLists,
     addQuickStockList,
     updateQuickStockList,
-    deleteQuickStockList
+    deleteQuickStockList,
+    addGroceryCatalogItem
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<'stores' | 'categories' | 'templates'>('stores');
@@ -86,7 +88,9 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       } else {
         await addQuickStockList({
           name: editingTemplate.name.trim(),
-          items: editingTemplate.items || []
+          items: editingTemplate.items || [],
+          icon: editingTemplate.icon,
+          color: editingTemplate.color
         });
       }
       setEditingTemplate(null);
@@ -106,6 +110,44 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
         ? currentItems.filter(i => i !== itemId)
         : [...currentItems, itemId]
     });
+  };
+
+  const handleCreateAndAddItem = async () => {
+    if (!itemSearch.trim() || !editingTemplate) return;
+
+    const rawName = itemSearch.trim();
+    // Check if it already exists in catalog (case-insensitive) to avoid duplicates
+    const existing = groceryCatalog.find(i => i.name.toLowerCase() === rawName.toLowerCase());
+
+    if (existing) {
+      toggleItemInTemplate(existing.id);
+      setItemSearch('');
+      toast('Item found in history and added', { icon: '✨' });
+      return;
+    }
+
+    try {
+      const newItem = {
+        name: rawName,
+        category: 'Uncategorized',
+        lastPurchased: new Date().toISOString(),
+        purchaseCount: 1 // Start at 1 since we're explicitly adding it
+      };
+
+      const newId = await addGroceryCatalogItem(newItem);
+
+      // Add to template
+      setEditingTemplate(prev => ({
+        ...prev,
+        items: [...(prev?.items || []), newId]
+      }));
+
+      setItemSearch('');
+      toast.success('Created and added to template');
+    } catch (error) {
+      console.error('Failed to create item:', error);
+      toast.error('Failed to create item');
+    }
   };
 
   const handleAddStore = async (e: React.FormEvent) => {
@@ -467,11 +509,20 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </button>
 
                   <div className="space-y-3">
-                    {quickStockLists.map(list => (
+                    {quickStockLists.map(list => {
+                       const Icon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
+                       const color = STORE_COLORS[list.color || 'slate'] || STORE_COLORS.slate;
+
+                       return (
                       <div key={list.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
-                        <div>
-                          <h4 className="font-bold text-gray-800">{list.name}</h4>
-                          <p className="text-xs text-gray-500">{list.items.length} items</p>
+                        <div className="flex items-center gap-3">
+                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${color.bg} ${color.text}`}>
+                              <Icon className="w-5 h-5" />
+                           </div>
+                           <div>
+                              <h4 className="font-bold text-gray-800">{list.name}</h4>
+                              <p className="text-xs text-gray-500">{list.items.length} items</p>
+                           </div>
                         </div>
                         <div className="flex gap-2">
                            <button
@@ -512,7 +563,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                            </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                     {quickStockLists.length === 0 && (
                       <p className="text-center text-gray-400 text-sm py-4">No templates yet. Create one for &quot;Work Week&quot;, &quot;Camping&quot;, etc.</p>
                     )}
@@ -525,24 +577,76 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
                        <h4 className="font-bold text-gray-800">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
                        <button onClick={() => setEditingTemplate(null)}><X className="w-5 h-5 text-gray-400" /></button>
                     </div>
-                    <input
-                      type="text"
-                      value={editingTemplate.name}
-                      onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
-                      placeholder="Template Name (e.g. Weekly Basics)"
-                      className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      autoFocus
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={editingTemplate.name}
+                        onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
+                        placeholder="Template Name (e.g. Weekly Basics)"
+                        className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Icon & Color Selection */}
+                    <div className="flex flex-col gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                         <div>
+                            <span className="text-xs font-bold text-gray-400 uppercase mb-2 block">Icon</span>
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
+                                    <button
+                                        key={id}
+                                        onClick={() => setEditingTemplate({...editingTemplate, icon: id})}
+                                        className={`p-2 rounded-lg transition-all shrink-0 ${
+                                            (editingTemplate.icon || 'ShoppingBag') === id
+                                                ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500 ring-offset-1'
+                                                : 'bg-white text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                                        }`}
+                                    >
+                                        <Icon className="w-5 h-5" />
+                                    </button>
+                                ))}
+                            </div>
+                         </div>
+                         <div>
+                            <span className="text-xs font-bold text-gray-400 uppercase mb-2 block">Color</span>
+                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                                {Object.values(STORE_COLORS).map((color) => (
+                                    <button
+                                        key={color.id}
+                                        onClick={() => setEditingTemplate({...editingTemplate, color: color.id})}
+                                        className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
+                                            (editingTemplate.color || 'slate') === color.id
+                                                ? 'border-brand-600 scale-110'
+                                                : 'border-transparent hover:scale-105'
+                                        }`}
+                                    />
+                                ))}
+                            </div>
+                         </div>
+                    </div>
+
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                       <input
                         type="text"
                         value={itemSearch}
                         onChange={e => setItemSearch(e.target.value)}
-                        placeholder="Search items to add..."
+                        placeholder="Search or add new item..."
                         className="w-full pl-9 p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                       />
                     </div>
+
+                    {/* Add New Item Action */}
+                    {itemSearch.trim() && !groceryCatalog.some(i => i.name.toLowerCase() === itemSearch.trim().toLowerCase()) && (
+                        <button
+                            onClick={handleCreateAndAddItem}
+                            className="w-full flex items-center gap-2 p-2 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg text-sm font-medium transition-colors border border-brand-200 border-dashed"
+                        >
+                            <Plus className="w-4 h-4" />
+                            Create & Add &quot;{itemSearch}&quot;
+                        </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-2 min-h-[200px]">

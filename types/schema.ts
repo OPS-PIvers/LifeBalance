@@ -295,6 +295,8 @@ export interface QuickStockList {
   id: string;
   name: string;
   items: string[]; // List of catalog item IDs (reference to GroceryCatalogItem.id)
+  icon?: string;
+  color?: string;
 }
 
 export interface GroceryCatalogItem {

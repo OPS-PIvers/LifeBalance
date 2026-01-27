@@ -98,7 +98,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
-  const [groceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
@@ -353,6 +353,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Template deleted');
   }, []);
 
+  const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
+    const id = generateId();
+    const newItem = { ...item, id } as GroceryCatalogItem;
+    setGroceryCatalog(prev => [...prev, newItem]);
+    toast.success('Mock: Item added to history');
+    return id;
+  }, []);
+
   // No-op functions for features not critical to testing
 
   const noOp = useCallback(async <T,>(..._args: unknown[]): Promise<T | void> => {
@@ -495,7 +503,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addQuickStockList,
     updateQuickStockList,
     deleteQuickStockList,
-    addGroceryCatalogItem: noOp,
+    addGroceryCatalogItem,
     updateGroceryCatalogItem: noOp,
     deleteGroceryCatalogItem: noOp,
     updateChallenge: noOp,
