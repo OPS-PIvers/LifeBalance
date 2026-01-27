@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { ShoppingItem } from '@/types/schema';
+import { ShoppingItem, QuickStockList } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -38,6 +38,32 @@ const ShoppingListTab: React.FC = () => {
       ? groceryCategories
       : [...GROCERY_CATEGORIES];
   }, [groceryCategories]);
+
+  // Pre-calculate active quick list for each item name to avoid expensive find in each row
+  const itemQuickListMap = useMemo(() => {
+    const map = new Map<string, QuickStockList>();
+    if (!quickStockLists || !groceryCatalog) return map;
+
+    // 1. Map Catalog ID -> QuickStockList
+    const idToListMap = new Map<string, QuickStockList>();
+    for (const list of quickStockLists) {
+      if (!list.items) continue;
+      for (const itemId of list.items) {
+        if (!idToListMap.has(itemId)) {
+          idToListMap.set(itemId, list);
+        }
+      }
+    }
+
+    // 2. Map Name -> QuickStockList
+    for (const item of groceryCatalog) {
+      const list = idToListMap.get(item.id);
+      if (list) {
+        map.set(item.name.toLowerCase(), list);
+      }
+    }
+    return map;
+  }, [quickStockLists, groceryCatalog]);
 
   // Local state for Reorder.Group
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -458,7 +484,7 @@ const ShoppingListTab: React.FC = () => {
                         item={item}
                         stores={stores}
                         quickStockLists={quickStockLists}
-                        groceryCatalog={groceryCatalog}
+                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
@@ -476,7 +502,7 @@ const ShoppingListTab: React.FC = () => {
                         item={item}
                         stores={stores}
                         quickStockLists={quickStockLists}
-                        groceryCatalog={groceryCatalog}
+                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
