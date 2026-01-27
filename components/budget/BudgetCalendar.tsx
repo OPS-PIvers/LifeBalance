@@ -34,12 +34,18 @@ const BudgetCalendar: React.FC = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(monthStart);
-  const startDate = startOfWeek(monthStart);
-  const endDate = endOfWeek(monthEnd);
-
-  const days = eachDayOfInterval({ start: startDate, end: endDate });
+  const { monthStart, startDate, endDate, days } = useMemo(() => {
+    const mStart = startOfMonth(currentDate);
+    const mEnd = endOfMonth(mStart);
+    const sDate = startOfWeek(mStart);
+    const eDate = endOfWeek(mEnd);
+    return {
+      monthStart: mStart,
+      startDate: sDate,
+      endDate: eDate,
+      days: eachDayOfInterval({ start: sDate, end: eDate })
+    };
+  }, [currentDate]);
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   // Expand recurring calendar items for the visible date range
