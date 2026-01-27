@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
+import { UIProvider } from './contexts/UIContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
 
@@ -118,120 +119,122 @@ const App: React.FC = () => {
     <HashRouter>
       <AuthProviderComponent>
         <HouseholdProviderComponent>
-          <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
-            {isTestMode && (
-              <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[9999] shadow-lg">
-                🧪 TEST MODE - MOCK DATA (Development Only)
-              </div>
-            )}
-            <Suspense fallback={<LoadingFallback />}>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/setup" element={<HouseholdSetup />} />
+          <UIProvider>
+            <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
+              {isTestMode && (
+                <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[9999] shadow-lg">
+                  🧪 TEST MODE - MOCK DATA (Development Only)
+                </div>
+              )}
+              <Suspense fallback={<LoadingFallback />}>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/setup" element={<HouseholdSetup />} />
 
-                {/* Protected Routes */}
-                <Route
-                  path="/"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <Dashboard />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/budget"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <Budget />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/habits"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <Habits />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/meals"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <MealsPage />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/shopping"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <ShoppingPage />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/todos"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <ToDosPage />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <Settings />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/migrate-submissions"
-                  element={
-                    <ProtectedRoute>
-                      <MigrateSubmissions />
-                    </ProtectedRoute>
-                  }
-                />
+                  {/* Protected Routes */}
+                  <Route
+                    path="/"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <Dashboard />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/budget"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <Budget />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/habits"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <Habits />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/meals"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <MealsPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/shopping"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <ShoppingPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/todos"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <ToDosPage />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <ProtectedRoute>
+                        <MainLayout>
+                          <Settings />
+                        </MainLayout>
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/migrate-submissions"
+                    element={
+                      <ProtectedRoute>
+                        <MigrateSubmissions />
+                      </ProtectedRoute>
+                    }
+                  />
 
-                {/* Catch all - redirect to home */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Suspense>
+                  {/* Catch all - redirect to home */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Suspense>
 
-            <Toaster
-              position="top-center"
-              containerStyle={{
-                top: 'calc(env(safe-area-inset-top) + 1rem)',
-                zIndex: 99999,
-              }}
-              toastOptions={{
-                className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
-                success: {
-                  iconTheme: {
-                    primary: '#10B981',
-                    secondary: 'white',
+              <Toaster
+                position="top-center"
+                containerStyle={{
+                  top: 'calc(env(safe-area-inset-top) + 1rem)',
+                  zIndex: 99999,
+                }}
+                toastOptions={{
+                  className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
+                  success: {
+                    iconTheme: {
+                      primary: '#10B981',
+                      secondary: 'white',
+                    },
                   },
-                },
-              }}
-            />
-          </div>
+                }}
+              />
+            </div>
+          </UIProvider>
         </HouseholdProviderComponent>
       </AuthProviderComponent>
     </HashRouter>

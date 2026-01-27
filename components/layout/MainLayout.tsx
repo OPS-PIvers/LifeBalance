@@ -1,12 +1,17 @@
 import React from 'react';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
+import CaptureModal from '../modals/CaptureModal';
+import { CommandPalette } from '../ui/CommandPalette';
+import { useUI } from '../../contexts/UIContext';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
+  const { captureModalState, closeCaptureModal } = useUI();
+
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden bg-brand-50">
       <div className="flex-none z-10">
@@ -22,6 +27,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <div className="flex-none z-20">
         <BottomNav />
       </div>
+
+      <CaptureModal
+        isOpen={captureModalState.isOpen}
+        onClose={closeCaptureModal}
+        initialTab={captureModalState.initialTab}
+        initialData={captureModalState.initialData}
+        initialTodoData={captureModalState.initialTodoData}
+        initialShoppingData={captureModalState.initialShoppingData}
+      />
+
+      <CommandPalette />
     </div>
   );
 };

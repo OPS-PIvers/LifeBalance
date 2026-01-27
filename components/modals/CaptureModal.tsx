@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
-import { ParsedTransaction } from '../../types/ui';
+import { ParsedTransaction, ManualInitialData, ModalTab, TodoInitialData, ShoppingInitialData } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
@@ -20,18 +20,13 @@ import { CaptureTransactionReview } from './CaptureTransactionReview';
 interface CaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: ModalTab;
+  initialData?: ManualInitialData;
+  initialTodoData?: TodoInitialData;
+  initialShoppingData?: ShoppingInitialData;
 }
 
 type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
-type ModalTab = 'transaction' | 'todo' | 'shopping';
-
-interface ManualInitialData {
-  amount?: string;
-  merchant?: string;
-  category?: string;
-  date?: string;
-  subBucketId?: string;
-}
 
 /**
  * Returns today's date in YYYY-MM-DD format using local timezone
@@ -44,14 +39,21 @@ const getLocalDateString = (): string => {
   return `${year}-${month}-${day}`;
 };
 
-const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
+const CaptureModal: React.FC<CaptureModalProps> = ({
+  isOpen,
+  onClose,
+  initialTab = 'transaction',
+  initialData,
+  initialTodoData,
+  initialShoppingData
+}) => {
   const {
     addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
     addShoppingItem, householdId
   } = useHousehold();
 
-  const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab);
 
   // --- Transaction State ---
   const [view, setView] = useState<ModalView>('menu');
@@ -142,14 +144,34 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    if (isOpen && !hasInitialized.current) {
-      // To-Do defaults
-      if (!todoDate) {
-        setTodoDate(getLocalDateString());
+    if (isOpen) {
+      // Sync props to state
+      setActiveTab(initialTab);
+
+      // Pre-fill Transaction Data
+      if (initialData && initialTab === 'transaction') {
+         setManualInitialData(initialData);
+         setView('manual');
       }
-      // Default assignee to current user or first member
-      if (!todoAssignee) {
-         setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
+
+      // Pre-fill To-Do Data
+      if (initialTab === 'todo') {
+          if (!todoDate) setTodoDate(getLocalDateString());
+          if (!todoAssignee) setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
+
+          if (initialTodoData) {
+              if (initialTodoData.text) setTodoText(initialTodoData.text);
+              if (initialTodoData.completeByDate) setTodoDate(initialTodoData.completeByDate);
+              if (initialTodoData.assignedTo) setTodoAssignee(initialTodoData.assignedTo);
+          }
+      }
+
+      // Pre-fill Shopping Data
+      if (initialTab === 'shopping' && initialShoppingData) {
+          if (initialShoppingData.name) setShoppingName(initialShoppingData.name);
+          if (initialShoppingData.category) setShoppingCategory(initialShoppingData.category as any);
+          if (initialShoppingData.quantity) setShoppingQuantity(initialShoppingData.quantity);
+          if (initialShoppingData.store) setShoppingStore(initialShoppingData.store);
       }
 
       hasInitialized.current = true;
@@ -158,13 +180,17 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     // Reset flag when modal closes
     if (!isOpen) {
       hasInitialized.current = false;
+      // Reset logic is in handleClose, but props might persist if not handled by parent.
     }
-  }, [isOpen, currentUser, members]);
+  }, [isOpen, currentUser, members, initialTab, initialData, initialTodoData, initialShoppingData]);
 
   // Reset state when closing
   const handleClose = () => {
     stopCamera();
     setView('menu');
+    // Don't reset activeTab here if we want to remember it, but user flow suggests resetting to 'transaction' usually.
+    // However, for Magic Action flow, we might want to respect the prop.
+    // Let's reset to transaction as default unless specified otherwise.
     setActiveTab('transaction');
 
     // Reset Transaction State
