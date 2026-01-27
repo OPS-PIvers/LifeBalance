@@ -7,6 +7,7 @@ import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -91,13 +92,15 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50 shrink-0">
         <h2 className="text-lg font-bold text-brand-800">Safe to Spend Breakdown</h2>
-        <button
+        <Button
+          variant="subtle"
+          size="icon"
+          className="rounded-full text-brand-400"
           onClick={onClose}
-          className="p-2 text-brand-400 hover:bg-brand-100 rounded-full"
           aria-label="Close modal"
         >
           <X size={20} />
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
