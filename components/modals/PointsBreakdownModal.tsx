@@ -328,6 +328,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           size="icon"
           className="rounded-full text-gray-400 hover:text-gray-600"
           onClick={onClose}
+          aria-label="Close modal"
         >
           <X size={20} />
         </Button>
