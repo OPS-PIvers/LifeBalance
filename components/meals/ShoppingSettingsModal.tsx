@@ -60,15 +60,18 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
         }
         setHasUnsavedCategoryChanges(false);
 
-        // Pre-fill template if provided
-        if (initialTemplateData) {
+        // Pre-fill template if provided (only if not already editing)
+        if (initialTemplateData && !editingTemplate) {
           setActiveTab('templates');
           setEditingTemplate(initialTemplateData);
         }
       }, 0);
       return () => clearTimeout(timer);
+    } else {
+      // Reset editing state when modal closes
+      setEditingTemplate(null);
     }
-  }, [isOpen, groceryCategories, initialTemplateData]);
+  }, [isOpen, groceryCategories, initialTemplateData]); // editingTemplate excluded to avoid loop
 
   // Handle Escape key to close modal
   useEffect(() => {
@@ -581,7 +584,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                      <h4 className="font-bold text-gray-800">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
-                     <button onClick={() => setEditingTemplate(null)}><X className="w-5 h-5 text-gray-400" /></button>
+                     <button onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
                   </div>
 
                   <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">

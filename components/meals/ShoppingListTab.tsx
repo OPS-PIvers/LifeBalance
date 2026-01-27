@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { ShoppingItem } from '@/types/schema';
+import { ShoppingItem, QuickStockList } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -77,6 +77,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -496,7 +497,11 @@ const ShoppingListTab: React.FC = () => {
         />
         <ShoppingSettingsModal
             isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              setSettingsInitialTemplate(null);
+            }}
+            initialTemplateData={settingsInitialTemplate}
         />
 
         {/* Edit Modal */}
