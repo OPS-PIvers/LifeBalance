@@ -13,3 +13,7 @@
 ## 2024-06-04 - Segmented Control Accessibility
 **Learning:** Ad-hoc toggle buttons (Expense/Income) were inaccessible and lacked keyboard support. Using `aria-pressed` in a `group` context is a simple, effective pattern for mutually exclusive options when full radio semantics are too heavy.
 **Action:** Use the new `SegmentedControl` component for any future toggle/choice groups to ensure consistent accessibility and focus management.
+
+## 2025-05-15 - Inline Edit Accessibility
+**Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
+**Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.

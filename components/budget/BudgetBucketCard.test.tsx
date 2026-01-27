@@ -66,6 +66,26 @@ describe('BudgetBucketCard', () => {
     expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
   });
 
+  it('calls onStartEditingLimit when limit text is activated via keyboard (Enter)', () => {
+    render(<BudgetBucketCard {...defaultProps} />);
+
+    const limitElement = screen.getByLabelText('Edit limit for Groceries, currently $500');
+    limitElement.focus();
+    fireEvent.keyDown(limitElement, { key: 'Enter' });
+
+    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
+  });
+
+  it('calls onStartEditingLimit when limit text is activated via keyboard (Space)', () => {
+    render(<BudgetBucketCard {...defaultProps} />);
+
+    const limitElement = screen.getByLabelText('Edit limit for Groceries, currently $500');
+    limitElement.focus();
+    fireEvent.keyDown(limitElement, { key: ' ' });
+
+    expect(defaultProps.onStartEditingLimit).toHaveBeenCalledWith('bucket1');
+  });
+
   it('calls onSaveLimit when save button is clicked', () => {
     render(<BudgetBucketCard {...defaultProps} isEditingLimit={true} />);
 
