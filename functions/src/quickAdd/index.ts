@@ -893,9 +893,20 @@ export const quickAddNaturalLanguage = onRequest(
     // 5. Detect command type
     const commandType = detectCommandType(trimmedText);
 
+    // 6. Enforce permissions based on detected type
+    if (commandType === 'expense' && !permissions?.expenses) {
+      errorResponse(res, 403, "API key does not have expenses permission", "FORBIDDEN");
+      return;
+    }
+
+    if (commandType === 'shopping' && !permissions?.shoppingList) {
+      errorResponse(res, 403, "API key does not have shoppingList permission", "FORBIDDEN");
+      return;
+    }
+
     try {
 
-      // 6. Write to pendingItems collection
+      // 7. Write to pendingItems collection
       const pendingItemData = {
         text: trimmedText,
         type: commandType,
