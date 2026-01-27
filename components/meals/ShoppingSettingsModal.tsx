@@ -10,9 +10,10 @@ import toast from 'react-hot-toast';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  initialTemplateData?: Partial<QuickStockList> | null;
 }
 
-const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
+const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTemplateData }) => {
   const {
     stores,
     addStore,
@@ -58,10 +59,16 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose }) => {
           setLocalCategories([...GROCERY_CATEGORIES]);
         }
         setHasUnsavedCategoryChanges(false);
+
+        // Pre-fill template if provided
+        if (initialTemplateData) {
+          setActiveTab('templates');
+          setEditingTemplate(initialTemplateData);
+        }
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, groceryCategories]);
+  }, [isOpen, groceryCategories, initialTemplateData]);
 
   // Handle Escape key to close modal
   useEffect(() => {

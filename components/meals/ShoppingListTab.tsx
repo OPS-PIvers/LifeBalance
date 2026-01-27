@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { ShoppingItem } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
+import { ShoppingItem, QuickStockList } from '@/types/schema';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2, Save } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
@@ -77,6 +77,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -214,6 +215,44 @@ const ShoppingListTab: React.FC = () => {
         }
     };
 
+    const handleSaveAsTemplate = async () => {
+      const pendingItems = shoppingList.filter(i => !i.isPurchased);
+      if (pendingItems.length === 0) {
+          toast('No pending items to save', { icon: 'ℹ️' });
+          return;
+      }
+
+      const itemIds: string[] = [];
+      for (const item of pendingItems) {
+           let catalogItemId: string;
+           const match = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
+           if (match) {
+               catalogItemId = match.id;
+           } else {
+               // Create item
+               const newItem = {
+                  name: item.name,
+                  category: item.category || 'Uncategorized',
+                  lastPurchased: new Date().toISOString(),
+                  purchaseCount: 1
+              };
+              catalogItemId = await addGroceryCatalogItem(newItem);
+           }
+           itemIds.push(catalogItemId);
+      }
+
+      // Remove duplicates if any
+      const uniqueIds = Array.from(new Set(itemIds));
+
+      setSettingsInitialTemplate({
+          name: '',
+          items: uniqueIds,
+          icon: 'ShoppingBag',
+          color: 'slate'
+      });
+      setIsSettingsOpen(true);
+    };
+
     const handleCheck = useCallback((item: ShoppingItem) => {
         toggleShoppingItemPurchased(item.id);
     }, [toggleShoppingItemPurchased]);
@@ -296,6 +335,15 @@ const ShoppingListTab: React.FC = () => {
                     aria-label="Copy list to clipboard"
                 >
                     <Share2 className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={handleSaveAsTemplate}
+                    disabled={!hasPendingItems}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                    title="Save as Quick List Template"
+                    aria-label="Save as Quick List Template"
+                >
+                    <Save className="w-5 h-5" />
                 </button>
                 <button
                     onClick={handleExport}
@@ -496,7 +544,11 @@ const ShoppingListTab: React.FC = () => {
         />
         <ShoppingSettingsModal
             isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+            onClose={() => {
+                setIsSettingsOpen(false);
+                setSettingsInitialTemplate(null);
+            }}
+            initialTemplateData={settingsInitialTemplate}
         />
 
         {/* Edit Modal */}
