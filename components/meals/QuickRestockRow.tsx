@@ -67,14 +67,14 @@ export const QuickRestockRow: React.FC = () => {
           <button
             key={list.id}
             onClick={() => handleRestock(list)}
-            className="flex-shrink-0 flex items-center gap-1.5 pl-2 pr-3 py-1.5 bg-white border border-brand-100 rounded-full shadow-sm hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all group"
+            className="flex-shrink-0 flex items-center gap-1.5 pl-2 pr-3 py-1.5 bg-white/60 backdrop-blur-md border border-transparent ring-1 ring-brand-100/50 rounded-full shadow-sm hover:ring-brand-300 hover:bg-white/80 active:scale-95 transition-all group"
             aria-label={`Quick add items from ${list.name}`}
           >
-            <div className="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200">
+            <div className="w-5 h-5 rounded-full bg-brand-100/80 text-brand-700 flex items-center justify-center group-hover:bg-brand-200">
               <List size={12} strokeWidth={3} />
             </div>
             <span className="text-xs font-medium text-brand-700">{list.name}</span>
-            <span className="text-[10px] text-brand-400 bg-brand-50 px-1 rounded-full">
+            <span className="text-[10px] text-brand-500 bg-brand-50/50 px-1 rounded-full">
               {list.items.length}
             </span>
           </button>

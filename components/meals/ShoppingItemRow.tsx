@@ -100,8 +100,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onDragEnd={handleDragEnd}
         style={{ x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-gray-100",
-          item.isPurchased && "opacity-60 bg-gray-50"
+          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm ring-1 ring-black/5 border-transparent",
+          item.isPurchased && "opacity-60 bg-slate-50"
         )}
       >
         {/* Drag Handle - Only render if reorderable */}
@@ -132,7 +132,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         <div className="flex-1 min-w-0">
             <div className={clsx(
                 "font-medium truncate transition-all",
-                item.isPurchased ? "text-gray-500 line-through decoration-gray-400" : "text-gray-900"
+                item.isPurchased ? "text-slate-500 line-through decoration-slate-400" : "text-slate-900"
             )}>
                 {item.name}
             </div>
@@ -140,7 +140,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             {/* Metadata Chips */}
             <div className="flex flex-wrap items-center gap-2 mt-1">
                  {item.quantity && (
-                    <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                         {item.quantity}
                     </span>
                  )}
