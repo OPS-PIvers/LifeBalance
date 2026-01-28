@@ -74,14 +74,14 @@ const Dashboard: React.FC = () => {
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/80 backdrop-blur-md border border-indigo-200/50 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4 ring-1 ring-black/5">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-blue-800">
+                <h3 className="text-sm font-bold text-slate-700">
                   Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
                 </h3>
-                <p className="text-xs text-blue-600 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts...
                 </p>
               </div>
@@ -161,14 +161,14 @@ const Dashboard: React.FC = () => {
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-             <h3 className="font-bold text-lg text-brand-800 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-brand-500 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md">
+           <div className="bg-white/90 backdrop-blur-2xl w-full max-w-sm rounded-2xl p-6 shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95">
+             <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
+             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
                Select which account to deduct this payment from.
              </p>
              
-             <div className="space-y-2 mb-4">
+             <div className="space-y-3 mb-6">
                {accounts.filter(a => a.type !== 'credit').map(acc => (
                  <button
                    key={acc.id}
@@ -176,17 +176,17 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-3 flex justify-between items-center bg-brand-50 hover:bg-brand-100 rounded-xl border border-brand-200 text-left"
+                   className="w-full p-4 flex justify-between items-center bg-white/50 hover:bg-white rounded-xl border border-slate-200/50 hover:border-slate-300 transition-all shadow-sm group"
                  >
-                   <span className="font-bold text-brand-700 text-sm">{acc.name}</span>
-                   <span className="font-mono text-xs text-brand-500">${acc.balance.toLocaleString()}</span>
+                   <span className="font-semibold text-slate-700 text-sm group-hover:text-slate-900 transition-colors">{acc.name}</span>
+                   <span className="font-mono text-xs text-slate-500 group-hover:text-slate-700 transition-colors">${acc.balance.toLocaleString()}</span>
                  </button>
                ))}
              </div>
              
              <button 
                onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-brand-400 font-bold"
+               className="w-full py-3 text-slate-400 font-semibold hover:text-slate-600 transition-colors"
              >
                Cancel
              </button>

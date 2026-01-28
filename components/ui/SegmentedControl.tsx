@@ -30,8 +30,8 @@ export const SegmentedControl = <T extends string>({
       role="group"
       aria-label={name}
       className={cn(
-        "flex bg-brand-50 p-1 rounded-xl",
-        showBorder && "border border-brand-200",
+        "flex bg-slate-100/50 backdrop-blur-sm p-1 rounded-xl",
+        showBorder && "ring-1 ring-black/5",
         className
       )}
     >
@@ -46,8 +46,8 @@ export const SegmentedControl = <T extends string>({
             className={cn(
               "flex-1 py-2 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
               isActive
-                ? cn("bg-white shadow-sm", option.activeClassName || "text-brand-800")
-                : "text-brand-400 hover:text-brand-600",
+                ? cn("bg-white shadow-sm ring-1 ring-black/5", option.activeClassName || "text-slate-900")
+                : "text-slate-500 hover:text-slate-700",
               option.className
             )}
           >

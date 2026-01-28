@@ -236,18 +236,18 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   }, [item, habits, transactions]);
 
   return (
-    <div className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
-      <div className="p-3 flex items-center justify-between">
+    <div className="bg-white/60 backdrop-blur-sm rounded-xl ring-1 ring-black/5 overflow-hidden transition-all hover:bg-white/80 shadow-sm">
+      <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-2 rounded-lg ${
-              isCalendarQueueItem(item) ? 'bg-orange-100 text-orange-600' :
-              isTodoQueueItem(item) ? 'bg-rose-100 text-rose-600' :
-              'bg-blue-100 text-blue-600'
+          <div className={`p-2.5 rounded-xl border shadow-sm ${
+              isCalendarQueueItem(item) ? 'bg-orange-50 border-orange-100/50 text-orange-600' :
+              isTodoQueueItem(item) ? 'bg-rose-50 border-rose-100/50 text-rose-600' :
+              'bg-blue-50 border-blue-100/50 text-blue-600'
             }`}>
-             {isCalendarQueueItem(item) ? <CalendarClock size={16} /> :
-              isTodoQueueItem(item) ? <ListTodo size={16} /> :
-              <Receipt size={16} />}
+             {isCalendarQueueItem(item) ? <CalendarClock size={18} /> :
+              isTodoQueueItem(item) ? <ListTodo size={18} /> :
+              <Receipt size={18} />}
           </div>
           <div>
             <p className="font-bold text-brand-700 text-sm">
@@ -291,12 +291,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
       {/* Expanded Actions */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
-          <div className="flex justify-between items-center mb-2">
-             <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">
+        <div className="px-4 pb-4 pt-3 border-t border-black/5 bg-white/40">
+          <div className="flex justify-between items-center mb-3">
+             <p className="text-xxs font-bold text-slate-400 uppercase tracking-wider">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
              </p>
-             <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
+             <button onClick={() => setExpandedId(null)}><X size={14} className="text-slate-400 hover:text-slate-600"/></button>
           </div>
 
           {isCalendarQueueItem(item) ? (
