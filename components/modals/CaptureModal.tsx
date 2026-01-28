@@ -17,6 +17,7 @@ import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
+import { ContextualSuggestions } from './ContextualSuggestions';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -570,6 +571,42 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Body Content */}
       <div className="p-6 overflow-y-auto flex-1">
 
+        {/* Universal Magic Input */}
+        {view === 'menu' && (
+          <>
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
+              <div className="bg-white rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles size={16} className="text-violet-600 animate-pulse" />
+                  <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
+                </div>
+                <form onSubmit={handleMagicSubmit} className="flex gap-2">
+                  <input
+                    type="text"
+                    aria-label="Magic action input"
+                    value={magicInput}
+                    onChange={(e) => setMagicInput(e.target.value)}
+                    placeholder="Spent $20 on Pizza..."
+                    className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
+                    disabled={magicLoading}
+                    autoFocus={activeTab === 'transaction' && !magicInput} // Only autofocus if we are in transaction mode initially
+                  />
+                  <button
+                    type="submit"
+                    aria-label="Submit magic action"
+                    disabled={!magicInput.trim() || magicLoading}
+                    className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                  >
+                    {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {!magicInput && <ContextualSuggestions onSelect={setMagicInput} />}
+          </>
+        )}
+
         {/* 1. TRANSACTION TAB */}
         {activeTab === 'transaction' && (
             <>
@@ -590,35 +627,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     <p className="text-xs text-blue-700">
                       <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
                     </p>
-                  </div>
-
-                  {/* Magic Input */}
-                  <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
-                    <div className="bg-white rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles size={16} className="text-violet-600 animate-pulse" />
-                        <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
-                      </div>
-                      <form onSubmit={handleMagicSubmit} className="flex gap-2">
-                        <input
-                          type="text"
-                          aria-label="Magic action input"
-                          value={magicInput}
-                          onChange={(e) => setMagicInput(e.target.value)}
-                          placeholder="Spent $20 on Pizza..."
-                          className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
-                          disabled={magicLoading}
-                        />
-                        <button
-                          type="submit"
-                          aria-label="Submit magic action"
-                          disabled={!magicInput.trim() || magicLoading}
-                          className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
-                        >
-                          {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                        </button>
-                      </form>
-                    </div>
                   </div>
 
                   <button

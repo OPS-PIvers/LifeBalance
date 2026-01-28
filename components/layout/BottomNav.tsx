@@ -6,6 +6,18 @@ import CaptureModal from '../modals/CaptureModal';
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) => 
     `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
       isActive ? 'text-brand-800' : 'text-brand-400 hover:text-brand-600'
