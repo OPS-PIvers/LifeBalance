@@ -4,15 +4,34 @@ import ToDosPage from './ToDosPage';
 import MealPlanTab from '../components/meals/MealPlanTab';
 import ShoppingListTab from '../components/meals/ShoppingListTab';
 
+const VALID_TABS = ['todos', 'meals', 'shopping'] as const;
+type TabValue = typeof VALID_TABS[number];
+
 const ListsPage: React.FC = () => {
   // Smart Memory: Initialize from localStorage
-  const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('lists-active-tab') || 'todos';
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const stored = window.localStorage.getItem('lists-active-tab');
+        if (stored && VALID_TABS.includes(stored as TabValue)) {
+          return stored;
+        }
+      }
+    } catch (error) {
+      // Ignore localStorage errors
+    }
+    return 'todos';
   });
 
   // Save to localStorage on change
   useEffect(() => {
-    localStorage.setItem('lists-active-tab', activeTab);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('lists-active-tab', activeTab);
+      }
+    } catch (error) {
+      // Ignore persistence errors
+    }
   }, [activeTab]);
 
   const tabs = [
