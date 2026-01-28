@@ -24,7 +24,7 @@ export const TEMPLATE_ICONS = [
   { id: 'Camera', icon: Camera, label: 'Hobby' },
   { id: 'Cat', icon: Cat, label: 'Pet' },
   { id: 'Clock', icon: Clock, label: 'Urgent' },
-  { id: 'CreditCard', icon: CreditCard, label: 'Shopping' },
+  { id: 'CreditCard', icon: CreditCard, label: 'Payment' },
   { id: 'Dumbbell', icon: Dumbbell, label: 'Gym' },
   { id: 'Flower', icon: Flower, label: 'Garden' },
   { id: 'Gamepad', icon: Gamepad, label: 'Gaming' },
