@@ -613,7 +613,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     <div className="flex flex-col gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
                          <div>
                             <span className="text-xs font-bold text-gray-400 uppercase mb-2 block">Icon</span>
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                            <div className="flex gap-2 overflow-x-auto p-2 scrollbar-hide">
                                 {TEMPLATE_ICONS.map(({ id, icon: Icon }) => (
                                     <button
                                         key={id}
@@ -631,7 +631,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                          </div>
                          <div>
                             <span className="text-xs font-bold text-gray-400 uppercase mb-2 block">Color</span>
-                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                            <div className="flex gap-2 overflow-x-auto p-2 scrollbar-hide">
                                 {Object.values(STORE_COLORS).map((color) => (
                                     <button
                                         key={color.id}
