@@ -17,7 +17,7 @@ const ListsPage: React.FC = () => {
           return stored;
         }
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore localStorage errors
     }
     return 'todos';
@@ -29,7 +29,7 @@ const ListsPage: React.FC = () => {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('lists-active-tab', activeTab);
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore persistence errors
     }
   }, [activeTab]);
