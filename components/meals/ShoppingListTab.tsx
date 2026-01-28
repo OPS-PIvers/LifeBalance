@@ -312,7 +312,7 @@ const ShoppingListTab: React.FC = () => {
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
         <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold">Shopping List</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shopping List</h1>
             <div className="flex gap-2">
                 <button
                     onClick={handleShareList}
@@ -342,7 +342,7 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Quick Add Input */}
-        <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
+        <div className="bg-white/80 backdrop-blur-xl p-4 rounded-xl shadow-glass ring-1 ring-black/5 space-y-3">
              <QuickRestockRow />
              <form onSubmit={handleSmartAdd} className="relative">
                 <input
@@ -350,7 +350,7 @@ const ShoppingListTab: React.FC = () => {
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400"
                     autoFocus
                 />
                 <button
