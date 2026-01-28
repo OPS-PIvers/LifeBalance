@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Transaction, Habit, BudgetBucket } from '../../types/schema';
 import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
+import { Button } from '../ui/Button';
 
 interface CaptureTransactionManualProps {
   initialData?: {
@@ -48,6 +49,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [isRecurring, setIsRecurring] = useState(false);
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || format(new Date(), 'yyyy-MM-dd'));
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Get current bucket and its sub-buckets
   const currentBucket = useMemo(() => buckets.find(b => b.name === category), [buckets, category]);
@@ -104,6 +106,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       return;
     }
 
+    setIsSubmitting(true);
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       amount: parsedAmount,
@@ -129,6 +132,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         errorMsg = error.message;
       }
       toast.error(errorMsg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -191,6 +196,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           {dynamicCategories.map(cat => (
             <button
               key={cat}
+              role="radio"
+              aria-checked={category === cat}
               onClick={() => { setCategory(cat); setSubBucketId(undefined); }}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 category === cat
@@ -217,6 +224,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           >
             <button
               onClick={() => setSubBucketId(undefined)}
+              role="radio"
+              aria-checked={!subBucketId}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                 !subBucketId
                   ? 'bg-brand-800 text-white'
@@ -228,6 +237,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             {availableSubBuckets.map(sb => (
               <button
                 key={sb.id}
+                role="radio"
+                aria-checked={subBucketId === sb.id}
                 onClick={() => setSubBucketId(sb.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                   subBucketId === sb.id
@@ -352,12 +363,14 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         </p>
       </div>
 
-      <button
+      <Button
         onClick={handleManualSave}
+        disabled={isSubmitting}
+        isLoading={isSubmitting}
         className="w-full py-4 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-brand-700"
       >
         Save Transaction
-      </button>
+      </Button>
     </div>
   );
 };
