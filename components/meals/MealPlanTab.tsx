@@ -254,7 +254,7 @@ const MealPlanTab: React.FC = () => {
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
-      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
+      setCurrentMeal({ name: '', description: '', tags: [], ingredients: [], instructions: [], recipeUrl: '' });
     setTargetDate(dateStr);
     setMealType('dinner'); // Default
     setIsAddModalOpen(true);
@@ -370,7 +370,7 @@ const MealPlanTab: React.FC = () => {
       setEditingMealId(null);
       setEditingPlanItemId(null);
       setMealType('dinner');
-      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
+      setCurrentMeal({ name: '', description: '', tags: [], ingredients: [], instructions: [], recipeUrl: '' });
       setIngredientName('');
       setIngredientQty('');
       setTagInput('');
