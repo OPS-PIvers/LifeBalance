@@ -894,14 +894,38 @@ export const quickAddNaturalLanguage = onRequest(
     const commandType = detectCommandType(trimmedText);
 
     // 6. Enforce permissions based on detected type
-    if (commandType === 'expense' && !permissions?.expenses) {
-      errorResponse(res, 403, "API key does not have expenses permission", "FORBIDDEN");
-      return;
-    }
-
-    if (commandType === 'shopping' && !permissions?.shoppingList) {
-      errorResponse(res, 403, "API key does not have shoppingList permission", "FORBIDDEN");
-      return;
+    switch (commandType) {
+      case "expense":
+        if (!permissions?.expenses) {
+          errorResponse(res, 403, "API key does not have expenses permission", "FORBIDDEN");
+          return;
+        }
+        break;
+      case "shopping":
+        if (!permissions?.shoppingList) {
+          errorResponse(res, 403, "API key does not have shoppingList permission", "FORBIDDEN");
+          return;
+        }
+        break;
+      case "todo":
+        if (!permissions?.habits) {
+          errorResponse(res, 403, "API key does not have habits permission", "FORBIDDEN");
+          return;
+        }
+        break;
+      case "unknown":
+      default:
+        // For ambiguous commands, require all relevant permissions to prevent privilege escalation
+        if (!permissions?.expenses || !permissions?.shoppingList || !permissions?.habits) {
+          errorResponse(
+            res,
+            403,
+            "API key does not have sufficient permissions for ambiguous command type",
+            "FORBIDDEN"
+          );
+          return;
+        }
+        break;
     }
 
     try {
@@ -919,10 +943,10 @@ export const quickAddNaturalLanguage = onRequest(
         .collection(`households/${householdId}/pendingItems`)
         .add(pendingItemData);
 
-      // 7. Log API call
+      // 8. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);
 
-      // 8. Return success
+      // 9. Return success
       jsonResponse(res, 200, {
         success: true,
         message: "Command queued. Open app to process.",
