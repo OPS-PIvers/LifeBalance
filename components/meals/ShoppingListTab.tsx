@@ -230,36 +230,44 @@ const ShoppingListTab: React.FC = () => {
         const toastId = toast.loading('Preparing template...');
 
         try {
-            // Resolve to Catalog IDs
+            // 1. Resolve to Catalog IDs
             const itemIds: string[] = [];
-            const itemsToCreate: ShoppingItem[] = [];
+            const itemsToCreateMap = new Map<string, ShoppingItem>();
 
             for (const item of shoppingList) {
                 const catalogItem = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
                 if (catalogItem) {
                     itemIds.push(catalogItem.id);
                 } else {
-                    itemsToCreate.push(item);
+                    // Deduplicate by name
+                    const key = item.name.toLowerCase();
+                    if (!itemsToCreateMap.has(key)) {
+                        itemsToCreateMap.set(key, item);
+                    }
                 }
             }
 
-            // Create missing catalog items
-            for (const item of itemsToCreate) {
-                const newId = await addGroceryCatalogItem({
-                    name: item.name,
-                    category: item.category || 'Uncategorized',
-                    lastPurchased: new Date().toISOString(),
-                    purchaseCount: 0 // Start at 0 as this is just a template creation reference
-                });
-                itemIds.push(newId);
-            }
+            // 2. Create missing catalog items in parallel
+            const createdIds = await Promise.all(
+                Array.from(itemsToCreateMap.values()).map(item =>
+                    addGroceryCatalogItem({
+                        name: item.name,
+                        category: item.category || 'Uncategorized',
+                        lastPurchased: new Date().toISOString(),
+                        purchaseCount: 0 // Start at 0 as this is just a template creation reference
+                    })
+                )
+            );
+
+            // 3. Combine all IDs
+            const allIds = [...itemIds, ...createdIds];
 
             toast.dismiss(toastId);
 
             // Open Modal with data
             setSettingsInitialTemplate({
                 name: '',
-                items: itemIds,
+                items: allIds,
                 icon: 'ShoppingBag',
                 color: 'slate'
             });
