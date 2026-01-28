@@ -464,6 +464,56 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId); // Allow cleanup
       }
 
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Bucket History
+      match /bucketHistory/{snapshotId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'bucketId', 'bucketName', 'periodId', 'periodStartDate', 'periodEndDate',
+                                'limit', 'totalSpent', 'totalPending', 'transactionCount', 'createdAt'
+                              ]) &&
+                              isValidString(request.resource.data.bucketId, 50) &&
+                              isValidString(request.resource.data.bucketName, 50) &&
+                              isValidString(request.resource.data.periodId, 10) && // YYYY-MM-DD
+                              isValidString(request.resource.data.periodStartDate, 10) &&
+                              isValidString(request.resource.data.periodEndDate, 10) &&
+                              isValidNumber(request.resource.data.limit) &&
+                              isValidNumber(request.resource.data.totalSpent) &&
+                              isValidNumber(request.resource.data.totalPending) &&
+                              isValidNumber(request.resource.data.transactionCount) &&
+                              isValidString(request.resource.data.createdAt, 30); // ISO string
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Challenges
+      match /challenges/{challengeId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'month', 'title', 'description', 'relatedHabitIds',
+                                'targetType', 'targetValue', 'targetTotalCount', 'currentValue',
+                                'yearlyGoalId', 'yearlyRewardLabel', 'status',
+                                'createdAt', 'createdBy', 'completedAt'
+                              ]) &&
+                              isValidString(request.resource.data.month, 7) && // YYYY-MM
+                              isValidString(request.resource.data.title, 100) &&
+                              isValidOptionalString(request.resource.data.get('description', null), 500) &&
+                              request.resource.data.relatedHabitIds is list &&
+                              (request.resource.data.get('targetType', null) == null || request.resource.data.targetType in ['count', 'percentage']) &&
+                              isValidOptionalNumber(request.resource.data.get('targetValue', null)) &&
+                              isValidOptionalNumber(request.resource.data.get('targetTotalCount', null)) && // Deprecated
+                              isValidOptionalNumber(request.resource.data.get('currentValue', null)) &&
+                              isValidOptionalString(request.resource.data.get('yearlyGoalId', null), 50) &&
+                              isValidString(request.resource.data.yearlyRewardLabel, 100) &&
+                              request.resource.data.status in ['active', 'success', 'failed'] &&
+                              // Metadata
+                              (request.resource.data.get('createdAt', null) == null || request.resource.data.createdAt is timestamp) &&
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
+                              (request.resource.data.get('completedAt', null) == null || request.resource.data.completedAt is timestamp);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -484,7 +534,9 @@ service cloud.firestore {
                      subcollection != 'meals' &&
                      subcollection != 'todos' &&
                      subcollection != 'groceryCatalog' &&
-                     subcollection != 'pendingItems';
+                     subcollection != 'pendingItems' &&
+                     subcollection != 'bucketHistory' &&
+                     subcollection != 'challenges';
       }
     }
 
