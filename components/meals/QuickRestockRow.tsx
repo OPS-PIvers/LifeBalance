@@ -9,6 +9,9 @@ import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import clsx from 'clsx';
 
+// Create map for O(1) icon lookup
+const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
+
 export const QuickRestockRow: React.FC = () => {
   const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useHousehold();
 
@@ -68,7 +71,7 @@ export const QuickRestockRow: React.FC = () => {
         {quickStockLists.map(list => {
           const colorKey = list.color || DEFAULT_STORE_COLOR;
           const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
-          const ListIcon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
+          const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
 
           return (
             <button
