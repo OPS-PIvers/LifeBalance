@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Wallet, Plus, Activity, Utensils, CheckSquare, ShoppingCart } from 'lucide-react';
+import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
 import CaptureModal from '../modals/CaptureModal';
 
 const BottomNav: React.FC = () => {
@@ -29,14 +29,6 @@ const BottomNav: React.FC = () => {
                 </>
               )}
             </NavLink>
-            <NavLink to="/budget" className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <Wallet className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Budget</span>
-                </>
-              )}
-            </NavLink>
             <NavLink to="/habits" className={navLinkClass}>
               {({ isActive }) => (
                 <>
@@ -52,27 +44,19 @@ const BottomNav: React.FC = () => {
 
           {/* Right Group */}
           <div className="flex items-center flex-1 justify-around">
-            <NavLink to="/todos" className={navLinkClass}>
+            <NavLink to="/budget" className={navLinkClass}>
               {({ isActive }) => (
                 <>
-                  <CheckSquare className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">To-Dos</span>
+                  <Wallet className={iconClass(isActive)} />
+                  <span className="text-xxs font-medium">Budget</span>
                 </>
               )}
             </NavLink>
-            <NavLink to="/meals" className={navLinkClass}>
+            <NavLink to="/lists" className={navLinkClass}>
               {({ isActive }) => (
                 <>
-                  <Utensils className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Meals</span>
-                </>
-              )}
-            </NavLink>
-            <NavLink to="/shopping" className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <ShoppingCart className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Shopping</span>
+                  <List className={iconClass(isActive)} />
+                  <span className="text-xxs font-medium">Lists</span>
                 </>
               )}
             </NavLink>
