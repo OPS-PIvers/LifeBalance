@@ -33,18 +33,15 @@ const ListsPage: React.FC = () => {
       </div>
 
       <div className="flex-1">
-        {activeTab === 'todos' && <ToDosPage />}
-
-        {activeTab === 'meals' && (
-             <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
-                <MealPlanTab />
-             </div>
-        )}
-
-        {activeTab === 'shopping' && (
-             <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
-                <ShoppingListTab />
-             </div>
+        {activeTab === 'todos' ? (
+          <ToDosPage />
+        ) : (
+          <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
+            {{
+              meals: <MealPlanTab />,
+              shopping: <ShoppingListTab />,
+            }[activeTab]}
+          </div>
         )}
       </div>
     </div>
