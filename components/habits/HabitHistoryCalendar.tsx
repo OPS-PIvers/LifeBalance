@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { useCalendarGrid } from '../../hooks/useCalendarGrid';
 import { Habit } from '../../types/schema';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -17,48 +18,25 @@ const HabitHistoryCalendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   // Calendar Grid Logic
-  const { monthStart, days } = useMemo(() => {
-    const mStart = startOfMonth(currentDate);
-    const mEnd = endOfMonth(mStart);
-    const sDate = startOfWeek(mStart);
-    const eDate = endOfWeek(mEnd);
-    return {
-      monthStart: mStart,
-      days: eachDayOfInterval({ start: sDate, end: eDate })
-    };
-  }, [currentDate]);
-
+  const { monthStart, days } = useCalendarGrid(currentDate);
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-  // Map: DateString -> Completed Habits
-  const dailyCompletions = useMemo(() => {
+  // Map: DateString -> Completed Habits & Max Count
+  const { dailyCompletions, maxDailyCompletions } = useMemo(() => {
     const map = new Map<string, Habit[]>();
+    let max = 0;
+
     habits.forEach(habit => {
       habit.completedDates.forEach(date => {
         if (!map.has(date)) map.set(date, []);
-        map.get(date)?.push(habit);
+        const list = map.get(date)!;
+        list.push(habit);
+        if (list.length > max) max = list.length;
       });
     });
-    return map;
+
+    return { dailyCompletions: map, maxDailyCompletions: max || 1 };
   }, [habits]);
-
-  // Map: DateString -> Completion Count (for heatmap intensity)
-  const dailyCounts = useMemo(() => {
-    const map = new Map<string, number>();
-    dailyCompletions.forEach((habits, date) => {
-      map.set(date, habits.length);
-    });
-    return map;
-  }, [dailyCompletions]);
-
-  // Calculate max completions for intensity scaling
-  const maxDailyCompletions = useMemo(() => {
-    let max = 0;
-    dailyCounts.forEach(count => {
-      if (count > max) max = count;
-    });
-    return max || 1; // Prevent division by zero
-  }, [dailyCounts]);
 
   const getIntensityClass = (count: number) => {
     if (count === 0) return '';
@@ -114,7 +92,8 @@ const HabitHistoryCalendar: React.FC = () => {
         <div className="grid grid-cols-7 gap-y-2 gap-x-1">
           {days.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const count = dailyCounts.get(dateStr) || 0;
+            const habitsOnDate = dailyCompletions.get(dateStr) || [];
+            const count = habitsOnDate.length;
             const isSelected = isSameDay(day, selectedDate);
             const isCurrentMonth = isSameMonth(day, monthStart);
             const intensityClass = getIntensityClass(count);

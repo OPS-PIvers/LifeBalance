@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
+import { useCalendarGrid } from '../../hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
@@ -34,18 +35,7 @@ const BudgetCalendar: React.FC = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
-  const { monthStart, startDate, endDate, days } = useMemo(() => {
-    const mStart = startOfMonth(currentDate);
-    const mEnd = endOfMonth(mStart);
-    const sDate = startOfWeek(mStart);
-    const eDate = endOfWeek(mEnd);
-    return {
-      monthStart: mStart,
-      startDate: sDate,
-      endDate: eDate,
-      days: eachDayOfInterval({ start: sDate, end: eDate })
-    };
-  }, [currentDate]);
+  const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   // Expand recurring calendar items for the visible date range
