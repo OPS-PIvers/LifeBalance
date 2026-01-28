@@ -1,8 +1,9 @@
 import React, { useState, useEffect, memo } from 'react';
-import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -64,6 +65,9 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   // Local state for limit editing to prevent parent re-renders on keystroke
   // We initialize it directly from props so it has a valid value immediately
   const [localLimit, setLocalLimit] = useState(bucket.limit.toString());
+
+  // State to track which transaction is being acted upon (for mobile drawer)
+  const [actionTx, setActionTx] = useState<Transaction | null>(null);
 
   // To avoid the "setState in effect" warning while correctly syncing state:
   // We use a pattern where we key the state initialization off the editing mode.
@@ -230,7 +234,8 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   }`}>
                     ${tx.amount}
                   </span>
-                  <div className="flex gap-1">
+                  {/* Desktop Actions */}
+                  <div className="hidden sm:flex gap-1">
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -248,6 +253,19 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                       title="Delete transaction"
                     >
                       <Trash2 size={14} />
+                    </Button>
+                  </div>
+
+                  {/* Mobile Actions */}
+                  <div className="sm:hidden">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => setActionTx(tx)}
+                      className="text-slate-400"
+                      title="Transaction options"
+                    >
+                      <MoreVertical size={16} />
                     </Button>
                   </div>
                 </div>
@@ -274,6 +292,50 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           </Button>
         </div>
       )}
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionTx}
+        onClose={() => setActionTx(null)}
+        title="Transaction Actions"
+      >
+        <div className="space-y-3">
+          {actionTx && (
+            <div className="pb-4 mb-4 border-b border-slate-100">
+               <p className="font-bold text-lg text-slate-800">{actionTx.merchant}</p>
+               <p className="text-slate-500 text-sm">
+                 {format(parseISO(actionTx.date), 'MMMM d, yyyy')} • ${actionTx.amount.toFixed(2)}
+               </p>
+            </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => {
+              if (actionTx) onEditTransaction(actionTx);
+              setActionTx(null);
+            }}
+            className="w-full justify-start h-12 text-base"
+          >
+            <Edit className="mr-3" size={20} />
+            Edit Transaction
+          </Button>
+
+          <Button
+            variant="ghost-destructive"
+            size="lg"
+            onClick={() => {
+              if (actionTx) onDeleteTransaction(actionTx.id);
+              setActionTx(null);
+            }}
+            className="w-full justify-start h-12 text-base"
+          >
+            <Trash2 className="mr-3" size={20} />
+            Delete Transaction
+          </Button>
+        </div>
+      </Drawer>
     </div>
   );
 }, arePropsEqual);
