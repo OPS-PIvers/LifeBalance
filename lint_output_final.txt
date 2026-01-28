@@ -1,0 +1,12 @@
+
+> lifebalance@0.0.0 lint /app
+> tsc --noEmit && eslint .
+
+
+/app/utils/firestoreHelpers.test.ts
+  70:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  87:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 2 problems (2 errors, 0 warnings)
+
+ ELIFECYCLE  Command failed with exit code 1.

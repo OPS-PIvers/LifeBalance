@@ -49,6 +49,7 @@ import {
   QuickStockList,
   HouseholdApiKey
 } from '@/types/schema';
+import { subscribeToCollection } from '@/utils/firestoreHelpers';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendFromExpanded } from '@/utils/safeToSpendCalculator';
@@ -300,65 +301,52 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const unsubscribers: (() => void)[] = [];
 
     // Accounts listener
-    const accountsQuery = query(collection(db, `households/${householdId}/accounts`));
     unsubscribers.push(
-      onSnapshot(accountsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
+      subscribeToCollection<Account>(db, `households/${householdId}/accounts`, setAccounts, {
+        transform: (doc) => {
           const d = doc.data();
           return {
             ...d,
             id: doc.id,
             lastUpdated: d.lastUpdated instanceof Timestamp ? d.lastUpdated.toDate().toISOString() : d.lastUpdated,
           } as Account;
-        });
-        setAccounts(data);
+        }
       })
     );
 
     // Buckets listener
-    const bucketsQuery = query(collection(db, `households/${householdId}/buckets`));
     unsubscribers.push(
-      onSnapshot(bucketsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BudgetBucket));
-        setBuckets(data);
-      })
+      subscribeToCollection<BudgetBucket>(db, `households/${householdId}/buckets`, setBuckets)
     );
 
     // Bucket History listener (Ordered by most recent period first)
     // NOTE: This might require an index on periodStartDate desc
-    const historyQuery = query(collection(db, `households/${householdId}/bucketHistory`), orderBy('periodStartDate', 'desc'));
     unsubscribers.push(
-      onSnapshot(historyQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot));
-        setBucketHistory(data);
-      }, (error) => {
-        console.error('Error listening to bucketHistory:', error);
-      })
+      subscribeToCollection<BucketPeriodSnapshot>(
+        db,
+        `households/${householdId}/bucketHistory`,
+        setBucketHistory,
+        {
+          constraints: [orderBy('periodStartDate', 'desc')],
+          onError: (error) => console.error('Error listening to bucketHistory:', error)
+        }
+      )
     );
 
     // Transactions listener
-    const txQuery = query(collection(db, `households/${householdId}/transactions`));
     unsubscribers.push(
-      onSnapshot(txQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Transaction));
-        setTransactions(data);
-      })
+      subscribeToCollection<Transaction>(db, `households/${householdId}/transactions`, setTransactions)
     );
 
     // Calendar listener
-    const calQuery = query(collection(db, `households/${householdId}/calendarItems`));
     unsubscribers.push(
-      onSnapshot(calQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CalendarItem));
-        setCalendarItems(data);
-      })
+      subscribeToCollection<CalendarItem>(db, `households/${householdId}/calendarItems`, setCalendarItems)
     );
 
     // Habits listener
-    const habitsQuery = query(collection(db, `households/${householdId}/habits`));
     unsubscribers.push(
-      onSnapshot(habitsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
+      subscribeToCollection<Habit>(db, `households/${householdId}/habits`, setHabits, {
+        transform: (doc) => {
           const d = doc.data();
           return {
             ...d,
@@ -366,36 +354,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             scoringType: d.scoringType || 'threshold',
             lastUpdated: d.lastUpdated instanceof Timestamp ? d.lastUpdated.toDate().toISOString() : d.lastUpdated,
           } as Habit;
-        });
-        setHabits(data);
+        }
       })
     );
 
     // Challenges listener
-    const challengesQuery = query(collection(db, `households/${householdId}/challenges`));
     unsubscribers.push(
-      onSnapshot(challengesQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Challenge));
-        setChallenges(data);
-      })
+      subscribeToCollection<Challenge>(db, `households/${householdId}/challenges`, setChallenges)
     );
 
     // Yearly Goals listener
-    const yearlyGoalsQuery = query(collection(db, `households/${householdId}/yearlyGoals`));
     unsubscribers.push(
-      onSnapshot(yearlyGoalsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as YearlyGoal));
-        setYearlyGoals(data);
-      })
+      subscribeToCollection<YearlyGoal>(db, `households/${householdId}/yearlyGoals`, setYearlyGoals)
     );
 
     // Rewards listener
-    const rewardsQuery = query(collection(db, `households/${householdId}/rewards`));
     unsubscribers.push(
-      onSnapshot(rewardsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as RewardItem));
-        setRewards(data);
-      })
+      subscribeToCollection<RewardItem>(db, `households/${householdId}/rewards`, setRewards)
     );
 
     // Members listener
@@ -483,46 +458,29 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     );
 
     // Meals listener
-    const mealsQuery = query(collection(db, `households/${householdId}/meals`));
     unsubscribers.push(
-      onSnapshot(mealsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Meal));
-        setMeals(data);
-      })
+      subscribeToCollection<Meal>(db, `households/${householdId}/meals`, setMeals)
     );
 
     // Shopping List listener
-    const shoppingListQuery = query(collection(db, `households/${householdId}/shoppingList`));
     unsubscribers.push(
-      onSnapshot(shoppingListQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ShoppingItem));
-        setShoppingList(data);
-      })
+      subscribeToCollection<ShoppingItem>(db, `households/${householdId}/shoppingList`, setShoppingList)
     );
 
     // Grocery Catalog listener
-    const groceryCatalogQuery = query(collection(db, `households/${householdId}/groceryCatalog`));
     unsubscribers.push(
-      onSnapshot(groceryCatalogQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as GroceryCatalogItem));
-        setGroceryCatalog(data);
-      })
+      subscribeToCollection<GroceryCatalogItem>(db, `households/${householdId}/groceryCatalog`, setGroceryCatalog)
     );
 
     // Meal Plan listener
-    const mealPlanQuery = query(collection(db, `households/${householdId}/mealPlan`));
     unsubscribers.push(
-      onSnapshot(mealPlanQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
-        setMealPlan(data);
-      })
+      subscribeToCollection<MealPlanItem>(db, `households/${householdId}/mealPlan`, setMealPlan)
     );
 
     // To-Do listener
-    const todosQuery = query(collection(db, `households/${householdId}/todos`));
     unsubscribers.push(
-      onSnapshot(todosQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
+      subscribeToCollection<ToDo>(db, `households/${householdId}/todos`, setTodos, {
+        transform: (doc) => {
           const d = doc.data();
           return {
             ...d,
@@ -532,8 +490,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               ? (d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt)
               : undefined,
           } as ToDo;
-        });
-        setTodos(data);
+        }
       })
     );
 
@@ -683,10 +640,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     // API Keys listener (for iOS Shortcuts)
-    const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`));
     unsubscribers.push(
-      onSnapshot(apiKeysQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
+      subscribeToCollection<HouseholdApiKey>(db, `households/${householdId}/apiKeys`, setApiKeys, {
+        transform: (doc) => {
           const d = doc.data();
           return {
             ...d,
@@ -694,12 +650,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
             lastUsedAt: d.lastUsedAt instanceof Timestamp ? d.lastUsedAt.toDate().toISOString() : d.lastUsedAt,
           } as HouseholdApiKey;
-        });
-        setApiKeys(data);
-      }, (error) => {
-        // Silently ignore permission errors for non-admin users
-        if (error.code !== 'permission-denied') {
-          console.error('Error fetching API keys:', error);
+        },
+        onError: (error) => {
+          // Silently ignore permission errors for non-admin users
+          if (error.code !== 'permission-denied') {
+            console.error('Error fetching API keys:', error);
+          }
         }
       })
     );

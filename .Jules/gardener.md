@@ -19,3 +19,8 @@
 **Weed:** `CaptureModal.tsx` was a "God Component" (> 1000 lines) handling multiple unrelated tabs and complex view states (Camera, Manual, Review) all in one file.
 **Root Cause:** Feature accumulation (Transactions, Todos, Shopping, Magic Action) without separation of concerns.
 **Plan:** Extracted `CaptureTransactionManual` into a separate component. Standardized manual entry logic and state management. Reduced complexity score of the parent modal.
+
+## 2026-06-25 - Firestore Listener Extraction
+**Weed:** Repeated boilerplates for Firestore listeners (query + onSnapshot + state update) in `FirebaseHouseholdContext.tsx`, occurring over 15 times.
+**Root Cause:** Pattern repetition without abstraction. Each new collection added required copying the same 10 lines of code.
+**Plan:** Created `subscribeToCollection` helper in `utils/firestoreHelpers.ts` to encapsulate the subscription logic. Refactored `FirebaseHouseholdContext.tsx` to use this helper, reducing noise and standardizing error handling and data transformation.
