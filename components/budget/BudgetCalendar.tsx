@@ -54,15 +54,41 @@ const BudgetCalendar: React.FC = () => {
     [calendarItems, startDate, endDate]
   );
 
+  // ⚡ Bolt Optimization: Pre-group items by date for O(1) lookup in render loop
+  const itemsByDate = useMemo(() => {
+    const map = new Map<string, CalendarItem[]>();
+    expandedCalendarItems.forEach(item => {
+      // item.date is YYYY-MM-DD
+      if (!map.has(item.date)) map.set(item.date, []);
+      map.get(item.date)!.push(item);
+    });
+    return map;
+  }, [expandedCalendarItems]);
+
+  const todosByDate = useMemo(() => {
+    const map = new Map<string, typeof todos>();
+    todos.forEach(todo => {
+      if (!todo.isCompleted) {
+        // todo.completeByDate is YYYY-MM-DD
+        const date = todo.completeByDate;
+        if (!map.has(date)) map.set(date, []);
+        map.get(date)!.push(todo);
+      }
+    });
+    return map;
+  }, [todos]);
+
   // Filter items for the selected date
-  const selectedItems = expandedCalendarItems.filter(item =>
-    isSameDay(parseISO(item.date), selectedDate)
-  );
+  const selectedItems = useMemo(() => {
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    return itemsByDate.get(dateKey) || [];
+  }, [itemsByDate, selectedDate]);
 
   // Filter todos for the selected date
-  const selectedTodos = todos.filter(todo =>
-    isSameDay(parseISO(todo.completeByDate), selectedDate) && !todo.isCompleted
-  );
+  const selectedTodos = useMemo(() => {
+    const dateKey = format(selectedDate, 'yyyy-MM-dd');
+    return todosByDate.get(dateKey) || [];
+  }, [todosByDate, selectedDate]);
 
   const openAddModal = () => {
     setTitle('');
@@ -237,10 +263,12 @@ const BudgetCalendar: React.FC = () => {
         </div>
         <div className="grid grid-cols-7 gap-y-2">
           {days.map(day => {
-            const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
+            const dateKey = format(day, 'yyyy-MM-dd');
+            const dateItems = itemsByDate.get(dateKey) || [];
+
             const hasIncome = dateItems.some(i => i.type === 'income');
             const hasExpense = dateItems.some(i => i.type === 'expense');
-            const hasTodo = todos.some(t => isSameDay(parseISO(t.completeByDate), day) && !t.isCompleted);
+            const hasTodo = (todosByDate.get(dateKey)?.length || 0) > 0;
             const isSelected = isSameDay(day, selectedDate);
 
             return (
