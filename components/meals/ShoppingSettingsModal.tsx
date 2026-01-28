@@ -109,8 +109,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
         await addQuickStockList({
           name: editingTemplate.name.trim(),
           items: editingTemplate.items || [],
-          icon: editingTemplate.icon,
-          color: editingTemplate.color
+          icon: editingTemplate.icon || 'ShoppingBag',
+          color: editingTemplate.color || DEFAULT_STORE_COLOR
         });
       }
       setEditingTemplate(null);
@@ -521,7 +521,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
               {!editingTemplate ? (
                 <>
                   <button
-                    onClick={() => setEditingTemplate({ name: '', items: [] })}
+                    onClick={() => setEditingTemplate({ name: '', items: [], icon: 'ShoppingBag', color: DEFAULT_STORE_COLOR })}
                     className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-gray-500 font-medium hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50 transition-all flex items-center justify-center gap-2"
                   >
                     <Plus className="w-5 h-5" />
