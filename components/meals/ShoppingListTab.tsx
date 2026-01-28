@@ -103,6 +103,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -522,7 +523,11 @@ const ShoppingListTab: React.FC = () => {
         />
         <ShoppingSettingsModal
             isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              setSettingsInitialTemplate(null);
+            }}
+            initialTemplateData={settingsInitialTemplate}
         />
 
         {/* Edit Modal */}
