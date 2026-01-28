@@ -1,5 +1,5 @@
-import React, { memo, useMemo } from 'react';
-import { ShoppingItem, Store as StoreType, QuickStockList, GroceryCatalogItem } from '@/types/schema';
+import React, { memo } from 'react';
+import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
 import { Reorder, useDragControls, useMotionValue, useTransform, motion, PanInfo } from 'framer-motion';
 import { GripVertical, Check, Trash2, Edit2, Store, RotateCcw, ShoppingBag } from 'lucide-react';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
@@ -10,7 +10,7 @@ interface ShoppingItemRowProps {
   item: ShoppingItem;
   stores?: StoreType[];
   quickStockLists?: QuickStockList[];
-  groceryCatalog?: GroceryCatalogItem[];
+  activeQuickList?: QuickStockList;
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
@@ -21,7 +21,7 @@ interface ShoppingItemRowProps {
   onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, groceryCatalog, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, activeQuickList, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
 
@@ -55,16 +55,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     }
   };
 
-  // Determine active Quick List
-  const activeList = useMemo(() => {
-    if (!quickStockLists || !groceryCatalog) return null;
-    const catalogItem = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
-    if (!catalogItem) return null;
-    return quickStockLists.find(list => list.items?.includes(catalogItem.id));
-  }, [quickStockLists, groceryCatalog, item.name]);
-
-  const ActiveIcon = activeList
-    ? (TEMPLATE_ICONS.find(i => i.id === activeList.icon)?.icon || ShoppingBag)
+  const ActiveIcon = activeQuickList
+    ? (TEMPLATE_ICONS.find(i => i.id === activeQuickList.icon)?.icon || ShoppingBag)
     : ShoppingBag;
 
   const Content = (
@@ -186,19 +178,19 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                       <span className={clsx(
                           "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
                           "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
-                          activeList
+                          activeQuickList
                               ? (() => {
-                                  const colorKey = activeList.color || DEFAULT_STORE_COLOR;
+                                  const colorKey = activeQuickList.color || DEFAULT_STORE_COLOR;
                                   const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                   return `${color.bg} ${color.text} ${color.border}`;
                               })()
                               : "bg-gray-50 text-gray-400 border-gray-200 border-dashed"
                       )}>
                           <ActiveIcon size={10} />
-                          {activeList ? activeList.name : "Add to Quick List"}
+                          {activeQuickList ? activeQuickList.name : "Add to Quick List"}
                       </span>
                       <select
-                          value={activeList ? activeList.id : ""}
+                          value={activeQuickList ? activeQuickList.id : ""}
                           onChange={(e) => {
                               onQuickListChange(item, e.target.value);
                           }}
@@ -206,7 +198,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                           aria-label="Select Quick List"
                           onClick={(e) => e.stopPropagation()}
                       >
-                          <option value="">{activeList ? "Remove from List" : "Add to Quick List"}</option>
+                          <option value="">{activeQuickList ? "Remove from List" : "Add to Quick List"}</option>
                           {quickStockLists.map(list => (
                               <option key={list.id} value={list.id}>{list.name}</option>
                           ))}
@@ -275,7 +267,7 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onEdit === next.onEdit &&
          prev.stores === next.stores &&
          prev.quickStockLists === next.quickStockLists &&
-         prev.groceryCatalog === next.groceryCatalog &&
+         prev.activeQuickList === next.activeQuickList &&
          prev.onUpdate === next.onUpdate &&
          prev.onQuickListChange === next.onQuickListChange &&
          prev.isReorderable === next.isReorderable &&
