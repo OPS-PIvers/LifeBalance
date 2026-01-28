@@ -22,7 +22,7 @@ export const TEMPLATE_ICONS = [
   { id: 'Book', icon: Book, label: 'School' },
   { id: 'Cake', icon: Cake, label: 'Birthday' },
   { id: 'Camera', icon: Camera, label: 'Hobby' },
-  { id: 'Cat', icon: Cat, label: 'Cat' },
+  { id: 'Cat', icon: Cat, label: 'Pet' },
   { id: 'Clock', icon: Clock, label: 'Urgent' },
   { id: 'CreditCard', icon: CreditCard, label: 'Shopping' },
   { id: 'Dumbbell', icon: Dumbbell, label: 'Gym' },
