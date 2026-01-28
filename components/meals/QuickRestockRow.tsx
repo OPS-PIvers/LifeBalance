@@ -79,8 +79,7 @@ export const QuickRestockRow: React.FC = () => {
               onClick={() => handleRestock(list)}
               className={clsx(
                 "flex-shrink-0 flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-all active:scale-95",
-                `${color.bg} ${color.text} ${color.border}`,
-                "hover:brightness-95"
+                `${color.bg} ${color.text} ${color.border} ${color.hoverBg}`
               )}
               aria-label={`Quick add items from ${list.name}`}
             >
