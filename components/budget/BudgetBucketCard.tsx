@@ -313,7 +313,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="ghost"
             size="lg"
             onClick={() => {
-              if (actionTx) onEditTransaction(actionTx);
+              onEditTransaction(actionTx!);
               setActionTx(null);
             }}
             className="w-full justify-start h-12 text-base"
@@ -326,7 +326,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="ghost-destructive"
             size="lg"
             onClick={() => {
-              if (actionTx) onDeleteTransaction(actionTx.id);
+              onDeleteTransaction(actionTx!.id);
               setActionTx(null);
             }}
             className="w-full justify-start h-12 text-base"
