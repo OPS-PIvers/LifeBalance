@@ -16,6 +16,7 @@ import {
 } from 'date-fns';
 import { clsx } from 'clsx';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { CustomTooltip } from '../analytics/CustomTooltip';
 import { calculateBurnDown } from '../../utils/analytics/financialMetrics';
 import {
@@ -182,9 +183,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
           </h2>
           <p className="text-xs text-slate-500 font-medium mt-0.5">Track your progress and financial health</p>
         </div>
-        <button onClick={onClose} aria-label="Close modal" className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 transition-colors text-slate-600">
+        <Button variant="ghost" size="icon" className="rounded-full text-slate-600" onClick={onClose} aria-label="Close modal">
           <X size={20} />
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}

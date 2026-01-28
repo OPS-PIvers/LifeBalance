@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { reorganizeHabits, HabitReorganizationPlan } from '@/services/geminiService';
 import { Habit } from '@/types/schema';
 
@@ -102,13 +103,15 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
             <p className="text-xs text-indigo-600 font-medium">AI-powered organization</p>
           </div>
         </div>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-indigo-400 hover:bg-white/50 hover:text-indigo-600"
           onClick={onClose}
-          className="p-2 text-indigo-400 hover:bg-white/50 rounded-full transition-colors"
           aria-label="Close"
         >
           <X size={20} />
-        </button>
+        </Button>
       </div>
 
       {/* Content */}

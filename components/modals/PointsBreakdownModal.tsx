@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;
@@ -322,12 +323,15 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     >
       <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
         <h2 className="text-lg font-bold text-gray-800">{getTitle()}</h2>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-gray-400 hover:text-gray-600"
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+          aria-label="Close modal"
         >
           <X size={20} />
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
