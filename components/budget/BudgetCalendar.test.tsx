@@ -278,32 +278,39 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
-    render(<BudgetCalendar />);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2024, 0, 15)); // Jan 15, 2024 - Safe mid-month date
 
-    const currentDate = new Date();
-    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    try {
+      render(<BudgetCalendar />);
 
-    // Check current month is displayed
-    expect(screen.getByText(currentMonth)).toBeInTheDocument();
+      const currentDate = new Date();
+      const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    // Click Next
-    fireEvent.click(screen.getByLabelText('Next month'));
+      // Check current month is displayed
+      expect(screen.getByText(currentMonth)).toBeInTheDocument();
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
-    const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      // Click Next
+      fireEvent.click(screen.getByLabelText('Next month'));
 
-    expect(screen.getByText(nextMonth)).toBeInTheDocument();
+      const nextDate = new Date();
+      nextDate.setMonth(nextDate.getMonth() + 1);
+      const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    // Click Prev twice (back to current, then prev)
-    fireEvent.click(screen.getByLabelText('Previous month'));
-    fireEvent.click(screen.getByLabelText('Previous month'));
+      expect(screen.getByText(nextMonth)).toBeInTheDocument();
 
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      // Click Prev twice (back to current, then prev)
+      fireEvent.click(screen.getByLabelText('Previous month'));
+      fireEvent.click(screen.getByLabelText('Previous month'));
 
-    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+      const prevDate = new Date();
+      prevDate.setMonth(prevDate.getMonth() - 1);
+      const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      expect(screen.getByText(prevMonth)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('toggles recurring switch with accessibility attributes', () => {
