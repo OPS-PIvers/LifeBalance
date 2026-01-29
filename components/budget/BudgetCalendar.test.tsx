@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { addMonths, subMonths } from 'date-fns';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -53,6 +54,8 @@ describe('BudgetCalendar', () => {
   const mockDeleteCalendarItem = vi.fn();
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2024, 0, 15)); // Set to Jan 15, 2024 to avoid month-end edge cases
     vi.clearAllMocks();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -277,10 +280,14 @@ describe('BudgetCalendar', () => {
     expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');
   });
 
-  it('navigates between months', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('navigates between months', async () => {
     render(<BudgetCalendar />);
 
-    const currentDate = new Date();
+    const currentDate = new Date(2024, 0, 15);
     const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     // Check current month is displayed
@@ -289,21 +296,27 @@ describe('BudgetCalendar', () => {
     // Click Next
     fireEvent.click(screen.getByLabelText('Next month'));
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
+    const nextDate = addMonths(currentDate, 1);
     const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    expect(screen.getByText(nextMonth)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(nextMonth)).toBeInTheDocument();
+    });
 
     // Click Prev twice (back to current, then prev)
     fireEvent.click(screen.getByLabelText('Previous month'));
+    // Wait for update before second click to avoid race condition/stale state
+    await waitFor(() => {
+      expect(screen.queryByText(nextMonth)).not.toBeInTheDocument();
+    });
     fireEvent.click(screen.getByLabelText('Previous month'));
 
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
+    const prevDate = subMonths(currentDate, 1);
     const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(prevMonth)).toBeInTheDocument();
+    });
   });
 
   it('toggles recurring switch with accessibility attributes', () => {
