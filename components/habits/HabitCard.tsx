@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Copy } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -18,7 +18,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, addHabit, activeChallenge } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -62,8 +62,33 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleDuplicate = async () => {
+    try {
+      // Create a clean copy without ID and reset state
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, ...rest } = habit;
+
+      const newHabit = {
+        ...rest,
+        title: `${habit.title} (Copy)`,
+        count: 0,
+        streakDays: 0,
+        completedDates: [],
+        totalCount: 0,
+        lastUpdated: new Date().toISOString(),
+        // We pass an empty ID to satisfy the type, but addHabit/addDoc will generate a new one
+        id: ''
+      };
+
+      await addHabit(newHabit as Habit);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Failed to duplicate:', error);
+    }
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = 4; // Edit, Duplicate, View Log, Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -86,9 +111,11 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           setIsEditModalOpen(true);
           setIsMenuOpen(false);
         } else if (focusedMenuIndex === 1) {
+          handleDuplicate();
+        } else if (focusedMenuIndex === 2) {
           setIsLogModalOpen(true);
           setIsMenuOpen(false);
-        } else if (focusedMenuIndex === 2) {
+        } else if (focusedMenuIndex === 3) {
           deleteHabit(habit.id);
           setIsMenuOpen(false);
         }
@@ -261,12 +288,26 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleDuplicate();
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 1 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
+              >
+                <Copy size={14} /> Duplicate
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   setIsLogModalOpen(true);
                   setIsMenuOpen(false);
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 1 && "bg-brand-50"
+                  focusedMenuIndex === 2 && "bg-brand-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -281,7 +322,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === 3 && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
