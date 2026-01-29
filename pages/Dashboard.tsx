@@ -161,14 +161,14 @@ const Dashboard: React.FC = () => {
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-             <h3 className="font-bold text-lg text-brand-800 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-brand-500 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+           <div className="bg-white/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 animate-in zoom-in-95">
+             <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
+             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
                Select which account to deduct this payment from.
              </p>
              
-             <div className="space-y-2 mb-4">
+             <div className="space-y-3 mb-6">
                {accounts.filter(a => a.type !== 'credit').map(acc => (
                  <button
                    key={acc.id}
@@ -176,17 +176,17 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-3 flex justify-between items-center bg-brand-50 hover:bg-brand-100 rounded-xl border border-brand-200 text-left"
+                   className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-brand-200 shadow-sm hover:shadow-md transition-all group"
                  >
-                   <span className="font-bold text-brand-700 text-sm">{acc.name}</span>
-                   <span className="font-mono text-xs text-brand-500">${acc.balance.toLocaleString()}</span>
+                   <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
+                   <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
                  </button>
                ))}
              </div>
              
              <button 
                onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-brand-400 font-bold"
+               className="w-full py-3 text-slate-400 hover:text-slate-600 font-semibold transition-colors text-sm"
              >
                Cancel
              </button>
