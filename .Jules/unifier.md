@@ -21,3 +21,7 @@
 ## 2025-03-01 - Standardizing Modal Close Buttons
 **Drift:** Modal close buttons were implemented as hardcoded `<button>` elements with inconsistent styles (`bg-slate-100`, `bg-brand-100`, `text-gray-400`, `text-brand-400`), creating visual noise and maintenance overhead.
 **Fix:** Refactored `AnalyticsModal`, `CaptureModal`, `BatchCategorizeModal`, `FeedbackModal`, `PointsBreakdownModal`, `SafeToSpendModal`, and `SmartHabitReorderModal` to use the standardized `<Button />` component with `ghost` or `subtle` variants.
+
+## 2026-03-01 - Standardizing Habit Card Stacking Context
+**Drift:** `HabitCard.tsx` utilized 7 instances of hardcoded inline `style={{ zIndex: ... }}` (values 1, 2, 3, 20) to manage internal stacking, bypassing the Tailwind design system.
+**Fix:** Refactored to use standard Tailwind utility classes (`z-10`, `z-20`, `z-30`, `z-50`) to ensure maintainability and consistency with the design system tokens.
