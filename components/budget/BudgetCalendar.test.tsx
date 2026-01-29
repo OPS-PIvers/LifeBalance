@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -53,6 +53,11 @@ describe('BudgetCalendar', () => {
   const mockDeleteCalendarItem = vi.fn();
 
   beforeEach(() => {
+    // Set a fixed date to avoid end-of-month navigation issues in tests
+    // 15th is safe from month-length overflow logic
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2024-01-15'));
+
     vi.clearAllMocks();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -62,6 +67,10 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('opens add modal when Add Event button is clicked', () => {
