@@ -53,6 +53,8 @@ describe('BudgetCalendar', () => {
   const mockDeleteCalendarItem = vi.fn();
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2024-01-15'));
     vi.clearAllMocks();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -280,30 +282,18 @@ describe('BudgetCalendar', () => {
   it('navigates between months', () => {
     render(<BudgetCalendar />);
 
-    const currentDate = new Date();
-    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    // Initial date is set to Jan 15, 2024 in beforeEach
+    expect(screen.getByText('January 2024')).toBeInTheDocument();
 
-    // Check current month is displayed
-    expect(screen.getByText(currentMonth)).toBeInTheDocument();
-
-    // Click Next
+    // Click Next -> Feb 2024
     fireEvent.click(screen.getByLabelText('Next month'));
+    expect(screen.getByText('February 2024')).toBeInTheDocument();
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
-    const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    expect(screen.getByText(nextMonth)).toBeInTheDocument();
-
-    // Click Prev twice (back to current, then prev)
+    // Click Prev twice -> Jan 2024 -> Dec 2023
     fireEvent.click(screen.getByLabelText('Previous month'));
     fireEvent.click(screen.getByLabelText('Previous month'));
 
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+    expect(screen.getByText('December 2023')).toBeInTheDocument();
   });
 
   it('toggles recurring switch with accessibility attributes', () => {
