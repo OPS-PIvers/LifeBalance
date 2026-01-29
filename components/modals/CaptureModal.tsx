@@ -589,7 +589,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     placeholder="Spent $20 on Pizza..."
                     className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
                     disabled={magicLoading}
-                    autoFocus={activeTab === 'transaction' && !magicInput} // Only autofocus if we are in transaction mode initially
+                    autoFocus={activeTab === 'transaction' && !magicInput} // Only autofocus if we are in transaction mode initially and the input is empty
                   />
                   <button
                     type="submit"

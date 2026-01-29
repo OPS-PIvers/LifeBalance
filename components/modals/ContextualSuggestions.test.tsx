@@ -37,6 +37,19 @@ describe('ContextualSuggestions', () => {
     expect(screen.getByText('Groceries')).toBeInTheDocument();
   });
 
+  it('shows afternoon suggestions between 2pm and 6pm', () => {
+    // Set time to 3:00 PM
+    const date = new Date(2023, 1, 1, 15, 0, 0);
+    vi.setSystemTime(date);
+
+    const onSelect = vi.fn();
+    render(<ContextualSuggestions onSelect={onSelect} />);
+
+    expect(screen.getByText('Shopping')).toBeInTheDocument();
+    expect(screen.getByText('Coffee Break')).toBeInTheDocument();
+    expect(screen.getByText('Commute')).toBeInTheDocument();
+  });
+
   it('shows evening suggestions between 6pm and 10pm', () => {
     // Set time to 7:00 PM
     const date = new Date(2023, 1, 1, 19, 0, 0);
@@ -47,6 +60,18 @@ describe('ContextualSuggestions', () => {
 
     expect(screen.getByText('Log Dinner')).toBeInTheDocument();
     expect(screen.getByText('Wind Down')).toBeInTheDocument();
+  });
+
+  it('shows night suggestions between 10pm and 5am', () => {
+    // Set time to 11:00 PM
+    const date = new Date(2023, 1, 1, 23, 0, 0);
+    vi.setSystemTime(date);
+
+    const onSelect = vi.fn();
+    render(<ContextualSuggestions onSelect={onSelect} />);
+
+    expect(screen.getByText('Sleep')).toBeInTheDocument();
+    expect(screen.getByText('Late Snack')).toBeInTheDocument();
   });
 
   it('calls onSelect with the correct prompt when clicked', () => {

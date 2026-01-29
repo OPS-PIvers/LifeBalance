@@ -2,21 +2,16 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
 import CaptureModal from '../modals/CaptureModal';
+import { useHotkey } from '../../hooks/useHotkey';
 
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsModalOpen(true);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  useHotkey('k', () => {
+    if (!isModalOpen) {
+      setIsModalOpen(true);
+    }
+  }, { meta: true });
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) => 
     `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${

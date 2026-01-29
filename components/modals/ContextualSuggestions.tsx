@@ -43,9 +43,9 @@ export const ContextualSuggestions: React.FC<ContextualSuggestionsProps> = ({ on
         <Sparkles size={12} />
         <span>Suggested Actions</span>
       </div>
-      {suggestions.map((s, i) => (
+      {suggestions.map((s) => (
         <button
-          key={i}
+          key={s.text}
           onClick={() => onSelect(s.prompt)}
           className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-full text-xs font-medium border border-violet-100 transition-colors active:scale-95"
         >
