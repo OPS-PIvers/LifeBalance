@@ -499,6 +499,7 @@ service cloud.firestore {
                               isValidString(request.resource.data.title, 100) &&
                               isValidOptionalString(request.resource.data.get('description', null), 500) &&
                               request.resource.data.relatedHabitIds is list &&
+                              request.resource.data.relatedHabitIds.size() <= 20 &&
                               (request.resource.data.get('targetType', null) == null || request.resource.data.targetType in ['count', 'percentage']) &&
                               isValidOptionalNumber(request.resource.data.get('targetValue', null)) &&
                               isValidOptionalNumber(request.resource.data.get('targetTotalCount', null)) && // Deprecated
@@ -507,9 +508,9 @@ service cloud.firestore {
                               isValidString(request.resource.data.yearlyRewardLabel, 100) &&
                               request.resource.data.status in ['active', 'success', 'failed'] &&
                               // Metadata
-                              (request.resource.data.get('createdAt', null) == null || request.resource.data.createdAt is timestamp) &&
-                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
-                              (request.resource.data.get('completedAt', null) == null || request.resource.data.completedAt is timestamp);
+                              isValidString(request.resource.data.createdAt, 30) && // ISO timestamp string
+                              isValidString(request.resource.data.createdBy, 50) && // UID string
+                              isValidOptionalString(request.resource.data.get('completedAt', null), 30); // ISO timestamp string
 
         allow delete: if isMemberOf(householdId);
       }
