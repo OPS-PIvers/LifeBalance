@@ -108,3 +108,10 @@
 **Vulnerability:** The `quickAddNaturalLanguage` Cloud Function allowed any API key with *any* permission to queue commands of *any* type (e.g., expenses), relying on client-side processing. This bypassed API key scope restrictions.
 **Learning:** Heuristic detection (like `detectCommandType`) must be paired with permission enforcement at the *ingestion* point, not just downstream.
 **Prevention:** Always validate specific permissions against the *interpreted* intent of the request before accepting it, especially in "smart" or "natural language" endpoints.
+
+## 2025-03-09 - [DoS/Data Integrity] Unprotected Bucket History Collection
+**Vulnerability:** The `bucketHistory` collection was falling under a generic wildcard rule (`match /{subcollection}/{document}`) without explicit schema validation or write restrictions. This allowed any household member to write arbitrary data to it, potentially corrupting historical records or abusing storage.
+**Learning:** Historical data collections often get overlooked when securing "active" data (like transactions), but they are critical for reporting and must be protected from tampering.
+**Prevention:**
+1. Implemented explicit `match /bucketHistory/{historyId}` block with strict schema validation and enforced immutability (`allow update: if false`).
+2. Added `bucketHistory` to the catch-all exclusion list to prevent bypass.

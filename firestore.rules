@@ -464,6 +464,33 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId); // Allow cleanup
       }
 
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Bucket History
+      match /bucketHistory/{historyId} {
+        allow read: if isMemberOf(householdId);
+        // Validate schema on create (snapshots are immutable)
+        allow create: if isMemberOf(householdId) &&
+                      request.resource.data.keys().hasOnly([
+                        'bucketId', 'bucketName', 'periodId',
+                        'periodStartDate', 'periodEndDate',
+                        'limit', 'totalSpent', 'totalPending',
+                        'transactionCount', 'createdAt'
+                      ]) &&
+                      isValidString(request.resource.data.bucketId, 100) &&
+                      isValidString(request.resource.data.bucketName, 50) &&
+                      isValidString(request.resource.data.periodId, 20) &&
+                      isValidString(request.resource.data.periodStartDate, 10) && // YYYY-MM-DD
+                      isValidString(request.resource.data.periodEndDate, 10) &&   // YYYY-MM-DD
+                      isValidNumber(request.resource.data.limit) &&
+                      isValidNumber(request.resource.data.totalSpent) &&
+                      isValidNumber(request.resource.data.totalPending) &&
+                      isValidNumber(request.resource.data.transactionCount) &&
+                      request.resource.data.createdAt is string; // ISO string
+
+        // History should be immutable
+        allow update: if false;
+        allow delete: if isAdminOf(householdId);
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -484,7 +511,8 @@ service cloud.firestore {
                      subcollection != 'meals' &&
                      subcollection != 'todos' &&
                      subcollection != 'groceryCatalog' &&
-                     subcollection != 'pendingItems';
+                     subcollection != 'pendingItems' &&
+                     subcollection != 'bucketHistory';
       }
     }
 
