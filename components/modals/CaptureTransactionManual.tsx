@@ -64,7 +64,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   // Default category update (if dynamicCategories loads late)
   useEffect(() => {
     if (!category && dynamicCategories.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCategory(dynamicCategories[0]);
     }
   }, [dynamicCategories, category]);

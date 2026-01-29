@@ -184,7 +184,7 @@ describe('CaptureTransactionManual', () => {
   });
 
   it('resets loading state on error', async () => {
-    let rejectPromise: (reason?: any) => void = () => {};
+    let rejectPromise: (reason?: unknown) => void = () => {};
     const promise = new Promise<void>((_, reject) => {
       rejectPromise = reject;
     });
