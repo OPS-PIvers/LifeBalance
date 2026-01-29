@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-brand-200 shadow-sm hover:shadow-md transition-all group"
+                   className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all group"
                  >
                    <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
                    <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
