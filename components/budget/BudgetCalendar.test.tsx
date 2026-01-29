@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { addMonths, subMonths } from 'date-fns';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -289,8 +290,8 @@ describe('BudgetCalendar', () => {
     // Click Next
     fireEvent.click(screen.getByLabelText('Next month'));
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
+    // Use date-fns addMonths to match component logic and handle end-of-month correctly
+    const nextDate = addMonths(currentDate, 1);
     const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     expect(screen.getByText(nextMonth)).toBeInTheDocument();
@@ -299,8 +300,8 @@ describe('BudgetCalendar', () => {
     fireEvent.click(screen.getByLabelText('Previous month'));
     fireEvent.click(screen.getByLabelText('Previous month'));
 
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
+    // Use date-fns subMonths
+    const prevDate = subMonths(currentDate, 1);
     const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     expect(screen.getByText(prevMonth)).toBeInTheDocument();
