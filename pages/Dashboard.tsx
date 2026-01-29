@@ -74,7 +74,7 @@ const Dashboard: React.FC = () => {
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-white/80 backdrop-blur-md border border-indigo-200/50 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4 ring-1 ring-black/5">
+          <div className="bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4 ring-1 ring-black/5">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
               <div className="flex-1">
@@ -176,7 +176,7 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-4 flex justify-between items-center bg-white/50 hover:bg-white rounded-xl border border-slate-200/50 hover:border-slate-300 transition-all shadow-sm group"
+                   className="w-full p-4 flex justify-between items-center bg-white/50 hover:bg-white rounded-xl border border-slate-200/50 hover:border-slate-300 shadow-sm group transition-colors"
                  >
                    <span className="font-semibold text-slate-700 text-sm group-hover:text-slate-900 transition-colors">{acc.name}</span>
                    <span className="font-mono text-xs text-slate-500 group-hover:text-slate-700 transition-colors">${acc.balance.toLocaleString()}</span>

@@ -109,7 +109,7 @@ const ToDosPage: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-white/80 backdrop-blur-xl border border-rose-200/50 rounded-2xl p-6 shadow-sm ring-1 ring-black/5 text-rose-700">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 text-rose-700">
           <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
           <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
         </div>
@@ -595,23 +595,23 @@ const Section: React.FC<{
 
   if (items.length === 0) return null;
 
-  const dotColors = {
+  const sectionDotColors = {
     rose: 'bg-rose-500',
     amber: 'bg-amber-500',
     blue: 'bg-blue-500',
   };
 
   const badgeStyles = {
-    rose: 'bg-rose-50 text-rose-700 border border-rose-100/50',
-    amber: 'bg-amber-50 text-amber-700 border border-amber-100/50',
-    blue: 'bg-blue-50 text-blue-700 border border-blue-100/50',
+    rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50',
+    amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50',
+    blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50',
   };
 
   return (
     <div className="animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-baseline justify-between mb-4 px-1">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${dotColors[color]} shadow-sm`}></div>
+          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-sm`}></div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h2>
         </div>
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{subtitle}</span>
