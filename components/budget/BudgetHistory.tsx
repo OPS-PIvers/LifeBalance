@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { BucketPeriodSnapshot } from '../../types/schema';
 import { format, parseISO } from 'date-fns';
@@ -57,41 +57,46 @@ const BudgetHistory: React.FC = () => {
     setExpandedPeriodId(prev => prev === periodId ? null : periodId);
   };
 
-  const handleExport = () => {
+  const handleExport = useCallback(() => {
     if (bucketHistory.length === 0) {
       toast.error('No history to export');
       return;
     }
 
-    const exportData = bucketHistory.map(snapshot => {
-      const savings = snapshot.limit - snapshot.totalSpent;
-      const utilization = snapshot.limit > 0
-        ? ((snapshot.totalSpent / snapshot.limit) * 100).toFixed(1) + '%'
-        : 'N/A';
+    try {
+      const exportData = bucketHistory.map(snapshot => {
+        const savings = snapshot.limit - snapshot.totalSpent;
+        const utilization = snapshot.limit > 0
+          ? ((snapshot.totalSpent / snapshot.limit) * 100).toFixed(1)
+          : 'N/A';
 
-      return {
-        'Period Start': snapshot.periodStartDate,
-        'Period End': snapshot.periodEndDate,
-        'Bucket Name': snapshot.bucketName,
-        'Limit': snapshot.limit,
-        'Spent': snapshot.totalSpent,
-        'Pending': snapshot.totalPending,
-        'Savings/Overspend': savings,
-        'Utilization': utilization,
-        'Transaction Count': snapshot.transactionCount
-      };
-    });
+        return {
+          'Period Start': snapshot.periodStartDate,
+          'Period End': snapshot.periodEndDate,
+          'Bucket Name': snapshot.bucketName,
+          'Limit': snapshot.limit,
+          'Spent': snapshot.totalSpent,
+          'Pending': snapshot.totalPending,
+          'Savings/Overspend': savings,
+          'Utilization (%)': utilization,
+          'Transaction Count': snapshot.transactionCount
+        };
+      });
 
-    // Sort by Period Start (desc) then Bucket Name
-    exportData.sort((a, b) => {
-      const dateDiff = b['Period Start'].localeCompare(a['Period Start']);
-      if (dateDiff !== 0) return dateDiff;
-      return a['Bucket Name'].localeCompare(b['Bucket Name']);
-    });
+      // Sort by Period Start (desc) then Bucket Name
+      exportData.sort((a, b) => {
+        const dateDiff = b['Period Start'].localeCompare(a['Period Start']);
+        if (dateDiff !== 0) return dateDiff;
+        return a['Bucket Name'].localeCompare(b['Bucket Name']);
+      });
 
-    generateCsvExport(exportData, 'budget-history');
-    toast.success('Export started');
-  };
+      generateCsvExport(exportData, 'budget-history');
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export history');
+    }
+  }, [bucketHistory]);
 
   const getProgressColor = (spent: number, limit: number) => {
     if (limit === 0) return 'bg-money-neg';
