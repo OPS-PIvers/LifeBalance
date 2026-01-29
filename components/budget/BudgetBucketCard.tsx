@@ -21,25 +21,49 @@ interface BudgetBucketCardProps {
 }
 
 const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps) => {
-  return (
-    prev.bucket.id === next.bucket.id &&
-    prev.bucket.limit === next.bucket.limit &&
-    prev.bucket.name === next.bucket.name &&
-    prev.bucket.color === next.bucket.color &&
-    prev.spent.verified === next.spent.verified &&
-    prev.spent.pending === next.spent.pending &&
-    prev.bucketTransactions === next.bucketTransactions &&
-    prev.isExpanded === next.isExpanded &&
-    prev.isEditingLimit === next.isEditingLimit &&
-    prev.onExpand === next.onExpand &&
-    prev.onEditBucket === next.onEditBucket &&
-    prev.onStartEditingLimit === next.onStartEditingLimit &&
-    prev.onSaveLimit === next.onSaveLimit &&
-    prev.onCancelEdit === next.onCancelEdit &&
-    prev.onReallocate === next.onReallocate &&
-    prev.onEditTransaction === next.onEditTransaction &&
-    prev.onDeleteTransaction === next.onDeleteTransaction
-  );
+  // Check primitive and cheap props first
+  if (
+    prev.bucket.id !== next.bucket.id ||
+    prev.bucket.limit !== next.bucket.limit ||
+    prev.bucket.name !== next.bucket.name ||
+    prev.bucket.color !== next.bucket.color ||
+    prev.spent.verified !== next.spent.verified ||
+    prev.spent.pending !== next.spent.pending ||
+    prev.isExpanded !== next.isExpanded ||
+    prev.isEditingLimit !== next.isEditingLimit
+  ) {
+    return false;
+  }
+
+  // Check function references (assumed stable via useCallback from parent)
+  if (
+    prev.onExpand !== next.onExpand ||
+    prev.onEditBucket !== next.onEditBucket ||
+    prev.onStartEditingLimit !== next.onStartEditingLimit ||
+    prev.onSaveLimit !== next.onSaveLimit ||
+    prev.onCancelEdit !== next.onCancelEdit ||
+    prev.onReallocate !== next.onReallocate ||
+    prev.onEditTransaction !== next.onEditTransaction ||
+    prev.onDeleteTransaction !== next.onDeleteTransaction
+  ) {
+    return false;
+  }
+
+  // Handle transactions optimization
+  // If exact reference match, we are good.
+  if (prev.bucketTransactions === next.bucketTransactions) {
+    return true;
+  }
+
+  // If refs are different, check if we can skip re-render based on visibility.
+  // When collapsed, we only care about length (for Chevron and aria-label).
+  // If length matches, the visual output is identical despite content changes.
+  if (!prev.isExpanded && !next.isExpanded) {
+    return prev.bucketTransactions.length === next.bucketTransactions.length;
+  }
+
+  // If expanded and refs differ, we must re-render to show updated list.
+  return false;
 };
 
 export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
