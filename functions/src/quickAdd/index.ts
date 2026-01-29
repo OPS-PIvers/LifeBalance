@@ -35,6 +35,12 @@ function jsonResponse(
   res.status(status).json(data);
 }
 
+// Helper to validate Firestore document IDs to prevent path traversal
+function isValidFirestoreId(id: string): boolean {
+  // Allow alphanumeric, dashes, and underscores
+  return /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
 function errorResponse(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   res: any,
@@ -119,6 +125,11 @@ export const quickAddHabit = onRequest(
     // Security: Input validation
     if (habitId && (typeof habitId !== "string" || habitId.length > 100)) {
       errorResponse(res, 400, "habitId must be a string (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    if (habitId && !isValidFirestoreId(habitId)) {
+      errorResponse(res, 400, "Invalid habitId format (alphanumeric, -, _ only)", "BAD_REQUEST");
       return;
     }
 
