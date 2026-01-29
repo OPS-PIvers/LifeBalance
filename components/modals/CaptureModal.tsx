@@ -18,20 +18,34 @@ import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
 
-interface CaptureModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+export type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
+export type ModalTab = 'transaction' | 'todo' | 'shopping';
 
-type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
-type ModalTab = 'transaction' | 'todo' | 'shopping';
-
-interface ManualInitialData {
+export interface ManualInitialData {
   amount?: string;
   merchant?: string;
   category?: string;
   date?: string;
   subBucketId?: string;
+}
+
+export interface CaptureModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialTab?: ModalTab;
+  initialView?: ModalView;
+  initialTransactionData?: ManualInitialData;
+  initialTodoData?: {
+    text: string;
+    date: string;
+    assignee?: string;
+  };
+  initialShoppingData?: {
+    name: string;
+    quantity: string;
+    category: string;
+    store: string;
+  };
 }
 
 /**
@@ -45,21 +59,29 @@ const getLocalDateString = (): string => {
   return `${year}-${month}-${day}`;
 };
 
-const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
+const CaptureModal: React.FC<CaptureModalProps> = ({
+  isOpen,
+  onClose,
+  initialTab,
+  initialView,
+  initialTransactionData,
+  initialTodoData,
+  initialShoppingData
+}) => {
   const {
     addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
     addShoppingItem, householdId
   } = useHousehold();
 
-  const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
+  const [activeTab, setActiveTab] = useState<ModalTab>(initialTab || 'transaction');
 
   // --- Transaction State ---
-  const [view, setView] = useState<ModalView>('menu');
+  const [view, setView] = useState<ModalView>(initialView || 'menu');
   const [processingMessage, setProcessingMessage] = useState('Processing...');
 
   // Manual Entry State
-  const [manualInitialData, setManualInitialData] = useState<ManualInitialData | undefined>(undefined);
+  const [manualInitialData, setManualInitialData] = useState<ManualInitialData | undefined>(initialTransactionData);
 
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
 
@@ -143,13 +165,37 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    if (isOpen && !hasInitialized.current) {
-      // To-Do defaults
-      if (!todoDate) {
+    if (isOpen) {
+      // 1. Apply Initial Props if provided (and not already initialized for this session)
+      if (!hasInitialized.current) {
+        if (initialTab) setActiveTab(initialTab);
+        if (initialView) setView(initialView);
+        if (initialTransactionData) setManualInitialData(initialTransactionData);
+
+        if (initialTodoData) {
+          setTodoText(initialTodoData.text);
+          setTodoDate(initialTodoData.date);
+          if (initialTodoData.assignee) setTodoAssignee(initialTodoData.assignee);
+        }
+
+        if (initialShoppingData) {
+          setShoppingName(initialShoppingData.name);
+          setShoppingQuantity(initialShoppingData.quantity);
+          if (initialShoppingData.category) {
+            // Validate category
+            const isValid = (GROCERY_CATEGORIES as readonly string[]).includes(initialShoppingData.category);
+            setShoppingCategory(isValid ? initialShoppingData.category as any : 'Uncategorized');
+          }
+          if (initialShoppingData.store) setShoppingStore(initialShoppingData.store);
+        }
+      }
+
+      // 2. Set defaults for missing fields
+      if (!todoDate && !initialTodoData?.date) {
         setTodoDate(getLocalDateString());
       }
       // Default assignee to current user or first member
-      if (!todoAssignee) {
+      if (!todoAssignee && !initialTodoData?.assignee) {
          setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
       }
 
@@ -160,7 +206,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (!isOpen) {
       hasInitialized.current = false;
     }
-  }, [isOpen, currentUser, members]);
+  }, [
+    isOpen,
+    currentUser,
+    members,
+    initialTab,
+    initialView,
+    initialTransactionData,
+    initialTodoData,
+    initialShoppingData
+  ]);
 
   // Reset state when closing
   const handleClose = () => {

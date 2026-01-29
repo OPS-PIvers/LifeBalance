@@ -11,6 +11,7 @@ import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidg
 import { InsightWidget } from '../components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import { HorizonCommandBar } from '../components/dashboard/HorizonCommandBar';
 import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
@@ -69,6 +70,8 @@ const Dashboard: React.FC = () => {
           <BarChart2 size={24} />
         </button>
       </div>
+
+      <HorizonCommandBar />
 
       <div className="px-4 space-y-8">
 
