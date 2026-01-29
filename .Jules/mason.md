@@ -19,3 +19,11 @@
 ## 2026-01-26 - Test Script Standardization
 **Bottleneck:** `npm test` behavior was ambiguous (watch vs run) depending on environment, and developers lacked a single command to lint the entire monorepo.
 **Fix:** Standardized `test` to `vitest run` (CI-safe), added `test:watch` for dev, and introduced `lint:all` to run lint across all workspace packages recursively.
+
+## 2026-01-30 - Production Deployment Drift
+**Bottleneck:** The `deploy.yml` workflow used `FirebaseExtended/action-hosting-deploy`, which only deployed Hosting, skipping Cloud Functions and Firestore Rules updates during production deployment.
+**Fix:** Replaced the action with `firebase-tools` (pinned in `devDependencies`) and `google-github-actions/auth`, ensuring full `firebase deploy` execution that matches local `deploy:all`.
+
+## 2026-01-30 - Flaky Date Tests
+**Bottleneck:** `BudgetCalendar` tests failed intermittently near month-end due to native `Date` rollover behavior in tests differing from `date-fns` logic in components.
+**Fix:** Implemented `vi.useFakeTimers({ toFake: ['Date'] })` to lock system time to a safe mid-month date, preventing false positives while allowing async `waitFor` to function correctly.
