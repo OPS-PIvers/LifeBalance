@@ -19,3 +19,8 @@
 **Weed:** `CaptureModal.tsx` was a "God Component" (> 1000 lines) handling multiple unrelated tabs and complex view states (Camera, Manual, Review) all in one file.
 **Root Cause:** Feature accumulation (Transactions, Todos, Shopping, Magic Action) without separation of concerns.
 **Plan:** Extracted `CaptureTransactionManual` into a separate component. Standardized manual entry logic and state management. Reduced complexity score of the parent modal.
+
+## 2026-02-23 - MealPlanTab Modal Extraction
+**Weed:** `MealPlanTab.tsx` was a "God Component" (> 960 lines) embedding three large modals (Add Meal, Previous Meals, AI Suggest) and their associated logic/state.
+**Root Cause:** Feature creep where multiple interactions (Cookbook, AI, Shopping List) were all managed within the main calendar view component.
+**Plan:** Extracted `MealFormModal`, `PreviousMealsModal`, and `AIMealModal` into separate components. Moved local form state into `MealFormModal`. This improved readability and separation of concerns, reducing the main file size significantly.

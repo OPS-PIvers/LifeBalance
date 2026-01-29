@@ -1,13 +1,14 @@
 /* eslint-disable */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
-
-const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
+import { MealFormModal } from './MealFormModal';
+import { PreviousMealsModal } from './PreviousMealsModal';
+import { AIMealModal, AIOptions } from './AIMealModal';
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -45,57 +46,7 @@ const MealPlanTab: React.FC = () => {
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
   const [targetDate, setTargetDate] = useState<string | null>(null);
 
-  // Tag management
-  const [tagInput, setTagInput] = useState('');
-
-  // Ingredient management
-  const [ingredientName, setIngredientName] = useState('');
-  const [ingredientQty, setIngredientQty] = useState('');
-
-  const handleAddTag = () => {
-    const trimmedInput = tagInput.trim();
-    if (trimmedInput && !currentMeal.tags?.some(t => t.toLowerCase() === trimmedInput.toLowerCase())) {
-      setCurrentMeal(prev => ({
-        ...prev,
-        tags: [...(prev.tags || []), trimmedInput]
-      }));
-      setTagInput('');
-    }
-  };
-
-  const handleAddIngredient = () => {
-    const nameTrimmed = ingredientName.trim();
-    if (nameTrimmed) {
-        // Check for duplicates case-insensitive
-        const exists = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === nameTrimmed.toLowerCase());
-        if (exists) {
-            toast.error('Ingredient already added');
-            return;
-        }
-
-        const newIng = { name: nameTrimmed, quantity: ingredientQty.trim() || '1' };
-        setCurrentMeal(prev => ({
-            ...prev,
-            ingredients: [...(prev.ingredients || []), newIng]
-        }));
-        setIngredientName('');
-        setIngredientQty('');
-    }
-  };
-
-  const handleRemoveTag = (tag: string) => {
-    setCurrentMeal(prev => ({
-      ...prev,
-      tags: prev.tags?.filter(t => t !== tag)
-    }));
-  };
-
-  // AI Options
-  const [aiOptions, setAiOptions] = useState({
-    cheap: false,
-    quick: false,
-    new: false,
-  });
+  // AI State
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
   // Calendar Logic
@@ -167,8 +118,6 @@ const MealPlanTab: React.FC = () => {
                 if (!ingredientMap.has(key)) {
                     ingredientMap.set(key, ing);
                 }
-                // Note: We don't sum quantities because they are strings (e.g. "1 box", "2 cups")
-                // Adding the item once is enough to get it on the list for review.
             });
             mealCount++;
         }
@@ -213,14 +162,9 @@ const MealPlanTab: React.FC = () => {
     try {
       // 3. Map to new items
       const promises = sourceItems.map(item => {
-        // Calculate day offset from source week start to preserve relative day
-        // Since we copy "last week" to "this week", it's always +7 days
         const itemDate = parseISO(item.date);
         const newDate = addDays(itemDate, 7);
         const newDateStr = format(newDate, 'yyyy-MM-dd');
-
-        // Check if item already exists at target (optional, but good for hygiene)
-        // For now, we allow duplicates or let the user manage them
 
         return addMealPlanItem(
           {
@@ -253,8 +197,7 @@ const MealPlanTab: React.FC = () => {
 
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    // Set up the modal to add to this date
-      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
+    setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
     setTargetDate(dateStr);
     setMealType('dinner'); // Default
     setIsAddModalOpen(true);
@@ -276,6 +219,15 @@ const MealPlanTab: React.FC = () => {
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
+  };
+
+  const handleCancel = () => {
+      setIsAddModalOpen(false);
+      setTargetDate(null);
+      setEditingMealId(null);
+      setEditingPlanItemId(null);
+      setMealType('dinner');
+      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
   };
 
   const saveMeal = async (forceNew = false) => {
@@ -364,19 +316,7 @@ const MealPlanTab: React.FC = () => {
       toast.success('Cloned! You are editing a new copy.');
   };
 
-  const handleCancel = () => {
-      setIsAddModalOpen(false);
-      setTargetDate(null);
-      setEditingMealId(null);
-      setEditingPlanItemId(null);
-      setMealType('dinner');
-      setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
-      setIngredientName('');
-      setIngredientQty('');
-      setTagInput('');
-  };
-
-  const handleAIRequest = async () => {
+  const handleAIRequest = async (options: AIOptions) => {
     if (!householdId) {
         toast.error("Household ID not found");
         return;
@@ -385,9 +325,9 @@ const MealPlanTab: React.FC = () => {
     try {
         const { suggestMeal } = await import('@/services/geminiService');
         const suggestion = await suggestMeal(householdId, {
-            cheap: aiOptions.cheap,
-            quick: aiOptions.quick,
-            new: aiOptions.new,
+            cheap: options.cheap,
+            quick: options.quick,
+            new: options.new,
             previousMeals: meals
         });
 
@@ -546,414 +486,43 @@ const MealPlanTab: React.FC = () => {
         })}
       </div>
 
-      {/* Add Meal Modal */}
       {isAddModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) handleCancel();
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-              <div className="bg-white rounded-2xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-xl animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center shrink-0">
-                      <h3 id="modal-title" className="text-lg font-bold text-gray-900">
-                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
-                      </h3>
-                      <button
-                          onClick={handleCancel}
-                          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                          aria-label="Close modal"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                      {/* Top Actions */}
-                      <div className="grid grid-cols-2 gap-4">
-                          <button
-                              onClick={() => setIsPreviousMealsModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 font-bold text-sm transition-colors border border-blue-100"
-                          >
-                              <ChefHat className="w-4.5 h-4.5" /> Cookbook
-                          </button>
-                          <button
-                              onClick={() => setIsAIModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 font-bold text-sm transition-colors border border-purple-100"
-                          >
-                              <Sparkles className="w-4.5 h-4.5" /> AI Suggest
-                          </button>
-                      </div>
-
-                      {/* Meal Details */}
-                      <div className="space-y-5">
-                          <div>
-                              <label htmlFor="meal-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meal Name</label>
-                              <input
-                                  id="meal-name"
-                                  type="text"
-                                  value={currentMeal.name}
-                                  onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none font-medium"
-                                  placeholder="e.g. Adobo Chicken & Rice"
-                              />
-                          </div>
-
-                          <div role="radiogroup" aria-labelledby="meal-type-label">
-                              <label id="meal-type-label" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meal Type</label>
-                              <div className="flex p-1 bg-gray-100 rounded-xl">
-                                  {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
-                                      <button
-                                          key={type}
-                                          role="radio"
-                                          aria-checked={mealType === type}
-                                          onClick={() => setMealType(type as any)}
-                                          className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-all ${
-                                              mealType === type
-                                                  ? 'bg-white text-brand-700 shadow-sm'
-                                                  : 'text-gray-500 hover:text-gray-700'
-                                          }`}
-                                      >
-                                          {type}
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
-
-                          <div>
-                              <label htmlFor="meal-description" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</label>
-                              <textarea
-                                  id="meal-description"
-                                  value={currentMeal.description}
-                                  onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm"
-                                  rows={2}
-                                  placeholder="Add notes about preparation..."
-                              />
-                          </div>
-
-                          {/* Collapsible Sections could go here if content gets too long */}
-                          <div>
-                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Instructions</label>
-                              <textarea
-                                  id="meal-instructions"
-                                  value={currentMeal.instructions?.join('\n') || ''}
-                                  onChange={e =>
-                                      setCurrentMeal({
-                                          ...currentMeal,
-                                          instructions: e.target.value
-                                              .split('\n')
-                                              .map(line => line.trim())
-                                              .filter(line => line.length > 0),
-                                      })
-                                  }
-                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm font-mono"
-                                  rows={4}
-                                  placeholder="Step 1...&#10;Step 2..."
-                              />
-                          </div>
-
-                          <div>
-                              <label htmlFor="meal-url" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Recipe URL</label>
-                              <input
-                                  id="meal-url"
-                                  type="url"
-                                  value={currentMeal.recipeUrl || ''}
-                                  onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none text-sm text-blue-600"
-                                  placeholder="https://example.com/recipe"
-                              />
-                          </div>
-
-                          {/* Tags Section */}
-                          <div>
-                              <label id="tags-label" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Tags</label>
-
-                              {/* Common Tags */}
-                              <div className="flex flex-wrap gap-2 mb-4" role="group" aria-labelledby="tags-label">
-                                  {COMMON_TAGS.map(tag => {
-                                      const isSelected = currentMeal.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
-                                      return (
-                                          <button
-                                              key={tag}
-                                              aria-pressed={isSelected}
-                                              onClick={() => {
-                                                  const newTags = isSelected
-                                                      ? currentMeal.tags?.filter(t => t.toLowerCase() !== tag.toLowerCase())
-                                                      : [...(currentMeal.tags || []), tag];
-                                                  setCurrentMeal({...currentMeal, tags: newTags});
-                                              }}
-                                              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                                                  isSelected
-                                                      ? 'bg-brand-100 text-brand-700 border-brand-200'
-                                                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                                              }`}
-                                          >
-                                              {isSelected ? <span className="mr-1">✓</span> : <span className="mr-1">+</span>}
-                                              {tag}
-                                          </button>
-                                      );
-                                  })}
-                              </div>
-
-                              {/* Selected Custom Tags & Input */}
-                              <div className="flex flex-wrap gap-2">
-                                  {currentMeal.tags?.filter(t => !COMMON_TAGS.some(ct => ct.toLowerCase() === t.toLowerCase())).map(tag => (
-                                      <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 border border-brand-100">
-                                          {tag}
-                                          <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900 p-0.5 rounded-full hover:bg-brand-100" aria-label={`Remove tag ${tag}`}>
-                                              <X className="w-3 h-3" />
-                                          </button>
-                                      </span>
-                                  ))}
-
-                                  <div className="relative flex-1 min-w-[140px]">
-                                      <input
-                                          type="text"
-                                          value={tagInput}
-                                          onChange={e => setTagInput(e.target.value)}
-                                          placeholder="Add custom tag..."
-                                          aria-label="Add custom tag"
-                                          className="w-full py-1.5 pl-3 pr-8 rounded-full bg-gray-50 border border-gray-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-none"
-                                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                                      />
-                                      <button
-                                          onClick={handleAddTag}
-                                          disabled={!tagInput.trim()}
-                                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm rounded-full text-brand-600 disabled:opacity-50 hover:bg-gray-50"
-                                          aria-label="Add custom tag"
-                                      >
-                                          <Plus className="w-3 h-3" />
-                                      </button>
-                                  </div>
-                              </div>
-                          </div>
-
-                      {/* Ingredients Section */}
-                      <div>
-                           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Ingredients</label>
-
-                           {/* Current Ingredients List */}
-                           {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
-                               <div className="mb-4 flex flex-wrap gap-2">
-                                   {currentMeal.ingredients.map((ing, idx) => (
-                                       <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm shadow-sm">
-                                           <span className="font-semibold text-gray-700">{ing.name}</span>
-                                           <span className="text-gray-400 text-xs bg-gray-50 px-1.5 py-0.5 rounded">{ing.quantity}</span>
-                                           <button
-                                               onClick={() => {
-                                                   setCurrentMeal(prev => ({
-                                                       ...prev,
-                                                       ingredients: prev.ingredients?.filter((_, i) => i !== idx)
-                                                   }));
-                                               }}
-                                               className="text-gray-300 hover:text-red-500 ml-1"
-                                               aria-label={`Remove ${ing.name}`}
-                                           >
-                                               <X className="w-3.5 h-3.5" />
-                                           </button>
-                                       </div>
-                                   ))}
-                               </div>
-                           )}
-
-                           <div className="space-y-4">
-                               {/* Ingredient Entry */}
-                               <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Add Ingredient</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            id="ingredient-name"
-                                            type="text"
-                                            placeholder="Item name"
-                                            className="flex-1 rounded-xl border-gray-200 bg-gray-50 text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
-                                            value={ingredientName}
-                                            onChange={(e) => setIngredientName(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                                        />
-                                        <input
-                                            aria-label="Ingredient quantity"
-                                            type="text"
-                                            placeholder="Qty"
-                                            className="w-20 rounded-xl border-gray-200 bg-gray-50 text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
-                                            value={ingredientQty}
-                                            onChange={(e) => setIngredientQty(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                                        />
-                                        <button
-                                            onClick={handleAddIngredient}
-                                            disabled={!ingredientName.trim()}
-                                            className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors shadow-sm"
-                                            aria-label="Add ingredient"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <p className="text-xxs text-gray-400 mt-2 pl-1">
-                                        Ingredients will be added to the shopping list when creating a new meal plan.
-                                    </p>
-                               </div>
-                           </div>
-                      </div>
-
-                      </div>
-                  </div>
-
-                  <div className="p-4 border-t border-gray-100 bg-white flex flex-col gap-2 shrink-0">
-                      {editingMealId && (
-                          <button
-                              onClick={() => saveMeal(true)}
-                              className="w-full py-2 text-brand-600 font-bold text-sm hover:underline"
-                          >
-                              Save as New Meal (Copy)
-                          </button>
-                      )}
-                      <div className="flex gap-3 w-full">
-                        <button
-                            onClick={handleCancel}
-                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={() => saveMeal(false)}
-                            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
-                        >
-                            {editingMealId ? 'Update & Save' : 'Save to Plan'}
-                        </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
+        <MealFormModal
+          isOpen={isAddModalOpen}
+          onClose={handleCancel}
+          meal={currentMeal}
+          onMealChange={setCurrentMeal}
+          onSave={saveMeal}
+          isEditing={!!editingMealId}
+          title={editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
+          mealType={mealType}
+          setMealType={setMealType}
+          onOpenCookbook={() => setIsPreviousMealsModalOpen(true)}
+          onOpenAI={() => setIsAIModalOpen(true)}
+        />
       )}
 
-      {/* Previous Meals Modal */}
       {isPreviousMealsModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="previous-meals-title"
-          >
-               <div className="bg-white rounded-2xl w-full max-w-md p-6 max-h-[80vh] flex flex-col shadow-xl">
-                   <h3 id="previous-meals-title" className="text-xl font-bold text-gray-900 mb-4">Your Cookbook</h3>
-                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                       {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
-                           <div key={meal.id} className="flex items-stretch gap-2">
-                               <button
-                                    onClick={() => {
-                                        setCurrentMeal(meal);
-                                        setEditingMealId(meal.id);
-                                        setIsPreviousMealsModalOpen(false);
-                                    }}
-                                    className="flex-1 text-left p-4 hover:bg-gray-50 rounded-xl border border-gray-100 flex justify-between items-center group transition-colors"
-                               >
-                                   <span className="font-semibold text-gray-700 group-hover:text-brand-700">{meal.name}</span>
-                                   <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-400" />
-                               </button>
-                               <button
-                                    onClick={() => handleCloneMeal(meal)}
-                                    className="px-4 text-gray-400 hover:text-brand-600 hover:bg-brand-50 border border-gray-100 rounded-xl transition-colors"
-                                    title="Clone Meal"
-                               >
-                                    <Copy className="w-5 h-5" />
-                               </button>
-                           </div>
-                       ))}
-                       {meals.length === 0 && <p className="text-gray-500 text-center py-8">No saved meals yet.</p>}
-                   </div>
-                   <button
-                        onClick={() => setIsPreviousMealsModalOpen(false)}
-                        className="mt-6 w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                   >
-                       Close
-                   </button>
-               </div>
-          </div>
+        <PreviousMealsModal
+          isOpen={isPreviousMealsModalOpen}
+          onClose={() => setIsPreviousMealsModalOpen(false)}
+          meals={meals}
+          onSelectMeal={(meal) => {
+            setCurrentMeal(meal);
+            setEditingMealId(meal.id);
+            setIsPreviousMealsModalOpen(false);
+          }}
+          onCloneMeal={handleCloneMeal}
+        />
       )}
 
-      {/* AI Modal */}
       {isAIModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsAIModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ai-modal-title"
-          >
-              <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl animate-in zoom-in-95 duration-200">
-                  <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-900">
-                      <Sparkles className="text-purple-600 w-6 h-6" /> Chef AI
-                  </h3>
-
-                  <div className="space-y-3 mb-8">
-                      <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.cheap}
-                              onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
-                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div>
-                              <div className="font-bold text-gray-800">Budget Friendly</div>
-                              <div className="text-xs text-gray-500 mt-0.5">Low cost ingredients</div>
-                          </div>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.quick}
-                              onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
-                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div>
-                              <div className="font-bold text-gray-800">Quick & Easy</div>
-                              <div className="text-xs text-gray-500 mt-0.5">Under 30 minutes</div>
-                          </div>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl cursor-pointer hover:bg-purple-50 hover:border-purple-200 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.new}
-                              onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
-                              className="w-5 h-5 rounded text-purple-600 focus:ring-purple-500"
-                          />
-                          <div>
-                              <div className="font-bold text-gray-800">Try Something New</div>
-                              <div className="text-xs text-gray-500 mt-0.5">Avoid recent meals</div>
-                          </div>
-                      </label>
-                  </div>
-
-                  <button
-                      onClick={handleAIRequest}
-                      disabled={isGeneratingAI}
-                      className="w-full py-3.5 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg shadow-purple-200 transition-all active:scale-95"
-                  >
-                      {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-                      {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
-                  </button>
-
-                  <button
-                      onClick={() => setIsAIModalOpen(false)}
-                      disabled={isGeneratingAI}
-                      className="mt-3 w-full py-3 text-gray-500 hover:bg-gray-50 hover:text-gray-700 font-bold rounded-xl transition-colors"
-                  >
-                      Cancel
-                  </button>
-              </div>
-          </div>
+        <AIMealModal
+          isOpen={isAIModalOpen}
+          onClose={() => setIsAIModalOpen(false)}
+          onSuggest={handleAIRequest}
+          isGenerating={isGeneratingAI}
+        />
       )}
     </div>
   );
