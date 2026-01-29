@@ -20,6 +20,7 @@ vi.mock('lucide-react', () => ({
   ChevronUp: () => <span data-testid="chevron-up" />,
   Edit: () => <span data-testid="edit-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
+  MoreVertical: () => <span data-testid="more-vertical-icon" />,
 }));
 
 // Mock child modals
