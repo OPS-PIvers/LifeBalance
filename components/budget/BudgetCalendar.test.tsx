@@ -278,9 +278,13 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
+    // Set system time to a safe mid-month date to avoid end-of-month edge cases (e.g. Jan 31 -> Feb 28/Mar 1)
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2024, 0, 15)); // Jan 15, 2024
+
     render(<BudgetCalendar />);
 
-    const currentDate = new Date();
+    const currentDate = new Date(2024, 0, 15);
     const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     // Check current month is displayed
@@ -289,8 +293,7 @@ describe('BudgetCalendar', () => {
     // Click Next
     fireEvent.click(screen.getByLabelText('Next month'));
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
+    const nextDate = new Date(2024, 1, 15); // Feb 15
     const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     expect(screen.getByText(nextMonth)).toBeInTheDocument();
@@ -299,11 +302,12 @@ describe('BudgetCalendar', () => {
     fireEvent.click(screen.getByLabelText('Previous month'));
     fireEvent.click(screen.getByLabelText('Previous month'));
 
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
+    const prevDate = new Date(2023, 11, 15); // Dec 15, 2023
     const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
     expect(screen.getByText(prevMonth)).toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 
   it('toggles recurring switch with accessibility attributes', () => {
