@@ -365,9 +365,8 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
 
       <Button
         onClick={handleManualSave}
-        disabled={isSubmitting}
         isLoading={isSubmitting}
-        className="w-full py-4 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all hover:bg-brand-700"
+        className="w-full py-4 font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all"
       >
         Save Transaction
       </Button>

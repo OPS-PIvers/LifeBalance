@@ -182,4 +182,38 @@ describe('CaptureTransactionManual', () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
   });
+
+  it('resets loading state on error', async () => {
+    let rejectPromise: (reason?: any) => void = () => {};
+    const promise = new Promise<void>((_, reject) => {
+      rejectPromise = reject;
+    });
+    mockOnAddTransaction.mockReturnValue(promise);
+
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Error Test' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
+
+    rejectPromise(new Error('Failed to save'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('icon-loader')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save transaction/i })).not.toBeDisabled();
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+  });
 });
