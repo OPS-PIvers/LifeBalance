@@ -1,14 +1,12 @@
 /* eslint-disable */
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  X, Camera, Type, Loader2, Upload, Check, CheckCircle2, AlertCircle,
-  Wallet, CheckSquare, ShoppingBag,
-  Shield, Sparkles, ArrowRight
+  X, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { ReceiptData } from '../../services/geminiService';
-import { Transaction, HouseholdMember } from '../../types/schema';
+import { ReceiptData, MagicActionResponse } from '../../services/geminiService';
+import { Transaction } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
@@ -17,6 +15,7 @@ import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
+import { CaptureMenu } from './CaptureMenu';
 
 interface CaptureModalProps {
   isOpen: boolean;
@@ -66,7 +65,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Dynamic Categories from buckets (Transaction)
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
@@ -83,26 +81,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [shoppingQuantity, setShoppingQuantity] = useState('');
   const [shoppingStore, setShoppingStore] = useState('');
 
-  // --- Magic Action State ---
-  const [magicInput, setMagicInput] = useState('');
-  const [magicLoading, setMagicLoading] = useState(false);
-
-  const handleMagicSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!magicInput.trim()) return;
-
-    setMagicLoading(true);
-    try {
-      if (!householdId) throw new Error("Household ID not found");
-      const context = {
-        categories: dynamicCategories,
-        groceryCategories: GROCERY_CATEGORIES,
-        todayDate: getLocalDateString()
-      };
-
-      const { parseMagicAction } = await import('../../services/geminiService');
-      const result = await parseMagicAction(householdId, magicInput, context);
-
+  const handleMagicSuccess = (result: MagicActionResponse) => {
       if (result.type === 'transaction') {
         setActiveTab('transaction');
         setManualInitialData({
@@ -130,13 +109,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       } else {
         toast.error("Couldn't understand that. Try being more specific.");
       }
-      setMagicInput('');
-    } catch (err) {
-      console.error(err);
-      toast.error("Magic action failed.");
-    } finally {
-      setMagicLoading(false);
-    }
   };
 
   // Initialize Defaults when modal opens
@@ -301,18 +273,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits, buckets, householdId, stopCamera, matchCategory, matchHabits, matchSubBucket, handleClose]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
-    }
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error('Image too large (max 10MB)');
-      return;
-    }
+  const handleFileSelect = async (file: File) => {
     setView('processing');
     setProcessingMessage('Reading image...');
     let base64: string;
@@ -379,7 +340,6 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       toast.error(`AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setView('manual');
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleToggleSelection = (id: string) => {
@@ -583,114 +543,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
               {/* Menu View */}
               {view === 'menu' && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-
-                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex items-start gap-3">
-                    <Shield size={16} className="text-blue-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-blue-700">
-                      <strong>AI Processing:</strong> Avoid capturing PII like full names or card numbers.
-                    </p>
-                  </div>
-
-                  {/* Magic Input */}
-                  <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
-                    <div className="bg-white rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles size={16} className="text-violet-600 animate-pulse" />
-                        <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
-                      </div>
-                      <form onSubmit={handleMagicSubmit} className="flex gap-2">
-                        <input
-                          type="text"
-                          aria-label="Magic action input"
-                          value={magicInput}
-                          onChange={(e) => setMagicInput(e.target.value)}
-                          placeholder="Spent $20 on Pizza..."
-                          className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
-                          disabled={magicLoading}
-                        />
-                        <button
-                          type="submit"
-                          aria-label="Submit magic action"
-                          disabled={!magicInput.trim() || magicLoading}
-                          className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
-                        >
-                          {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={startCamera}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
-                  >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600">
-                      <Camera size={24} />
-                    </div>
-                    <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Scan Receipt</span>
-                      <span className="text-xs text-brand-400">Take a photo of your receipt</span>
-                    </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
-                      REVIEW
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
-                  >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 text-purple-600">
-                      <Upload size={24} />
-                    </div>
-                    <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Upload Image</span>
-                      <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
-                    </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
-                      REVIEW
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => setView('manual')}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
-                  >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos text-money-pos">
-                      <Type size={24} />
-                    </div>
-                    <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Manual Entry</span>
-                      <span className="text-xs text-brand-400">Enter transaction details directly</span>
-                    </div>
-                    <div className="px-2 py-1 bg-green-100 text-green-700 text-xxs font-bold rounded-full">
-                      INSTANT
-                    </div>
-                  </button>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                  />
-
-                  <div className="text-center pt-2">
-                    <p className="text-xs text-brand-400">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                        Review = shows in Action Queue
-                      </span>
-                      <span className="mx-2">•</span>
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-green-400"></span>
-                        Instant = updates budget immediately
-                      </span>
-                    </p>
-                  </div>
-                </div>
+                <CaptureMenu
+                  onScan={startCamera}
+                  onFileSelect={handleFileSelect}
+                  onManual={() => setView('manual')}
+                  householdId={householdId || ''}
+                  dynamicCategories={dynamicCategories}
+                  onMagicSuccess={handleMagicSuccess}
+                />
               )}
 
               {/* Camera View */}
