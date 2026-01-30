@@ -282,14 +282,14 @@ const BudgetCalendar: React.FC = () => {
           <div className="space-y-3">
             {/* ToDos Section */}
             {selectedTodos.map(todo => (
-              <div key={todo.id} className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm flex items-center justify-between group">
+              <div key={todo.id} className="bg-white p-4 rounded-xl border border-blue-100 shadow-soft flex items-center justify-between group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg bg-blue-50 text-blue-600">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg bg-blue-50 text-blue-600">
                     <CheckSquare size={20} />
                   </div>
                   <div>
-                    <p className="font-bold text-brand-800 text-sm">{todo.text}</p>
-                    <p className="text-xs text-brand-400">
+                    <p className="font-bold text-slate-900 text-sm">{todo.text}</p>
+                    <p className="text-xs text-slate-500">
                       Task
                     </p>
                   </div>
@@ -318,23 +318,23 @@ const BudgetCalendar: React.FC = () => {
 
             {/* Financial Items Section */}
             {selectedItems.map(item => (
-              <div key={item.id} className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm flex items-center justify-between group">
+              <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft flex items-center justify-between group">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-lg ${
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg ${
                     item.type === 'income' ? 'bg-money-bgPos text-money-pos' : 'bg-money-bgNeg text-money-neg'
                   }`}>
                     {item.type === 'income' ? '+' : '-'}
                   </div>
                   <div>
-                    <p className="font-bold text-brand-800 text-sm">{item.title}</p>
-                    <p className={`text-xs ${item.isPaid ? 'text-money-pos' : 'text-brand-400'}`}>
+                    <p className="font-bold text-slate-900 text-sm">{item.title}</p>
+                    <p className={`text-xs ${item.isPaid ? 'text-money-pos' : 'text-slate-500'}`}>
                       {item.isPaid ? 'Paid' : 'Unpaid'} {item.isRecurring && '• Recurring'}
                     </p>
                   </div>
                 </div>
                 
                 <div className="flex flex-col items-end gap-1">
-                  <span className="font-mono font-bold text-brand-800">
+                  <span className="font-mono font-bold text-slate-900">
                     ${item.amount.toLocaleString()}
                   </span>
                   
@@ -345,7 +345,7 @@ const BudgetCalendar: React.FC = () => {
                       {item.isPaid ? (
                         <CheckCircle2 size={18} className="text-money-pos" />
                       ) : (
-                        <Circle size={18} className="text-brand-300" />
+                        <Circle size={18} className="text-slate-300" />
                       )}
                     </div>
 
@@ -356,7 +356,7 @@ const BudgetCalendar: React.FC = () => {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => openEditModal(item)}
-                          className="text-brand-300 hover:text-brand-600"
+                          className="text-slate-400 hover:text-slate-600"
                           aria-label={`Edit ${item.title}`}
                         >
                           <Edit2 size={14} />
@@ -366,7 +366,7 @@ const BudgetCalendar: React.FC = () => {
                         variant="ghost-destructive"
                         size="icon-sm"
                         onClick={() => deleteCalendarItem(item.id)}
-                        className="text-brand-300 hover:text-money-neg"
+                        className="text-slate-400 hover:text-money-neg"
                         aria-label={`Delete ${item.title}`}
                       >
                         <Trash2 size={14} />
@@ -377,7 +377,7 @@ const BudgetCalendar: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="md:hidden text-brand-300"
+                      className="md:hidden text-slate-400"
                       onClick={() => setActiveActionItem(item)}
                       aria-label={`More actions for ${item.title}`}
                     >
@@ -446,7 +446,7 @@ const BudgetCalendar: React.FC = () => {
       >
         <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-lg text-brand-800">
+            <h3 className="font-bold text-lg text-slate-900">
               {editingItem ? 'Edit Event' : 'Add Calendar Item'}
             </h3>
             <Button
@@ -454,7 +454,7 @@ const BudgetCalendar: React.FC = () => {
               size="icon"
               onClick={() => setIsAddModalOpen(false)}
               aria-label="Close modal"
-              className="text-brand-400"
+              className="text-slate-400 hover:text-slate-600"
             >
               <X size={20} />
             </Button>
@@ -500,13 +500,13 @@ const BudgetCalendar: React.FC = () => {
              />
 
              <div className="flex items-center justify-between">
-               <label id="recurring-label" className="text-sm font-bold text-brand-600">Recurring?</label>
+               <label id="recurring-label" className="text-sm font-bold text-slate-700">Recurring?</label>
                <button
                 role="switch"
                 aria-checked={isRecurring}
                 aria-labelledby="recurring-label"
                 onClick={() => setIsRecurring(!isRecurring)}
-                className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-brand-800' : 'bg-brand-200'}`}
+                className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-slate-900' : 'bg-slate-200'}`}
                >
                  <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : ''}`} />
                </button>
