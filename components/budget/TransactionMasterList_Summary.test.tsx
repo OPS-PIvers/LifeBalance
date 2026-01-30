@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -21,7 +21,7 @@ vi.mock('react-hot-toast', () => ({
 vi.mock('../modals/EditTransactionModal', () => ({ default: () => null }));
 vi.mock('../modals/SplitTransactionModal', () => ({ default: () => null }));
 vi.mock('../modals/BatchCategorizeModal', () => ({ default: () => null }));
-vi.mock('../ui/Modal', () => ({ Modal: ({ children }: { children: any }) => <div>{children}</div> }));
+vi.mock('../ui/Modal', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
@@ -77,14 +77,14 @@ describe('TransactionMasterList Summary Widget', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useHousehold).mockReturnValue({
+    (useHousehold as unknown as Mock).mockReturnValue({
       transactions: mockTransactions,
       deleteTransaction: vi.fn(),
       updateTransaction: vi.fn(),
       addTransaction: vi.fn(),
       splitTransaction: vi.fn(),
       householdId: 'test-household',
-    } as any);
+    });
   });
 
   it('calculates and displays correct totals', () => {
