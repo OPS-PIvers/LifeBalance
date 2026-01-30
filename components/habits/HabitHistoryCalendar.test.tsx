@@ -1,8 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitHistoryCalendar from './HabitHistoryCalendar';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Habit } from '../../types/schema';
 
 // Mock Lucide icons
@@ -35,7 +34,6 @@ describe('HabitHistoryCalendar', () => {
       streakDays: 5,
       completedDates: ['2024-01-15', '2024-01-16'],
       type: 'positive',
-      frequency: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
       scoringType: 'incremental',
       period: 'daily',
       targetCount: 1,
@@ -43,9 +41,7 @@ describe('HabitHistoryCalendar', () => {
       totalCount: 0,
       lastUpdated: '2024-01-15T12:00:00Z',
       weatherSensitive: false,
-      createdAt: '2024-01-01T00:00:00Z',
       createdBy: 'user-1',
-      householdId: 'household-1',
     },
     {
       id: 'habit-2',
@@ -55,7 +51,6 @@ describe('HabitHistoryCalendar', () => {
       streakDays: 0,
       completedDates: ['2024-01-15'],
       type: 'positive',
-      frequency: ['Mon', 'Fri'],
       scoringType: 'incremental',
       period: 'daily',
       targetCount: 1,
@@ -63,9 +58,7 @@ describe('HabitHistoryCalendar', () => {
       totalCount: 0,
       lastUpdated: '2024-01-15T12:00:00Z',
       weatherSensitive: false,
-      createdAt: '2024-01-01T00:00:00Z',
       createdBy: 'user-1',
-      householdId: 'household-1',
     },
   ];
 
