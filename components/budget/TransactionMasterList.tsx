@@ -90,7 +90,7 @@ const TransactionMasterList: React.FC = () => {
         if (b.date < a.date) return -1;
         return 0;
       });
-  }, [transactions, searchTerm, categoryFilter, sourceFilter]);
+  }, [transactions, searchTerm, categoryFilter, sourceFilter, startDate, endDate]);
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {

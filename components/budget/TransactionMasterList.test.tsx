@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+// import userEvent from '@testing-library/user-event';
 import TransactionMasterList from './TransactionMasterList';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../../utils/exportUtils';
@@ -227,7 +227,7 @@ describe('TransactionMasterList', () => {
   describe('Summary & Date Filtering', () => {
     // Skipped due to JSDOM/React 18 issue where date input state updates don't consistently trigger list re-renders in the test environment
     it.skip('filters by date range', async () => {
-      const user = userEvent.setup();
+      // const user = userEvent.setup();
       render(<TransactionMasterList />);
       const startDateInput = screen.getByTitle('Start Date');
       const endDateInput = screen.getByTitle('End Date');
