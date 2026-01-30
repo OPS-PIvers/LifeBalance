@@ -508,10 +508,45 @@ service cloud.firestore {
                               isValidString(request.resource.data.yearlyRewardLabel, 100) &&
                               request.resource.data.status in ['active', 'success', 'failed'] &&
                               // Metadata
-                              isValidString(request.resource.data.createdAt, 30) && // ISO timestamp string
+                              request.resource.data.createdAt is timestamp &&
                               isValidString(request.resource.data.createdBy, 50) && // UID string
-                              isValidOptionalString(request.resource.data.get('completedAt', null), 30); // ISO timestamp string
+                              (request.resource.data.get('completedAt', null) == null || request.resource.data.completedAt is timestamp);
 
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Rewards
+      match /rewards/{rewardId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'title', 'cost', 'icon', 'createdBy'
+                              ]) &&
+                              isValidString(request.resource.data.title, 100) &&
+                              isValidNumber(request.resource.data.cost) &&
+                              isValidString(request.resource.data.icon, 50) &&
+                              isValidString(request.resource.data.createdBy, 50);
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Yearly Goals
+      match /yearlyGoals/{goalId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'year', 'title', 'description', 'requiredMonths',
+                                'successfulMonths', 'status', 'createdBy',
+                                'createdAt', 'achievedAt'
+                              ]) &&
+                              isValidNumber(request.resource.data.year) &&
+                              isValidString(request.resource.data.title, 100) &&
+                              isValidOptionalString(request.resource.data.get('description', null), 500) &&
+                              isValidNumber(request.resource.data.requiredMonths) &&
+                              request.resource.data.successfulMonths is list &&
+                              request.resource.data.status in ['in_progress', 'achieved', 'failed'] &&
+                              isValidString(request.resource.data.createdBy, 50) &&
+                              request.resource.data.createdAt is timestamp &&
+                              (request.resource.data.get('achievedAt', null) == null || request.resource.data.achievedAt is timestamp);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -537,7 +572,9 @@ service cloud.firestore {
                      subcollection != 'groceryCatalog' &&
                      subcollection != 'pendingItems' &&
                      subcollection != 'bucketHistory' &&
-                     subcollection != 'challenges';
+                     subcollection != 'challenges' &&
+                     subcollection != 'rewards' &&
+                     subcollection != 'yearlyGoals';
       }
     }
 
