@@ -27,3 +27,7 @@
 ## 2026-02-23 - [Date Object Reference Instability]
 **Learning:** Helper functions like `startOfWeek(new Date())` return new Date object instances on every render. If these are passed as dependencies to `useMemo` (e.g., for expensive list filtering), they break memoization and force re-calculation on every render.
 **Action:** Memoize date range boundaries (start/end dates) using `useMemo` dependent on the stable anchor date (e.g., `currentMonth`), or pass primitive timestamps to dependency arrays.
+
+## 2026-01-30 - [Stable State Setters in Callbacks]
+**Learning:** Passing an inline arrow function (e.g., `() => setSelectedDate(day)`) to a memoized child component creates a new function reference on every render, breaking memoization.
+**Action:** Pass the stable state setter function (e.g., `setSelectedDate`) directly to the child as a prop (e.g., `onSelect={setSelectedDate}`), and have the child invoke it with the necessary arguments. This avoids `useCallback` overhead while maintaining referential stability.
