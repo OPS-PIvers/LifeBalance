@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2, Save } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
@@ -223,6 +223,61 @@ const ShoppingListTab: React.FC = () => {
         toast.success("Export started");
     };
 
+    const handleSaveAsTemplate = async () => {
+        if (shoppingList.length === 0) return;
+
+        // Optimistically show loading
+        const toastId = toast.loading('Preparing template...');
+
+        try {
+            // 1. Resolve to Catalog IDs
+            const itemIds: string[] = [];
+            const itemsToCreateMap = new Map<string, ShoppingItem>();
+
+            for (const item of shoppingList) {
+                const catalogItem = groceryCatalog.find(c => c.name.toLowerCase() === item.name.toLowerCase());
+                if (catalogItem) {
+                    itemIds.push(catalogItem.id);
+                } else {
+                    // Deduplicate by name
+                    const key = item.name.toLowerCase();
+                    if (!itemsToCreateMap.has(key)) {
+                        itemsToCreateMap.set(key, item);
+                    }
+                }
+            }
+
+            // 2. Create missing catalog items in parallel
+            const createdIds = await Promise.all(
+                Array.from(itemsToCreateMap.values()).map(item =>
+                    addGroceryCatalogItem({
+                        name: item.name,
+                        category: item.category || 'Uncategorized',
+                        lastPurchased: new Date().toISOString(),
+                        purchaseCount: 0 // Start at 0 as this is just a template creation reference
+                    })
+                )
+            );
+
+            // 3. Combine all IDs
+            const allIds = [...itemIds, ...createdIds];
+
+            toast.dismiss(toastId);
+
+            // Open Modal with data
+            setSettingsInitialTemplate({
+                name: '',
+                items: allIds,
+                icon: 'ShoppingBag',
+                color: 'slate'
+            });
+            setIsSettingsOpen(true);
+        } catch (error) {
+            console.error("Failed to prepare template:", error);
+            toast.error("Failed to prepare template", { id: toastId });
+        }
+    };
+
     const handleShareList = async () => {
         // Share pending items only
         const itemsToShare = shoppingList.filter(i => !i.isPurchased);
@@ -315,6 +370,15 @@ const ShoppingListTab: React.FC = () => {
         <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shopping List</h1>
             <div className="flex gap-2">
+                <button
+                    onClick={handleSaveAsTemplate}
+                    disabled={shoppingList.length === 0}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+                    title="Save as Template"
+                    aria-label="Save as Template"
+                >
+                    <Save className="w-5 h-5" />
+                </button>
                 <button
                     onClick={handleShareList}
                     disabled={!hasPendingItems}

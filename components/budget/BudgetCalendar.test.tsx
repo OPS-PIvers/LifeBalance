@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -53,8 +53,11 @@ describe('BudgetCalendar', () => {
   const mockDeleteCalendarItem = vi.fn();
 
   beforeEach(() => {
+    // Set a fixed date to avoid end-of-month navigation issues in tests
+    // 15th is safe from month-length overflow logic
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(2024, 5, 15)); // June 15, 2024 (Safe mid-month date)
+    vi.setSystemTime(new Date('2024-01-15'));
+
     vi.clearAllMocks();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -64,6 +67,10 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('opens add modal when Add Event button is clicked', () => {
@@ -280,20 +287,27 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
-    render(<BudgetCalendar />);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-15'));
 
-    // June 2024
-    expect(screen.getByText('June 2024')).toBeInTheDocument();
+    try {
+      render(<BudgetCalendar />);
 
-    // Click Next -> July 2024
-    fireEvent.click(screen.getByLabelText('Next month'));
-    expect(screen.getByText('July 2024')).toBeInTheDocument();
+      // Current date is mocked to 2024-01-15, so month is January 2024
+      expect(screen.getByText('January 2024')).toBeInTheDocument();
 
-    // Click Prev twice -> June -> May 2024
-    fireEvent.click(screen.getByLabelText('Previous month'));
-    fireEvent.click(screen.getByLabelText('Previous month'));
+      // Click Next
+      fireEvent.click(screen.getByLabelText('Next month'));
+      expect(screen.getByText('February 2024')).toBeInTheDocument();
 
-    expect(screen.getByText('May 2024')).toBeInTheDocument();
+      // Click Prev twice (back to current, then prev)
+      fireEvent.click(screen.getByLabelText('Previous month'));
+      fireEvent.click(screen.getByLabelText('Previous month'));
+
+      expect(screen.getByText('December 2023')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('toggles recurring switch with accessibility attributes', () => {

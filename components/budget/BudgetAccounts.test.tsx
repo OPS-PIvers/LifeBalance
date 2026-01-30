@@ -75,12 +75,15 @@ vi.mock('lucide-react', () => ({
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
 vi.mock('../ui/Modal', () => ({
-  Modal: ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
-    <div data-testid="modal">
-      <button onClick={onClose} aria-label="Close">X</button>
-      {children}
-    </div>
-  )
+  Modal: ({ children, onClose, isOpen }: { children: React.ReactNode, onClose: () => void, isOpen: boolean }) => {
+    if (!isOpen) return null;
+    return (
+      <div data-testid="modal">
+        <button onClick={onClose} aria-label="Close">X</button>
+        {children}
+      </div>
+    );
+  }
 }));
 
 describe('BudgetAccounts', () => {
