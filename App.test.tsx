@@ -54,6 +54,10 @@ vi.mock('./pages/ToDosPage', () => ({
   default: () => <div data-testid="todos-page">ToDos Page</div>
 }));
 
+vi.mock('./pages/ListsPage', () => ({
+  default: () => <div data-testid="lists-page">Lists Page</div>
+}));
+
 vi.mock('./pages/Settings', () => ({
   default: () => <div data-testid="settings-page">Settings Page</div>
 }));
@@ -147,6 +151,13 @@ describe('App Routing', () => {
     window.location.hash = '#/todos';
     render(<App />);
     await waitFor(() => expect(screen.getByTestId('todos-page')).toBeInTheDocument());
+  });
+
+  it('renders Lists page at /lists', async () => {
+    vi.mocked(AuthContext.useAuth).mockReturnValue(mockAuthenticatedUser);
+    window.location.hash = '#/lists';
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('lists-page')).toBeInTheDocument());
   });
 
   it('renders Settings page at /settings', async () => {

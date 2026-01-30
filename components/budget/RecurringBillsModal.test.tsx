@@ -24,6 +24,7 @@ vi.mock('lucide-react', () => ({
   TrendingUp: () => <div data-testid="trending-up-icon" />,
   TrendingDown: () => <div data-testid="trending-down-icon" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
+  MoreVertical: () => <div data-testid="more-vertical-icon" />,
 }));
 
 describe('RecurringBillsModal', () => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { db } from '@/firebase.config';
@@ -55,13 +56,15 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
     <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="feedback-title" maxWidth="max-w-md">
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
         <h2 id="feedback-title" className="text-lg font-bold">Send Feedback</h2>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-slate-400 hover:text-slate-600"
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
           aria-label="Close modal"
         >
           <X size={20} />
-        </button>
+        </Button>
       </div>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <div className="space-y-2">

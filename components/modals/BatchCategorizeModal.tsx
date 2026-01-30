@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
+import { Button } from '../ui/Button';
 import { X, Loader2, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -54,14 +55,16 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
             <Tag size={20} className="text-brand-600" />
             Batch Categorize
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-brand-400 hover:text-brand-600"
             onClick={onClose}
             disabled={isSaving}
-            className="text-brand-400 hover:text-brand-600 p-1 rounded-lg transition-colors disabled:opacity-50"
             aria-label="Close modal"
           >
             <X size={20} />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}

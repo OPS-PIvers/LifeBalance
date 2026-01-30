@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { ShoppingItem } from '@/types/schema';
+import { ShoppingItem, QuickStockList } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2 } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
@@ -38,6 +38,32 @@ const ShoppingListTab: React.FC = () => {
       ? groceryCategories
       : [...GROCERY_CATEGORIES];
   }, [groceryCategories]);
+
+  // Pre-calculate active quick list for each item name to avoid expensive find in each row
+  const itemQuickListMap = useMemo(() => {
+    const map = new Map<string, QuickStockList>();
+    if (!quickStockLists || !groceryCatalog) return map;
+
+    // 1. Map Catalog ID -> QuickStockList
+    const idToListMap = new Map<string, QuickStockList>();
+    for (const list of quickStockLists) {
+      if (!list.items) continue;
+      for (const itemId of list.items) {
+        if (!idToListMap.has(itemId)) {
+          idToListMap.set(itemId, list);
+        }
+      }
+    }
+
+    // 2. Map Name -> QuickStockList
+    for (const item of groceryCatalog) {
+      const list = idToListMap.get(item.id);
+      if (list) {
+        map.set(item.name.toLowerCase(), list);
+      }
+    }
+    return map;
+  }, [quickStockLists, groceryCatalog]);
 
   // Local state for Reorder.Group
   const [items, setItems] = useState<ShoppingItem[]>([]);
@@ -77,6 +103,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -286,7 +313,7 @@ const ShoppingListTab: React.FC = () => {
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
         <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-semibold">Shopping List</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shopping List</h1>
             <div className="flex gap-2">
                 <button
                     onClick={handleShareList}
@@ -316,7 +343,7 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Quick Add Input */}
-        <div className="bg-white p-4 rounded-xl shadow-sm space-y-3">
+        <div className="bg-white/80 backdrop-blur-xl p-4 rounded-xl shadow-glass ring-1 ring-black/5 space-y-3">
              <QuickRestockRow />
              <form onSubmit={handleSmartAdd} className="relative">
                 <input
@@ -324,7 +351,7 @@ const ShoppingListTab: React.FC = () => {
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400"
                     autoFocus
                 />
                 <button
@@ -458,7 +485,7 @@ const ShoppingListTab: React.FC = () => {
                         item={item}
                         stores={stores}
                         quickStockLists={quickStockLists}
-                        groceryCatalog={groceryCatalog}
+                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
@@ -476,7 +503,7 @@ const ShoppingListTab: React.FC = () => {
                         item={item}
                         stores={stores}
                         quickStockLists={quickStockLists}
-                        groceryCatalog={groceryCatalog}
+                        activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
@@ -496,7 +523,11 @@ const ShoppingListTab: React.FC = () => {
         />
         <ShoppingSettingsModal
             isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+            onClose={() => {
+              setIsSettingsOpen(false);
+              setSettingsInitialTemplate(null);
+            }}
+            initialTemplateData={settingsInitialTemplate}
         />
 
         {/* Edit Modal */}

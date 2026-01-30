@@ -301,13 +301,13 @@ const ToDosPage: React.FC = () => {
   };
 
   return (
-    <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
+    <div className="pb-32 pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
       <div className="flex items-center justify-between mb-6">
         <div>
           {isSelectionMode ? (
              <div className="flex flex-col">
-               <h1 className="text-2xl font-bold text-brand-800">Select Tasks</h1>
+               <h1 className="text-2xl font-bold tracking-tight text-slate-900">Select Tasks</h1>
                <button
                   onClick={handleSelectAll}
                   className="text-sm text-brand-600 font-medium flex items-center gap-1 mt-1 hover:text-brand-800"
@@ -318,8 +318,8 @@ const ToDosPage: React.FC = () => {
              </div>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-brand-800">To-Do List</h1>
-              <p className="text-sm text-brand-500">Stay on top of your tasks</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">To-Do List</h1>
+              <p className="text-sm text-slate-500 leading-relaxed">Stay on top of your tasks</p>
             </>
           )}
         </div>
@@ -619,10 +619,10 @@ const Section: React.FC<{
              <div
                 key={item.id}
                 onClick={() => isSelectionMode && onToggleSelection(item.id)}
-                className={`rounded-2xl p-4 shadow-sm border transition-all active:scale-[0.99] ${
+                className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 transition-all active:scale-[0.99] ${
                   isSelectionMode
-                    ? `cursor-pointer ${isSelected ? 'bg-brand-50 border-brand-200' : 'bg-white border-brand-100'}`
-                    : 'bg-white border-brand-100'
+                    ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200' : 'bg-white/80 backdrop-blur-xl'}`
+                    : 'bg-white/80 backdrop-blur-xl'
                 }`}
              >
                <div className="flex items-start gap-3">
@@ -655,7 +655,7 @@ const Section: React.FC<{
                  )}
 
                  <div className="flex-1 min-w-0">
-                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800' : 'text-brand-800'}`}>{item.text}</p>
+                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800' : 'text-slate-900'}`}>{item.text}</p>
 
                    <div className="flex flex-wrap items-center gap-2 mt-2">
                      {isBefore(parseISO(item.completeByDate), startOfToday()) ? (

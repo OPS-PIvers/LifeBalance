@@ -278,10 +278,10 @@ const MealPlanTab: React.FC = () => {
       setIsAddModalOpen(true);
   };
 
-  const saveMeal = async () => {
+  const saveMeal = async (forceNew = false) => {
       if (!currentMeal.name) return;
 
-      let mealId = editingMealId;
+      let mealId = forceNew ? null : editingMealId;
 
       // 1. Handle Meal Library (Create or Update)
       if (mealId) {
@@ -342,6 +342,26 @@ const MealPlanTab: React.FC = () => {
       }
 
       handleCancel();
+  };
+
+  const handleCloneMeal = (meal: Meal) => {
+      // 1. Populate form with meal data (copy)
+      setCurrentMeal({
+          name: `${meal.name} (Copy)`,
+          description: meal.description,
+          ingredients: meal.ingredients || [],
+          instructions: meal.instructions || [],
+          recipeUrl: meal.recipeUrl || '',
+          tags: meal.tags || []
+      });
+
+      // 2. Ensure it's treated as a NEW meal
+      setEditingMealId(null);
+
+      // 3. Switch modals
+      setIsPreviousMealsModalOpen(false);
+      setIsAddModalOpen(true);
+      toast.success('Cloned! You are editing a new copy.');
   };
 
   const handleCancel = () => {
@@ -783,19 +803,29 @@ const MealPlanTab: React.FC = () => {
                       </div>
                   </div>
 
-                  <div className="p-4 border-t border-gray-100 bg-white flex gap-3 shrink-0">
-                      <button
-                          onClick={handleCancel}
-                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                      >
-                          Cancel
-                      </button>
-                      <button
-                          onClick={saveMeal}
-                          className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
-                      >
-                          Save to Plan
-                      </button>
+                  <div className="p-4 border-t border-gray-100 bg-white flex flex-col gap-2 shrink-0">
+                      {editingMealId && (
+                          <button
+                              onClick={() => saveMeal(true)}
+                              className="w-full py-2 text-brand-600 font-bold text-sm hover:underline"
+                          >
+                              Save as New Meal (Copy)
+                          </button>
+                      )}
+                      <div className="flex gap-3 w-full">
+                        <button
+                            onClick={handleCancel}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => saveMeal(false)}
+                            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
+                        >
+                            {editingMealId ? 'Update & Save' : 'Save to Plan'}
+                        </button>
+                      </div>
                   </div>
               </div>
           </div>
@@ -816,18 +846,26 @@ const MealPlanTab: React.FC = () => {
                    <h3 id="previous-meals-title" className="text-xl font-bold text-gray-900 mb-4">Your Cookbook</h3>
                    <div className="flex-1 overflow-y-auto space-y-2 pr-2">
                        {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
-                           <button
-                                key={meal.id}
-                                onClick={() => {
-                                    setCurrentMeal(meal);
-                                    setEditingMealId(meal.id);
-                                    setIsPreviousMealsModalOpen(false);
-                                }}
-                                className="w-full text-left p-4 hover:bg-gray-50 rounded-xl border border-gray-100 flex justify-between items-center group transition-colors"
-                           >
-                               <span className="font-semibold text-gray-700 group-hover:text-brand-700">{meal.name}</span>
-                               <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-400" />
-                           </button>
+                           <div key={meal.id} className="flex items-stretch gap-2">
+                               <button
+                                    onClick={() => {
+                                        setCurrentMeal(meal);
+                                        setEditingMealId(meal.id);
+                                        setIsPreviousMealsModalOpen(false);
+                                    }}
+                                    className="flex-1 text-left p-4 hover:bg-gray-50 rounded-xl border border-gray-100 flex justify-between items-center group transition-colors"
+                               >
+                                   <span className="font-semibold text-gray-700 group-hover:text-brand-700">{meal.name}</span>
+                                   <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-400" />
+                               </button>
+                               <button
+                                    onClick={() => handleCloneMeal(meal)}
+                                    className="px-4 text-gray-400 hover:text-brand-600 hover:bg-brand-50 border border-gray-100 rounded-xl transition-colors"
+                                    title="Clone Meal"
+                               >
+                                    <Copy className="w-5 h-5" />
+                               </button>
+                           </div>
                        ))}
                        {meals.length === 0 && <p className="text-gray-500 text-center py-8">No saved meals yet.</p>}
                    </div>

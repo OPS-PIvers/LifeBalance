@@ -17,3 +17,7 @@
 ## 2025-02-28 - Standardizing Toggle Switches
 **Drift:** `NotificationSettings` contained 5 instances of a complex, hardcoded toggle switch pattern with repeated Tailwind classes, creating maintenance overhead and inconsistency risks.
 **Fix:** Created `components/ui/Switch.tsx` encapsulating the toggle logic and styles, and refactored `NotificationSettings` to use this shared component.
+
+## 2025-03-01 - Standardizing Modal Close Buttons
+**Drift:** Modal close buttons were implemented as hardcoded `<button>` elements with inconsistent styles (`bg-slate-100`, `bg-brand-100`, `text-gray-400`, `text-brand-400`), creating visual noise and maintenance overhead.
+**Fix:** Refactored `AnalyticsModal`, `CaptureModal`, `BatchCategorizeModal`, `FeedbackModal`, `PointsBreakdownModal`, `SafeToSpendModal`, and `SmartHabitReorderModal` to use the standardized `<Button />` component with `ghost` or `subtle` variants.
