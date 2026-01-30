@@ -1,0 +1,1 @@
+## 2024-05-23 - [Horizon Command Bar] **Insight:** Navigation is high-friction. Users have to switch contexts (Budget -> Habits -> Shopping) just to log simple actions. **Concept:** Global Cmd+K Natural Language Command Bar. A single "Magic" input that predicts intent and executes actions (Log Expense, Add Task, Check Habit, Add Item) without leaving the current screen.

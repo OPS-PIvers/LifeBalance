@@ -1,6 +1,7 @@
 import React from 'react';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
+import { HorizonCommandBar } from '../HorizonCommandBar';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -9,6 +10,7 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden bg-brand-50">
+      <HorizonCommandBar />
       <div className="flex-none z-10">
         <TopToolbar />
       </div>

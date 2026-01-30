@@ -737,7 +737,7 @@ export const generateInsight = async (
   }
 };
 
-export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'unknown';
+export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'habit' | 'unknown';
 
 export interface MagicActionResponse {
   type: MagicActionType;
@@ -757,6 +757,10 @@ export interface MagicActionResponse {
     item?: string;
     quantity?: string;
     store?: string;
+
+    // Habit fields
+    habitId?: string;
+    habitTitle?: string;
   };
 }
 
@@ -773,6 +777,7 @@ export const parseMagicAction = async (
     categories: string[] | readonly string[];
     groceryCategories: string[] | readonly string[];
     todayDate: string;
+    habits?: { id: string; title: string }[];
   },
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<MagicActionResponse> => {
@@ -782,10 +787,13 @@ export const parseMagicAction = async (
       ? context.categories.join(', ')
       : "No predefined categories";
     const groceryCategoryList = context.groceryCategories.join(', ');
+    const habitList = context.habits && context.habits.length > 0
+      ? JSON.stringify(context.habits.map(h => ({ id: h.id, title: h.title })))
+      : "[]";
 
     const prompt = `
       Analyze this user input: "${sanitizedInput}".
-      Determine the intent: 'transaction', 'todo', or 'shopping'.
+      Determine the intent: 'transaction', 'todo', 'shopping', or 'habit'.
       Today's date is ${context.todayDate}.
 
       1. Transaction: User spent money or wants to log an expense.
@@ -794,6 +802,9 @@ export const parseMagicAction = async (
          Extract: text (task description), completeByDate (YYYY-MM-DD). If no date is specified, set completeByDate to today's date. If the user says "tomorrow", set completeByDate to tomorrow's date (today + 1 day).
       3. Shopping: User wants to buy something later.
          Extract: item (name), quantity (string), category (match one of: ${groceryCategoryList}), store (optional).
+      4. Habit: User completed a habit or wants to log a habit.
+         Match the input to one of these existing habits: ${habitList}.
+         Extract: habitId (the exact id from the list), habitTitle (the title).
 
       If unsure, default to 'unknown'.
 
@@ -806,7 +817,7 @@ export const parseMagicAction = async (
       {
         type: Type.OBJECT,
         properties: {
-          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'unknown'] },
+          type: { type: Type.STRING, enum: ['transaction', 'todo', 'shopping', 'habit', 'unknown'] },
           confidence: { type: Type.NUMBER },
           data: {
             type: Type.OBJECT,
@@ -819,7 +830,9 @@ export const parseMagicAction = async (
               completeByDate: { type: Type.STRING },
               item: { type: Type.STRING },
               quantity: { type: Type.STRING },
-              store: { type: Type.STRING }
+              store: { type: Type.STRING },
+              habitId: { type: Type.STRING },
+              habitTitle: { type: Type.STRING }
             }
           }
         },

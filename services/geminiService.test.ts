@@ -222,6 +222,34 @@ describe('geminiService', () => {
     expect(result.data.store).toBe('Walmart');
   });
 
+  it('parseMagicAction correctly parses habit', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+
+    const mockResponse = {
+      type: 'habit',
+      confidence: 0.95,
+      data: {
+        habitId: 'habit-123',
+        habitTitle: 'Drink Water'
+      }
+    };
+
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify(mockResponse)
+    });
+
+    const result = await parseMagicAction('test-household', 'Drank water', {
+      categories: [],
+      groceryCategories: [],
+      todayDate: '2025-02-18',
+      habits: [{ id: 'habit-123', title: 'Drink Water' }]
+    });
+
+    expect(result.type).toBe('habit');
+    expect(result.data.habitId).toBe('habit-123');
+    expect(result.data.habitTitle).toBe('Drink Water');
+  });
+
   it('analyzeHabitPoints correctly parses suggestions', async () => {
     const { analyzeHabitPoints } = await import('./geminiService');
 
