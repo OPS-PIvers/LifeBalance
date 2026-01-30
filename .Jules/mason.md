@@ -23,3 +23,7 @@
 ## 2026-01-28 - Deployment Gap
 **Bottleneck:** The `deploy.yml` workflow was using `FirebaseExtended/action-hosting-deploy`, which only deploys Hosting. Backend Functions and Firestore Rules were not being automatically deployed on push to main, leading to potential inconsistencies between frontend and backend.
 **Fix:** Updated `deploy.yml` to use `google-github-actions/auth` and `firebase deploy` (via `firebase-tools` added to devDependencies) to perform a full deployment of Hosting, Functions, and Rules.
+
+## 2026-01-30 - Lockfile Consolidation
+**Bottleneck:** Existence of both `package-lock.json` and `pnpm-lock.yaml` caused ambiguity and potential "Config Drift" between developers and CI.
+**Fix:** Removed `package-lock.json` to enforce `pnpm` as the single source of truth for dependencies.
