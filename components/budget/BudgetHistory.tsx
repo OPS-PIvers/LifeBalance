@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { BucketPeriodSnapshot } from '../../types/schema';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronUp, History } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, Download } from 'lucide-react';
 import Card from '../ui/Card';
+import { Button } from '../ui/Button';
+import { generateCsvExport } from '../../utils/exportUtils';
+import toast from 'react-hot-toast';
 
 interface PeriodGroup {
   periodId: string;
@@ -54,6 +57,47 @@ const BudgetHistory: React.FC = () => {
     setExpandedPeriodId(prev => prev === periodId ? null : periodId);
   };
 
+  const handleExport = useCallback(() => {
+    if (bucketHistory.length === 0) {
+      toast.error('No history to export');
+      return;
+    }
+
+    try {
+      const exportData = bucketHistory.map(snapshot => {
+        const savings = snapshot.limit - snapshot.totalSpent;
+        const utilization = snapshot.limit > 0
+          ? ((snapshot.totalSpent / snapshot.limit) * 100).toFixed(1)
+          : 'N/A';
+
+        return {
+          'Period Start': snapshot.periodStartDate,
+          'Period End': snapshot.periodEndDate,
+          'Bucket Name': snapshot.bucketName,
+          'Limit': snapshot.limit,
+          'Spent': snapshot.totalSpent,
+          'Pending': snapshot.totalPending,
+          'Savings/Overspend': savings,
+          'Utilization (%)': utilization,
+          'Transaction Count': snapshot.transactionCount
+        };
+      });
+
+      // Sort by Period Start (desc) then Bucket Name
+      exportData.sort((a, b) => {
+        const dateDiff = b['Period Start'].localeCompare(a['Period Start']);
+        if (dateDiff !== 0) return dateDiff;
+        return a['Bucket Name'].localeCompare(b['Bucket Name']);
+      });
+
+      generateCsvExport(exportData, 'budget-history');
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export history');
+    }
+  }, [bucketHistory]);
+
   const getProgressColor = (spent: number, limit: number) => {
     if (limit === 0) return 'bg-money-neg';
     const ratio = spent / limit;
@@ -62,23 +106,34 @@ const BudgetHistory: React.FC = () => {
     return 'bg-money-safe';
   };
 
-  if (historyGroups.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-brand-400">
-        <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mb-4">
-          <History size={32} className="text-brand-300" />
-        </div>
-        <h3 className="text-lg font-bold text-brand-600">No History Yet</h3>
-        <p className="text-center max-w-xs mt-2 text-sm">
-          Budget snapshots are created automatically when you approve a new paycheck.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {historyGroups.map(group => {
+      {/* Header */}
+      <div className="flex justify-between items-center px-1">
+        <h2 className="text-xl font-bold text-slate-900">History</h2>
+        <Button
+          onClick={handleExport}
+          disabled={bucketHistory.length === 0}
+          variant="secondary"
+          size="sm"
+          leftIcon={<Download size={16} />}
+        >
+          Export CSV
+        </Button>
+      </div>
+
+      {historyGroups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-brand-400">
+          <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mb-4">
+            <History size={32} className="text-brand-300" />
+          </div>
+          <h3 className="text-lg font-bold text-brand-600">No History Yet</h3>
+          <p className="text-center max-w-xs mt-2 text-sm">
+            Budget snapshots are created automatically when you approve a new paycheck.
+          </p>
+        </div>
+      ) : (
+        historyGroups.map(group => {
         const isExpanded = expandedPeriodId === group.periodId;
         const savings = group.totalLimit - group.totalSpent;
         const percentUsed = group.totalLimit > 0
@@ -168,7 +223,7 @@ const BudgetHistory: React.FC = () => {
             )}
           </Card>
         );
-      })}
+      }))}
     </div>
   );
 };

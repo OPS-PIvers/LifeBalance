@@ -1,6 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { addMonths, subMonths } from 'date-fns';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -54,6 +53,11 @@ describe('BudgetCalendar', () => {
   const mockDeleteCalendarItem = vi.fn();
 
   beforeEach(() => {
+    // Set a fixed date to avoid end-of-month navigation issues in tests
+    // 15th is safe from month-length overflow logic
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2024-01-15'));
+
     vi.clearAllMocks();
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -63,6 +67,10 @@ describe('BudgetCalendar', () => {
       todos: [],
       completeToDo: vi.fn(),
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('opens add modal when Add Event button is clicked', () => {
@@ -279,32 +287,27 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
-    render(<BudgetCalendar />);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-15'));
 
-    const currentDate = new Date();
-    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    try {
+      render(<BudgetCalendar />);
 
-    // Check current month is displayed
-    expect(screen.getByText(currentMonth)).toBeInTheDocument();
+      // Current date is mocked to 2024-01-15, so month is January 2024
+      expect(screen.getByText('January 2024')).toBeInTheDocument();
 
-    // Click Next
-    fireEvent.click(screen.getByLabelText('Next month'));
+      // Click Next
+      fireEvent.click(screen.getByLabelText('Next month'));
+      expect(screen.getByText('February 2024')).toBeInTheDocument();
 
-    // Use date-fns addMonths to match component logic and handle end-of-month correctly
-    const nextDate = addMonths(currentDate, 1);
-    const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      // Click Prev twice (back to current, then prev)
+      fireEvent.click(screen.getByLabelText('Previous month'));
+      fireEvent.click(screen.getByLabelText('Previous month'));
 
-    expect(screen.getByText(nextMonth)).toBeInTheDocument();
-
-    // Click Prev twice (back to current, then prev)
-    fireEvent.click(screen.getByLabelText('Previous month'));
-    fireEvent.click(screen.getByLabelText('Previous month'));
-
-    // Use date-fns subMonths
-    const prevDate = subMonths(currentDate, 1);
-    const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+      expect(screen.getByText('December 2023')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('toggles recurring switch with accessibility attributes', () => {

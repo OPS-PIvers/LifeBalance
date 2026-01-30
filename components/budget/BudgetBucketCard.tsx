@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo } from 'react';
-import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import { Button } from '../ui/Button';
@@ -18,6 +18,7 @@ interface BudgetBucketCardProps {
   onReallocate: (targetId: string) => void;
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
+  onOpenTransactionActions: (tx: Transaction) => void;
 }
 
 const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps) => {
@@ -38,7 +39,8 @@ const arePropsEqual = (prev: BudgetBucketCardProps, next: BudgetBucketCardProps)
     prev.onCancelEdit === next.onCancelEdit &&
     prev.onReallocate === next.onReallocate &&
     prev.onEditTransaction === next.onEditTransaction &&
-    prev.onDeleteTransaction === next.onDeleteTransaction
+    prev.onDeleteTransaction === next.onDeleteTransaction &&
+    prev.onOpenTransactionActions === next.onOpenTransactionActions
   );
 };
 
@@ -56,6 +58,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   onReallocate,
   onEditTransaction,
   onDeleteTransaction,
+  onOpenTransactionActions,
 }) => {
   const totalCommitted = spent.verified + spent.pending;
   const percent = Math.min(100, (totalCommitted / bucket.limit) * 100);
@@ -230,25 +233,42 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   }`}>
                     ${tx.amount}
                   </span>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => onEditTransaction(tx)}
-                      className="text-slate-400 hover:text-slate-600"
-                      title="Edit transaction"
-                    >
-                      <Edit size={14} />
-                    </Button>
-                    <Button
-                      variant="ghost-destructive"
-                      size="icon-sm"
-                      onClick={() => onDeleteTransaction(tx.id)}
-                      className="text-slate-400 hover:text-money-neg"
-                      title="Delete transaction"
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+
+                  {/* Actions: Buttons on Desktop, More Menu on Mobile */}
+                  <div className="flex items-center">
+                    <div className="hidden sm:flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => onEditTransaction(tx)}
+                        className="text-slate-400 hover:text-slate-600"
+                        title="Edit transaction"
+                      >
+                        <Edit size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost-destructive"
+                        size="icon-sm"
+                        onClick={() => onDeleteTransaction(tx.id)}
+                        className="text-slate-400 hover:text-money-neg"
+                        title="Delete transaction"
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+
+                    <div className="flex sm:hidden">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onOpenTransactionActions(tx)}
+                        className="text-slate-400 hover:text-slate-600"
+                        title="More options"
+                        aria-label="More options"
+                      >
+                        <MoreVertical size={18} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

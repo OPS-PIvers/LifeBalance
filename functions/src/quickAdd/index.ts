@@ -14,6 +14,7 @@ import {
   extractApiKey,
   checkRateLimit,
   logApiCall,
+  isValidFirestoreId,
 } from "./apiKeyValidation";
 import {
   Habit,
@@ -119,6 +120,12 @@ export const quickAddHabit = onRequest(
     // Security: Input validation
     if (habitId && (typeof habitId !== "string" || habitId.length > 100)) {
       errorResponse(res, 400, "habitId must be a string (max 100 chars)", "BAD_REQUEST");
+      return;
+    }
+
+    // Security: Validate habitId format to prevent path traversal
+    if (habitId && !isValidFirestoreId(habitId)) {
+      errorResponse(res, 400, "habitId contains invalid characters", "BAD_REQUEST");
       return;
     }
 

@@ -5,3 +5,5 @@
 ## 2026-02-18 - [Budget Calendar Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in the `BudgetCalendar` event list are tiny (`icon-sm`, ~22px) and placed side-by-side, creating a "Fat Finger" trap. **Reflow:** Replace them with a single "More" button that opens a touch-friendly Bottom Drawer with large, full-width actions.
 
 ## 2026-02-19 - [Recurring Bills Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in `RecurringBillsModal` were tiny (`icon-sm`, ~22px) and placed side-by-side, creating a "Fat Finger" trap. **Reflow:** Replaced them with a single "More" button (`MoreVertical`) that triggers a touch-friendly Bottom Drawer with large, full-width Edit and Delete actions.
+
+## 2026-02-20 - [Budget Bucket Transactions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in the expanded `BudgetBucketCard` transaction list were tiny (`icon-sm`, ~22px) and placed side-by-side (gap-1), creating a "Fat Finger" trap. **Reflow:** Replaced them with a single "More" button (`MoreVertical`) that triggers a touch-friendly Bottom Drawer with large, full-width Edit and Delete actions.
