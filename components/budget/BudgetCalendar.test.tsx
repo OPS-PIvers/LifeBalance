@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { addMonths, subMonths } from 'date-fns';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -278,27 +279,30 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2024-01-15'));
+    render(<BudgetCalendar />);
 
-    try {
-      render(<BudgetCalendar />);
+    const currentDate = new Date();
+    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-      // Current date is mocked to 2024-01-15, so month is January 2024
-      expect(screen.getByText('January 2024')).toBeInTheDocument();
+    // Check current month is displayed
+    expect(screen.getByText(currentMonth)).toBeInTheDocument();
 
-      // Click Next
-      fireEvent.click(screen.getByLabelText('Next month'));
-      expect(screen.getByText('February 2024')).toBeInTheDocument();
+    // Click Next
+    fireEvent.click(screen.getByLabelText('Next month'));
 
-      // Click Prev twice (back to current, then prev)
-      fireEvent.click(screen.getByLabelText('Previous month'));
-      fireEvent.click(screen.getByLabelText('Previous month'));
+    const nextDate = addMonths(currentDate, 1);
+    const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-      expect(screen.getByText('December 2023')).toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(screen.getByText(nextMonth)).toBeInTheDocument();
+
+    // Click Prev twice (back to current, then prev)
+    fireEvent.click(screen.getByLabelText('Previous month'));
+    fireEvent.click(screen.getByLabelText('Previous month'));
+
+    const prevDate = subMonths(nextDate, 2);
+    const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    expect(screen.getByText(prevMonth)).toBeInTheDocument();
   });
 
   it('toggles recurring switch with accessibility attributes', () => {

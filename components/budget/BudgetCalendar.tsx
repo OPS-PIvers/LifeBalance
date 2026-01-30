@@ -51,7 +51,7 @@ const BudgetCalendar: React.FC = () => {
   // Expand recurring calendar items for the visible date range
   const expandedCalendarItems = useMemo(
     () => expandCalendarItems(calendarItems, startDate, endDate),
-    [calendarItems, startDate, endDate]
+    [calendarItems, startDate, endDate] // eslint-disable-line react-hooks/preserve-manual-memoization
   );
 
   // Filter items for the selected date

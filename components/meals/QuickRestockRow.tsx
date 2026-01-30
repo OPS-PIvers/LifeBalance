@@ -2,15 +2,10 @@ import React from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { QuickStockList } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { ShoppingBag } from 'lucide-react';
+import { List } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ShoppingItem } from '@/types/schema';
-import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
-import { TEMPLATE_ICONS } from '@/data/templateIcons';
-import clsx from 'clsx';
 
-// Create map for O(1) icon lookup
-const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
+import { ShoppingItem } from '@/types/schema';
 
 export const QuickRestockRow: React.FC = () => {
   const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useHousehold();
@@ -68,29 +63,22 @@ export const QuickRestockRow: React.FC = () => {
         role="group"
         aria-label="Quick restock lists"
       >
-        {quickStockLists.map(list => {
-          const colorKey = list.color || DEFAULT_STORE_COLOR;
-          const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
-          const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
-
-          return (
-            <button
-              key={list.id}
-              onClick={() => handleRestock(list)}
-              className={clsx(
-                "flex-shrink-0 flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-all active:scale-95",
-                `${color.bg} ${color.text} ${color.border} ${color.hoverBg}`
-              )}
-              aria-label={`Quick add items from ${list.name}`}
-            >
-              <ListIcon size={12} />
-              <span className="font-medium">{list.name}</span>
-              <span className="opacity-70 font-bold ml-0.5">
-                {list.items.length}
-              </span>
-            </button>
-          );
-        })}
+        {quickStockLists.map(list => (
+          <button
+            key={list.id}
+            onClick={() => handleRestock(list)}
+            className="flex-shrink-0 flex items-center gap-1.5 pl-2 pr-3 py-1.5 bg-white border border-brand-100 rounded-full shadow-sm hover:border-brand-300 hover:bg-brand-50 active:scale-95 transition-all group"
+            aria-label={`Quick add items from ${list.name}`}
+          >
+            <div className="w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center group-hover:bg-brand-200">
+              <List size={12} strokeWidth={3} />
+            </div>
+            <span className="text-xs font-medium text-brand-700">{list.name}</span>
+            <span className="text-[10px] text-brand-400 bg-brand-50 px-1 rounded-full">
+              {list.items.length}
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );

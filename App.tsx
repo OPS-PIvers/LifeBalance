@@ -18,7 +18,6 @@ const MigrateSubmissions = React.lazy(() => import('./pages/MigrateSubmissions')
 const MealsPage = React.lazy(() => import('./pages/MealsPage'));
 const ShoppingPage = React.lazy(() => import('./pages/ShoppingPage'));
 const ToDosPage = React.lazy(() => import('./pages/ToDosPage'));
-const ListsPage = React.lazy(() => import('./pages/ListsPage'));
 
 const LoadingFallback = () => (
   <div className="min-h-screen bg-brand-50 flex items-center justify-center">
@@ -138,16 +137,6 @@ const App: React.FC = () => {
                     <ProtectedRoute>
                       <MainLayout>
                         <Dashboard />
-                      </MainLayout>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/lists"
-                  element={
-                    <ProtectedRoute>
-                      <MainLayout>
-                        <ListsPage />
                       </MainLayout>
                     </ProtectedRoute>
                   }

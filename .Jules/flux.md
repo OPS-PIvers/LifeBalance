@@ -3,5 +3,3 @@
 ## 2026-01-25 - [Transaction Actions Clutter] **Squeeze:** On mobile (375px), 4 small action buttons in `TransactionItem` were too small (32px) and cluttered the row. **Reflow:** Replaced individual buttons with a single "More" button that opens a Bottom Drawer with full-width, touch-friendly actions (48px+).
 
 ## 2026-02-18 - [Budget Calendar Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in the `BudgetCalendar` event list are tiny (`icon-sm`, ~22px) and placed side-by-side, creating a "Fat Finger" trap. **Reflow:** Replace them with a single "More" button that opens a touch-friendly Bottom Drawer with large, full-width actions.
-
-## 2026-02-19 - [Recurring Bills Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in `RecurringBillsModal` were tiny (`icon-sm`, ~22px) and placed side-by-side, creating a "Fat Finger" trap. **Reflow:** Replaced them with a single "More" button (`MoreVertical`) that triggers a touch-friendly Bottom Drawer with large, full-width Edit and Delete actions.

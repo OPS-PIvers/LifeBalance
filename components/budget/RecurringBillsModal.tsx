@@ -3,9 +3,8 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { CalendarItem } from '../../types/schema';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Trash2, Edit2, X, Check, Repeat, TrendingUp, TrendingDown, MoreVertical } from 'lucide-react';
+import { Trash2, Edit2, X, Check, Repeat, TrendingUp, TrendingDown } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 
@@ -17,7 +16,6 @@ interface RecurringBillsModalProps {
 const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClose }) => {
   const { calendarItems, updateCalendarItem, deleteCalendarItem } = useHousehold();
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
 
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
@@ -223,26 +221,13 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                           <div className="text-xxs text-gray-400">per instance</div>
                         </div>
 
-                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                            <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)}>
                              <Edit2 size={14} className="text-gray-400 hover:text-brand-600" />
                            </Button>
                            <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)}>
                              <Trash2 size={14} />
                            </Button>
-                        </div>
-
-                        {/* Mobile Action */}
-                        <div className="sm:hidden">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setActionItem(item)}
-                            className="text-gray-400 active:bg-gray-100"
-                            aria-label={`Manage ${item.title}`}
-                          >
-                            <MoreVertical size={20} />
-                          </Button>
                         </div>
                     </div>
                   </>
@@ -257,42 +242,6 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
            Changes made here affect all future generated events.
         </div>
       </div>
-
-      <Drawer
-        isOpen={!!actionItem}
-        onClose={() => setActionItem(null)}
-        title={actionItem ? `Manage ${actionItem.title}` : 'Manage Item'}
-      >
-        <div className="space-y-2">
-          {actionItem && (
-            <>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit2 className="text-brand-500" />}
-                onClick={() => {
-                  startEditing(actionItem);
-                  setActionItem(null);
-                }}
-              >
-                Edit Item
-              </Button>
-              <div className="h-px bg-gray-100 my-2" />
-              <Button
-                variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
-                onClick={() => {
-                  handleDelete(actionItem.id);
-                  setActionItem(null);
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-        </div>
-      </Drawer>
     </Modal>
   );
 };

@@ -12,7 +12,6 @@ import { Transaction, HouseholdMember } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -514,15 +513,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   {activeTab === 'todo' && 'New Task'}
                   {activeTab === 'shopping' && 'Add Item'}
               </h2>
-              <Button
-                  variant="subtle"
-                  size="icon"
-                  className="rounded-full"
+              <button
                   onClick={handleClose}
                   aria-label="Close modal"
+                  className="p-2 bg-brand-100 rounded-full text-brand-600 hover:bg-brand-200 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                   <X size={20} />
-              </Button>
+              </button>
           </div>
 
           {/* Tab Switcher - Only show if not in deep transaction flow */}

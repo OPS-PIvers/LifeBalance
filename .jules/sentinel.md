@@ -103,8 +103,3 @@
 **Prevention:**
 1. Added explicit `match /pendingItems/{itemId}` block with `create: if false` (only Admin SDK can create) and strict schema validation for `update`.
 2. Added `pendingItems` to the catch-all exclusion list to prevent bypass.
-
-## 2025-02-19 - [Privilege Escalation in Quick Add]
-**Vulnerability:** The `quickAddNaturalLanguage` Cloud Function allowed any API key with *any* permission to queue commands of *any* type (e.g., expenses), relying on client-side processing. This bypassed API key scope restrictions.
-**Learning:** Heuristic detection (like `detectCommandType`) must be paired with permission enforcement at the *ingestion* point, not just downstream.
-**Prevention:** Always validate specific permissions against the *interpreted* intent of the request before accepting it, especially in "smart" or "natural language" endpoints.
