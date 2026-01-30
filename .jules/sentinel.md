@@ -115,3 +115,8 @@
 **Prevention:**
 1. Added explicit `match` blocks for `bucketHistory` and `challenges` with strict schema validation.
 2. Added these collections to the catch-all exclusion list to enforce the strict rules.
+
+## 2026-03-09 - [Path Traversal] Firestore Path Injection
+**Vulnerability:** The `quickAddHabit` Cloud Function accepted a user-provided `habitId` and used it directly in a Firestore path (`households/${householdId}/habits/${habitId}`). Without validation, an attacker could supply an ID like `../otherCollection/doc` to access or overwrite documents outside the intended `habits` collection.
+**Learning:** Cloud Functions running with Admin SDK privileges bypass standard Firestore Security Rules. Therefore, strict input validation (especially for path segments) is critical at the application layer to prevent "confused deputy" attacks.
+**Prevention:** Implemented a strict `isValidFirestoreId` validator (allowlist: `a-zA-Z0-9_-`) for all user-supplied document IDs in Admin SDK paths.

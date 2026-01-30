@@ -19,3 +19,7 @@
 ## 2026-01-26 - Test Script Standardization
 **Bottleneck:** `npm test` behavior was ambiguous (watch vs run) depending on environment, and developers lacked a single command to lint the entire monorepo.
 **Fix:** Standardized `test` to `vitest run` (CI-safe), added `test:watch` for dev, and introduced `lint:all` to run lint across all workspace packages recursively.
+
+## 2026-01-28 - Deployment Gap
+**Bottleneck:** The `deploy.yml` workflow was using `FirebaseExtended/action-hosting-deploy`, which only deploys Hosting. Backend Functions and Firestore Rules were not being automatically deployed on push to main, leading to potential inconsistencies between frontend and backend.
+**Fix:** Updated `deploy.yml` to use `google-github-actions/auth` and `firebase deploy` (via `firebase-tools` added to devDependencies) to perform a full deployment of Hosting, Functions, and Rules.
