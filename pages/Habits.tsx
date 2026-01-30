@@ -5,13 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Habit } from '../types/schema';
 import HabitCategoryList from '../components/habits/HabitCategoryList';
-import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '../components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '../components/habits/HabitCoach';
+import HabitHistoryCalendar from '../components/habits/HabitHistoryCalendar';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -138,6 +139,10 @@ const Habits: React.FC = () => {
               <LayoutList size={16} />
               Track
             </TabsTrigger>
+            <TabsTrigger value="history">
+              <Calendar size={16} />
+              History
+            </TabsTrigger>
             <TabsTrigger value="coach">
               <GraduationCap size={16} />
               Coach
@@ -188,6 +193,9 @@ const Habits: React.FC = () => {
                 <HabitCategoryList category={category} habits={groupedHabits[category]} />
               </div>
             ))}
+          </TabsContent>
+          <TabsContent value="history">
+            <HabitHistoryCalendar />
           </TabsContent>
           <TabsContent value="coach">
             <HabitCoach />
