@@ -109,9 +109,9 @@ const ToDosPage: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">
-          <p className="font-semibold">Authentication Required</p>
-          <p className="text-sm">Please log in to manage your to-do list.</p>
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 text-rose-700">
+          <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
+          <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
         </div>
       </div>
     );
@@ -349,7 +349,11 @@ const ToDosPage: React.FC = () => {
 
             <button
               onClick={() => setIsSelectionMode(!isSelectionMode)}
-              className={`p-2 rounded-xl transition-colors border ${isSelectionMode ? 'bg-brand-100 text-brand-800 border-brand-200' : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'}`}
+              className={`p-2 rounded-xl transition-colors border ${
+                isSelectionMode
+                  ? 'bg-slate-100 text-slate-900 border-slate-200'
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
+              }`}
               title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
               aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
             >
@@ -406,15 +410,15 @@ const ToDosPage: React.FC = () => {
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
         <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
-          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-            <div className="px-3 font-bold text-sm border-r border-brand-700">
+          <div className="bg-slate-900/90 backdrop-blur-xl text-white p-2 rounded-2xl shadow-glass ring-1 ring-white/10 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+            <div className="px-3 font-bold text-sm border-r border-white/10">
               {selectedIds.size} selected
             </div>
 
             <button
               onClick={handleBatchComplete}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
               aria-label="Mark selected as completed"
             >
               <Check size={18} />
@@ -424,7 +428,7 @@ const ToDosPage: React.FC = () => {
             <button
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-lg transition-colors disabled:opacity-50"
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
@@ -591,23 +595,26 @@ const Section: React.FC<{
 
   if (items.length === 0) return null;
 
-  const colorStyles = {
-    rose: 'text-rose-600 bg-rose-50 border-rose-100',
-    amber: 'text-amber-600 bg-amber-50 border-amber-100',
-    blue: 'text-blue-600 bg-blue-50 border-blue-100',
+  const sectionDotColors = {
+    rose: 'bg-rose-500',
+    amber: 'bg-amber-500',
+    blue: 'bg-blue-500',
   };
 
   const badgeStyles = {
-    rose: 'bg-rose-100 text-rose-700',
-    amber: 'bg-amber-100 text-amber-700',
-    blue: 'bg-blue-100 text-blue-700',
+    rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50',
+    amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50',
+    blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50',
   };
 
   return (
     <div className="animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-baseline justify-between mb-3 px-1">
-        <h2 className={`text-lg font-bold ${colorStyles[color].split(' ')[0]}`}>{title}</h2>
-        <span className="text-xs font-medium text-brand-400 uppercase tracking-wider">{subtitle}</span>
+      <div className="flex items-baseline justify-between mb-4 px-1">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-sm`}></div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h2>
+        </div>
+        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{subtitle}</span>
       </div>
 
       <div className="space-y-3">

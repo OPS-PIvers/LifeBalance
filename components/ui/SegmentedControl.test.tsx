@@ -51,12 +51,12 @@ describe('SegmentedControl', () => {
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={true} name="Border Group" />
     );
     let group = screen.getByRole('group', { name: /border group/i });
-    expect(group).toHaveClass('border');
+    expect(group).toHaveClass('ring-1');
 
     rerender(
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={false} name="Border Group" />
     );
     group = screen.getByRole('group', { name: /border group/i });
-    expect(group).not.toHaveClass('border');
+    expect(group).not.toHaveClass('ring-1');
   });
 });
