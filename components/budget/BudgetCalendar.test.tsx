@@ -278,32 +278,27 @@ describe('BudgetCalendar', () => {
   });
 
   it('navigates between months', () => {
-    render(<BudgetCalendar />);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-15'));
 
-    const currentDate = new Date();
-    const currentMonth = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+    try {
+      render(<BudgetCalendar />);
 
-    // Check current month is displayed
-    expect(screen.getByText(currentMonth)).toBeInTheDocument();
+      // Current date is mocked to 2024-01-15, so month is January 2024
+      expect(screen.getByText('January 2024')).toBeInTheDocument();
 
-    // Click Next
-    fireEvent.click(screen.getByLabelText('Next month'));
+      // Click Next
+      fireEvent.click(screen.getByLabelText('Next month'));
+      expect(screen.getByText('February 2024')).toBeInTheDocument();
 
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
-    const nextMonth = nextDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+      // Click Prev twice (back to current, then prev)
+      fireEvent.click(screen.getByLabelText('Previous month'));
+      fireEvent.click(screen.getByLabelText('Previous month'));
 
-    expect(screen.getByText(nextMonth)).toBeInTheDocument();
-
-    // Click Prev twice (back to current, then prev)
-    fireEvent.click(screen.getByLabelText('Previous month'));
-    fireEvent.click(screen.getByLabelText('Previous month'));
-
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const prevMonth = prevDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+      expect(screen.getByText('December 2023')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('toggles recurring switch with accessibility attributes', () => {
