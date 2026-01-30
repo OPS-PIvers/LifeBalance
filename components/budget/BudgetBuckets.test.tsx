@@ -20,6 +20,8 @@ vi.mock('lucide-react', () => ({
   ChevronUp: () => <span data-testid="chevron-up" />,
   Edit: () => <span data-testid="edit-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,
+  MoreVertical: () => <span data-testid="more-vertical-icon" />,
+  X: () => <span data-testid="x-icon" />,
 }));
 
 // Mock child modals
@@ -208,5 +210,47 @@ describe('BudgetBuckets', () => {
      expect(mockDeleteTransaction).not.toHaveBeenCalled();
 
      confirmSpy.mockRestore();
+  });
+
+  it('opens transaction actions drawer on mobile', async () => {
+    // Mock window.confirm
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    confirmSpy.mockImplementation(() => true);
+
+    render(<BudgetBuckets />);
+
+    // Expand first
+    const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
+    fireEvent.click(toggleButton);
+
+    // Find the More Options button (which is rendered in the card)
+    // Note: In the real app, this is only visible on mobile (sm:hidden).
+    // In JSDOM tests, usually styles aren't applied so both desktop and mobile buttons might be in the DOM,
+    // or we might need to target it specifically.
+    // The BudgetBucketCard implementation has `aria-label="More options"` on the button.
+    const moreButton = screen.getByLabelText('More options');
+    expect(moreButton).toBeInTheDocument();
+
+    // Click it to open drawer
+    fireEvent.click(moreButton);
+
+    // Check if Drawer content appears
+    expect(screen.getByText('Transaction Options')).toBeInTheDocument();
+
+    // Check if Edit button works
+    const editButton = screen.getByText('Edit Transaction');
+    fireEvent.click(editButton);
+    expect(screen.getByTestId('edit-transaction-modal')).toBeInTheDocument();
+
+    // Re-open drawer (since it closes on action)
+    fireEvent.click(moreButton);
+
+    // Check if Delete button works
+    const deleteButton = screen.getByText('Delete');
+    fireEvent.click(deleteButton);
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
+
+    confirmSpy.mockRestore();
   });
 });
