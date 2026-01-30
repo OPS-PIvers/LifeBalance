@@ -68,4 +68,4 @@ jobs:
           create_credentials_file: true
 
       - name: Deploy to Firebase
-        run: pnpm exec firebase deploy --only hosting,functions --project lifebalance-26080
+        run: pnpm exec firebase deploy --only hosting --project lifebalance-26080
