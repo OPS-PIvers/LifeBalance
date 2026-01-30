@@ -13,6 +13,7 @@ import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -632,9 +633,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Scan Receipt</span>
                       <span className="text-xs text-brand-400">Take a photo of your receipt</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+                    <Badge variant="warning" size="sm">
                       REVIEW
-                    </div>
+                    </Badge>
                   </button>
 
                   <button
@@ -648,9 +649,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Upload Image</span>
                       <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+                    <Badge variant="warning" size="sm">
                       REVIEW
-                    </div>
+                    </Badge>
                   </button>
 
                   <button
@@ -664,9 +665,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       <span className="font-bold text-brand-700 block">Manual Entry</span>
                       <span className="text-xs text-brand-400">Enter transaction details directly</span>
                     </div>
-                    <div className="px-2 py-1 bg-green-100 text-green-700 text-xxs font-bold rounded-full">
+                    <Badge variant="success" size="sm">
                       INSTANT
-                    </div>
+                    </Badge>
                   </button>
 
                   <input
