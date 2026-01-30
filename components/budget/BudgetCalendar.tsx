@@ -1,9 +1,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
+import { useCalendarGrid } from '../../hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
@@ -34,18 +35,7 @@ const BudgetCalendar: React.FC = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
-  const { monthStart, startDate, endDate, days } = useMemo(() => {
-    const mStart = startOfMonth(currentDate);
-    const mEnd = endOfMonth(mStart);
-    const sDate = startOfWeek(mStart);
-    const eDate = endOfWeek(mEnd);
-    return {
-      monthStart: mStart,
-      startDate: sDate,
-      endDate: eDate,
-      days: eachDayOfInterval({ start: sDate, end: eDate })
-    };
-  }, [currentDate]);
+  const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
   // Expand recurring calendar items for the visible date range
@@ -178,10 +168,10 @@ const BudgetCalendar: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Calendar Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-4">
+      <div className="bg-white/50 backdrop-blur-xl rounded-3xl shadow-soft border border-white/20 p-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-lg text-brand-800">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="font-bold text-xl text-slate-900 tracking-tight">
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
@@ -189,7 +179,7 @@ const BudgetCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsRecurringModalOpen(true)}
-              className="text-brand-400 hover:text-brand-600 rounded-lg"
+              className="text-slate-400 hover:text-slate-600 rounded-xl"
               title="Manage Recurring Bills"
               aria-label="Manage Recurring Bills"
             >
@@ -199,18 +189,18 @@ const BudgetCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={handleExport}
-              className="text-brand-400 hover:text-brand-600 mr-2 rounded-lg"
+              className="text-slate-400 hover:text-slate-600 mr-2 rounded-xl"
               title="Export this month to CSV"
               aria-label="Export this month to CSV"
             >
               <Download size={20} />
             </Button>
-            <div className="w-px h-6 bg-brand-100 my-auto mx-1" />
+            <div className="w-px h-6 bg-slate-200 my-auto mx-1" />
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="text-brand-400 rounded-lg"
+              className="text-slate-400 hover:text-slate-600 rounded-xl"
               aria-label="Previous month"
             >
               <ChevronLeft size={20} />
@@ -219,7 +209,7 @@ const BudgetCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="text-brand-400 rounded-lg"
+              className="text-slate-400 hover:text-slate-600 rounded-xl"
               aria-label="Next month"
             >
               <ChevronRight size={20} />
@@ -228,14 +218,14 @@ const BudgetCalendar: React.FC = () => {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-7 mb-2">
+        <div className="grid grid-cols-7 mb-4">
           {weekDays.map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-xs font-bold text-brand-300 py-2">
+            <div key={`${d}-${i}`} className="text-center text-xs font-bold text-slate-400 py-2">
               {d}
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-2">
+        <div className="grid grid-cols-7 gap-y-3">
           {days.map(day => {
             const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
             const hasIncome = dateItems.some(i => i.type === 'income');
@@ -248,19 +238,19 @@ const BudgetCalendar: React.FC = () => {
                 key={day.toString()} 
                 onClick={() => setSelectedDate(day)}
                 className={`
-                  relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-xl text-sm font-medium cursor-pointer transition-all
-                  ${!isSameMonth(day, monthStart) ? 'text-brand-200' : 'text-brand-600'}
-                  ${isSelected ? 'bg-brand-800 text-white shadow-md scale-105' : 'hover:bg-brand-50'}
-                  ${isToday(day) && !isSelected ? 'text-brand-800 font-bold' : ''}
+                  relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-2xl text-sm font-medium cursor-pointer transition-all duration-200
+                  ${!isSameMonth(day, monthStart) ? 'text-slate-300' : 'text-slate-600'}
+                  ${isSelected ? 'bg-slate-900 text-white shadow-lg scale-110 ring-2 ring-slate-900 ring-offset-2 ring-offset-white' : 'hover:bg-white hover:shadow-sm'}
+                  ${isToday(day) && !isSelected ? 'text-slate-900 font-bold bg-white shadow-sm' : ''}
                 `}
               >
                 {format(day, 'd')}
                 
                 {/* Dots */}
-                <div className="absolute bottom-1 flex gap-0.5">
-                  {hasIncome && <div className="w-1 h-1 rounded-full bg-money-pos"></div>}
-                  {hasExpense && <div className="w-1 h-1 rounded-full bg-money-neg"></div>}
-                  {hasTodo && <div className="w-1 h-1 rounded-full bg-blue-500"></div>}
+                <div className="absolute bottom-1.5 flex gap-0.5">
+                  {hasIncome && <div className="w-1 h-1 rounded-full bg-emerald-400"></div>}
+                  {hasExpense && <div className="w-1 h-1 rounded-full bg-rose-400"></div>}
+                  {hasTodo && <div className="w-1 h-1 rounded-full bg-blue-400"></div>}
                 </div>
               </div>
             );
@@ -270,22 +260,22 @@ const BudgetCalendar: React.FC = () => {
 
       {/* Detail List */}
       <div>
-        <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="font-bold text-brand-800 text-sm uppercase tracking-wide">
-            Events for {format(selectedDate, 'MMM d')}
+        <div className="flex items-center justify-between mb-4 px-2">
+          <h3 className="font-semibold text-slate-900 text-lg tracking-tight">
+            {format(selectedDate, 'MMMM d')}
           </h3>
           <Button
             variant="subtle"
             size="sm"
             onClick={openAddModal}
-            className="text-xs py-1.5 rounded-lg"
+            className="text-xs py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
           >
             Add Event <Plus size={14} />
           </Button>
         </div>
 
         {selectedItems.length === 0 && selectedTodos.length === 0 ? (
-          <div className="text-center py-8 bg-white border border-dashed border-brand-200 rounded-2xl text-brand-400 text-sm">
+          <div className="text-center py-12 bg-slate-50/50 rounded-3xl text-slate-400 text-sm">
             No events or tasks scheduled.
           </div>
         ) : (

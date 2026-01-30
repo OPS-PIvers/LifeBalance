@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { ArrowRightLeft, Plus } from 'lucide-react';
+import { ArrowRightLeft, Plus, Edit, Trash2 } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Select from '../ui/Select';
 import { BudgetBucketCard } from './BudgetBucketCard';
@@ -77,6 +78,9 @@ const BudgetBuckets: React.FC = () => {
   // Edit Transaction Modal State
   const [isEditTransactionModalOpen, setIsEditTransactionModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+  // Mobile Action Drawer State
+  const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
 
   // --- Memoized Handlers ---
 
@@ -208,6 +212,7 @@ const BudgetBuckets: React.FC = () => {
             onReallocate={handleReallocate}
             onEditTransaction={handleEditTransaction}
             onDeleteTransaction={handleDeleteTransaction}
+            onOpenTransactionActions={setActionTransaction}
           />
         );
       })}
@@ -319,6 +324,45 @@ const BudgetBuckets: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionTransaction}
+        onClose={() => setActionTransaction(null)}
+        title="Transaction Options"
+      >
+        <div className="space-y-2">
+          {actionTransaction && (
+            <>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Edit className="text-brand-500" />}
+                onClick={() => {
+                  const txToEdit = actionTransaction;
+                  setActionTransaction(null);
+                  handleEditTransaction(txToEdit);
+                }}
+              >
+                Edit Transaction
+              </Button>
+              <div className="h-px bg-gray-100 my-2" />
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                  const txToDelete = actionTransaction;
+                  setActionTransaction(null);
+                  handleDeleteTransaction(txToDelete.id);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 };

@@ -108,3 +108,15 @@
 **Vulnerability:** The `quickAddNaturalLanguage` Cloud Function allowed any API key with *any* permission to queue commands of *any* type (e.g., expenses), relying on client-side processing. This bypassed API key scope restrictions.
 **Learning:** Heuristic detection (like `detectCommandType`) must be paired with permission enforcement at the *ingestion* point, not just downstream.
 **Prevention:** Always validate specific permissions against the *interpreted* intent of the request before accepting it, especially in "smart" or "natural language" endpoints.
+
+## 2026-03-09 - [DoS/Data Integrity] Unprotected Analytics Collections
+**Vulnerability:** The `bucketHistory` and `challenges` collections were falling through to the generic catch-all wildcard rule (`match /{subcollection}/{document}`), which allowed any household member to write arbitrary data without schema validation.
+**Learning:** Adding new features (like Challenges or Budget History) without defining explicit Firestore rules creates security gaps because the catch-all rule is "permissive by default" regarding schema. Every new collection needs a corresponding `match` block.
+**Prevention:**
+1. Added explicit `match` blocks for `bucketHistory` and `challenges` with strict schema validation.
+2. Added these collections to the catch-all exclusion list to enforce the strict rules.
+
+## 2026-03-09 - [Path Traversal] Firestore Path Injection
+**Vulnerability:** The `quickAddHabit` Cloud Function accepted a user-provided `habitId` and used it directly in a Firestore path (`households/${householdId}/habits/${habitId}`). Without validation, an attacker could supply an ID like `../otherCollection/doc` to access or overwrite documents outside the intended `habits` collection.
+**Learning:** Cloud Functions running with Admin SDK privileges bypass standard Firestore Security Rules. Therefore, strict input validation (especially for path segments) is critical at the application layer to prevent "confused deputy" attacks.
+**Prevention:** Implemented a strict `isValidFirestoreId` validator (allowlist: `a-zA-Z0-9_-`) for all user-supplied document IDs in Admin SDK paths.

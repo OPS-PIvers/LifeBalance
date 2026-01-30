@@ -301,3 +301,14 @@ export async function logApiCall(
     logger.error("Failed to log API call:", error);
   }
 }
+
+/**
+ * Validate that a string is a safe Firestore ID
+ * Prevents path traversal characters like '/' and '..'
+ */
+export function isValidFirestoreId(id: string): boolean {
+  if (!id || typeof id !== "string") return false;
+  // Allow alphanumeric, underscore, hyphen
+  // Standard Firestore IDs are base64-like alphanumeric
+  return /^[a-zA-Z0-9_-]+$/.test(id);
+}
