@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { Transaction } from '../../types/schema';
+import { Transaction, INCOME_CATEGORY } from '../../types/schema';
 import { Button } from '../ui/Button';
 
 // --- Helper Functions ---
@@ -53,9 +53,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
         )}
 
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-           tx.category === 'Income' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'
+           tx.category === INCOME_CATEGORY ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'
         }`}>
-          {tx.category === 'Income' ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
+          {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>
 
         <div className="min-w-0">
@@ -74,9 +74,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
           <p className={`font-mono font-semibold text-base ${
-            tx.category === 'Income' ? 'text-emerald-600' : 'text-slate-900'
+            tx.category === INCOME_CATEGORY ? 'text-emerald-600' : 'text-slate-900'
           }`}>
-            {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
+            {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}
           </p>
           {tx.status === 'pending_review' && (
             <p className="text-xxs text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">

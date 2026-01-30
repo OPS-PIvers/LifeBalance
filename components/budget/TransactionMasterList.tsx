@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
-import { Transaction } from '../../types/schema';
+import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
@@ -89,7 +89,7 @@ const TransactionMasterList: React.FC = () => {
   const summary = useMemo(() => {
     return filteredTransactions.reduce(
       (acc, tx) => {
-        if (tx.category === 'Income') {
+        if (tx.category === INCOME_CATEGORY) {
           acc.income += tx.amount;
         } else {
           acc.expense += tx.amount;
@@ -403,19 +403,19 @@ const TransactionMasterList: React.FC = () => {
           <div className="bg-brand-50 p-3 rounded-xl">
             <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
             <p className="text-lg font-bold text-money-pos font-mono">
-              +${summary.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
           <div className="bg-brand-50 p-3 rounded-xl">
             <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
             <p className="text-lg font-bold text-money-neg font-mono">
-              -${summary.expense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
           <div className="bg-brand-50 p-3 rounded-xl">
             <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
             <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
           <div className="bg-brand-50 p-3 rounded-xl">
