@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import HabitHistoryCalendar from './HabitHistoryCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
@@ -36,7 +36,7 @@ describe('HabitHistoryCalendar', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-15T12:00:00Z'));
 
-    (useHousehold as any).mockReturnValue({
+    (useHousehold as Mock).mockReturnValue({
       habits: mockHabits,
     });
   });
