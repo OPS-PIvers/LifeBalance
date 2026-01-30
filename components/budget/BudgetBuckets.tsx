@@ -339,8 +339,9 @@ const BudgetBuckets: React.FC = () => {
                 className="w-full justify-start text-lg py-4"
                 leftIcon={<Edit className="text-brand-500" />}
                 onClick={() => {
-                  handleEditTransaction(actionTransaction);
+                  const txToEdit = actionTransaction;
                   setActionTransaction(null);
+                  handleEditTransaction(txToEdit);
                 }}
               >
                 Edit Transaction
@@ -351,8 +352,9 @@ const BudgetBuckets: React.FC = () => {
                 className="w-full justify-start text-lg py-4"
                 leftIcon={<Trash2 />}
                 onClick={() => {
-                  handleDeleteTransaction(actionTransaction.id);
+                  const txToDelete = actionTransaction;
                   setActionTransaction(null);
+                  handleDeleteTransaction(txToDelete.id);
                 }}
               >
                 Delete

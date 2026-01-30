@@ -264,6 +264,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                         onClick={() => onOpenTransactionActions(tx)}
                         className="text-slate-400 hover:text-slate-600"
                         title="More options"
+                        aria-label="More options"
                       >
                         <MoreVertical size={18} />
                       </Button>
