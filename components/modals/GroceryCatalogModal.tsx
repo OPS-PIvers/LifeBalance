@@ -123,6 +123,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search history..."
+              aria-label="Search history"
               className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
               autoFocus
             />
@@ -193,14 +194,24 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
       {/* Nested Edit Modal */}
       {editingItem && (
-        <div className="absolute inset-0 z-popover flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 animate-in zoom-in-95">
-            <h4 className="text-lg font-bold text-gray-800 mb-4">Edit History Item</h4>
+        <div
+          className="absolute inset-0 z-popover flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+          onClick={() => setEditingItem(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-item-title"
+          >
+            <h4 id="edit-item-title" className="text-lg font-bold text-gray-800 mb-4">Edit History Item</h4>
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase">Name</label>
+                <label htmlFor={`edit-${editingItem.id}-name`} className="text-xs font-bold text-gray-400 uppercase">Name</label>
                 <input
+                  id={`edit-${editingItem.id}-name`}
                   type="text"
                   value={editingItem.name}
                   onChange={e => setEditingItem({...editingItem, name: e.target.value})}
@@ -208,8 +219,9 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
+                <label htmlFor={`edit-${editingItem.id}-category`} className="text-xs font-bold text-gray-400 uppercase">Category</label>
                 <input
+                  id={`edit-${editingItem.id}-category`}
                   type="text"
                   value={editingItem.category}
                   onChange={e => setEditingItem({...editingItem, category: e.target.value})}
@@ -218,8 +230,9 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                   <label className="text-xs font-bold text-gray-400 uppercase">Default Qty</label>
+                   <label htmlFor={`edit-${editingItem.id}-qty`} className="text-xs font-bold text-gray-400 uppercase">Default Qty</label>
                    <input
+                    id={`edit-${editingItem.id}-qty`}
                     type="text"
                     value={editingItem.defaultQuantity || ''}
                     onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
@@ -228,8 +241,9 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   />
                 </div>
                 <div>
-                   <label className="text-xs font-bold text-gray-400 uppercase">Default Store</label>
+                   <label htmlFor={`edit-${editingItem.id}-store`} className="text-xs font-bold text-gray-400 uppercase">Default Store</label>
                    <input
+                    id={`edit-${editingItem.id}-store`}
                     type="text"
                     value={editingItem.defaultStore || ''}
                     onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}

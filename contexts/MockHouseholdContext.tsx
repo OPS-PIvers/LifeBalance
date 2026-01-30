@@ -83,6 +83,17 @@ const SEED_STORES: Store[] = [
   { id: 's2', name: 'Costco', icon: 'Store' },
 ];
 
+const SEED_GROCERY_CATALOG: GroceryCatalogItem[] = [
+  {
+    id: 'cat1', name: 'Milk', category: 'Dairy', defaultQuantity: '1', defaultStore: 'Safeway',
+    purchaseCount: 10, lastPurchased: new Date().toISOString()
+  },
+  {
+    id: 'cat2', name: 'Eggs', category: 'Dairy', defaultQuantity: '12', defaultStore: 'Costco',
+    purchaseCount: 5, lastPurchased: new Date().toISOString()
+  }
+];
+
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -98,7 +109,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
-  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");

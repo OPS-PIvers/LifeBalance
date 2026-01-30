@@ -17,3 +17,7 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+
+## 2026-01-30 - Modal Accessibility & Backdrop Interaction
+**Learning:** Nested modals often miss standard accessibility features (role="dialog", aria-modal, labels) and interaction patterns (backdrop click to close), creating dead ends for users.
+**Action:** Enforce a "Dialog Pattern" for all nested overlays: always use `role="dialog"`, ensure explicit labeling via `aria-labelledby`, and enable backdrop dismissal.
