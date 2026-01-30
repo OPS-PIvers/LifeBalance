@@ -1169,6 +1169,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[resetBucketsForNewPeriod] Failed:', error);
       toast.error('Failed to reset period. Please try again.');
+      throw error; // Re-throw so handlePaycheckApproval can catch it
     }
   }, [householdId, currentPeriodId, buckets, bucketSpentMap, transactions]);
 
@@ -1198,216 +1199,258 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[initializeFirstPeriod] Failed:', error);
       toast.error('Failed to initialize period tracking');
+      throw error; // Re-throw so handlePaycheckApproval can catch it
     }
   }, [householdId, user, buckets]);
 
   const handlePaycheckApproval = useCallback(async (paycheckDate: string) => {
     if (!householdId || !user) return;
 
-    if (!currentPeriodId) {
-      // First paycheck ever - initialize period tracking
-      await initializeFirstPeriod(paycheckDate);
-      return;
+    try {
+      if (!currentPeriodId) {
+        // First paycheck ever - initialize period tracking
+        await initializeFirstPeriod(paycheckDate);
+        return;
+      }
+
+      // Reset buckets for the period that just ended
+      await resetBucketsForNewPeriod(paycheckDate);
+
+      // Update household's last paycheck date
+      const householdRef = doc(db, `households/${householdId}`);
+      await updateDoc(householdRef, {
+        lastPaycheckDate: paycheckDate,
+      });
+    } catch (error) {
+      console.error('[handlePaycheckApproval] Failed:', error);
+      toast.error('Failed to process paycheck approval. Please try again.');
+      throw error;
     }
-
-    // Reset buckets for the period that just ended
-    await resetBucketsForNewPeriod(paycheckDate);
-
-    // Update household's last paycheck date
-    const householdRef = doc(db, `households/${householdId}`);
-    await updateDoc(householdRef, {
-      lastPaycheckDate: paycheckDate,
-    });
   }, [householdId, user, currentPeriodId, initializeFirstPeriod, resetBucketsForNewPeriod]);
 
   // --- ACTIONS: CALENDAR ---
 
   const addCalendarItem = useCallback(async (item: CalendarItem) => {
     if (!householdId || !user) return;
-    const sanitizedItem = sanitizeFirestoreData(item);
-    await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-      ...sanitizedItem,
-      createdBy: user.uid,
-    });
-    toast.success('Event added');
+
+    try {
+      // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
+      const { id: _id, ...itemWithoutId } = item;
+      const sanitizedItem = sanitizeFirestoreData(itemWithoutId);
+
+      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        ...sanitizedItem,
+        createdBy: user.uid,
+      });
+      toast.success('Event added');
+    } catch (error) {
+      console.error('[addCalendarItem] Failed:', error);
+      toast.error('Failed to add event. Please try again.');
+      throw error;
+    }
   }, [householdId, user]);
 
   const updateCalendarItem = useCallback(async (item: CalendarItem) => {
     if (!householdId) return;
-    const updates = {
-      title: item.title,
-      amount: item.amount,
-      date: item.date,
-      type: item.type,
-      isPaid: item.isPaid,
-      isRecurring: item.isRecurring,
-      frequency: item.frequency,
-    };
-    const sanitizedUpdates = sanitizeFirestoreData(updates);
-    await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
-    toast.success('Event updated');
+
+    try {
+      const updates = {
+        title: item.title,
+        amount: item.amount,
+        date: item.date,
+        type: item.type,
+        isPaid: item.isPaid,
+        isRecurring: item.isRecurring,
+        frequency: item.frequency,
+      };
+      const sanitizedUpdates = sanitizeFirestoreData(updates);
+      await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
+      toast.success('Event updated');
+    } catch (error) {
+      console.error('[updateCalendarItem] Failed:', error);
+      toast.error('Failed to update event. Please try again.');
+      throw error;
+    }
   }, [householdId]);
 
   const deleteRecurringInstance = useCallback(async (syntheticId: string) => {
     if (!householdId || !user) return;
 
-    // Parse synthetic ID to get template ID and date
-    const parsed = parseRecurringId(syntheticId);
-    if (!parsed) return;
-    const { templateId: parentRecurringId, date: specificDate } = parsed;
+    try {
+      // Parse synthetic ID to get template ID and date
+      const parsed = parseRecurringId(syntheticId);
+      if (!parsed) return;
+      const { templateId: parentRecurringId, date: specificDate } = parsed;
 
-    // Find the recurring template to get item details
-    const template = calendarItems.find(i => i.id === parentRecurringId);
-    if (!template) return;
+      // Find the recurring template to get item details
+      const template = calendarItems.find(i => i.id === parentRecurringId);
+      if (!template) return;
 
-    // Check if this specific date has already been deleted or paid
-    const existingInstance = calendarItems.find(
-      i => i.parentRecurringId === parentRecurringId && i.date === specificDate
-    );
-    if (existingInstance) {
-      // If it's already a paid/deleted instance, just delete that record
-      await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
+      // Check if this specific date has already been deleted or paid
+      const existingInstance = calendarItems.find(
+        i => i.parentRecurringId === parentRecurringId && i.date === specificDate
+      );
+      if (existingInstance) {
+        // If it's already a paid/deleted instance, just delete that record
+        await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
+        toast.success('Instance deleted');
+        return;
+      }
+
+      // Create a deleted instance marker
+      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        title: template.title,
+        amount: template.amount,
+        date: specificDate,
+        type: template.type,
+        isPaid: false,
+        isRecurring: false,
+        isDeleted: true,
+        parentRecurringId: parentRecurringId,
+        createdBy: user.uid,
+      });
+
       toast.success('Instance deleted');
-      return;
+    } catch (error) {
+      console.error('[deleteRecurringInstance] Failed:', error);
+      toast.error('Failed to delete instance. Please try again.');
+      throw error;
     }
-
-    // Create a deleted instance marker
-    await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-      title: template.title,
-      amount: template.amount,
-      date: specificDate,
-      type: template.type,
-      isPaid: false,
-      isRecurring: false,
-      isDeleted: true,
-      parentRecurringId: parentRecurringId,
-      createdBy: user.uid,
-    });
-
-    toast.success('Instance deleted');
   }, [householdId, user, calendarItems]);
 
   const deleteCalendarItem = useCallback(async (id: string) => {
     if (!householdId) return;
 
-    // Check if this is a recurring instance (synthetic ID with date suffix)
-    const isRecurringInstance = isRecurringId(id);
+    try {
+      // Check if this is a recurring instance (synthetic ID with date suffix)
+      const isRecurringInstance = isRecurringId(id);
 
-    if (isRecurringInstance) {
-      // Delete only this instance, not the entire series
-      await deleteRecurringInstance(id);
-    } else {
-      // Direct deletion for non-recurring items or templates
-      await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
-      toast.success('Event deleted');
+      if (isRecurringInstance) {
+        // Delete only this instance, not the entire series
+        await deleteRecurringInstance(id);
+      } else {
+        // Direct deletion for non-recurring items or templates
+        await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
+        toast.success('Event deleted');
+      }
+    } catch (error) {
+      console.error('[deleteCalendarItem] Failed:', error);
+      toast.error('Failed to delete event. Please try again.');
+      throw error;
     }
   }, [householdId, deleteRecurringInstance]);
 
   const payCalendarItem = useCallback(async (itemId: string, accountId: string) => {
     if (!householdId || !user) return;
 
-    const account = accounts.find(a => a.id === accountId);
-    if (!account) return;
+    try {
+      const account = accounts.find(a => a.id === accountId);
+      if (!account) return;
 
-    // Check if this is a recurring instance
-    const isRecurringInstance = isRecurringId(itemId);
+      // Check if this is a recurring instance
+      const isRecurringInstance = isRecurringId(itemId);
 
-    let item: CalendarItem | undefined;
-    let parentRecurringId: string | undefined;
-    let specificDate: string;
+      let item: CalendarItem | undefined;
+      let parentRecurringId: string | undefined;
+      let specificDate: string;
 
-    if (isRecurringInstance) {
-      // Parse synthetic ID to get original template ID and date
-      const parsed = parseRecurringId(itemId);
-      if (!parsed) return;
-      parentRecurringId = parsed.templateId;
-      specificDate = parsed.date;
+      if (isRecurringInstance) {
+        // Parse synthetic ID to get original template ID and date
+        const parsed = parseRecurringId(itemId);
+        if (!parsed) return;
+        parentRecurringId = parsed.templateId;
+        specificDate = parsed.date;
 
-      // Find the recurring template
-      const template = calendarItems.find(i => i.id === parentRecurringId);
-      if (!template) return;
+        // Find the recurring template
+        const template = calendarItems.find(i => i.id === parentRecurringId);
+        if (!template) return;
 
-      // Check if this specific date has already been paid
-      const existingPaidInstance = calendarItems.find(
-        i => i.parentRecurringId === parentRecurringId && i.date === specificDate && i.isPaid
-      );
-      if (existingPaidInstance) return;
+        // Check if this specific date has already been paid
+        const existingPaidInstance = calendarItems.find(
+          i => i.parentRecurringId === parentRecurringId && i.date === specificDate && i.isPaid
+        );
+        if (existingPaidInstance) return;
 
-      // Create item object for this specific instance
-      item = {
-        ...template,
-        date: specificDate,
-      };
-    } else {
-      // Non-recurring item
-      item = calendarItems.find(i => i.id === itemId);
-      if (!item || item.isPaid) return;
-      specificDate = item.date;
-    }
+        // Create item object for this specific instance
+        item = {
+          ...template,
+          date: specificDate,
+        };
+      } else {
+        // Non-recurring item
+        item = calendarItems.find(i => i.id === itemId);
+        if (!item || item.isPaid) return;
+        specificDate = item.date;
+      }
 
-    // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction
-    if (item.type === 'income') {
-      await handlePaycheckApproval(specificDate);
-    }
+      // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction
+      if (item.type === 'income') {
+        await handlePaycheckApproval(specificDate);
+      }
 
-    // 1. Create or update the paid calendar item
-    if (isRecurringInstance) {
-      // Create a new paid instance record
-      await addDoc(collection(db, `households/${householdId}/calendarItems`), {
-        title: item.title,
+      // 1. Create or update the paid calendar item
+      if (isRecurringInstance) {
+        // Create a new paid instance record
+        await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+          title: item.title,
+          amount: item.amount,
+          date: specificDate,
+          type: item.type,
+          isPaid: true,
+          isRecurring: false, // Individual instances are not recurring
+          parentRecurringId: parentRecurringId,
+          createdBy: user.uid,
+        });
+      } else {
+        // Mark non-recurring item as paid
+        await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
+          isPaid: true,
+        });
+      }
+
+      // 2. Update account balance
+      const newBalance = item.type === 'expense' ? account.balance - item.amount : account.balance + item.amount;
+
+      await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
+        balance: newBalance,
+        lastUpdated: serverTimestamp(),
+      });
+
+      // 3. Auto-categorize
+      let category = 'Bills';
+      if (item.type === 'expense') {
+        const matchedBucket = buckets.find(b => item.title.toLowerCase().includes(b.name.toLowerCase()));
+        if (matchedBucket) category = matchedBucket.name;
+      } else {
+        category = 'Income';
+      }
+
+      // 4. Create transaction
+      const transactionDate = new Date().toISOString().split('T')[0];
+      const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
+
+      await addDoc(collection(db, `households/${householdId}/transactions`), {
         amount: item.amount,
-        date: specificDate,
-        type: item.type,
-        isPaid: true,
-        isRecurring: false, // Individual instances are not recurring
-        parentRecurringId: parentRecurringId,
+        merchant: item.title,
+        category: category,
+        date: transactionDate,
+        status: 'verified',
+        isRecurring: !!item.isRecurring,
+        source: 'recurring',
+        autoCategorized: true,
+        payPeriodId,
         createdBy: user.uid,
+        createdAt: serverTimestamp(),
       });
-    } else {
-      // Mark non-recurring item as paid
-      await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
-        isPaid: true,
-      });
+
+      // DO NOT update bucket.spent - it's now calculated in real-time from transactions
+
+      toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
+    } catch (error) {
+      console.error('[payCalendarItem] Failed:', error);
+      toast.error('Failed to process payment. Please try again.');
+      throw error;
     }
-
-    // 2. Update account balance
-    const newBalance = item.type === 'expense' ? account.balance - item.amount : account.balance + item.amount;
-
-    await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
-      balance: newBalance,
-      lastUpdated: serverTimestamp(),
-    });
-
-    // 3. Auto-categorize
-    let category = 'Bills';
-    if (item.type === 'expense') {
-      const matchedBucket = buckets.find(b => item.title.toLowerCase().includes(b.name.toLowerCase()));
-      if (matchedBucket) category = matchedBucket.name;
-    } else {
-      category = 'Income';
-    }
-
-    // 4. Create transaction
-    const transactionDate = new Date().toISOString().split('T')[0];
-    const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
-
-    await addDoc(collection(db, `households/${householdId}/transactions`), {
-      amount: item.amount,
-      merchant: item.title,
-      category: category,
-      date: transactionDate,
-      status: 'verified',
-      isRecurring: !!item.isRecurring,
-      source: 'recurring',
-      autoCategorized: true,
-      payPeriodId,
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-    });
-
-    // DO NOT update bucket.spent - it's now calculated in real-time from transactions
-
-    toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
   }, [householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval]);
 
   const deferCalendarItem = useCallback(async (itemId: string) => {
