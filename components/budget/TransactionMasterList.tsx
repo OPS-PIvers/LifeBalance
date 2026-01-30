@@ -27,6 +27,8 @@ const TransactionMasterList: React.FC = () => {
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -75,7 +77,12 @@ const TransactionMasterList: React.FC = () => {
           (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
           (sourceFilter === 'file-upload' && tx.source === 'file-upload');
 
-        return matchesSearch && matchesCategory && matchesSource;
+        // Date Range Filter
+        const matchesDate =
+          (!startDate || tx.date >= startDate) &&
+          (!endDate || tx.date <= endDate);
+
+        return matchesSearch && matchesCategory && matchesSource && matchesDate;
       })
       // Optimize sort: String comparison of ISO dates is ~12x faster than parsing Date objects
       .sort((a, b) => {
@@ -144,6 +151,8 @@ const TransactionMasterList: React.FC = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setSourceFilter('all');
+    setStartDate('');
+    setEndDate('');
   };
 
   const toggleSelection = useCallback((id: string) => {
@@ -248,6 +257,24 @@ const TransactionMasterList: React.FC = () => {
     }
   };
 
+  // Derived State: Summary Stats
+  const { totalIncome, totalExpense, net } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    filteredTransactions.forEach(tx => {
+      if (tx.category === 'Income') {
+        income += tx.amount;
+      } else {
+        expense += tx.amount;
+      }
+    });
+    return {
+      totalIncome: income,
+      totalExpense: expense,
+      net: income - expense
+    };
+  }, [filteredTransactions]);
+
   const handleExport = () => {
     try {
       if (filteredTransactions.length === 0) {
@@ -325,7 +352,26 @@ const TransactionMasterList: React.FC = () => {
             <option value="file-upload">File Upload</option>
           </select>
 
-          {(categoryFilter !== 'all' || sourceFilter !== 'all') && (
+          {/* Date Range Inputs */}
+          <div className="flex items-center gap-1 bg-brand-50 border border-brand-200 rounded-lg px-2">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent text-sm text-brand-700 outline-none w-28 py-2"
+              title="Start Date"
+            />
+            <span className="text-brand-300">-</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent text-sm text-brand-700 outline-none w-28 py-2"
+              title="End Date"
+            />
+          </div>
+
+          {(categoryFilter !== 'all' || sourceFilter !== 'all' || startDate || endDate) && (
             <button
               onClick={clearFilters}
               className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"
@@ -369,15 +415,54 @@ const TransactionMasterList: React.FC = () => {
           currentFilters={{
             searchTerm,
             categoryFilter,
-            sourceFilter
+            sourceFilter,
+            startDate,
+            endDate
           }}
           onApply={(filters) => {
             setSearchTerm(filters.searchTerm);
             setCategoryFilter(filters.categoryFilter);
             setSourceFilter(filters.sourceFilter);
+            setStartDate(filters.startDate || '');
+            setEndDate(filters.endDate || '');
           }}
         />
       </div>
+
+      {/* Summary Card */}
+      {filteredTransactions.length > 0 && (
+        <div className="bg-brand-50 border border-brand-100 p-3 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm animate-in fade-in slide-in-from-top-2">
+          <div className="font-bold text-brand-700 flex items-center gap-2">
+            <div className="bg-brand-200 p-1 rounded-md text-brand-700">
+               <Tag size={14} />
+            </div>
+            Summary ({filteredTransactions.length})
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 items-center">
+            {totalIncome > 0 && (
+              <div className="text-money-pos font-mono font-bold flex items-center gap-1">
+                <span>Income:</span>
+                <span>+${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {totalExpense > 0 && (
+              <div className="text-money-neg font-mono font-bold flex items-center gap-1">
+                <span>Expense:</span>
+                <span>-${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </div>
+            )}
+            {(totalIncome > 0 && totalExpense > 0) && (
+              <>
+                <div className="w-px h-4 bg-brand-200 hidden sm:block" />
+                <div className={`font-mono font-bold flex items-center gap-1 ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                  <span>Net:</span>
+                  <span>{net >= 0 ? '+' : ''}${net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Select All Bar */}
       {isSelectionMode && (

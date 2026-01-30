@@ -9,6 +9,8 @@ interface SavedView {
     searchTerm: string;
     categoryFilter: string;
     sourceFilter: string;
+    startDate?: string;
+    endDate?: string;
   };
 }
 
@@ -18,8 +20,16 @@ interface SavedViewChipsProps {
     searchTerm: string;
     categoryFilter: string;
     sourceFilter: string;
+    startDate?: string;
+    endDate?: string;
   };
-  onApply: (filters: { searchTerm: string; categoryFilter: string; sourceFilter: string }) => void;
+  onApply: (filters: {
+    searchTerm: string;
+    categoryFilter: string;
+    sourceFilter: string;
+    startDate?: string;
+    endDate?: string;
+  }) => void;
 }
 
 const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFilters, onApply }) => {

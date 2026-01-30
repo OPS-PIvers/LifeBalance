@@ -20,7 +20,9 @@ describe('SavedViewChips', () => {
   const currentFilters = {
     searchTerm: 'test',
     categoryFilter: 'Food',
-    sourceFilter: 'all'
+    sourceFilter: 'all',
+    startDate: '2023-01-01',
+    endDate: '2023-01-31'
   };
 
   beforeEach(() => {
@@ -76,7 +78,13 @@ describe('SavedViewChips', () => {
     const view = {
       id: '1',
       name: 'Test View',
-      filters: { searchTerm: 'foo', categoryFilter: 'bar', sourceFilter: 'baz' }
+      filters: {
+        searchTerm: 'foo',
+        categoryFilter: 'bar',
+        sourceFilter: 'baz',
+        startDate: '2023-02-01',
+        endDate: '2023-02-28'
+      }
     };
     localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
 
@@ -116,18 +124,11 @@ describe('SavedViewChips', () => {
 
     expect(screen.getByText('Test View')).toBeInTheDocument();
 
-    // Click delete (X icon inside the chip)
-    // The chip structure has multiple X icons (one in form if open, one in chips).
-    // We want the one inside the chip.
-    // The chip structure: <button ...><span>Test View</span><div role="button"><X/></div></button>
-    // We can find by role="button" inside the chip?
-    // Or just query all X icons and pick the right one.
-    // But since "Save View" form is closed, there is only one X icon (inside the chip)?
-    // No, "Save View" button has a Plus icon.
-    // Wait, the "Save View" button is NOT open initially.
-    // So there is only the X icon in the chip.
-
-    const deleteBtn = screen.getByTestId('x-icon').closest('div');
+    // The delete button is the second button inside the group div
+    // But since we are mocking icons, we can find the X icon.
+    // However, the "Save View" form cancel button also has an X icon if visible.
+    // Here the form is not visible, so only the chip has an X icon.
+    const deleteBtn = screen.getByTestId('x-icon').closest('button');
     fireEvent.click(deleteBtn!);
 
     expect(screen.queryByText('Test View')).not.toBeInTheDocument();
