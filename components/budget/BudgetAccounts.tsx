@@ -198,25 +198,29 @@ const BudgetAccounts: React.FC = () => {
               </span>
             </div>
             {isSavings && (
-              <button
+              <Button
+                variant="subtle"
+                size="icon-sm"
                 onClick={() => setIsGoalModalOpen(account.id)}
-                className="p-1.5 rounded-full bg-brand-50 text-brand-400 hover:text-habit-gold hover:bg-yellow-50 transition-colors"
+                className="hover:text-habit-gold hover:bg-yellow-50"
                 aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
-              </button>
+              </Button>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             {/* Delete button */}
-            <button
+            <Button
+              variant="ghost-destructive"
+              size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="p-1.5 rounded-full text-brand-300 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+              className="text-brand-300"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
-            </button>
+            </Button>
 
             {isEditing ? (
               <div className="flex items-center gap-2">
@@ -227,13 +231,14 @@ const BudgetAccounts: React.FC = () => {
                   className="w-24 bg-brand-50 border border-brand-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
                   autoFocus
                 />
-                <button
+                <Button
+                  variant="primary"
+                  size="icon-sm"
                   onClick={() => saveEditing(account.id)}
-                  className="p-1.5 bg-brand-800 text-white rounded-lg active:scale-95"
                   aria-label="Save balance"
                 >
                   <Check size={16} />
-                </button>
+                </Button>
               </div>
             ) : (
               <div
@@ -342,74 +347,92 @@ const BudgetAccounts: React.FC = () => {
       </Button>
 
       {/* Add Account Modal */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-brand-800">Add Account</h3>
-              <button onClick={() => setIsAddModalOpen(false)}><X size={20} className="text-brand-400" /></button>
-            </div>
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        ariaLabelledBy="add-account-title"
+      >
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 id="add-account-title" className="font-bold text-lg text-brand-800">Add Account</h3>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setIsAddModalOpen(false)}
+              aria-label="Close"
+            >
+              <X size={20} className="text-brand-400" />
+            </Button>
+          </div>
 
-            <div className="space-y-4">
-               <Input
-                 placeholder="Account Name"
-                 value={newName}
-                 onChange={e => setNewName(e.target.value)}
-              />
-              <Select
-                value={newType}
-                onChange={(e) => setNewType(e.target.value as Account['type'])}
-              >
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
-                <option value="credit">Credit Card</option>
-              </Select>
-              <Input
-                 type="number"
-                 placeholder="Current Balance"
-                 value={newBalance}
-                 onChange={e => setNewBalance(e.target.value)}
-                 className="font-mono"
-              />
-               <Button
-                 onClick={handleAddAccount}
-                 className="w-full py-3 mt-2"
-               >
-                 Save Account
-               </Button>
-            </div>
-           </div>
+          <div className="space-y-4">
+            <Input
+              placeholder="Account Name"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+            />
+            <Select
+              value={newType}
+              onChange={(e) => setNewType(e.target.value as Account['type'])}
+            >
+              <option value="checking">Checking</option>
+              <option value="savings">Savings</option>
+              <option value="credit">Credit Card</option>
+            </Select>
+            <Input
+              type="number"
+              placeholder="Current Balance"
+              value={newBalance}
+              onChange={e => setNewBalance(e.target.value)}
+              className="font-mono"
+            />
+            <Button
+              onClick={handleAddAccount}
+              className="w-full py-3 mt-2"
+            >
+              Save Account
+            </Button>
+          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Goal Modal */}
-      {isGoalModalOpen && (
-        <div className="fixed inset-0 z-modal flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-           <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95">
-             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-brand-800">Set Savings Goal</h3>
-              <button onClick={() => setIsGoalModalOpen(null)}><X size={20} className="text-brand-400" /></button>
-            </div>
-             <p className="text-sm text-brand-500 mb-4">
-               What is your target balance for this account?
-             </p>
-             <Input
-                 type="number"
-                 placeholder="Goal Amount"
-                 value={goalAmount}
-                 onChange={e => setGoalAmount(e.target.value)}
-                 className="font-mono mb-4"
-                 autoFocus
-              />
-              <Button
-                 onClick={handleSetGoal}
-                 className="w-full py-3"
-               >
-                 Set Goal
-               </Button>
-           </div>
+      <Modal
+        isOpen={!!isGoalModalOpen}
+        onClose={() => setIsGoalModalOpen(null)}
+        ariaLabelledBy="set-goal-title"
+      >
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 id="set-goal-title" className="font-bold text-lg text-brand-800">Set Savings Goal</h3>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setIsGoalModalOpen(null)}
+              aria-label="Close"
+            >
+              <X size={20} className="text-brand-400" />
+            </Button>
+          </div>
+          <p className="text-sm text-brand-500 mb-4">
+            What is your target balance for this account?
+          </p>
+          <Input
+            type="number"
+            placeholder="Goal Amount"
+            value={goalAmount}
+            onChange={e => setGoalAmount(e.target.value)}
+            className="font-mono mb-4"
+            autoFocus
+          />
+          <Button
+            onClick={handleSetGoal}
+            className="w-full py-3"
+          >
+            Set Goal
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       {deletingId && (
@@ -423,14 +446,16 @@ const BudgetAccounts: React.FC = () => {
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 id="delete-account-title" className="font-bold text-lg text-brand-800">Delete Account?</h3>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onClick={() => !isDeleting && setDeletingId(null)}
-                className="text-brand-400 hover:text-brand-600 transition-colors"
+                className="text-brand-400 hover:text-brand-600"
                 aria-label="Close"
                 disabled={isDeleting}
               >
                 <X size={20} />
-              </button>
+              </Button>
             </div>
             <p id="delete-account-desc" className="text-sm text-brand-500 mb-6">
               Are you sure you want to delete this account? This action cannot be undone.
