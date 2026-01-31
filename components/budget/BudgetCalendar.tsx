@@ -111,7 +111,7 @@ const BudgetCalendar: React.FC = () => {
         // If so, we can't update it directly (it doesn't exist).
         // Instead, we create a new event (materialize it) and hide the original instance.
         if (isRecurringId(editingItem.id)) {
-          const { id, ...itemData } = newItem;
+          const { id: _id, ...itemData } = newItem;
           const newRealItem = { ...itemData, id: crypto.randomUUID() };
 
           await addCalendarItem(newRealItem);
