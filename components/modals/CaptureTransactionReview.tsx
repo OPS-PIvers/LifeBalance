@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { ParsedTransaction } from '../../types/ui';
 import { BudgetBucket, Store, Account } from '../../types/schema';
+import { CompactSelect } from '../ui/CompactSelect';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
@@ -104,16 +105,12 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
                       return (
                         <div>
-                          <select
+                          <CompactSelect
                             value={tx.subBucketId || ''}
-                            onChange={(e) => onUpdateTransaction(tx.id, { subBucketId: e.target.value || undefined })}
-                            className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
-                          >
-                            <option value="">Sub-Category...</option>
-                            {selectedBucket.subBuckets.map(sb => (
-                              <option key={sb.id} value={sb.id}>{sb.name}</option>
-                            ))}
-                          </select>
+                            onChange={(value) => onUpdateTransaction(tx.id, { subBucketId: value || undefined })}
+                            options={selectedBucket.subBuckets.map(sb => ({ id: sb.id, label: sb.name }))}
+                            placeholder="Sub-Category..."
+                          />
                         </div>
                       );
                     }
@@ -122,30 +119,22 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
 
                   {/* Store Select */}
                   <div>
-                    <select
+                    <CompactSelect
                       value={tx.store || ''}
-                      onChange={(e) => onUpdateTransaction(tx.id, { store: e.target.value || undefined })}
-                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
-                    >
-                      <option value="">Store...</option>
-                      {stores.map(s => (
-                        <option key={s.id} value={s.name}>{s.name}</option>
-                      ))}
-                    </select>
+                      onChange={(value) => onUpdateTransaction(tx.id, { store: value || undefined })}
+                      options={stores.map(s => ({ id: s.name, label: s.name }))}
+                      placeholder="Store..."
+                    />
                   </div>
 
                   {/* Account Select */}
                   <div>
-                    <select
+                    <CompactSelect
                       value={tx.accountId || ''}
-                      onChange={(e) => onUpdateTransaction(tx.id, { accountId: e.target.value || undefined })}
-                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
-                    >
-                      <option value="">Account...</option>
-                      {accounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.name}</option>
-                      ))}
-                    </select>
+                      onChange={(value) => onUpdateTransaction(tx.id, { accountId: value || undefined })}
+                      options={accounts.map(a => ({ id: a.id, label: a.name }))}
+                      placeholder="Account..."
+                    />
                   </div>
                 </div>
 
