@@ -112,6 +112,7 @@ export interface Transaction {
   subBucketId?: string;
   store?: string;
   accountId?: string;
+  notes?: string;
 }
 
 export interface CalendarItem {
