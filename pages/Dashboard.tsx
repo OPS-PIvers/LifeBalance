@@ -74,14 +74,14 @@ const Dashboard: React.FC = () => {
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/90 backdrop-blur-xl border border-blue-100 shadow-sm ring-1 ring-blue-500/10 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)] animate-pulse"></div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-blue-800">
+                <h3 className="text-sm font-bold text-slate-900">
                   Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
                 </h3>
-                <p className="text-xs text-blue-600 mt-0.5">
+                <p className="text-xs text-slate-500 mt-0.5">
                   Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts...
                 </p>
               </div>
