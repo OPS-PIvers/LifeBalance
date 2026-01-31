@@ -1,13 +1,12 @@
 import React from 'react';
-import { X, Wallet, Receipt, CreditCard } from 'lucide-react';
+import { Wallet, Receipt, CreditCard } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -83,27 +82,12 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
   const totalBucketLiability = bucketBreakdown.reduce((sum, b) => sum + b.remaining, 0);
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-sm"
-      backdropColor="bg-slate-900/80"
+      title="Safe to Spend Breakdown"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-brand-50 shrink-0">
-        <h2 className="text-lg font-bold text-brand-800">Safe to Spend Breakdown</h2>
-        <Button
-          variant="subtle"
-          size="icon"
-          className="rounded-full text-brand-400"
-          onClick={onClose}
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="space-y-6">
           
           {/* Top Line: Checking Balance */}
           <div className="flex items-center justify-between">
@@ -216,9 +200,8 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
           <p className="text-xxs text-center text-brand-400">
             This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
-
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

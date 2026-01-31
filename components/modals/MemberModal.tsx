@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { HouseholdMember, Role } from '@/types/schema';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
 
 interface MemberModalProps {
@@ -54,69 +54,53 @@ const MemberModal: React.FC<MemberModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      maxWidth="max-w-md"
-      backdropColor="bg-black/50"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
-        <h2 className="text-lg font-bold text-gray-800">{title}</h2>
-        <button
-          onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <X size={20} />
-        </button>
-      </div>
+    <Drawer isOpen={isOpen} onClose={onClose} title={title}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Display Name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="e.g. John Doe"
+          required
+        />
 
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
-          <Input
-            label="Display Name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g. John Doe"
-            required
-          />
+        <Input
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="e.g. john@example.com"
+        />
 
-          <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="e.g. john@example.com"
-          />
-
-          <div>
-            <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
-              Role
+        <div>
+          <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+            Role
+          </label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="role"
+                value="member"
+                checked={role === 'member'}
+                onChange={() => setRole('member')}
+                className="text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-gray-700">Member</span>
             </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="role"
-                  value="member"
-                  checked={role === 'member'}
-                  onChange={() => setRole('member')}
-                  className="text-brand-600 focus:ring-brand-500"
-                />
-                <span className="text-gray-700">Member</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="role"
-                  value="admin"
-                  checked={role === 'admin'}
-                  onChange={() => setRole('admin')}
-                  className="text-brand-600 focus:ring-brand-500"
-                />
-                <span className="text-gray-700">Admin</span>
-              </label>
-            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="role"
+                value="admin"
+                checked={role === 'admin'}
+                onChange={() => setRole('admin')}
+                className="text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-gray-700">Admin</span>
+            </label>
           </div>
+        </div>
 
         <div className="pt-4 flex justify-end gap-3">
           <button
@@ -140,7 +124,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
           </button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 };
 

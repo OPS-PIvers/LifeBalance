@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { X, Award, Edit2, Minus, Plus } from 'lucide-react';
+import { Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
@@ -7,7 +7,7 @@ import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 
 interface PointsBreakdownModalProps {
@@ -319,26 +319,13 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   };
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-md"
-      backdropColor="bg-black/50"
+      title={getTitle()}
+      noPadding={true}
     >
-      <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50 shrink-0">
-        <h2 className="text-lg font-bold text-gray-800">{getTitle()}</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-gray-400 hover:text-gray-600"
-          onClick={onClose}
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </Button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="p-4 space-y-3">
           {contributions.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -388,14 +375,14 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
               </div>
             ))
           )}
-        </div>
+      </div>
 
-      <div className="p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
+      <div className="sticky bottom-0 p-4 border-t border-gray-100 bg-gray-50 text-center text-xs text-gray-400">
         {view === 'total' && "Total points are estimated from lifetime counts."}
         {view === 'weekly' && "Points are calculated based on completed days this week."}
         {view === 'daily' && "Points earned today."}
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

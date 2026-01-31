@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { db } from '@/firebase.config';
 import { collection, addDoc } from 'firebase/firestore';
 import { FeedbackReport } from '@/types/schema';
 import toast from 'react-hot-toast';
-import { Loader2, Send, X } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 interface FeedbackModalProps {
@@ -53,20 +52,8 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="feedback-title" maxWidth="max-w-md">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h2 id="feedback-title" className="text-lg font-bold">Send Feedback</h2>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-slate-400 hover:text-slate-600"
-          onClick={onClose}
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </Button>
-      </div>
-      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <Drawer isOpen={isOpen} onClose={onClose} title="Send Feedback">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700">
             Describe the issue or suggestion
@@ -98,7 +85,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
       </form>
-    </Modal>
+    </Drawer>
   );
 };
 

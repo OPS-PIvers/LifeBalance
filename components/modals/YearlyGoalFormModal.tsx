@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
 import { YearlyGoal } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 
 interface YearlyGoalFormModalProps {
   isOpen: boolean;
@@ -73,105 +72,93 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
   };
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-md"
+      title={editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
+      noPadding={true}
     >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-indigo-50 shrink-0">
-        <h2 className="text-lg font-bold text-brand-800">
-          {editingGoal ? 'Edit Yearly Goal' : 'New Yearly Goal'}
-        </h2>
-        <button
-          onClick={onClose}
-          className="p-2 text-brand-400 hover:bg-brand-100 rounded-full transition-colors"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
+      <div className="p-4 space-y-4">
+        {/* Title */}
+        <div>
+          <label htmlFor="goal-title" className="text-xs font-bold text-brand-400 uppercase">
+            Goal Title *
+          </label>
+          <input
+            id="goal-title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g., Family Trip to Disney"
+            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:border-brand-400 outline-none transition-colors"
+          />
+        </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {/* Title */}
+        {/* Description */}
+        <div>
+          <label htmlFor="goal-description" className="text-xs font-bold text-brand-400 uppercase">
+            Description (Optional)
+          </label>
+          <textarea
+            id="goal-description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Add details about this goal..."
+            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl resize-none h-20 focus:border-brand-400 outline-none transition-colors"
+          />
+        </div>
+
+        {/* Year and Required Months */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="goal-title" className="text-xs font-bold text-brand-400 uppercase">
-              Goal Title *
+            <label htmlFor="goal-year" className="text-xs font-bold text-brand-400 uppercase">
+              Year
             </label>
             <input
-              id="goal-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Family Trip to Disney"
-              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:border-brand-400 outline-none transition-colors"
+              id="goal-year"
+              type="number"
+              value={year}
+              onChange={(e) => setYear(parseInt(e.target.value))}
+              min={new Date().getFullYear()}
+              max={new Date().getFullYear() + 5}
+              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
             />
           </div>
 
-          {/* Description */}
           <div>
-            <label htmlFor="goal-description" className="text-xs font-bold text-brand-400 uppercase">
-              Description (Optional)
+            <label htmlFor="goal-required-months" className="text-xs font-bold text-brand-400 uppercase">
+              Required Months *
             </label>
-            <textarea
-              id="goal-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add details about this goal..."
-              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl resize-none h-20 focus:border-brand-400 outline-none transition-colors"
+            <input
+              id="goal-required-months"
+              type="number"
+              value={requiredMonths}
+              onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
+              min={1}
+              max={12}
+              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
             />
           </div>
-
-          {/* Year and Required Months */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="goal-year" className="text-xs font-bold text-brand-400 uppercase">
-                Year
-              </label>
-              <input
-                id="goal-year"
-                type="number"
-                value={year}
-                onChange={(e) => setYear(parseInt(e.target.value))}
-                min={new Date().getFullYear()}
-                max={new Date().getFullYear() + 5}
-                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="goal-required-months" className="text-xs font-bold text-brand-400 uppercase">
-                Required Months *
-              </label>
-              <input
-                id="goal-required-months"
-                type="number"
-                value={requiredMonths}
-                onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
-                min={1}
-                max={12}
-                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
-            <p className="text-xs text-brand-600">
-              Complete <span className="font-bold">{requiredMonths}</span> out of 12 monthly
-              challenges to achieve this yearly goal.
-            </p>
-          </div>
         </div>
 
-        <div className="p-4 border-t border-brand-100 bg-brand-50">
-          <button
-            onClick={handleSave}
-            disabled={!title || requiredMonths < 1 || requiredMonths > 12}
-            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {editingGoal ? 'Update Goal' : 'Create Goal'}
-          </button>
+        <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+          <p className="text-xs text-brand-600">
+            Complete <span className="font-bold">{requiredMonths}</span> out of 12 monthly
+            challenges to achieve this yearly goal.
+          </p>
         </div>
-    </Modal>
+      </div>
+
+      <div className="sticky bottom-0 p-4 border-t border-brand-100 bg-brand-50">
+        <button
+          onClick={handleSave}
+          disabled={!title || requiredMonths < 1 || requiredMonths > 12}
+          className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {editingGoal ? 'Update Goal' : 'Create Goal'}
+        </button>
+      </div>
+    </Drawer>
   );
 };
 

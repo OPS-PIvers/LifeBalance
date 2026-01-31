@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { Store as StoreIcon, Plus, Trash2, X, Save, RotateCcw, Search, Check, ShoppingBag } from 'lucide-react';
+import { Store as StoreIcon, Plus, Trash2, Save, RotateCcw, Search, Check, ShoppingBag, X } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
 import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface Props {
   isOpen: boolean;
@@ -283,35 +284,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     ), { duration: 5000 });
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-        onClick={onClose}
-        role="presentation"
-      />
-
-      <div
-        className="relative w-full max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0 bg-white">
-          <h3 id="settings-title" className="text-lg font-bold text-gray-800">Shopping List Settings</h3>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Shopping List Settings"
+      noPadding={true}
+    >
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100">
           <button
             onClick={() => setActiveTab('stores')}
             className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
@@ -730,8 +711,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 </button>
             </div>
         )}
-      </div>
-    </div>
+    </Drawer>
   );
 };
 

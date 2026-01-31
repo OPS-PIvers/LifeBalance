@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../../components/ui/Modal';
+import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import toast from 'react-hot-toast';
@@ -132,30 +132,13 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
   if (!transaction) return null;
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      ariaLabelledBy="split-transaction-title"
-      disableBackdropClose={isProcessing}
-      maxWidth="max-w-2xl"
+      title="Split Transaction"
+      disableClose={isProcessing}
+      noPadding={true}
     >
-      <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0 z-10">
-        <div className="flex items-center gap-2">
-          <Scissors className="text-brand-600" size={20} />
-          <h2 id="split-transaction-title" className="text-lg font-bold text-brand-800">
-            Split Transaction
-          </h2>
-        </div>
-        <button
-          onClick={onClose}
-          disabled={isProcessing}
-          className="text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
       <div className="p-4 bg-brand-50 border-b border-brand-100">
         <div className="flex justify-between items-center mb-1">
           <span className="text-sm font-bold text-brand-600">Original Transaction</span>
@@ -166,7 +149,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[60vh]">
+      <div className="p-4 space-y-4">
         {splits.map((split, index) => (
           <div key={split.id} className="p-4 bg-white rounded-xl border border-brand-200 shadow-sm relative group">
             <div className="absolute top-2 left-2 text-xs font-bold text-brand-300">
@@ -287,7 +270,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
           </button>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

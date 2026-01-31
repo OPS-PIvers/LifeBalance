@@ -4,7 +4,7 @@ import { Habit, HabitSubmission } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -187,29 +187,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   }, [calendarDate, habit.completedDates]);
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-2xl"
-      className="flex flex-col overflow-hidden"
+      title={`Habit Analytics - ${habit.title}`}
+      noPadding={true}
     >
-      {/* Header */}
-      <div className="p-4 border-b border-brand-100 flex justify-between items-start shrink-0">
-        <div className="flex-1 min-w-0">
-          <h2 className="text-lg font-bold text-brand-800 truncate">Habit Analytics</h2>
-          <p className="text-sm text-brand-400 truncate">{habit.title}</p>
-        </div>
-        <button
-          onClick={onClose}
-          className="ml-3 text-brand-400 hover:text-brand-600 p-1 hover:bg-brand-50 rounded-lg transition-colors flex-shrink-0"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
       {/* Tab Navigation */}
-      <div className="px-4 pt-3 pb-0 shrink-0 border-b border-brand-100">
+      <div className="px-4 pt-3 pb-0 border-b border-brand-100">
         <div className="flex gap-1 bg-brand-50 p-1 rounded-xl">
           <button
             onClick={() => setActiveTab('log')}
@@ -248,7 +233,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="overflow-y-auto">
         {isLoading ? (
           <div className="text-center py-12 text-brand-400">
             <div className="animate-spin w-8 h-8 border-4 border-brand-200 border-t-brand-600 rounded-full mx-auto mb-3"></div>
@@ -670,7 +655,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 };
 

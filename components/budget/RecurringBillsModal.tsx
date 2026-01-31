@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { CalendarItem } from '../../types/schema';
-import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Trash2, Edit2, X, Check, Repeat, TrendingUp, TrendingDown, MoreVertical } from 'lucide-react';
+import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
@@ -106,30 +105,20 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl">
-      <div className="flex flex-col h-full max-h-[80vh]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-slate-100 text-slate-600 rounded-2xl">
-              <Repeat size={20} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Recurring Manager</h3>
-              <p className="text-xs text-slate-500">Manage your subscriptions and bills</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:bg-slate-100 rounded-full"
-            aria-label="Close modal"
-          >
-            <X size={20} />
-          </button>
+    <Drawer isOpen={isOpen} onClose={onClose} noPadding={true}>
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+        <div className="p-2 bg-slate-100 text-slate-600 rounded-2xl">
+          <Repeat size={20} />
         </div>
+        <div>
+          <h3 className="text-lg font-bold text-slate-900">Recurring Manager</h3>
+          <p className="text-xs text-slate-500">Manage your subscriptions and bills</p>
+        </div>
+      </div>
 
-        {/* Summary Cards */}
-        <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-slate-50/50">
+      {/* Summary Cards */}
+      <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-slate-50/50">
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
             <div className="flex items-center gap-2 mb-1 text-money-neg font-bold text-xs uppercase tracking-wider">
               <TrendingDown size={14} /> Monthly Expenses
@@ -148,10 +137,10 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             </div>
             <div className="text-xs text-slate-400 mt-1">Estimated recurring income</div>
           </div>
-        </div>
+      </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+      {/* List */}
+      <div className="p-4 sm:p-6 space-y-3">
           {recurringItems.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
               <p className="text-slate-400">No recurring items found.</p>
@@ -250,14 +239,14 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               </div>
             ))
           )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 text-center text-xs text-slate-400">
-           Changes made here affect all future generated events.
-        </div>
       </div>
 
+      {/* Footer */}
+      <div className="sticky bottom-0 p-4 bg-slate-50 border-t border-slate-100 text-center text-xs text-slate-400">
+         Changes made here affect all future generated events.
+      </div>
+
+      {/* Mobile Action Drawer */}
       <Drawer
         isOpen={!!actionItem}
         onClose={() => setActionItem(null)}
@@ -293,7 +282,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
           )}
         </div>
       </Drawer>
-    </Modal>
+    </Drawer>
   );
 };
 
