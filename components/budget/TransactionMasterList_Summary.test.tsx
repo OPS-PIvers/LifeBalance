@@ -84,6 +84,7 @@ describe('TransactionMasterList Summary Widget', () => {
       addTransaction: vi.fn(),
       splitTransaction: vi.fn(),
       householdId: 'test-household',
+      stores: [],
     });
   });
 
