@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { ParsedTransaction } from '../../types/ui';
-import { BudgetBucket } from '../../types/schema';
+import { BudgetBucket, Store, Account } from '../../types/schema';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
@@ -11,6 +11,8 @@ interface CaptureTransactionReviewProps {
   onSubmit: () => void;
   dynamicCategories: string[];
   buckets: BudgetBucket[];
+  stores: Store[];
+  accounts: Account[];
 }
 
 export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> = ({
@@ -20,7 +22,9 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   onToggleAll,
   onSubmit,
   dynamicCategories,
-  buckets
+  buckets,
+  stores,
+  accounts
 }) => {
   const selectedCount = parsedTransactions.filter(t => t.selected).length;
   const allSelected = parsedTransactions.every(t => t.selected) && parsedTransactions.length > 0;
@@ -92,27 +96,59 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     </select>
                   )}
                 </div>
-                {/* Sub-Bucket Select for Review Item */}
-                {(() => {
-                  const selectedBucket = buckets.find(b => b.name === tx.category);
-                  if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
-                    return (
-                      <div className="mt-2">
-                        <select
-                          value={tx.subBucketId || ''}
-                          onChange={(e) => onUpdateTransaction(tx.id, { subBucketId: e.target.value || undefined })}
-                          className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
-                        >
-                          <option value="">Select Sub-Category...</option>
-                          {selectedBucket.subBuckets.map(sb => (
-                            <option key={sb.id} value={sb.id}>{sb.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {/* Sub-Bucket Select */}
+                  {(() => {
+                    const selectedBucket = buckets.find(b => b.name === tx.category);
+                    if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
+                      return (
+                        <div>
+                          <select
+                            value={tx.subBucketId || ''}
+                            onChange={(e) => onUpdateTransaction(tx.id, { subBucketId: e.target.value || undefined })}
+                            className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
+                          >
+                            <option value="">Sub-Category...</option>
+                            {selectedBucket.subBuckets.map(sb => (
+                              <option key={sb.id} value={sb.id}>{sb.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Store Select */}
+                  <div>
+                    <select
+                      value={tx.store || ''}
+                      onChange={(e) => onUpdateTransaction(tx.id, { store: e.target.value || undefined })}
+                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
+                    >
+                      <option value="">Store...</option>
+                      {stores.map(s => (
+                        <option key={s.id} value={s.name}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Account Select */}
+                  <div>
+                    <select
+                      value={tx.accountId || ''}
+                      onChange={(e) => onUpdateTransaction(tx.id, { accountId: e.target.value || undefined })}
+                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
+                    >
+                      <option value="">Account...</option>
+                      {accounts.map(a => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>

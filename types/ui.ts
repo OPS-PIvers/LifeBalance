@@ -7,4 +7,6 @@ export interface ParsedTransaction {
   selected: boolean;
   relatedHabitIds?: string[];
   subBucketId?: string;
+  store?: string;
+  accountId?: string;
 }

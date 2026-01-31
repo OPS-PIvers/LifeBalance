@@ -32,6 +32,8 @@ interface ManualInitialData {
   category?: string;
   date?: string;
   subBucketId?: string;
+  store?: string;
+  accountId?: string;
 }
 
 /**
@@ -49,7 +51,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const {
     addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
-    addShoppingItem, householdId
+    addShoppingItem, householdId, stores, accounts
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
@@ -289,7 +291,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'camera-scan',
           autoCategorized: true,
           relatedHabitIds: matchHabits(data.suggestedHabits),
-          subBucketId: matchSubBucket(category, data.subBucket)
+          subBucketId: matchSubBucket(category, data.subBucket),
+          store: data.store
         };
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
@@ -355,7 +358,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           date: receipt.date || getLocalDateString(),
           selected: true,
           relatedHabitIds: matchHabits(receipt.suggestedHabits),
-          subBucketId: matchSubBucket(category, receipt.subBucket)
+          subBucketId: matchSubBucket(category, receipt.subBucket),
+          store: receipt.store
         }]);
       } else {
         setParsedTransactions(transactions.map(tx => {
@@ -418,7 +422,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'file-upload',
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
-          subBucketId: tx.subBucketId
+          subBucketId: tx.subBucketId,
+          store: tx.store,
+          accountId: tx.accountId
         };
         return addTransaction(newTransaction);
       })
@@ -725,6 +731,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   onSubmit={submitParsedTransactions}
                   dynamicCategories={dynamicCategories}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
 
@@ -738,6 +746,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   habits={habits}
                   transactions={transactions}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
             </>

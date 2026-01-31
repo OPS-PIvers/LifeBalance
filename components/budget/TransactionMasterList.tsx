@@ -16,7 +16,7 @@ import SavedViewChips from './SavedViewChips';
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId, stores } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +27,7 @@ const TransactionMasterList: React.FC = () => {
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
 
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -75,7 +76,10 @@ const TransactionMasterList: React.FC = () => {
           (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
           (sourceFilter === 'file-upload' && tx.source === 'file-upload');
 
-        return matchesSearch && matchesCategory && matchesSource;
+        // Store Filter
+        const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
+
+        return matchesSearch && matchesCategory && matchesSource && matchesStore;
       })
       // Optimize sort: String comparison of ISO dates is ~12x faster than parsing Date objects
       .sort((a, b) => {
@@ -83,7 +87,7 @@ const TransactionMasterList: React.FC = () => {
         if (b.date < a.date) return -1;
         return 0;
       });
-  }, [transactions, searchTerm, categoryFilter, sourceFilter]);
+  }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {
@@ -144,6 +148,7 @@ const TransactionMasterList: React.FC = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setSourceFilter('all');
+    setStoreFilter('all');
   };
 
   const toggleSelection = useCallback((id: string) => {
@@ -325,7 +330,18 @@ const TransactionMasterList: React.FC = () => {
             <option value="file-upload">File Upload</option>
           </select>
 
-          {(categoryFilter !== 'all' || sourceFilter !== 'all') && (
+          <select
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Stores</option>
+            {stores.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+
+          {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
             <button
               onClick={clearFilters}
               className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"

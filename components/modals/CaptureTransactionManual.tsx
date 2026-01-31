@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import { Transaction, Habit, BudgetBucket } from '../../types/schema';
+import { Transaction, Habit, BudgetBucket, Store, Account } from '../../types/schema';
 import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
 import { Button } from '../ui/Button';
 
@@ -13,6 +13,8 @@ interface CaptureTransactionManualProps {
     category?: string;
     date?: string;
     subBucketId?: string;
+    store?: string;
+    accountId?: string;
   };
   onAddTransaction: (transaction: Transaction) => Promise<void>;
   onClose: () => void;
@@ -20,6 +22,8 @@ interface CaptureTransactionManualProps {
   habits: Habit[];
   transactions: Transaction[];
   buckets: BudgetBucket[];
+  stores: Store[];
+  accounts: Account[];
 }
 
 export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> = ({
@@ -29,7 +33,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   dynamicCategories,
   habits,
   transactions,
-  buckets
+  buckets,
+  stores,
+  accounts
 }) => {
   // State with lazy initialization
   const [amount, setAmount] = useState(() => initialData?.amount || '');
@@ -46,6 +52,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   });
 
   const [subBucketId, setSubBucketId] = useState<string | undefined>(() => initialData?.subBucketId);
+  const [store, setStore] = useState(() => initialData?.store || '');
+  const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
+
   const [isRecurring, setIsRecurring] = useState(false);
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || format(new Date(), 'yyyy-MM-dd'));
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
@@ -117,7 +126,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       source: 'manual',
       autoCategorized: false,
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
-      subBucketId: validatedSubBucketId
+      subBucketId: validatedSubBucketId,
+      store: store || undefined,
+      accountId: accountId || undefined
     };
 
     try {
@@ -182,6 +193,38 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           onChange={(e) => setTransactionDate(e.target.value)}
           className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="manual-store" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Store (Optional)</label>
+          <select
+            id="manual-store"
+            value={store}
+            onChange={(e) => setStore(e.target.value)}
+            className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium appearance-none"
+          >
+            <option value="">Select Store...</option>
+            {stores.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="manual-account" className="block text-xs font-semibold text-brand-400 uppercase tracking-wider mb-1">Account (Optional)</label>
+          <select
+            id="manual-account"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium appearance-none"
+          >
+            <option value="">Select Account...</option>
+            {accounts.map(a => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
