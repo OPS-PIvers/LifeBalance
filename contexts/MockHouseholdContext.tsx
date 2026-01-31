@@ -497,7 +497,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addToDo,
     updateToDo,
     deleteToDo,
-    completeToDo: noOp,
+    completeToDo: useCallback(async (id: string) => {
+      setTodos(prev => prev.map(t => t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t));
+      toast.success('Mock: ToDo completed');
+    }, []),
     addStore,
     updateStore,
     deleteStore,
