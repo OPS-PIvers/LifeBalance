@@ -525,7 +525,9 @@ service cloud.firestore {
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.cost) &&
                               isValidString(request.resource.data.icon, 50) &&
-                              isValidString(request.resource.data.createdBy, 50);
+                              // Ensure createdBy is set by the current user on create and is immutable on update
+                              isValidString(request.resource.data.createdBy, 50) &&
+                              (request.method == 'create' ? request.resource.data.createdBy == request.auth.uid : request.resource.data.createdBy == resource.data.createdBy);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -543,8 +545,11 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('description', null), 500) &&
                               isValidNumber(request.resource.data.requiredMonths) &&
                               request.resource.data.successfulMonths is list &&
+                              request.resource.data.successfulMonths.size() <= 13 &&
                               request.resource.data.status in ['in_progress', 'achieved', 'failed'] &&
+                              // Ensure createdBy is set by the current user on create and is immutable on update
                               isValidString(request.resource.data.createdBy, 50) &&
+                              (request.method == 'create' ? request.resource.data.createdBy == request.auth.uid : request.resource.data.createdBy == resource.data.createdBy) &&
                               request.resource.data.createdAt is timestamp &&
                               (request.resource.data.get('achievedAt', null) == null || request.resource.data.achievedAt is timestamp);
         allow delete: if isMemberOf(householdId);
