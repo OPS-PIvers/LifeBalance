@@ -518,22 +518,36 @@ service cloud.firestore {
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Yearly Goals
       match /yearlyGoals/{goalId} {
         allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
-                              request.resource.data.keys().hasOnly([
-                                'year', 'title', 'description', 'requiredMonths',
-                                'successfulMonths', 'status',
-                                'createdBy', 'createdAt', 'achievedAt'
-                              ]) &&
-                              isValidNumber(request.resource.data.year) &&
-                              isValidString(request.resource.data.title, 100) &&
-                              isValidOptionalString(request.resource.data.get('description', null), 500) &&
-                              isValidNumber(request.resource.data.requiredMonths) &&
-                              request.resource.data.successfulMonths is list &&
-                              request.resource.data.status in ['in_progress', 'achieved', 'failed'] &&
-                              // Metadata
-                              isValidString(request.resource.data.createdBy, 50) &&
-                              request.resource.data.createdAt is timestamp &&
-                              (request.resource.data.get('achievedAt', null) == null || request.resource.data.achievedAt is timestamp);
+
+        // Validation helper for Yearly Goals
+        function isValidYearlyGoal() {
+          return request.resource.data.keys().hasOnly([
+                   'year', 'title', 'description', 'requiredMonths',
+                   'successfulMonths', 'status',
+                   'createdBy', 'createdAt', 'achievedAt'
+                 ]) &&
+                 isValidNumber(request.resource.data.year) &&
+                 isValidString(request.resource.data.title, 100) &&
+                 isValidOptionalString(request.resource.data.get('description', null), 500) &&
+                 isValidNumber(request.resource.data.requiredMonths) &&
+                 // Improved list validation: Max 12 months, and correct YYYY-MM format
+                 request.resource.data.successfulMonths is list &&
+                 request.resource.data.successfulMonths.size() <= 12 &&
+                 request.resource.data.successfulMonths.all(m, m is string && m.matches('^\\d{4}-\\d{2}$')) &&
+                 request.resource.data.status in ['in_progress', 'achieved', 'failed'] &&
+                 request.resource.data.createdAt is timestamp &&
+                 (request.resource.data.get('achievedAt', null) == null || request.resource.data.achievedAt is timestamp);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      isValidYearlyGoal() &&
+                      // Enforce ownership on create
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidYearlyGoal() &&
+                      // Prevent modification of immutable fields
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'year']);
 
         allow delete: if isMemberOf(householdId);
       }
@@ -541,14 +555,26 @@ service cloud.firestore {
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Rewards
       match /rewards/{rewardId} {
         allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
-                              request.resource.data.keys().hasOnly([
-                                'title', 'cost', 'icon', 'createdBy'
-                              ]) &&
-                              isValidString(request.resource.data.title, 100) &&
-                              isValidNumber(request.resource.data.cost) &&
-                              isValidString(request.resource.data.icon, 50) &&
-                              isValidString(request.resource.data.createdBy, 50);
+
+        // Validation helper for Rewards
+        function isValidReward() {
+          return request.resource.data.keys().hasOnly([
+                   'title', 'cost', 'icon', 'createdBy'
+                 ]) &&
+                 isValidString(request.resource.data.title, 100) &&
+                 isValidNumber(request.resource.data.cost) &&
+                 isValidString(request.resource.data.icon, 50);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      isValidReward() &&
+                      // Enforce ownership on create
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidReward() &&
+                      // Prevent modification of immutable fields
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy']);
 
         allow delete: if isMemberOf(householdId);
       }
