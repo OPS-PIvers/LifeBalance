@@ -1627,9 +1627,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdAt: serverTimestamp(),
       };
 
-      // Add optional fields only if they exist
+      // Add optional fields only if they exist and are not empty strings
       if (tx.relatedHabitIds && tx.relatedHabitIds.length > 0) {
         docData.relatedHabitIds = tx.relatedHabitIds;
+      }
+      if (tx.store && tx.store.trim()) {
+        docData.store = tx.store.trim();
+      }
+      if (tx.accountId && tx.accountId.trim()) {
+        docData.accountId = tx.accountId.trim();
+      }
+      if (tx.subBucketId && tx.subBucketId.trim()) {
+        docData.subBucketId = tx.subBucketId.trim();
+      }
+      if (tx.notes && tx.notes.trim()) {
+        docData.notes = tx.notes.trim();
       }
 
       console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
@@ -1756,9 +1768,33 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         payPeriodId = getPayPeriodForTransaction(updates.date, householdSettings?.lastPaycheckDate);
       }
 
+      // Sanitize optional string fields - remove undefined or empty strings from updates
+      // This prevents Firestore validation errors for empty strings
+      const sanitizedUpdates: Record<string, unknown> = { ...updates };
+      if (sanitizedUpdates.store === undefined || sanitizedUpdates.store === '') {
+        delete sanitizedUpdates.store;
+      } else if (typeof sanitizedUpdates.store === 'string') {
+        sanitizedUpdates.store = sanitizedUpdates.store.trim();
+      }
+      if (sanitizedUpdates.accountId === undefined || sanitizedUpdates.accountId === '') {
+        delete sanitizedUpdates.accountId;
+      } else if (typeof sanitizedUpdates.accountId === 'string') {
+        sanitizedUpdates.accountId = sanitizedUpdates.accountId.trim();
+      }
+      if (sanitizedUpdates.subBucketId === undefined || sanitizedUpdates.subBucketId === '') {
+        delete sanitizedUpdates.subBucketId;
+      } else if (typeof sanitizedUpdates.subBucketId === 'string') {
+        sanitizedUpdates.subBucketId = sanitizedUpdates.subBucketId.trim();
+      }
+      if (sanitizedUpdates.notes === undefined || sanitizedUpdates.notes === '') {
+        delete sanitizedUpdates.notes;
+      } else if (typeof sanitizedUpdates.notes === 'string') {
+        sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
+      }
+
       // Update transaction in Firestore
       await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
-        ...updates,
+        ...sanitizedUpdates,
         payPeriodId,
       });
 
