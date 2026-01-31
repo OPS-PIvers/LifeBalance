@@ -265,6 +265,9 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('notes', null), 500) &&
                               isValidOptionalString(request.resource.data.get('payPeriodId', null), 20) &&
                               isValidOptionalString(request.resource.data.get('source', null), 20) &&
+                              isValidOptionalString(request.resource.data.get('store', null), 100) &&
+                              isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
+                              isValidOptionalString(request.resource.data.get('subBucketId', null), 50) &&
                               // Booleans
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
@@ -347,7 +350,7 @@ service cloud.firestore {
                               request.resource.data.keys().hasOnly([
                                 'title', 'amount', 'date', 'type', 'isPaid',
                                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                                'createdBy', 'notes', 'createdAt', 'updatedAt'
+                                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
                               ]) &&
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.amount) &&
@@ -361,6 +364,8 @@ service cloud.firestore {
                               (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted)) &&
                               // Metadata
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
+                              // Account linking (optional)
+                              isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
                               // Legacy fields (optional, for backward compatibility)
                               isValidOptionalString(request.resource.data.get('notes', null), 500) &&
                               // createdAt/updatedAt can be either strings or timestamps
