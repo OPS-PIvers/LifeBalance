@@ -42,7 +42,7 @@ describe('YearlyGoalFormModal', () => {
     const handleClose = vi.fn();
     render(<YearlyGoalFormModal isOpen={true} onClose={handleClose} />);
 
-    const closeButton = screen.getByLabelText('Close modal');
+    const closeButton = screen.getByLabelText('Close drawer');
     fireEvent.click(closeButton);
     expect(handleClose).toHaveBeenCalledTimes(1);
   });

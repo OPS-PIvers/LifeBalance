@@ -87,7 +87,7 @@ describe('RecurringBillsModal', () => {
 
   it('calls onClose when close button is clicked', () => {
     render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
-    const closeButton = screen.getByLabelText('Close modal');
+    const closeButton = screen.getByLabelText('Close drawer');
     fireEvent.click(closeButton);
     expect(onClose).toHaveBeenCalled();
   });

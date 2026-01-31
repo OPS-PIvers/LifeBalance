@@ -75,10 +75,10 @@ describe('FeedbackModal', () => {
     const handleClose = vi.fn();
     render(<FeedbackModal isOpen={true} onClose={handleClose} />);
 
-    // We expect a close button with aria-label "Close modal" or similar.
+    // We expect a close button with aria-label "Close drawer" or similar.
     // Or we can look for the X icon.
     // Since it doesn't exist yet, this test is expected to fail.
-    const closeButton = screen.getByLabelText('Close modal');
+    const closeButton = screen.getByLabelText('Close drawer');
     fireEvent.click(closeButton);
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
