@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
-import { Transaction } from '../../types/schema';
+import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
@@ -16,7 +16,7 @@ import SavedViewChips from './SavedViewChips';
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId, stores } = useHousehold();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -27,6 +27,7 @@ const TransactionMasterList: React.FC = () => {
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
 
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -75,7 +76,10 @@ const TransactionMasterList: React.FC = () => {
           (sourceFilter === 'camera-scan' && tx.source === 'camera-scan') ||
           (sourceFilter === 'file-upload' && tx.source === 'file-upload');
 
-        return matchesSearch && matchesCategory && matchesSource;
+        // Store Filter
+        const matchesStore = storeFilter === 'all' || tx.store === storeFilter;
+
+        return matchesSearch && matchesCategory && matchesSource && matchesStore;
       })
       // Optimize sort: String comparison of ISO dates is ~12x faster than parsing Date objects
       .sort((a, b) => {
@@ -83,7 +87,25 @@ const TransactionMasterList: React.FC = () => {
         if (b.date < a.date) return -1;
         return 0;
       });
-  }, [transactions, searchTerm, categoryFilter, sourceFilter]);
+  }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
+
+  // Derived State: Summary Statistics
+  const summary = useMemo(() => {
+    return filteredTransactions.reduce(
+      (acc, tx) => {
+        if (tx.category === INCOME_CATEGORY) {
+          acc.income += tx.amount;
+        } else {
+          acc.expense += tx.amount;
+        }
+        acc.count += 1;
+        return acc;
+      },
+      { income: 0, expense: 0, count: 0 }
+    );
+  }, [filteredTransactions]);
+
+  const net = summary.income - summary.expense;
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {
@@ -144,6 +166,7 @@ const TransactionMasterList: React.FC = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setSourceFilter('all');
+    setStoreFilter('all');
   };
 
   const toggleSelection = useCallback((id: string) => {
@@ -325,7 +348,18 @@ const TransactionMasterList: React.FC = () => {
             <option value="file-upload">File Upload</option>
           </select>
 
-          {(categoryFilter !== 'all' || sourceFilter !== 'all') && (
+          <select
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Stores</option>
+            {stores.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
+
+          {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
             <button
               onClick={clearFilters}
               className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"
@@ -377,6 +411,36 @@ const TransactionMasterList: React.FC = () => {
             setSourceFilter(filters.sourceFilter);
           }}
         />
+      </div>
+
+      {/* Summary Widget */}
+      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
+            <p className="text-lg font-bold text-money-pos font-mono">
+              +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
+            <p className="text-lg font-bold text-money-neg font-mono">
+              -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
+            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-brand-700 font-mono">
+              {summary.count}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Select All Bar */}

@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Camera, Upload, Type, Shield } from 'lucide-react';
+import { Badge } from '../ui/Badge';
 import { CaptureMagicAction } from './CaptureMagicAction';
 import { MagicActionResponse } from '../../services/geminiService';
 import toast from 'react-hot-toast';
@@ -64,50 +65,50 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
       <button
         onClick={onScan}
-        className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
       >
-        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600">
+        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600">
           <Camera size={24} />
         </div>
         <div className="text-left flex-1">
-          <span className="font-bold text-brand-700 block">Scan Receipt</span>
-          <span className="text-xs text-brand-400">Take a photo of your receipt</span>
+          <span className="font-bold text-slate-900 block">Scan Receipt</span>
+          <span className="text-xs text-slate-500">Take a photo of your receipt</span>
         </div>
-        <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+        <Badge variant="warning" size="sm">
           REVIEW
-        </div>
+        </Badge>
       </button>
 
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
       >
-        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 text-purple-600">
+        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-50 text-purple-600">
           <Upload size={24} />
         </div>
         <div className="text-left flex-1">
-          <span className="font-bold text-brand-700 block">Upload Image</span>
-          <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
+          <span className="font-bold text-slate-900 block">Upload Image</span>
+          <span className="text-xs text-slate-500">Bank statement or receipt screenshot</span>
         </div>
-        <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+        <Badge variant="warning" size="sm">
           REVIEW
-        </div>
+        </Badge>
       </button>
 
       <button
         onClick={onManual}
-        className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
       >
-        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos text-money-pos">
+        <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600">
           <Type size={24} />
         </div>
         <div className="text-left flex-1">
-          <span className="font-bold text-brand-700 block">Manual Entry</span>
-          <span className="text-xs text-brand-400">Enter transaction details directly</span>
+          <span className="font-bold text-slate-900 block">Manual Entry</span>
+          <span className="text-xs text-slate-500">Enter transaction details directly</span>
         </div>
-        <div className="px-2 py-1 bg-green-100 text-green-700 text-xxs font-bold rounded-full">
+        <Badge variant="success" size="sm">
           INSTANT
-        </div>
+        </Badge>
       </button>
 
       <input

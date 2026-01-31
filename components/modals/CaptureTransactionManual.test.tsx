@@ -22,6 +22,7 @@ vi.mock('lucide-react', () => ({
   CheckCircle2: () => <div data-testid="icon-check-circle" />,
   Sparkles: () => <div data-testid="icon-sparkles" />,
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
+  Loader2: () => <div data-testid="icon-loader" />,
 }));
 
 describe('CaptureTransactionManual', () => {
@@ -45,6 +46,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -63,6 +66,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -98,6 +103,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -131,6 +138,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -145,6 +154,78 @@ describe('CaptureTransactionManual', () => {
       amount: 50,
       merchant: 'Test Merchant',
       category: 'Transport',
+    });
+  });
+
+  it('shows loading state during submission', async () => {
+    let resolvePromise: (value: void | PromiseLike<void>) => void = () => {};
+    const promise = new Promise<void>((resolve) => {
+      resolvePromise = resolve;
+    });
+    mockOnAddTransaction.mockReturnValue(promise);
+
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Loading Test' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save transaction/i })).toBeDisabled();
+
+    resolvePromise();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('icon-loader')).not.toBeInTheDocument();
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  it('resets loading state on error', async () => {
+    let rejectPromise: (reason?: unknown) => void = () => {};
+    const promise = new Promise<void>((_, reject) => {
+      rejectPromise = reject;
+    });
+    mockOnAddTransaction.mockReturnValue(promise);
+
+    render(
+      <CaptureTransactionManual
+        onAddTransaction={mockOnAddTransaction}
+        onClose={mockOnClose}
+        dynamicCategories={mockCategories}
+        habits={mockHabits}
+        transactions={mockTransactions}
+        buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '25.00' } });
+    fireEvent.change(screen.getByPlaceholderText('e.g. Starbucks'), { target: { value: 'Error Test' } });
+
+    fireEvent.click(screen.getByText('Save Transaction'));
+
+    expect(screen.getByTestId('icon-loader')).toBeInTheDocument();
+
+    rejectPromise(new Error('Failed to save'));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('icon-loader')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save transaction/i })).not.toBeDisabled();
+      expect(mockOnClose).not.toHaveBeenCalled();
     });
   });
 });

@@ -235,27 +235,41 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     );
   }, [item, habits, transactions]);
 
+  // Compute icon and styles only when item type changes
+  const { iconComponent, iconClasses } = useMemo(() => {
+    if (isCalendarQueueItem(item)) {
+      return {
+        iconComponent: <CalendarClock size={18} />,
+        iconClasses: 'bg-orange-50 border-orange-100/50 text-orange-600',
+      };
+    }
+    if (isTodoQueueItem(item)) {
+      return {
+        iconComponent: <ListTodo size={18} />,
+        iconClasses: 'bg-rose-50 border-rose-100/50 text-rose-600',
+      };
+    }
+    return {
+      iconComponent: <Receipt size={18} />,
+      iconClasses: 'bg-blue-50 border-blue-100/50 text-blue-600',
+    };
+  }, [item]);
+
   return (
-    <div className="bg-brand-50 rounded-xl border border-brand-100 overflow-hidden transition-all">
-      <div className="p-3 flex items-center justify-between">
+    <div className="bg-white/80 backdrop-blur-xl rounded-2xl ring-1 ring-black/5 overflow-hidden transition-all hover:bg-white/90 shadow-soft group">
+      <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-2 rounded-lg ${
-              isCalendarQueueItem(item) ? 'bg-orange-100 text-orange-600' :
-              isTodoQueueItem(item) ? 'bg-rose-100 text-rose-600' :
-              'bg-blue-100 text-blue-600'
-            }`}>
-             {isCalendarQueueItem(item) ? <CalendarClock size={16} /> :
-              isTodoQueueItem(item) ? <ListTodo size={16} /> :
-              <Receipt size={16} />}
+          <div className={`p-3 rounded-2xl border shadow-sm ${iconClasses}`}>
+             {iconComponent}
           </div>
           <div>
-            <p className="font-bold text-brand-700 text-sm">
+            <p className="font-bold text-slate-700 text-sm">
               {isCalendarQueueItem(item) ? item.title :
                isTodoQueueItem(item) ? item.text :
                isTransactionQueueItem(item) ? item.merchant : ''}
             </p>
-            <div className="text-xs text-brand-400 flex items-center gap-1">
+            <div className="text-xs text-slate-400 flex items-center gap-1">
                {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
                {format(parseISO(item.date), 'MMM d, yyyy')}
                {isTodoQueueItem(item) && item.assignedTo && (
@@ -275,12 +289,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
         <div className="flex items-center gap-3">
           {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
-            <span className="font-mono font-bold text-brand-800">${item.amount.toLocaleString()}</span>
+            <span className="font-mono font-bold text-slate-900">${item.amount.toLocaleString()}</span>
           )}
           {!isExpanded && (
             <button
               onClick={handleExpand}
-              className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-brand-600"
+              className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-slate-900"
               aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
             >
               Review
@@ -291,18 +305,18 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
       {/* Expanded Actions */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-brand-100 bg-white">
-          <div className="flex justify-between items-center mb-2">
-             <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">
+        <div className="px-4 pb-3 sm:pb-4 pt-3 border-t border-black/5 bg-white/40">
+          <div className="flex justify-between items-center mb-2 sm:mb-3">
+             <p className="text-xxs font-bold text-slate-400 uppercase tracking-wider">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
              </p>
-             <button onClick={() => setExpandedId(null)}><X size={14} className="text-brand-300"/></button>
+             <button onClick={() => setExpandedId(null)}><X size={14} className="text-slate-400 hover:text-slate-600"/></button>
           </div>
 
           {isCalendarQueueItem(item) ? (
             /* Calendar Item Actions */
             <div className="space-y-2">
-              <p className="text-xs text-brand-500 mb-3">
+              <p className="text-xs text-slate-500 mb-3">
                 {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -346,7 +360,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           ) : isTodoQueueItem(item) ? (
             /* To-Do Item Actions */
             <div className="space-y-2">
-               <p className="text-xs text-brand-500 mb-3">
+               <p className="text-xs text-slate-500 mb-3">
                  Mark this task as complete or delay it:
                </p>
                <div className="flex flex-col sm:flex-row gap-2">
@@ -441,7 +455,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                         step="0.01"
                         value={editForm.amount}
                         onChange={e => setEditForm({...editForm, amount: e.target.value})}
-                        icon={<span className="text-brand-400 font-bold">$</span>}
+                        icon={<span className="text-slate-400 font-bold">$</span>}
                     />
                     <Input
                         label="Date"
@@ -465,12 +479,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 {/* Habits Section - Smart Suggestions */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Connect Habits</p>
+                    <p className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Connect Habits</p>
                     {suggestedHabits.some(s => s.confidence !== 'low') && (
                       <Sparkles size={10} className="text-violet-500" />
                     )}
                   </div>
-                  {habits.length === 0 && <p className="text-xs text-brand-400 italic">No habits found. Create some in Habits tab.</p>}
+                  {habits.length === 0 && <p className="text-xs text-slate-400 italic">No habits found. Create some in Habits tab.</p>}
 
                   {habits.length > 0 && (
                     <div className="flex flex-wrap gap-2">
@@ -529,7 +543,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                       {/* "More" button to show all habits */}
                       {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
                         <details className="inline">
-                          <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100 cursor-pointer inline-flex items-center gap-1">
+                          <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/50 border border-slate-200 text-slate-500 hover:bg-white cursor-pointer inline-flex items-center gap-1">
                             + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
                           </summary>
                           <div className="flex flex-wrap gap-2 mt-2">
@@ -541,7 +555,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                                   onClick={() => {
                                     setSelectedHabitIds(prev => [...prev, habit.id]);
                                   }}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-brand-50 border border-brand-200 text-brand-500 hover:bg-brand-100"
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white/50 border border-slate-200 text-slate-500 hover:bg-white"
                                 >
                                   {habit.title}
                                 </button>
@@ -555,7 +569,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
                 {/* Categories Section */}
                 <div className="space-y-2">
-                  <p className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Budget Category</p>
+                  <p className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Budget Category</p>
                   <div className="flex flex-wrap gap-2">
                     {buckets.map(bucket => (
                       <button
@@ -563,8 +577,8 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                         onClick={() => setSelectedCategory(bucket.name)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                           selectedCategory === bucket.name
-                            ? 'bg-brand-800 text-white shadow-sm'
-                            : 'bg-brand-50 border border-brand-200 text-brand-600 hover:bg-brand-100'
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'bg-white/50 border border-slate-200 text-slate-600 hover:bg-white'
                         }`}
                       >
                         {selectedCategory === bucket.name && <Check size={12} strokeWidth={3} className="inline mr-1" />}
@@ -613,7 +627,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 </Button>
 
                 {/* Edit/Delete Actions */}
-                <div className="flex gap-2 pt-1 border-t border-brand-100 mt-2">
+                <div className="flex gap-2 pt-1 border-t border-black/5 mt-2">
                     <Button
                       variant="ghost"
                       size="sm"

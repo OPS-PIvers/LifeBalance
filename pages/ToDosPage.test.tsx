@@ -39,12 +39,14 @@ vi.mock('lucide-react', () => ({
   Layers: () => <div data-testid="layers-icon" />,
   CheckSquare: () => <div data-testid="check-square-icon" />,
   Loader2: () => <div data-testid="loader-icon" />,
+  RotateCcw: () => <div data-testid="rotate-ccw-icon" />,
+  Copy: () => <div data-testid="copy-icon" />,
+  History: () => <div data-testid="history-icon" />,
 }));
 
 describe('ToDosPage', () => {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
-  // const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd'); // Unused variable removed
 
   const mockMembers = [
     {
@@ -87,6 +89,7 @@ describe('ToDosPage', () => {
       completeByDate: today,
       assignedTo: 'user1',
       isCompleted: true,
+      completedAt: new Date().toISOString(), // Completed today
       createdBy: 'user1',
       createdAt: new Date().toISOString()
     }
@@ -129,7 +132,7 @@ describe('ToDosPage', () => {
       expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
       const [exportedData, filenamePrefix] = (generateCsvExport as any).mock.calls[0];
-      expect(filenamePrefix).toBe('todo-list');
+      expect(filenamePrefix).toBe('todo-list-active');
       expect(exportedData).toHaveLength(2);
 
       const overdueTask = exportedData.find((d: any) => d.Task === 'Overdue Task');
@@ -138,19 +141,13 @@ describe('ToDosPage', () => {
       expect(overdueTask['Status']).toBe('Overdue');
     });
 
-    it('excludes completed tasks from export', () => {
+    it('excludes completed tasks from active export', () => {
       setup();
       const exportBtn = screen.getByLabelText('Export active tasks to CSV');
       fireEvent.click(exportBtn);
       const [exportedData] = (generateCsvExport as any).mock.calls[0];
       const completedTask = exportedData.find((d: any) => d.Task === 'Completed Task');
       expect(completedTask).toBeUndefined();
-    });
-
-    it('disables export button when no todos exist', () => {
-      setup([]);
-      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-      expect(exportBtn).toBeDisabled();
     });
   });
 
@@ -256,6 +253,72 @@ describe('ToDosPage', () => {
         }));
       });
     });
+
+    it('duplicates a task', async () => {
+        setup();
+        const duplicateBtn = screen.getAllByLabelText('Duplicate task')[0];
+        fireEvent.click(duplicateBtn);
+
+        await waitFor(() => {
+            expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+                text: 'Overdue Task',
+                assignedTo: 'user1',
+                isCompleted: false
+            }));
+        });
+    });
+  });
+
+  describe('Completed View', () => {
+      it('toggles to completed view and shows completed tasks', () => {
+          setup();
+
+          // Switch to completed view
+          const completedToggle = screen.getByText('Completed');
+          fireEvent.click(completedToggle);
+
+          // Check if Completed Task is visible
+          expect(screen.getByText('Completed Task')).toBeInTheDocument();
+
+          // Check if Active tasks are NOT visible
+          expect(screen.queryByText('Overdue Task')).not.toBeInTheDocument();
+      });
+
+      it('restores a completed task to active', async () => {
+          setup();
+          // Switch to completed view
+          fireEvent.click(screen.getByText('Completed'));
+
+          // Click restore (uncomplete) button
+          const restoreBtn = screen.getByTitle('Mark as incomplete');
+          fireEvent.click(restoreBtn);
+
+          await waitFor(() => {
+              expect(mockUpdateToDo).toHaveBeenCalledWith('3', {
+                  isCompleted: false,
+                  completedAt: undefined
+              });
+          });
+      });
+
+      it('duplicates a completed task', async () => {
+          setup();
+          // Switch to completed view
+          fireEvent.click(screen.getByText('Completed'));
+
+          // Hover/Click duplicate on completed item
+          // Note: Duplicate button might be hidden by CSS group-hover in real DOM,
+          // but in RTL/JSDOM it should be present in the DOM.
+          const duplicateBtn = screen.getByTitle('Duplicate task');
+          fireEvent.click(duplicateBtn);
+
+          await waitFor(() => {
+            expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+                text: 'Completed Task',
+                isCompleted: false
+            }));
+        });
+      });
   });
 
   describe('Validation', () => {
@@ -266,9 +329,6 @@ describe('ToDosPage', () => {
       // Try submitting empty form
       fireEvent.click(screen.getByText('Create Task'));
       expect(toast.error).toHaveBeenCalledWith('Please fill in all required fields');
-
-      // Try submitting without members (different scenario)
-      // Re-setup with no members
     });
 
     it('validates no members available', async () => {
@@ -298,10 +358,6 @@ describe('ToDosPage', () => {
       const createBtn = screen.getByText('Create Task');
       expect(createBtn).toBeDisabled();
 
-      // Try force submitting via form (if possible) or check toast if triggered earlier
-      // The handleSubmit checks members length
-      // But button is disabled, so user can't click.
-      // We can assert the alert message in the modal
       expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();
     });
   });

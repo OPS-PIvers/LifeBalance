@@ -1,8 +1,9 @@
 import React, { memo } from 'react';
 import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { Transaction } from '../../types/schema';
+import { Transaction, INCOME_CATEGORY } from '../../types/schema';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 
 // --- Helper Functions ---
 
@@ -38,50 +39,56 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      className={`p-3 rounded-xl border shadow-sm flex items-center justify-between transition-colors group cursor-pointer ${
+      className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
-          ? 'bg-brand-50 border-brand-300'
-          : 'bg-white border-brand-100 hover:border-brand-300'
+          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
+          : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-md'
       }`}
     >
-      <div className="flex items-center gap-3 overflow-hidden">
+      <div className="flex items-center gap-4 overflow-hidden">
         {/* Selection Checkbox */}
         {isSelectionMode && (
-          <div className={`shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
-            {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+          <div className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-300'}`}>
+            {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded-md" />}
           </div>
         )}
 
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-           tx.category === 'Income' ? 'bg-green-100 text-green-600' : 'bg-brand-100 text-brand-600'
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+           tx.category === INCOME_CATEGORY ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'
         }`}>
-          {tx.category === 'Income' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
+          {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-bold text-brand-800 truncate">{tx.merchant}</p>
+            <p className="font-semibold text-slate-900 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs text-brand-500 truncate flex items-center gap-1">
+          <p className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
             {format(parseISO(tx.date), 'MMM d, yyyy')}
-            <span className="w-1 h-1 rounded-full bg-brand-300" />
-            <span className="font-medium text-brand-600">{tx.category}</span>
+            <span className="w-1 h-1 rounded-full bg-slate-300" />
+            <span className="font-medium text-slate-600">{tx.category}</span>
+            {tx.store && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="font-medium text-slate-600">{tx.store}</span>
+              </>
+            )}
           </p>
         </div>
       </div>
 
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
-          <p className={`font-mono font-bold ${
-            tx.category === 'Income' ? 'text-green-600' : 'text-brand-800'
+          <p className={`font-mono font-semibold text-base ${
+            tx.category === INCOME_CATEGORY ? 'text-emerald-600' : 'text-slate-900'
           }`}>
-            {tx.category === 'Income' ? '+' : ''}${tx.amount.toFixed(2)}
+            {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}
           </p>
           {tx.status === 'pending_review' && (
-            <p className="text-xxs text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
+            <Badge variant="warning" size="sm">
               Pending
-            </p>
+            </Badge>
           )}
         </div>
 
@@ -161,6 +168,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.status === n.status &&
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
+    p.store === n.store &&
     // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
     // These fields do not affect the rendering of this component.
     // Excluding them prevents unnecessary re-renders when backend-only fields change

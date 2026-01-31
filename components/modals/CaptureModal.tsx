@@ -9,8 +9,9 @@ import { ReceiptData, MagicActionResponse } from '../../services/geminiService';
 import { Transaction } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -31,6 +32,8 @@ interface ManualInitialData {
   category?: string;
   date?: string;
   subBucketId?: string;
+  store?: string;
+  accountId?: string;
 }
 
 /**
@@ -48,7 +51,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const {
     addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
-    addShoppingItem, householdId
+    addShoppingItem, householdId, stores, accounts
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
@@ -261,7 +264,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'camera-scan',
           autoCategorized: true,
           relatedHabitIds: matchHabits(data.suggestedHabits),
-          subBucketId: matchSubBucket(category, data.subBucket)
+          subBucketId: matchSubBucket(category, data.subBucket),
+          store: data.store
         };
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
@@ -316,7 +320,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           date: receipt.date || getLocalDateString(),
           selected: true,
           relatedHabitIds: matchHabits(receipt.suggestedHabits),
-          subBucketId: matchSubBucket(category, receipt.subBucket)
+          subBucketId: matchSubBucket(category, receipt.subBucket),
+          store: receipt.store
         }]);
       } else {
         setParsedTransactions(transactions.map(tx => {
@@ -378,7 +383,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'file-upload',
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
-          subBucketId: tx.subBucketId
+          subBucketId: tx.subBucketId,
+          store: tx.store,
+          accountId: tx.accountId
         };
         return addTransaction(newTransaction);
       })
@@ -450,85 +457,84 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      maxWidth="max-w-md"
-      disableBackdropClose={view === 'processing'}
-      ariaLabelledBy="capture-modal-title"
-      backdropColor="bg-slate-900/90"
-      className="shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
-          <div className="flex items-center justify-between px-6 py-4">
-              <h2 id="capture-modal-title" className="text-xl font-bold text-brand-800">
-                  {activeTab === 'transaction' && (
-                      view === 'menu' ? 'Add Transaction' :
-                      view === 'camera' ? 'Scan Receipt' :
-                      view === 'upload' ? 'Upload Image' :
-                      view === 'manual' ? 'Manual Entry' :
-                      view === 'processing' ? 'Processing' : 'Review'
-                  )}
-                  {activeTab === 'todo' && 'New Task'}
-                  {activeTab === 'shopping' && 'Add Item'}
-              </h2>
-              <Button
-                  variant="subtle"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={handleClose}
-                  aria-label="Close modal"
-              >
-                  <X size={20} />
-              </Button>
-          </div>
-
-          {/* Tab Switcher - Only show if not in deep transaction flow */}
-          {view === 'menu' && (
-              <div className="px-6 pb-4">
-                  <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
-                      <button
-                          onClick={() => setActiveTab('transaction')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'transaction'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <Wallet size={16} />
-                          <span>Expense</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('todo')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'todo'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <CheckSquare size={16} />
-                          <span>To-Do</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('shopping')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'shopping'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <ShoppingBag size={16} />
-                          <span>Shop</span>
-                      </button>
-                  </div>
-              </div>
+  const headerContent = (
+    <div className="flex flex-col border-b border-brand-100 bg-white">
+      <div className="flex items-center justify-between px-6 py-4">
+        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800">
+          {activeTab === 'transaction' && (
+            view === 'menu' ? 'Add Transaction' :
+            view === 'camera' ? 'Scan Receipt' :
+            view === 'upload' ? 'Upload Image' :
+            view === 'manual' ? 'Manual Entry' :
+            view === 'processing' ? 'Processing' : 'Review'
           )}
+          {activeTab === 'todo' && 'New Task'}
+          {activeTab === 'shopping' && 'Add Item'}
+        </h2>
+        <Button
+          variant="subtle"
+          size="icon"
+          className="rounded-full"
+          onClick={handleClose}
+          aria-label="Close drawer"
+        >
+          <X size={20} />
+        </Button>
       </div>
 
+      {/* Tab Switcher - Only show if not in deep transaction flow */}
+      {view === 'menu' && (
+        <div className="px-6 pb-4">
+          <div className="flex p-1 bg-slate-100/50 rounded-xl border border-slate-200/50">
+            <button
+              onClick={() => setActiveTab('transaction')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'transaction'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Wallet size={16} />
+              <span>Expense</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('todo')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'todo'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <CheckSquare size={16} />
+              <span>To-Do</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('shopping')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'shopping'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <ShoppingBag size={16} />
+              <span>Shop</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      header={headerContent}
+      noPadding={true}
+      disableClose={view === 'processing'}
+    >
       {/* Body Content */}
-      <div className="p-6 overflow-y-auto flex-1">
+      <div className="p-6">
 
         {/* 1. TRANSACTION TAB */}
         {activeTab === 'transaction' && (
@@ -585,6 +591,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   onSubmit={submitParsedTransactions}
                   dynamicCategories={dynamicCategories}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
 
@@ -598,6 +606,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   habits={habits}
                   transactions={transactions}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
             </>
@@ -633,7 +643,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           )}
 
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

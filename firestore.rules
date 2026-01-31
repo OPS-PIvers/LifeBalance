@@ -343,10 +343,11 @@ service cloud.firestore {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
                               // Allow only expected fields to prevent storage abuse
+                              // Include legacy fields (notes, createdAt, updatedAt) for backward compatibility
                               request.resource.data.keys().hasOnly([
                                 'title', 'amount', 'date', 'type', 'isPaid',
                                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                                'createdBy'
+                                'createdBy', 'notes', 'createdAt', 'updatedAt'
                               ]) &&
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.amount) &&
@@ -359,7 +360,16 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('parentRecurringId', null), 50) &&
                               (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted)) &&
                               // Metadata
-                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
+                              // Legacy fields (optional, for backward compatibility)
+                              isValidOptionalString(request.resource.data.get('notes', null), 500) &&
+                              // createdAt/updatedAt can be either strings or timestamps
+                              (request.resource.data.get('createdAt', null) == null ||
+                               request.resource.data.createdAt is string ||
+                               request.resource.data.createdAt is timestamp) &&
+                              (request.resource.data.get('updatedAt', null) == null ||
+                               request.resource.data.updatedAt is string ||
+                               request.resource.data.updatedAt is timestamp);
         allow delete: if isMemberOf(householdId);
       }
 
@@ -464,6 +474,121 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId); // Allow cleanup
       }
 
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Bucket History
+      match /bucketHistory/{snapshotId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'bucketId', 'bucketName', 'periodId', 'periodStartDate', 'periodEndDate',
+                                'limit', 'totalSpent', 'totalPending', 'transactionCount', 'createdAt'
+                              ]) &&
+                              isValidString(request.resource.data.bucketId, 50) &&
+                              isValidString(request.resource.data.bucketName, 50) &&
+                              isValidString(request.resource.data.periodId, 10) && // YYYY-MM-DD
+                              isValidString(request.resource.data.periodStartDate, 10) &&
+                              isValidString(request.resource.data.periodEndDate, 10) &&
+                              isValidNumber(request.resource.data.limit) &&
+                              isValidNumber(request.resource.data.totalSpent) &&
+                              isValidNumber(request.resource.data.totalPending) &&
+                              isValidNumber(request.resource.data.transactionCount) &&
+                              isValidString(request.resource.data.createdAt, 30); // ISO string
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Challenges
+      match /challenges/{challengeId} {
+        allow read: if isMemberOf(householdId);
+        allow create, update: if isMemberOf(householdId) &&
+                              request.resource.data.keys().hasOnly([
+                                'month', 'title', 'description', 'relatedHabitIds',
+                                'targetType', 'targetValue', 'targetTotalCount', 'currentValue',
+                                'yearlyGoalId', 'yearlyRewardLabel', 'status',
+                                'createdAt', 'createdBy', 'completedAt'
+                              ]) &&
+                              isValidString(request.resource.data.month, 7) && // YYYY-MM
+                              isValidString(request.resource.data.title, 100) &&
+                              isValidOptionalString(request.resource.data.get('description', null), 500) &&
+                              request.resource.data.relatedHabitIds is list &&
+                              request.resource.data.relatedHabitIds.size() <= 20 &&
+                              (request.resource.data.get('targetType', null) == null || request.resource.data.targetType in ['count', 'percentage']) &&
+                              isValidOptionalNumber(request.resource.data.get('targetValue', null)) &&
+                              isValidOptionalNumber(request.resource.data.get('targetTotalCount', null)) && // Deprecated
+                              isValidOptionalNumber(request.resource.data.get('currentValue', null)) &&
+                              isValidOptionalString(request.resource.data.get('yearlyGoalId', null), 50) &&
+                              isValidString(request.resource.data.yearlyRewardLabel, 100) &&
+                              request.resource.data.status in ['active', 'success', 'failed'] &&
+                              // Metadata
+                              isValidString(request.resource.data.createdAt, 30) && // ISO timestamp string
+                              isValidString(request.resource.data.createdBy, 50) && // UID string
+                              isValidOptionalString(request.resource.data.get('completedAt', null), 30); // ISO timestamp string
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Yearly Goals
+      match /yearlyGoals/{goalId} {
+        allow read: if isMemberOf(householdId);
+
+        // Validation helper for Yearly Goals
+        function isValidYearlyGoal() {
+          return request.resource.data.keys().hasOnly([
+                   'year', 'title', 'description', 'requiredMonths',
+                   'successfulMonths', 'status',
+                   'createdBy', 'createdAt', 'achievedAt'
+                 ]) &&
+                 isValidNumber(request.resource.data.year) &&
+                 isValidString(request.resource.data.title, 100) &&
+                 isValidOptionalString(request.resource.data.get('description', null), 500) &&
+                 isValidNumber(request.resource.data.requiredMonths) &&
+                 // Improved list validation: Max 12 months, and correct YYYY-MM format
+                 request.resource.data.successfulMonths is list &&
+                 request.resource.data.successfulMonths.size() <= 12 &&
+                 request.resource.data.successfulMonths.all(m, m is string && m.matches('^\\d{4}-\\d{2}$')) &&
+                 request.resource.data.status in ['in_progress', 'achieved', 'failed'] &&
+                 request.resource.data.createdAt is timestamp &&
+                 (request.resource.data.get('achievedAt', null) == null || request.resource.data.achievedAt is timestamp);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      isValidYearlyGoal() &&
+                      // Enforce ownership on create
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidYearlyGoal() &&
+                      // Prevent modification of immutable fields
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'year']);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
+      // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Rewards
+      match /rewards/{rewardId} {
+        allow read: if isMemberOf(householdId);
+
+        // Validation helper for Rewards
+        function isValidReward() {
+          return request.resource.data.keys().hasOnly([
+                   'title', 'cost', 'icon', 'createdBy'
+                 ]) &&
+                 isValidString(request.resource.data.title, 100) &&
+                 isValidNumber(request.resource.data.cost) &&
+                 isValidString(request.resource.data.icon, 50);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      isValidReward() &&
+                      // Enforce ownership on create
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidReward() &&
+                      // Prevent modification of immutable fields
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy']);
+
+        allow delete: if isMemberOf(householdId);
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
@@ -484,7 +609,11 @@ service cloud.firestore {
                      subcollection != 'meals' &&
                      subcollection != 'todos' &&
                      subcollection != 'groceryCatalog' &&
-                     subcollection != 'pendingItems';
+                     subcollection != 'pendingItems' &&
+                     subcollection != 'bucketHistory' &&
+                     subcollection != 'challenges' &&
+                     subcollection != 'yearlyGoals' &&
+                     subcollection != 'rewards';
       }
     }
 

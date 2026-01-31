@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/components/ui/Modal';
+import { Badge } from '@/components/ui/Badge';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
@@ -169,9 +170,9 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                           <tr key={t.id} className="hover:bg-gray-50">
                             <td className="p-3 font-medium">{t.email}</td>
                             <td className="p-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${t.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                              <Badge variant={t.status === 'active' ? 'success' : 'danger'} size="md">
                                 {t.status}
-                              </span>
+                              </Badge>
                             </td>
                             <td className="p-3 text-gray-500">{new Date(t.addedAt).toLocaleDateString()}</td>
                             <td className="p-3 flex gap-2">
