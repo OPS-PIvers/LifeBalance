@@ -27,3 +27,19 @@
 - **Soft Depth:** Upgraded shadows to `shadow-soft` and borders to `slate-100` for a cleaner, modern look.
 - **Squircles:** Updated all icon containers to `rounded-2xl` for a friendlier, organic feel.
 - **Breathing Room:** Increased padding in list items to `p-4` to reduce visual clutter.
+
+## 2026-02-19 - Dashboard & Capture Polish
+
+**Critique:** "Developer UI" markers found in Dashboard banner, Challenge widgets, and Capture modal.
+- **Voice Command Banner:** Used default `blue-50` and `blue-800` "alert" styling.
+- **Empty Challenge Widget:** Used flat white background and standard `brand-800` colors.
+- **Capture Modal:**
+    - "Magic Action" used heavy gradients.
+    - Menu buttons used `brand-50` backgrounds (looks like wireframe).
+    - Tab switcher was boxy.
+
+**Polish:** Applied "Muse" sophistication.
+- **Glassmorphism:** Upgraded all cards to `bg-white/80 backdrop-blur-xl`.
+- **Slate Typography:** Switched `text-brand-*` and `text-blue-*` to `text-slate-900`/`500`.
+- **Tactile Cards:** Added `shadow-soft`, `ring-1 ring-black/5`, and `rounded-2xl` to menu buttons.
+- **Subtle Inputs:** Refined Magic Action input to be cleaner (`bg-slate-50`).

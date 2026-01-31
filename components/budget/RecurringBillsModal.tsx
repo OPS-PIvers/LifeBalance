@@ -151,7 +151,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
           {recurringItems.length === 0 ? (
             <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
               <p className="text-slate-400">No recurring items found.</p>

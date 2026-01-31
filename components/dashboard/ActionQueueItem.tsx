@@ -256,11 +256,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   }, [item]);
 
   return (
-    <div className="bg-white/60 backdrop-blur-sm rounded-xl ring-1 ring-black/5 overflow-hidden transition-all hover:bg-white/80 shadow-sm">
+    <div className="bg-white/80 backdrop-blur-xl rounded-2xl ring-1 ring-black/5 overflow-hidden transition-all hover:bg-white/90 shadow-soft group">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-2.5 rounded-xl border shadow-sm ${iconClasses}`}>
+          <div className={`p-3 rounded-2xl border shadow-sm ${iconClasses}`}>
              {iconComponent}
           </div>
           <div>

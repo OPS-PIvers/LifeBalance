@@ -66,6 +66,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
   });
 
@@ -104,6 +105,7 @@ describe('BudgetCalendar', () => {
         }
       ],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -133,6 +135,7 @@ describe('BudgetCalendar', () => {
         }
       ],
       completeToDo: mockCompleteToDo,
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -193,6 +196,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -232,6 +236,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -275,6 +280,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -349,6 +355,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
@@ -407,6 +414,7 @@ describe('BudgetCalendar', () => {
       deleteCalendarItem: mockDeleteCalendarItem,
       todos: [],
       completeToDo: vi.fn(),
+      accounts: [],
     });
 
     render(<BudgetCalendar />);
