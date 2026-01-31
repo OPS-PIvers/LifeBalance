@@ -1254,15 +1254,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
 
     try {
-      const updates = {
+      const updates: Record<string, unknown> = {
         title: item.title,
         amount: item.amount,
         date: item.date,
         type: item.type,
         isPaid: item.isPaid,
         isRecurring: item.isRecurring,
-        frequency: item.frequency,
       };
+
+      // Handle frequency field: delete it if not recurring, otherwise include it
+      if (item.isRecurring && item.frequency) {
+        updates.frequency = item.frequency;
+      } else if (!item.isRecurring) {
+        // Explicitly delete the frequency field when toggling off recurring
+        updates.frequency = deleteField();
+      }
+
       const sanitizedUpdates = sanitizeFirestoreData(updates);
       await updateDoc(doc(db, `households/${householdId}/calendarItems`, item.id), sanitizedUpdates);
       toast.success('Event updated');

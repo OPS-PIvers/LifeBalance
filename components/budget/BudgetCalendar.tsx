@@ -79,15 +79,28 @@ const BudgetCalendar: React.FC = () => {
 
   const openEditModal = (item: CalendarItem) => {
     // If this is a recurring instance, edit the original item instead
-    const itemToEdit = isInstance(item) ? findOriginalItem(item.id) || item : item;
-
-    setTitle(itemToEdit.title);
-    setAmount(itemToEdit.amount.toString());
-    setType(itemToEdit.type);
-    setDate(itemToEdit.date);
-    setIsRecurring(!!itemToEdit.isRecurring);
-    setFrequency(itemToEdit.frequency || 'monthly');
-    setEditingItem(itemToEdit);
+    if (isInstance(item)) {
+      const originalItem = findOriginalItem(item.id);
+      if (!originalItem) {
+        toast.error('Cannot edit this recurring instance. The original template may have been deleted.');
+        return;
+      }
+      setTitle(originalItem.title);
+      setAmount(originalItem.amount.toString());
+      setType(originalItem.type);
+      setDate(originalItem.date);
+      setIsRecurring(!!originalItem.isRecurring);
+      setFrequency(originalItem.frequency || 'monthly');
+      setEditingItem(originalItem);
+    } else {
+      setTitle(item.title);
+      setAmount(item.amount.toString());
+      setType(item.type);
+      setDate(item.date);
+      setIsRecurring(!!item.isRecurring);
+      setFrequency(item.frequency || 'monthly');
+      setEditingItem(item);
+    }
     setIsAddModalOpen(true);
   };
 
