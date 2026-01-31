@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, X } from 'lucide-react';
 import { BudgetBucket, SubBucket } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';

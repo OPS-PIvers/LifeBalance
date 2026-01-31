@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Loader2, Copy } from 'lucide-react';
+import { Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../../components/ui/Drawer';

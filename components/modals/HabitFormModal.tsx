@@ -1,7 +1,4 @@
-/* eslint-disable */
-
 import React, { useState, useEffect } from 'react';
-import { X, Check } from 'lucide-react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
