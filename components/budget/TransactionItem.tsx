@@ -67,6 +67,12 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             {format(parseISO(tx.date), 'MMM d, yyyy')}
             <span className="w-1 h-1 rounded-full bg-slate-300" />
             <span className="font-medium text-slate-600">{tx.category}</span>
+            {tx.store && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="font-medium text-slate-600">{tx.store}</span>
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -161,6 +167,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
     p.status === n.status &&
     p.source === n.source &&
     p.isRecurring === n.isRecurring &&
+    p.store === n.store &&
     // Ignored props: payPeriodId, autoCategorized, relatedHabitIds
     // These fields do not affect the rendering of this component.
     // Excluding them prevents unnecessary re-renders when backend-only fields change

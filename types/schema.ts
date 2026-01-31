@@ -107,6 +107,8 @@ export interface Transaction {
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];
   subBucketId?: string;
+  store?: string;
+  accountId?: string;
 }
 
 export interface CalendarItem {
@@ -120,6 +122,7 @@ export interface CalendarItem {
   frequency?: 'weekly' | 'bi-weekly' | 'monthly';
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
   isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
+  accountId?: string;
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';

@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo } = useHousehold();
+  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo, accounts } = useHousehold();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -32,6 +32,7 @@ const BudgetCalendar: React.FC = () => {
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [date, setDate] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
@@ -59,6 +60,7 @@ const BudgetCalendar: React.FC = () => {
     setAmount('');
     setType('expense');
     setDate(format(selectedDate, 'yyyy-MM-dd'));
+    setAccountId('');
     setIsRecurring(false);
     setFrequency('monthly');
     setEditingItem(null);
@@ -89,6 +91,7 @@ const BudgetCalendar: React.FC = () => {
       setAmount(originalItem.amount.toString());
       setType(originalItem.type);
       setDate(originalItem.date);
+      setAccountId(originalItem.accountId || '');
       setIsRecurring(!!originalItem.isRecurring);
       setFrequency(originalItem.frequency || 'monthly');
       setEditingItem(originalItem);
@@ -97,6 +100,7 @@ const BudgetCalendar: React.FC = () => {
       setAmount(item.amount.toString());
       setType(item.type);
       setDate(item.date);
+      setAccountId(item.accountId || '');
       setIsRecurring(!!item.isRecurring);
       setFrequency(item.frequency || 'monthly');
       setEditingItem(item);
@@ -115,7 +119,8 @@ const BudgetCalendar: React.FC = () => {
       type,
       isPaid: editingItem ? editingItem.isPaid : false,
       isRecurring,
-      frequency: isRecurring ? frequency : undefined
+      frequency: isRecurring ? frequency : undefined,
+      accountId: accountId || undefined
     };
 
     try {
@@ -142,7 +147,8 @@ const BudgetCalendar: React.FC = () => {
       type,
       isPaid: false, // Reset status for duplicate
       isRecurring,
-      frequency: isRecurring ? frequency : undefined
+      frequency: isRecurring ? frequency : undefined,
+      accountId: accountId || undefined
     };
 
     addCalendarItem(newItem);
@@ -511,6 +517,17 @@ const BudgetCalendar: React.FC = () => {
                onChange={e => setDate(e.target.value)}
                className="font-medium"
              />
+
+             <Select
+               label="Account (Optional)"
+               value={accountId}
+               onChange={(e) => setAccountId(e.target.value)}
+             >
+               <option value="">(None)</option>
+               {accounts.map(a => (
+                 <option key={a.id} value={a.id}>{a.name}</option>
+               ))}
+             </Select>
 
              <div className="flex items-center justify-between">
                <label id="recurring-label" className="text-sm font-bold text-brand-600">Recurring?</label>

@@ -1,7 +1,8 @@
 import React from 'react';
 import { Check, AlertCircle } from 'lucide-react';
 import { ParsedTransaction } from '../../types/ui';
-import { BudgetBucket } from '../../types/schema';
+import { BudgetBucket, Store, Account } from '../../types/schema';
+import { CompactSelect } from '../ui/CompactSelect';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
@@ -11,6 +12,8 @@ interface CaptureTransactionReviewProps {
   onSubmit: () => void;
   dynamicCategories: string[];
   buckets: BudgetBucket[];
+  stores: Store[];
+  accounts: Account[];
 }
 
 export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> = ({
@@ -20,7 +23,9 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   onToggleAll,
   onSubmit,
   dynamicCategories,
-  buckets
+  buckets,
+  stores,
+  accounts
 }) => {
   const selectedCount = parsedTransactions.filter(t => t.selected).length;
   const allSelected = parsedTransactions.every(t => t.selected) && parsedTransactions.length > 0;
@@ -92,27 +97,47 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     </select>
                   )}
                 </div>
-                {/* Sub-Bucket Select for Review Item */}
-                {(() => {
-                  const selectedBucket = buckets.find(b => b.name === tx.category);
-                  if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
-                    return (
-                      <div className="mt-2">
-                        <select
-                          value={tx.subBucketId || ''}
-                          onChange={(e) => onUpdateTransaction(tx.id, { subBucketId: e.target.value || undefined })}
-                          className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full"
-                        >
-                          <option value="">Select Sub-Category...</option>
-                          {selectedBucket.subBuckets.map(sb => (
-                            <option key={sb.id} value={sb.id}>{sb.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {/* Sub-Bucket Select */}
+                  {(() => {
+                    const selectedBucket = buckets.find(b => b.name === tx.category);
+                    if (selectedBucket?.subBuckets && selectedBucket.subBuckets.length > 0) {
+                      return (
+                        <div>
+                          <CompactSelect
+                            value={tx.subBucketId || ''}
+                            onChange={(value) => onUpdateTransaction(tx.id, { subBucketId: value || undefined })}
+                            options={selectedBucket.subBuckets.map(sb => ({ id: sb.id, label: sb.name }))}
+                            placeholder="Sub-Category..."
+                          />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  {/* Store Select */}
+                  <div>
+                    <CompactSelect
+                      value={tx.store || ''}
+                      onChange={(value) => onUpdateTransaction(tx.id, { store: value || undefined })}
+                      options={stores.map(s => ({ id: s.name, label: s.name }))}
+                      placeholder="Store..."
+                    />
+                  </div>
+
+                  {/* Account Select */}
+                  <div>
+                    <CompactSelect
+                      value={tx.accountId || ''}
+                      onChange={(value) => onUpdateTransaction(tx.id, { accountId: value || undefined })}
+                      options={accounts.map(a => ({ id: a.id, label: a.name }))}
+                      placeholder="Account..."
+                    />
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
