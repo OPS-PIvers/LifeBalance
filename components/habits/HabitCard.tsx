@@ -7,6 +7,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import HabitFormModal from '../modals/HabitFormModal';
 import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
 
@@ -25,14 +26,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
-  const [isMobile, setIsMobile] = useState(false);
-
-  React.useEffect(() => {
-    const checkMobile = () => setIsMobile(window.matchMedia('(max-width: 640px)').matches);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useMediaQuery('(max-width: 640px)');
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
