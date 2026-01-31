@@ -107,14 +107,23 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   return (
     <Drawer isOpen={isOpen} onClose={onClose} noPadding={true}>
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-        <div className="p-2 bg-slate-100 text-slate-600 rounded-2xl">
-          <Repeat size={20} />
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-slate-100 text-slate-600 rounded-2xl">
+            <Repeat size={20} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Recurring Manager</h3>
+            <p className="text-xs text-slate-500">Manage your subscriptions and bills</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-lg font-bold text-slate-900">Recurring Manager</h3>
-          <p className="text-xs text-slate-500">Manage your subscriptions and bills</p>
-        </div>
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+          aria-label="Close drawer"
+        >
+          <X size={20} />
+        </button>
       </div>
 
       {/* Summary Cards */}
