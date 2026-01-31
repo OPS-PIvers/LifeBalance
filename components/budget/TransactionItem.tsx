@@ -3,6 +3,7 @@ import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSqua
 import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '../../types/schema';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 
 // --- Helper Functions ---
 
@@ -85,9 +86,9 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
             {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}
           </p>
           {tx.status === 'pending_review' && (
-            <p className="text-xxs text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded-full inline-block">
+            <Badge variant="warning" size="sm">
               Pending
-            </p>
+            </Badge>
           )}
         </div>
 
