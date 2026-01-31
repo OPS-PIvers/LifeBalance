@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History } from 'lucide-react';
-import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isYesterday, isThisWeek } from 'date-fns';
+import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
@@ -111,7 +111,6 @@ const ToDosPage: React.FC = () => {
   // Categorize To-Dos (Completed)
   const { completedToday, completedYesterday, completedWeek, completedOlder } = useMemo(() => {
     const completed = todos.filter(t => t.isCompleted);
-    const today = currentDate;
 
     const completedToday: ToDo[] = [];
     const completedYesterday: ToDo[] = [];
@@ -123,11 +122,11 @@ const ToDosPage: React.FC = () => {
         const dateStr = todo.completedAt || todo.createdAt || new Date().toISOString();
         const date = parseISO(dateStr);
 
-        if (isToday(date)) {
+        if (isSameDay(date, currentDate)) {
             completedToday.push(todo);
-        } else if (isYesterday(date)) {
+        } else if (isSameDay(date, subDays(currentDate, 1))) {
             completedYesterday.push(todo);
-        } else if (isThisWeek(date, { weekStartsOn: 1 })) {
+        } else if (isSameWeek(date, currentDate, { weekStartsOn: 1 })) {
             completedWeek.push(todo);
         } else {
             completedOlder.push(todo);
@@ -236,7 +235,7 @@ const ToDosPage: React.FC = () => {
           status = 'This Week';
         }
 
-        const record: any = {
+        const record: Record<string, string> = {
           'Task': todo.text,
           'Due Date': todo.completeByDate,
           'Assigned To': assignee?.displayName || 'Unassigned',
