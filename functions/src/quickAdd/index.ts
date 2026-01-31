@@ -299,16 +299,20 @@ export const quickAddExpense = onRequest(
       amount = Math.round(amount * 100) / 100;
     }
 
-    if (typeof amount !== "number" || isNaN(amount) || amount <= 0) {
+    if (typeof amount !== "number" || isNaN(amount) || amount === 0) {
       logger.warn(`Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount })}`);
       errorResponse(
         res,
         400,
-        `amount must be a positive number (received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)})`,
+        `amount must be a non-zero number (received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)})`,
         "BAD_REQUEST"
       );
       return;
     }
+
+    // Note: Apple Pay automations send debits as negative numbers (-50.00),
+    // so we accept negative amounts and convert to positive for storage
+    amount = Math.abs(amount);
 
     // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
