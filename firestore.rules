@@ -346,7 +346,7 @@ service cloud.firestore {
                               request.resource.data.keys().hasOnly([
                                 'title', 'amount', 'date', 'type', 'isPaid',
                                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                                'createdBy'
+                                'createdBy', 'createdAt', 'updatedAt', 'notes'
                               ]) &&
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.amount) &&
