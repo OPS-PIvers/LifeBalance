@@ -21,3 +21,7 @@
 ## 2025-03-01 - Standardizing Modal Close Buttons
 **Drift:** Modal close buttons were implemented as hardcoded `<button>` elements with inconsistent styles (`bg-slate-100`, `bg-brand-100`, `text-gray-400`, `text-brand-400`), creating visual noise and maintenance overhead.
 **Fix:** Refactored `AnalyticsModal`, `CaptureModal`, `BatchCategorizeModal`, `FeedbackModal`, `PointsBreakdownModal`, `SafeToSpendModal`, and `SmartHabitReorderModal` to use the standardized `<Button />` component with `ghost` or `subtle` variants.
+
+## 2025-03-02 - Standardizing Points Breakdown Buttons
+**Drift:** `PointsBreakdownModal` contained hardcoded increment/decrement buttons using raw `<button>` tags with manual borders and padding, inconsistent with the system's button styles.
+**Fix:** Refactored the increment/decrement controls in `PointsBreakdownModal.tsx` to use the standardized `<Button />` component with `variant="secondary"` and `size="icon-sm"`.

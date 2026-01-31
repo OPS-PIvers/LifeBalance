@@ -46,6 +46,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -64,6 +66,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -99,6 +103,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -132,6 +138,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -164,6 +172,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -198,6 +208,8 @@ describe('CaptureTransactionManual', () => {
         habits={mockHabits}
         transactions={mockTransactions}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 

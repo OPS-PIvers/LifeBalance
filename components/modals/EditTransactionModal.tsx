@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Loader2, Copy } from 'lucide-react';
+import { Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../../components/ui/Modal';
+import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import toast from 'react-hot-toast';
@@ -15,12 +15,14 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, addTransaction, buckets } = useHousehold();
+  const { updateTransaction, deleteTransaction, addTransaction, buckets, stores, accounts } = useHousehold();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');
   const [category, setCategory] = useState('');
   const [subBucketId, setSubBucketId] = useState<string | undefined>(undefined);
+  const [store, setStore] = useState('');
+  const [accountId, setAccountId] = useState('');
   const [date, setDate] = useState('');
   const [status, setStatus] = useState<'verified' | 'pending_review'>('verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -40,6 +42,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setMerchant(transaction.merchant);
       setCategory(transaction.category);
       setSubBucketId(transaction.subBucketId);
+      setStore(transaction.store || '');
+      setAccountId(transaction.accountId || '');
       setDate(transaction.date);
       setStatus(transaction.status);
     }
@@ -78,6 +82,8 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         merchant: merchant.trim(),
         category,
         subBucketId: subBucketId || undefined,
+        store: store || undefined,
+        accountId: accountId || undefined,
         date,
         status,
       });
@@ -139,6 +145,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         isRecurring: false,
         source: 'manual',
         autoCategorized: transaction.autoCategorized ?? false,
+        subBucketId: subBucketId || undefined,
+        store: store || undefined,
+        accountId: accountId || undefined
         // Let addTransaction handle ID and timestamps
       } as unknown as Transaction);
 
@@ -155,27 +164,14 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   if (!transaction) return null;
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
-      onClose={onClose}
-      ariaLabelledBy="edit-transaction-title"
-      disableBackdropClose={isSaving}
+      onClose={isSaving ? () => {} : onClose}
+      title="Edit Transaction"
+      noPadding={true}
     >
-      {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
-        <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
-        <button
-          onClick={onClose}
-          disabled={isSaving}
-          className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
       {/* Form */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="p-4 space-y-4">
         <Input
           id="edit-amount"
           label="Amount"
@@ -231,6 +227,38 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             ))}
           </Select>
         )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            id="edit-store"
+            label="Store"
+            disabled={isSaving}
+            value={store}
+            onChange={(e) => setStore(e.target.value)}
+          >
+            <option value="">(None)</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            id="edit-account"
+            label="Account"
+            disabled={isSaving}
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="">(None)</option>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </Select>
+        </div>
 
         <Input
           id="edit-date"
@@ -326,7 +354,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           </div>
         )}
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 
