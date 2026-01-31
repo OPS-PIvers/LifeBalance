@@ -52,9 +52,14 @@ export const sanitizeFirestoreData = (obj: unknown): any => {
       return obj;
     }
 
-    const newObj: Record<string, unknown> = {};
-    // Safe because we checked typeof obj === 'object' and !isArray and !null (above)
+    // Handle Firestore sentinel values (deleteField, increment, arrayUnion, etc.)
+    // These have a _methodName property and must be preserved as-is
     const record = obj as Record<string, unknown>;
+    if ('_methodName' in record) {
+      return obj;
+    }
+
+    const newObj: Record<string, unknown> = {};
 
     Object.keys(record).forEach(key => {
       const value = sanitizeFirestoreData(record[key]);
