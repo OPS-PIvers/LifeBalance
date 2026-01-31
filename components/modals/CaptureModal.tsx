@@ -570,6 +570,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       onClose={handleClose}
       header={headerContent}
       noPadding={true}
+      disableClose={view === 'processing'}
     >
       {/* Body Content */}
       <div className="p-6">

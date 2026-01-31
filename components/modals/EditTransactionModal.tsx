@@ -168,9 +168,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       isOpen={isOpen}
       onClose={isSaving ? () => {} : onClose}
       title="Edit Transaction"
+      noPadding={true}
     >
       {/* Form */}
-      <div className="space-y-4 pb-4">
+      <div className="p-4 space-y-4">
         <Input
           id="edit-amount"
           label="Amount"
@@ -281,7 +282,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-brand-100 pt-4 -mx-4 px-4 -mb-4 pb-4 space-y-2">
+      <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
         <div className="flex gap-2">
           <button
             onClick={onClose}

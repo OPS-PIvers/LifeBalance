@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -14,6 +14,12 @@ interface DrawerProps {
   className?: string;
   /** Disable default content padding */
   noPadding?: boolean;
+  /** Accessibility: ID of element that labels this drawer */
+  ariaLabelledBy?: string;
+  /** Accessibility: Label for this drawer (used if no ariaLabelledBy or title) */
+  ariaLabel?: string;
+  /** Prevent closing via backdrop, escape, or swipe */
+  disableClose?: boolean;
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
@@ -23,8 +29,13 @@ export const Drawer: React.FC<DrawerProps> = ({
   header,
   children,
   className,
-  noPadding = false
+  noPadding = false,
+  ariaLabelledBy,
+  ariaLabel,
+  disableClose = false
 }) => {
+  const titleId = useId();
+
   // Lock body scroll when open
   useEffect(() => {
     if (isOpen) {
@@ -38,7 +49,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   // Handle Escape key
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || disableClose) return;
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
@@ -46,7 +57,7 @@ export const Drawer: React.FC<DrawerProps> = ({
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, disableClose]);
 
   return createPortal(
     <AnimatePresence>
@@ -59,7 +70,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-sm"
-            onClick={onClose}
+            onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
             aria-hidden="true"
           />
@@ -78,14 +89,15 @@ export const Drawer: React.FC<DrawerProps> = ({
             dragConstraints={{ top: 0 }}
             dragElastic={0.2}
             onDragEnd={(_, info) => {
-              if (info.offset.y > 100 || info.velocity.y > 500) {
+              if (!disableClose && (info.offset.y > 100 || info.velocity.y > 500)) {
                 onClose();
               }
             }}
             data-testid="drawer-content"
             role="dialog"
             aria-modal="true"
-            aria-labelledby={title ? "drawer-title" : undefined}
+            aria-labelledby={ariaLabelledBy || (title ? titleId : undefined)}
+            aria-label={!ariaLabelledBy && !title ? ariaLabel : undefined}
           >
              {/* Handle bar for visual cue */}
              <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
@@ -95,8 +107,8 @@ export const Drawer: React.FC<DrawerProps> = ({
              {/* Header */}
              {title && (
                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 shrink-0">
-                 <h3 className="font-bold text-lg text-slate-800">{title}</h3>
-                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer">
+                 <h3 id={titleId} className="font-bold text-lg text-slate-800">{title}</h3>
+                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer" disabled={disableClose}>
                    <X size={20} />
                  </button>
                </div>

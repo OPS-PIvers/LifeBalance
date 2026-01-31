@@ -96,8 +96,9 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       isOpen={isOpen}
       onClose={isSaving ? () => {} : onClose}
       title={editingHabit ? 'Edit Habit' : 'New Habit'}
+      noPadding={true}
     >
-      <div className="space-y-4">
+      <div className="p-4 space-y-4">
 
         {/* Title */}
         <div>
@@ -226,7 +227,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
       </div>
 
-      <div className="sticky bottom-0 bg-white border-t border-brand-100 pt-4 -mx-4 px-4 -mb-4 pb-4">
+      <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4">
         <button
           type="button"
           onClick={handleSave}
