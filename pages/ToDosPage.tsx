@@ -413,10 +413,10 @@ const ToDosPage: React.FC = () => {
                 <>
                   <button
                     onClick={handleExport}
-                    disabled={todos.length === 0}
+                    disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
                     className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label="Export active tasks to CSV"
-                    title="Export active tasks to CSV"
+                    aria-label={`Export ${viewMode} tasks to CSV`}
+                    title={`Export ${viewMode} tasks to CSV`}
                   >
                     <Download size={16} />
                     <span className="hidden sm:inline">Export</span>
