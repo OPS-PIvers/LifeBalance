@@ -11,7 +11,7 @@ import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
@@ -33,6 +33,8 @@ interface ManualInitialData {
   category?: string;
   date?: string;
   subBucketId?: string;
+  store?: string;
+  accountId?: string;
 }
 
 /**
@@ -50,7 +52,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const {
     addTransaction, buckets, habits, transactions,
     addToDo, members, currentUser,
-    addShoppingItem, householdId
+    addShoppingItem, householdId, stores, accounts
   } = useHousehold();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
@@ -290,7 +292,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'camera-scan',
           autoCategorized: true,
           relatedHabitIds: matchHabits(data.suggestedHabits),
-          subBucketId: matchSubBucket(category, data.subBucket)
+          subBucketId: matchSubBucket(category, data.subBucket),
+          store: data.store
         };
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
@@ -356,7 +359,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           date: receipt.date || getLocalDateString(),
           selected: true,
           relatedHabitIds: matchHabits(receipt.suggestedHabits),
-          subBucketId: matchSubBucket(category, receipt.subBucket)
+          subBucketId: matchSubBucket(category, receipt.subBucket),
+          store: receipt.store
         }]);
       } else {
         setParsedTransactions(transactions.map(tx => {
@@ -419,7 +423,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           source: 'file-upload',
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
-          subBucketId: tx.subBucketId
+          subBucketId: tx.subBucketId,
+          store: tx.store,
+          accountId: tx.accountId
         };
         return addTransaction(newTransaction);
       })
@@ -491,85 +497,84 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      maxWidth="max-w-md"
-      disableBackdropClose={view === 'processing'}
-      ariaLabelledBy="capture-modal-title"
-      backdropColor="bg-slate-900/90"
-      className="shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
-          <div className="flex items-center justify-between px-6 py-4">
-              <h2 id="capture-modal-title" className="text-xl font-bold text-brand-800">
-                  {activeTab === 'transaction' && (
-                      view === 'menu' ? 'Add Transaction' :
-                      view === 'camera' ? 'Scan Receipt' :
-                      view === 'upload' ? 'Upload Image' :
-                      view === 'manual' ? 'Manual Entry' :
-                      view === 'processing' ? 'Processing' : 'Review'
-                  )}
-                  {activeTab === 'todo' && 'New Task'}
-                  {activeTab === 'shopping' && 'Add Item'}
-              </h2>
-              <Button
-                  variant="subtle"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={handleClose}
-                  aria-label="Close modal"
-              >
-                  <X size={20} />
-              </Button>
-          </div>
-
-          {/* Tab Switcher - Only show if not in deep transaction flow */}
-          {view === 'menu' && (
-              <div className="px-6 pb-4">
-                  <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
-                      <button
-                          onClick={() => setActiveTab('transaction')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'transaction'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <Wallet size={16} />
-                          <span>Expense</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('todo')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'todo'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <CheckSquare size={16} />
-                          <span>To-Do</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('shopping')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'shopping'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <ShoppingBag size={16} />
-                          <span>Shop</span>
-                      </button>
-                  </div>
-              </div>
+  const headerContent = (
+    <div className="flex flex-col border-b border-brand-100 bg-white">
+      <div className="flex items-center justify-between px-6 py-4">
+        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800">
+          {activeTab === 'transaction' && (
+            view === 'menu' ? 'Add Transaction' :
+            view === 'camera' ? 'Scan Receipt' :
+            view === 'upload' ? 'Upload Image' :
+            view === 'manual' ? 'Manual Entry' :
+            view === 'processing' ? 'Processing' : 'Review'
           )}
+          {activeTab === 'todo' && 'New Task'}
+          {activeTab === 'shopping' && 'Add Item'}
+        </h2>
+        <Button
+          variant="subtle"
+          size="icon"
+          className="rounded-full"
+          onClick={handleClose}
+          aria-label="Close drawer"
+        >
+          <X size={20} />
+        </Button>
       </div>
 
+      {/* Tab Switcher - Only show if not in deep transaction flow */}
+      {view === 'menu' && (
+        <div className="px-6 pb-4">
+          <div className="flex p-1 bg-slate-100/50 rounded-xl border border-slate-200/50">
+            <button
+              onClick={() => setActiveTab('transaction')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'transaction'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <Wallet size={16} />
+              <span>Expense</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('todo')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'todo'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <CheckSquare size={16} />
+              <span>To-Do</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('shopping')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'shopping'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <ShoppingBag size={16} />
+              <span>Shop</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      header={headerContent}
+      noPadding={true}
+      disableClose={view === 'processing'}
+    >
       {/* Body Content */}
-      <div className="p-6 overflow-y-auto flex-1">
+      <div className="p-6">
 
         {/* 1. TRANSACTION TAB */}
         {activeTab === 'transaction' && (
@@ -594,10 +599,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   {/* Magic Input */}
-                  <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
-                    <div className="bg-white rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles size={16} className="text-violet-600 animate-pulse" />
+                  <div className="bg-white/80 backdrop-blur-xl border border-violet-100 ring-1 ring-violet-500/10 rounded-2xl shadow-sm mb-6 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="p-1.5 bg-violet-50 rounded-lg text-violet-600">
+                           <Sparkles size={14} className="animate-pulse" />
+                        </div>
                         <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
                       </div>
                       <form onSubmit={handleMagicSubmit} className="flex gap-2">
@@ -607,31 +613,30 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                           value={magicInput}
                           onChange={(e) => setMagicInput(e.target.value)}
                           placeholder="Spent $20 on Pizza..."
-                          className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
+                          className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 font-medium rounded-xl px-3 py-2.5 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
                           disabled={magicLoading}
                         />
                         <button
                           type="submit"
                           aria-label="Submit magic action"
                           disabled={!magicInput.trim() || magicLoading}
-                          className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                          className="p-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 transition-colors shadow-sm active:scale-95"
                         >
                           {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
                         </button>
                       </form>
-                    </div>
                   </div>
 
                   <button
                     onClick={startCamera}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600">
                       <Camera size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Scan Receipt</span>
-                      <span className="text-xs text-brand-400">Take a photo of your receipt</span>
+                      <span className="font-bold text-slate-900 block">Scan Receipt</span>
+                      <span className="text-xs text-slate-500">Take a photo of your receipt</span>
                     </div>
                     <Badge variant="warning" size="sm">
                       REVIEW
@@ -640,14 +645,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 text-purple-600">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-50 text-purple-600">
                       <Upload size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Upload Image</span>
-                      <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
+                      <span className="font-bold text-slate-900 block">Upload Image</span>
+                      <span className="text-xs text-slate-500">Bank statement or receipt screenshot</span>
                     </div>
                     <Badge variant="warning" size="sm">
                       REVIEW
@@ -656,14 +661,14 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
                   <button
                     onClick={() => setView('manual')}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos text-money-pos">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600">
                       <Type size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Manual Entry</span>
-                      <span className="text-xs text-brand-400">Enter transaction details directly</span>
+                      <span className="font-bold text-slate-900 block">Manual Entry</span>
+                      <span className="text-xs text-slate-500">Enter transaction details directly</span>
                     </div>
                     <Badge variant="success" size="sm">
                       INSTANT
@@ -726,6 +731,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   onSubmit={submitParsedTransactions}
                   dynamicCategories={dynamicCategories}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
 
@@ -739,6 +746,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   habits={habits}
                   transactions={transactions}
                   buckets={buckets}
+                  stores={stores}
+                  accounts={accounts}
                 />
               )}
             </>
@@ -774,7 +783,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           )}
 
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

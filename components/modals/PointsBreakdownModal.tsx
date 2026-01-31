@@ -222,21 +222,23 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
             <div className="mt-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
                 <span className="text-sm text-gray-600">Adjust Count:</span>
                 <div className="flex items-center gap-3">
-                    <button
+                    <Button
+                        variant="secondary"
+                        size="icon-sm"
                         onClick={() => handleToggleHabit(item.id, 'down')}
-                        className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
                         aria-label="Decrease daily count"
                     >
                         <Minus size={16} />
-                    </button>
+                    </Button>
                     <span className="font-bold w-6 text-center">{item.count}</span>
-                    <button
-                         onClick={() => handleToggleHabit(item.id, 'up')}
-                         className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
-                         aria-label="Increase daily count"
+                    <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        onClick={() => handleToggleHabit(item.id, 'up')}
+                        aria-label="Increase daily count"
                     >
                         <Plus size={16} />
-                    </button>
+                    </Button>
                 </div>
             </div>
         );
@@ -280,21 +282,23 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                  <p className="text-sm text-gray-600 mb-2">Total Count Correction:</p>
                  <div className="flex items-center gap-3">
-                    <button
+                    <Button
+                        variant="secondary"
+                        size="icon-sm"
                         onClick={() => handleUpdateTotalCount(item, item.totalCount - 1)}
-                        className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
                         aria-label="Decrease total count"
                     >
                         <Minus size={16} />
-                    </button>
+                    </Button>
                     <span className="font-bold min-w-[3rem] text-center">{item.totalCount}</span>
-                    <button
-                         onClick={() => handleUpdateTotalCount(item, item.totalCount + 1)}
-                         className="p-1 bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-100"
-                         aria-label="Increase total count"
+                    <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        onClick={() => handleUpdateTotalCount(item, item.totalCount + 1)}
+                        aria-label="Increase total count"
                     >
                         <Plus size={16} />
-                    </button>
+                    </Button>
                 </div>
                 <p className="text-xs text-gray-400 mt-2">Adjusting this only affects lifetime stats, not points.</p>
 

@@ -58,7 +58,12 @@ describe('Drawer', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(dialog).toHaveAttribute('aria-labelledby', 'drawer-title');
+
+    // Check that aria-labelledby is set and points to the title element
+    const ariaLabelledBy = dialog.getAttribute('aria-labelledby');
+    expect(ariaLabelledBy).toBeTruthy();
+    const titleElement = document.getElementById(ariaLabelledBy!);
+    expect(titleElement).toHaveTextContent('Accessible Drawer');
 
     // Backdrop should be hidden from screen readers
     const backdrop = screen.getByTestId('drawer-backdrop');
@@ -121,5 +126,44 @@ describe('Drawer', () => {
       </Drawer>
     );
     expect(document.body.style.overflow).toBe('');
+  });
+
+  it('does not close when disableClose is true', () => {
+    render(
+      <Drawer isOpen={true} onClose={onCloseMock} disableClose={true}>
+        <div>Content</div>
+      </Drawer>
+    );
+
+    // Try clicking backdrop
+    fireEvent.click(screen.getByTestId('drawer-backdrop'));
+    expect(onCloseMock).not.toHaveBeenCalled();
+
+    // Try pressing Escape
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onCloseMock).not.toHaveBeenCalled();
+  });
+
+  it('supports custom aria-label when no title is provided', () => {
+    render(
+      <Drawer isOpen={true} onClose={onCloseMock} ariaLabel="Custom Label">
+        <div>Content</div>
+      </Drawer>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-label', 'Custom Label');
+    expect(dialog).not.toHaveAttribute('aria-labelledby');
+  });
+
+  it('supports custom ariaLabelledBy', () => {
+    render(
+      <Drawer isOpen={true} onClose={onCloseMock} ariaLabelledBy="custom-id">
+        <div id="custom-id">Custom Title</div>
+      </Drawer>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'custom-id');
   });
 });

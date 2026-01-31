@@ -12,6 +12,39 @@ function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
+// Optimization: Memoized calendar day to prevent re-rendering the entire grid on selection change
+interface CalendarDayProps {
+  day: Date;
+  count: number;
+  isSelected: boolean;
+  isCurrentMonth: boolean;
+  intensityClass: string;
+  isToday: boolean;
+  onSelect: (date: Date) => void;
+}
+
+const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intensityClass, isToday, onSelect }: CalendarDayProps) => {
+  return (
+    <button
+      onClick={() => onSelect(day)}
+      className={cn(
+        "relative flex flex-col items-center justify-center h-10 w-full rounded-xl text-sm font-medium transition-all duration-200",
+        !isCurrentMonth && "opacity-30",
+        isSelected
+          ? "ring-2 ring-brand-800 scale-105 z-10"
+          : "hover:scale-105 hover:bg-brand-50",
+        !intensityClass && !isSelected && "text-brand-400 bg-brand-50/50",
+        intensityClass,
+        isToday && !isSelected && !intensityClass && "text-brand-800 font-bold bg-brand-100"
+      )}
+      aria-label={`${format(day, 'MMM d')}: ${count} habits completed`}
+    >
+      {format(day, 'd')}
+    </button>
+  );
+});
+CalendarDay.displayName = 'CalendarDay';
+
 const HabitHistoryCalendar: React.FC = () => {
   const { habits } = useHousehold();
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -99,25 +132,16 @@ const HabitHistoryCalendar: React.FC = () => {
             const intensityClass = getIntensityClass(count);
 
             return (
-              <button
+              <CalendarDay
                 key={day.toString()}
-                onClick={() => setSelectedDate(day)}
-                className={cn(
-                  "relative flex flex-col items-center justify-center h-10 w-full rounded-xl text-sm font-medium transition-all duration-200",
-                  !isCurrentMonth && "opacity-30",
-                  isSelected
-                    ? "ring-2 ring-brand-800 scale-105 z-10"
-                    : "hover:scale-105 hover:bg-brand-50",
-                  !intensityClass && !isSelected && "text-brand-400 bg-brand-50/50",
-                  intensityClass,
-                  isToday(day) && !isSelected && !intensityClass && "text-brand-800 font-bold bg-brand-100"
-                )}
-                aria-label={`${format(day, 'MMM d')}: ${count} habits completed`}
-              >
-                {format(day, 'd')}
-                {/* Optional: Dot indicator instead of background color?
-                    Going with background color for heatmap effect as planned. */}
-              </button>
+                day={day}
+                count={count}
+                isSelected={isSelected}
+                isCurrentMonth={isCurrentMonth}
+                intensityClass={intensityClass}
+                isToday={isToday(day)}
+                onSelect={setSelectedDate}
+              />
             );
           })}
         </div>

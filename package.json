@@ -63,5 +63,10 @@
     "typescript-eslint": "^8.54.0",
     "vite": "^6.4.1",
     "vitest": "^4.0.18"
+  },
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": "^5.3.4"
+    }
   }
 }

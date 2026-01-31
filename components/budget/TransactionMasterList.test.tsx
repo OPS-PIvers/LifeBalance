@@ -131,6 +131,7 @@ describe('TransactionMasterList', () => {
       addTransaction: mockAddTransaction,
       splitTransaction: mockSplitTransaction,
       householdId: 'test-household',
+      stores: [],
     } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm

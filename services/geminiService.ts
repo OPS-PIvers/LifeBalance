@@ -144,6 +144,7 @@ export interface ReceiptData {
   date?: string; // Optional - may not be visible on all receipts
   suggestedHabits?: string[];
   subBucket?: string;
+  store?: string;
 }
 
 export interface BankTransactionData {
@@ -316,6 +317,7 @@ export const analyzeReceipt = async (
     const prompt = [
       `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''}`,
       subBucketContext,
+      `Extract the store name if visible.`,
       `Today's date is ${today}. If the year is missing, infer it.`,
       'Return JSON.'
     ].join('\n');
@@ -331,7 +333,8 @@ export const analyzeReceipt = async (
           category: { type: Type.STRING },
           date: { type: Type.STRING },
           suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
-          subBucket: { type: Type.STRING }
+          subBucket: { type: Type.STRING },
+          store: { type: Type.STRING }
         },
         required: ["merchant", "amount", "category"]
       },

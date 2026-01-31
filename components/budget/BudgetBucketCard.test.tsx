@@ -31,6 +31,7 @@ describe('BudgetBucketCard', () => {
     onReallocate: vi.fn(),
     onEditTransaction: vi.fn(),
     onDeleteTransaction: vi.fn(),
+    onOpenTransactionActions: vi.fn(),
   };
 
   it('renders bucket information correctly', () => {
