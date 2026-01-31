@@ -363,8 +363,13 @@ service cloud.firestore {
                               (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
                               // Legacy fields (optional, for backward compatibility)
                               isValidOptionalString(request.resource.data.get('notes', null), 500) &&
-                              isValidOptionalString(request.resource.data.get('createdAt', null), 30) &&
-                              isValidOptionalString(request.resource.data.get('updatedAt', null), 30);
+                              // createdAt/updatedAt can be either strings or timestamps
+                              (request.resource.data.get('createdAt', null) == null ||
+                               request.resource.data.createdAt is string ||
+                               request.resource.data.createdAt is timestamp) &&
+                              (request.resource.data.get('updatedAt', null) == null ||
+                               request.resource.data.updatedAt is string ||
+                               request.resource.data.updatedAt is timestamp);
         allow delete: if isMemberOf(householdId);
       }
 
