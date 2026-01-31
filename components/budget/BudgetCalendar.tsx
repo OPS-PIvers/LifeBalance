@@ -107,7 +107,18 @@ const BudgetCalendar: React.FC = () => {
 
     try {
       if (editingItem) {
-        await updateCalendarItem(newItem);
+        // Safe Update: Check if we are trying to update a synthetic recurring instance
+        // If so, we can't update it directly (it doesn't exist).
+        // Instead, we create a new event (materialize it) and hide the original instance.
+        if (isRecurringId(editingItem.id)) {
+          const { id, ...itemData } = newItem;
+          const newRealItem = { ...itemData, id: crypto.randomUUID() };
+
+          await addCalendarItem(newRealItem);
+          await deleteCalendarItem(editingItem.id);
+        } else {
+          await updateCalendarItem(newItem);
+        }
       } else {
         await addCalendarItem(newItem);
       }
