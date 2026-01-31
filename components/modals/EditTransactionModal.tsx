@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../../components/ui/Modal';
+import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import toast from 'react-hot-toast';
@@ -164,27 +164,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   if (!transaction) return null;
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
-      onClose={onClose}
-      ariaLabelledBy="edit-transaction-title"
-      disableBackdropClose={isSaving}
+      onClose={isSaving ? () => {} : onClose}
+      title="Edit Transaction"
     >
-      {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-brand-100 p-4 flex justify-between items-center shrink-0">
-        <h2 id="edit-transaction-title" className="text-lg font-bold text-brand-800">Edit Transaction</h2>
-        <button
-          onClick={onClose}
-          disabled={isSaving}
-          className="text-brand-400 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg p-1 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
       {/* Form */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="space-y-4 pb-4">
         <Input
           id="edit-amount"
           label="Amount"
@@ -295,7 +281,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
+      <div className="sticky bottom-0 bg-white border-t border-brand-100 pt-4 -mx-4 px-4 -mb-4 pb-4 space-y-2">
         <div className="flex gap-2">
           <button
             onClick={onClose}
@@ -367,7 +353,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           </div>
         )}
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Trash2, Plus } from 'lucide-react';
 import { BudgetBucket, SubBucket } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
 
@@ -93,21 +93,8 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-sm" ariaLabelledBy="bucket-form-modal-title">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 shrink-0">
-        <h2 id="bucket-form-modal-title" className="text-lg font-bold text-brand-800">
-          {editingBucket ? 'Edit Bucket' : 'New Bucket'}
-        </h2>
-        <button
-          onClick={onClose}
-          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full focus:outline-none focus:ring-2 focus:ring-brand-500"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+    <Drawer isOpen={isOpen} onClose={onClose} title={editingBucket ? 'Edit Bucket' : 'New Bucket'}>
+      <div className="space-y-4">
         <Input
           id="bucket-name"
           label="Bucket Name"
@@ -217,7 +204,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
           </Button>
         )}
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

@@ -11,7 +11,7 @@ import { ReceiptData } from '../../services/geminiService';
 import { Transaction, HouseholdMember } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
@@ -496,85 +496,83 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={handleClose}
-      maxWidth="max-w-md"
-      disableBackdropClose={view === 'processing'}
-      ariaLabelledBy="capture-modal-title"
-      backdropColor="bg-slate-900/90"
-      className="shadow-2xl"
-    >
-      {/* Header */}
-      <div className="flex flex-col border-b border-brand-100 shrink-0 bg-white z-10">
-          <div className="flex items-center justify-between px-6 py-4">
-              <h2 id="capture-modal-title" className="text-xl font-bold text-brand-800">
-                  {activeTab === 'transaction' && (
-                      view === 'menu' ? 'Add Transaction' :
-                      view === 'camera' ? 'Scan Receipt' :
-                      view === 'upload' ? 'Upload Image' :
-                      view === 'manual' ? 'Manual Entry' :
-                      view === 'processing' ? 'Processing' : 'Review'
-                  )}
-                  {activeTab === 'todo' && 'New Task'}
-                  {activeTab === 'shopping' && 'Add Item'}
-              </h2>
-              <Button
-                  variant="subtle"
-                  size="icon"
-                  className="rounded-full"
-                  onClick={handleClose}
-                  aria-label="Close modal"
-              >
-                  <X size={20} />
-              </Button>
-          </div>
-
-          {/* Tab Switcher - Only show if not in deep transaction flow */}
-          {view === 'menu' && (
-              <div className="px-6 pb-4">
-                  <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
-                      <button
-                          onClick={() => setActiveTab('transaction')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'transaction'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <Wallet size={16} />
-                          <span>Expense</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('todo')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'todo'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <CheckSquare size={16} />
-                          <span>To-Do</span>
-                      </button>
-                      <button
-                          onClick={() => setActiveTab('shopping')}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                              activeTab === 'shopping'
-                              ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                              : 'text-brand-400 hover:text-brand-600'
-                          }`}
-                      >
-                          <ShoppingBag size={16} />
-                          <span>Shop</span>
-                      </button>
-                  </div>
-              </div>
+  const headerContent = (
+    <div className="flex flex-col border-b border-brand-100 bg-white">
+      <div className="flex items-center justify-between px-6 py-4">
+        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800">
+          {activeTab === 'transaction' && (
+            view === 'menu' ? 'Add Transaction' :
+            view === 'camera' ? 'Scan Receipt' :
+            view === 'upload' ? 'Upload Image' :
+            view === 'manual' ? 'Manual Entry' :
+            view === 'processing' ? 'Processing' : 'Review'
           )}
+          {activeTab === 'todo' && 'New Task'}
+          {activeTab === 'shopping' && 'Add Item'}
+        </h2>
+        <Button
+          variant="subtle"
+          size="icon"
+          className="rounded-full"
+          onClick={handleClose}
+          aria-label="Close drawer"
+        >
+          <X size={20} />
+        </Button>
       </div>
 
+      {/* Tab Switcher - Only show if not in deep transaction flow */}
+      {view === 'menu' && (
+        <div className="px-6 pb-4">
+          <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
+            <button
+              onClick={() => setActiveTab('transaction')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'transaction'
+                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                : 'text-brand-400 hover:text-brand-600'
+              }`}
+            >
+              <Wallet size={16} />
+              <span>Expense</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('todo')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'todo'
+                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                : 'text-brand-400 hover:text-brand-600'
+              }`}
+            >
+              <CheckSquare size={16} />
+              <span>To-Do</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('shopping')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'shopping'
+                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
+                : 'text-brand-400 hover:text-brand-600'
+              }`}
+            >
+              <ShoppingBag size={16} />
+              <span>Shop</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Drawer
+      isOpen={isOpen}
+      onClose={handleClose}
+      header={headerContent}
+      noPadding={true}
+    >
       {/* Body Content */}
-      <div className="p-6 overflow-y-auto flex-1">
+      <div className="p-6">
 
         {/* 1. TRANSACTION TAB */}
         {activeTab === 'transaction' && (
@@ -783,7 +781,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           )}
 
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

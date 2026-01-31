@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
+import { Drawer } from '../ui/Drawer';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -95,28 +95,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   };
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
-      onClose={onClose}
-      disableBackdropClose={isSaving}
-      ariaLabelledBy="habit-form-title"
+      onClose={isSaving ? () => {} : onClose}
+      title={editingHabit ? 'Edit Habit' : 'New Habit'}
     >
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
-        <h2 id="habit-form-title" className="text-lg font-bold text-brand-800">
-          {editingHabit ? 'Edit Habit' : 'New Habit'}
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSaving}
-          className="p-2 text-brand-400 hover:bg-brand-50 rounded-full disabled:opacity-50"
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="space-y-4">
 
         {/* Title */}
         <div>
@@ -245,7 +229,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
       </div>
 
-      <div className="p-4 border-t border-brand-100 flex-shrink-0">
+      <div className="sticky bottom-0 bg-white border-t border-brand-100 pt-4 -mx-4 px-4 -mb-4 pb-4">
         <button
           type="button"
           onClick={handleSave}
@@ -255,7 +239,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
         </button>
       </div>
-    </Modal>
+    </Drawer>
   );
 };
 

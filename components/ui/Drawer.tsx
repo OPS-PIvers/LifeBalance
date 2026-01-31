@@ -8,16 +8,22 @@ interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
+  /** Optional fixed header content (won't scroll) */
+  header?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  /** Disable default content padding */
+  noPadding?: boolean;
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
   isOpen,
   onClose,
   title,
+  header,
   children,
-  className
+  className,
+  noPadding = false
 }) => {
   // Lock body scroll when open
   useEffect(() => {
@@ -88,7 +94,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
              {/* Header */}
              {title && (
-               <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
+               <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 shrink-0">
                  <h3 className="font-bold text-lg text-slate-800">{title}</h3>
                  <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer">
                    <X size={20} />
@@ -96,8 +102,15 @@ export const Drawer: React.FC<DrawerProps> = ({
                </div>
              )}
 
+             {/* Custom Header (fixed, won't scroll) */}
+             {header && (
+               <div className="shrink-0">
+                 {header}
+               </div>
+             )}
+
              {/* Content */}
-             <div className="p-4 overflow-y-auto pb-safe">
+             <div className={twMerge("overflow-y-auto flex-1 pb-safe", !noPadding && "p-4")}>
                {children}
              </div>
           </motion.div>
