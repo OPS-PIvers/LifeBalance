@@ -1,35 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useSyncExternalStore, useCallback } from 'react';
 
 export function useMediaQuery(query: string): boolean {
-  // Lazy initialization to avoid hydration mismatch and flash of wrong content
-  const [matches, setMatches] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia(query).matches;
-    }
+  const subscribe = useCallback(
+    (callback: () => void) => {
+      // Handle SSR or environments without matchMedia
+      if (typeof window === 'undefined' || !window.matchMedia) {
+         return () => {};
+      }
+
+      const mediaQuery = window.matchMedia(query);
+      // 'change' event is modern; 'addListener' is deprecated but legacy
+      // Using 'change' is fine for modern React apps
+      mediaQuery.addEventListener('change', callback);
+
+      return () => {
+        mediaQuery.removeEventListener('change', callback);
+      };
+    },
+    [query]
+  );
+
+  const getSnapshot = () => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia(query).matches;
+  };
+
+  const getServerSnapshot = () => {
     return false;
-  });
+  };
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const mediaQuery = window.matchMedia(query);
-
-    // Update state if it changed between init and effect
-    if (mediaQuery.matches !== matches) {
-      setMatches(mediaQuery.matches);
-    }
-
-    const handleChange = (event: MediaQueryListEvent) => {
-      setMatches(event.matches);
-    };
-
-    // Use the modern 'change' event which is more efficient than 'resize'
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, [query, matches]);
-
-  return matches;
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

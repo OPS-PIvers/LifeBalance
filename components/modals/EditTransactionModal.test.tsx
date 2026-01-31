@@ -33,6 +33,8 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
       { id: '1', name: 'Groceries', limit: 500, color: 'green', isVariable: true, isCore: true },
       { id: '2', name: 'Utilities', limit: 200, color: 'blue', isVariable: false, isCore: true },
     ],
+    stores: [],
+    accounts: [],
   }),
 }));
 

@@ -55,6 +55,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -74,6 +76,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -99,6 +103,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -118,6 +124,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -137,6 +145,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -154,6 +164,8 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
@@ -173,10 +185,12 @@ describe('CaptureTransactionReview', () => {
         onSubmit={mockOnSubmit}
         dynamicCategories={['Food', 'Transport']}
         buckets={mockBuckets}
+        stores={[]}
+        accounts={[]}
       />
     );
 
     // First transaction is Food, which has sub-buckets
-    expect(screen.getByText('Select Sub-Category...')).toBeInTheDocument();
+    expect(screen.getByText('Sub-Category...')).toBeInTheDocument();
   });
 });

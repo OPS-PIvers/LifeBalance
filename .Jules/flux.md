@@ -7,5 +7,3 @@
 ## 2026-02-19 - [Recurring Bills Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in `RecurringBillsModal` were tiny (`icon-sm`, ~22px) and placed side-by-side, creating a "Fat Finger" trap. **Reflow:** Replaced them with a single "More" button (`MoreVertical`) that triggers a touch-friendly Bottom Drawer with large, full-width Edit and Delete actions.
 
 ## 2026-02-20 - [Budget Bucket Transactions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in the expanded `BudgetBucketCard` transaction list were tiny (`icon-sm`, ~22px) and placed side-by-side (gap-1), creating a "Fat Finger" trap. **Reflow:** Replaced them with a single "More" button (`MoreVertical`) that triggers a touch-friendly Bottom Drawer with large, full-width Edit and Delete actions.
-
-## 2026-02-23 - [Habit Actions Trap] **Squeeze:** On mobile, the "More" dropdown in `HabitCard` was tiny and floated absolutely, making it hard to tap and visually disconnected from the thumb zone. **Reflow:** Replaced the dropdown with a responsive "Bottom Drawer" on mobile (<640px) using large, full-width buttons (44px+) for Edit, Log, and Delete actions.
