@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
-import { Transaction } from '../../types/schema';
+import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
@@ -88,6 +88,24 @@ const TransactionMasterList: React.FC = () => {
         return 0;
       });
   }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
+
+  // Derived State: Summary Statistics
+  const summary = useMemo(() => {
+    return filteredTransactions.reduce(
+      (acc, tx) => {
+        if (tx.category === INCOME_CATEGORY) {
+          acc.income += tx.amount;
+        } else {
+          acc.expense += tx.amount;
+        }
+        acc.count += 1;
+        return acc;
+      },
+      { income: 0, expense: 0, count: 0 }
+    );
+  }, [filteredTransactions]);
+
+  const net = summary.income - summary.expense;
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {
@@ -393,6 +411,36 @@ const TransactionMasterList: React.FC = () => {
             setSourceFilter(filters.sourceFilter);
           }}
         />
+      </div>
+
+      {/* Summary Widget */}
+      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
+            <p className="text-lg font-bold text-money-pos font-mono">
+              +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
+            <p className="text-lg font-bold text-money-neg font-mono">
+              -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
+            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+            </p>
+          </div>
+          <div className="bg-brand-50 p-3 rounded-xl">
+            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-brand-700 font-mono">
+              {summary.count}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Select All Bar */}
