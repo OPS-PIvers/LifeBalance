@@ -120,3 +120,10 @@
 **Vulnerability:** The `quickAddHabit` Cloud Function accepted a user-provided `habitId` and used it directly in a Firestore path (`households/${householdId}/habits/${habitId}`). Without validation, an attacker could supply an ID like `../otherCollection/doc` to access or overwrite documents outside the intended `habits` collection.
 **Learning:** Cloud Functions running with Admin SDK privileges bypass standard Firestore Security Rules. Therefore, strict input validation (especially for path segments) is critical at the application layer to prevent "confused deputy" attacks.
 **Prevention:** Implemented a strict `isValidFirestoreId` validator (allowlist: `a-zA-Z0-9_-`) for all user-supplied document IDs in Admin SDK paths.
+
+## 2026-03-10 - [DoS/Data Integrity] Unprotected Yearly Goals and Rewards
+**Vulnerability:** The `yearlyGoals` and `rewards` collections were falling through to the generic catch-all wildcard rule (`match /{subcollection}/{document}`), which allowed any household member to write arbitrary data without schema validation.
+**Learning:** Even "minor" or "gamification" features like rewards and goals need explicit security rules. If a collection is used in the app, it must have a matching rule block to prevent data corruption or storage abuse.
+**Prevention:**
+1. Added explicit `match` blocks for `yearlyGoals` and `rewards` with strict schema validation.
+2. Added these collections to the catch-all exclusion list to enforce the strict rules.

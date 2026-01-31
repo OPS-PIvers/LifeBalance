@@ -524,13 +524,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Tab Switcher - Only show if not in deep transaction flow */}
       {view === 'menu' && (
         <div className="px-6 pb-4">
-          <div className="flex p-1 bg-brand-50 rounded-xl border border-brand-100">
+          <div className="flex p-1 bg-slate-100/50 rounded-xl border border-slate-200/50">
             <button
               onClick={() => setActiveTab('transaction')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'transaction'
-                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                : 'text-brand-400 hover:text-brand-600'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <Wallet size={16} />
@@ -538,10 +538,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
             </button>
             <button
               onClick={() => setActiveTab('todo')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'todo'
-                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                : 'text-brand-400 hover:text-brand-600'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <CheckSquare size={16} />
@@ -549,10 +549,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
             </button>
             <button
               onClick={() => setActiveTab('shopping')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'shopping'
-                ? 'bg-white text-brand-800 shadow-sm ring-1 ring-black/5'
-                : 'text-brand-400 hover:text-brand-600'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <ShoppingBag size={16} />
@@ -598,10 +598,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                   </div>
 
                   {/* Magic Input */}
-                  <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
-                    <div className="bg-white rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles size={16} className="text-violet-600 animate-pulse" />
+                  <div className="bg-white/80 backdrop-blur-xl border border-violet-100 ring-1 ring-violet-500/10 rounded-2xl shadow-sm mb-6 p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="p-1.5 bg-violet-50 rounded-lg text-violet-600">
+                           <Sparkles size={14} className="animate-pulse" />
+                        </div>
                         <span className="text-xs font-bold text-violet-600 uppercase tracking-wider">Magic Action</span>
                       </div>
                       <form onSubmit={handleMagicSubmit} className="flex gap-2">
@@ -611,65 +612,64 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                           value={magicInput}
                           onChange={(e) => setMagicInput(e.target.value)}
                           placeholder="Spent $20 on Pizza..."
-                          className="flex-1 bg-violet-50 border-none outline-none text-brand-800 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
+                          className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 font-medium rounded-xl px-3 py-2.5 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 outline-none transition-all"
                           disabled={magicLoading}
                         />
                         <button
                           type="submit"
                           aria-label="Submit magic action"
                           disabled={!magicInput.trim() || magicLoading}
-                          className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                          className="p-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:opacity-50 transition-colors shadow-sm active:scale-95"
                         >
                           {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
                         </button>
                       </form>
-                    </div>
                   </div>
 
                   <button
                     onClick={startCamera}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600">
                       <Camera size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Scan Receipt</span>
-                      <span className="text-xs text-brand-400">Take a photo of your receipt</span>
+                      <span className="font-bold text-slate-900 block">Scan Receipt</span>
+                      <span className="text-xs text-slate-500">Take a photo of your receipt</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+                    <div className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xxs font-bold rounded-full">
                       REVIEW
                     </div>
                   </button>
 
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 text-purple-600">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-50 text-purple-600">
                       <Upload size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Upload Image</span>
-                      <span className="text-xs text-brand-400">Bank statement or receipt screenshot</span>
+                      <span className="font-bold text-slate-900 block">Upload Image</span>
+                      <span className="text-xs text-slate-500">Bank statement or receipt screenshot</span>
                     </div>
-                    <div className="px-2 py-1 bg-amber-100 text-amber-700 text-xxs font-bold rounded-full">
+                    <div className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xxs font-bold rounded-full">
                       REVIEW
                     </div>
                   </button>
 
                   <button
                     onClick={() => setView('manual')}
-                    className="w-full flex items-center gap-4 p-4 bg-brand-50 border-2 border-brand-100 rounded-2xl hover:border-brand-300 hover:bg-brand-100 transition-all active:scale-[0.98]"
+                    className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
                   >
-                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-money-bgPos text-money-pos">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600">
                       <Type size={24} />
                     </div>
                     <div className="text-left flex-1">
-                      <span className="font-bold text-brand-700 block">Manual Entry</span>
-                      <span className="text-xs text-brand-400">Enter transaction details directly</span>
+                      <span className="font-bold text-slate-900 block">Manual Entry</span>
+                      <span className="text-xs text-slate-500">Enter transaction details directly</span>
                     </div>
-                    <div className="px-2 py-1 bg-green-100 text-green-700 text-xxs font-bold rounded-full">
+                    <div className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xxs font-bold rounded-full">
                       INSTANT
                     </div>
                   </button>

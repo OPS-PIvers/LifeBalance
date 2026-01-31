@@ -1,6 +1,9 @@
 
 export type Role = 'admin' | 'member';
 
+export const INCOME_CATEGORY = 'Income';
+export const CURRENCY_FORMAT_OPTIONS: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+
 export interface NotificationPreferences {
   // Habit reminders
   habitReminders: {
