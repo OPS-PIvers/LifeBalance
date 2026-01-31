@@ -343,10 +343,11 @@ service cloud.firestore {
         allow read: if isMemberOf(householdId);
         allow create, update: if isMemberOf(householdId) &&
                               // Allow only expected fields to prevent storage abuse
+                              // Include legacy fields (notes, createdAt, updatedAt) for backward compatibility
                               request.resource.data.keys().hasOnly([
                                 'title', 'amount', 'date', 'type', 'isPaid',
                                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                                'createdBy'
+                                'createdBy', 'notes', 'createdAt', 'updatedAt'
                               ]) &&
                               isValidString(request.resource.data.title, 100) &&
                               isValidNumber(request.resource.data.amount) &&
@@ -359,7 +360,11 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('parentRecurringId', null), 50) &&
                               (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted)) &&
                               // Metadata
-                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
+                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
+                              // Legacy fields (optional, for backward compatibility)
+                              isValidOptionalString(request.resource.data.get('notes', null), 500) &&
+                              isValidOptionalString(request.resource.data.get('createdAt', null), 30) &&
+                              isValidOptionalString(request.resource.data.get('updatedAt', null), 30);
         allow delete: if isMemberOf(householdId);
       }
 
