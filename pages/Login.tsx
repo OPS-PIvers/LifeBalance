@@ -62,20 +62,20 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass ring-1 ring-black/5 p-8 space-y-6">
           {/* Logo/Brand */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <div className="inline-flex items-center justify-center w-24 h-24 mb-4 shadow-soft rounded-2xl bg-white p-2 ring-1 ring-black/5">
               <img
                 src="/lifebalance_icon.png"
                 alt="LifeBalance"
-                className="w-full h-full object-contain rounded-2xl"
+                className="w-full h-full object-contain rounded-xl"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-2">LifeBalance</h1>
+            <p className="text-slate-500 text-sm leading-relaxed">
               Manage your household finances, habits, and goals
             </p>
           </div>
@@ -83,10 +83,10 @@ const Login: React.FC = () => {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+            <div className="relative flex justify-center text-xs uppercase tracking-wider">
+              <span className="bg-white/50 backdrop-blur-xl px-3 text-slate-400 font-medium">Sign in to continue</span>
             </div>
           </div>
 
@@ -97,7 +97,7 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-brand-800"
+            className="w-full text-slate-700 hover:text-slate-900 shadow-sm border-slate-200/60"
             leftIcon={
               !loading && (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -125,14 +125,14 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
+          <p className="text-center text-xs text-slate-400 pt-4 leading-relaxed">
             By signing in, you agree to manage your household responsibly
           </p>
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
+        <div className="mt-8 text-center">
+          <p className="text-sm font-medium text-slate-500 tracking-tight">
             Track finances • Build habits • Earn rewards
           </p>
         </div>
