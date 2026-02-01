@@ -35,9 +35,9 @@ vi.mock('lucide-react', () => {
     'Truck', 'Tv', 'Umbrella', 'Wine', 'Wrench'
   ];
 
-  const mockIcons: Record<string, any> = {};
+  const mockIcons: Record<string, React.FC<React.SVGProps<SVGSVGElement>>> = {};
   icons.forEach(icon => {
-    mockIcons[icon] = (props: any) => <div data-testid={`${icon}-icon`} {...props} />;
+    mockIcons[icon] = (props: React.SVGProps<SVGSVGElement>) => <svg data-testid={`${icon}-icon`} {...props} />;
   });
 
   return mockIcons;
@@ -84,7 +84,7 @@ describe('ShoppingSettingsModal', () => {
       updateQuickStockList: mockUpdateQuickStockList,
       deleteQuickStockList: mockDeleteQuickStockList,
       addGroceryCatalogItem: mockAddGroceryCatalogItem,
-    } as any);
+    } as unknown as ReturnType<typeof useHousehold>);
   });
 
   it('renders stores tab by default', () => {

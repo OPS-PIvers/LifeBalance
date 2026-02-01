@@ -300,7 +300,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     >
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as any)}
+        onValueChange={(v) => setActiveTab(v as 'stores' | 'categories' | 'templates')}
         className="flex flex-col h-full"
       >
         <div className="px-4 py-2 border-b border-gray-100 shrink-0">
