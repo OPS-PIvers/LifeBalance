@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, expect, beforeEach, Mock } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
 import { Habit } from '../../types/schema';
 
@@ -30,7 +30,7 @@ vi.mock('../modals/HabitSubmissionLogModal', () => ({
 
 // Mock Drawer
 vi.mock('../ui/Drawer', () => ({
-  Drawer: ({ isOpen, children, title }: any) => isOpen ? (
+  Drawer: ({ isOpen, children, title }: { isOpen: boolean; children: React.ReactNode; title: string }) => isOpen ? (
     <div data-testid="mobile-drawer">
       <h1>{title}</h1>
       {children}
@@ -52,7 +52,6 @@ vi.mock('lucide-react', () => ({
 const mockHabit: Habit = {
   id: 'h1',
   title: 'Test Habit',
-  description: '',
   category: 'Health',
   type: 'positive',
   period: 'daily',
@@ -61,11 +60,9 @@ const mockHabit: Habit = {
   streakDays: 0,
   basePoints: 10,
   completedDates: [],
-  createdAt: '2023-01-01',
   lastUpdated: '2023-01-01',
-  scoringType: 'completion',
+  scoringType: 'threshold',
   weatherSensitive: false,
-  relatedHabitIds: [],
   totalCount: 0
 };
 
