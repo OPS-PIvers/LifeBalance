@@ -29,3 +29,7 @@
 ## 2025-03-02 - Standardizing Points Breakdown Buttons
 **Drift:** `PointsBreakdownModal` contained hardcoded increment/decrement buttons using raw `<button>` tags with manual borders and padding, inconsistent with the system's button styles.
 **Fix:** Refactored the increment/decrement controls in `PointsBreakdownModal.tsx` to use the standardized `<Button />` component with `variant="secondary"` and `size="icon-sm"`.
+
+## 2025-05-23 - Standardizing Shopping Settings Modal
+**Drift:** `ShoppingSettingsModal` used custom underlined tabs and raw HTML `<button>`/`<input>` elements, creating inconsistent styling and maintenance overhead compared to the standard `Tabs`, `Button`, and `Input` components.
+**Fix:** Refactored `ShoppingSettingsModal` to use the standardized `Tabs` (segmented style), `Button`, and `Input` components, unifying the UI pattern with `ListsPage` and reducing "snowflake" code.
