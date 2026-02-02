@@ -14,8 +14,8 @@ export const SmartTransactionShortcuts: React.FC<SmartTransactionShortcutsProps>
 }) => {
   const shortcuts = useMemo(() => {
     // 1. Filter manual transactions
-    // We only want to shortcut items the user manually types
-    const manualTx = transactions.filter(t => t.source === 'manual');
+    // We only want to shortcut items the user manually types that are not recurring
+    const manualTx = transactions.filter(t => t.source === 'manual' && !t.isRecurring);
 
     // 2. Count frequencies
     const counts = new Map<string, { count: number; tx: Transaction }>();
@@ -45,19 +45,24 @@ export const SmartTransactionShortcuts: React.FC<SmartTransactionShortcutsProps>
   const handleShortcutClick = async (tx: Transaction) => {
     const toastId = toast.loading('Adding transaction...');
     try {
+        // Destructure to remove ID and dynamic fields
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, ...txData } = tx;
+
         // Clone and reset dynamic fields
         const newTx = {
-            ...tx,
+            ...txData,
             id: 'temp-id', // Placeholder to satisfy TS, ignored by addTransaction
             date: new Date().toISOString().split('T')[0], // Today
             status: 'verified', // Assume verified if reusing a shortcut
             isRecurring: false,
             source: 'manual',
+            autoCategorized: false, // Explicitly false for manual shortcuts
             payPeriodId: undefined, // Let context handle
             relatedHabitIds: [],
             // Clear specific fields
             notes: undefined,
-        } as unknown as Transaction;
+        } as Transaction;
 
         await onAddTransaction(newTx);
 
@@ -82,10 +87,11 @@ export const SmartTransactionShortcuts: React.FC<SmartTransactionShortcutsProps>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
-        {shortcuts.map((tx, index) => (
+        {shortcuts.map((tx) => (
           <button
-            key={`${tx.merchant}-${index}`}
+            key={`${tx.merchant}-${tx.category}-${tx.amount}`}
             onClick={() => handleShortcutClick(tx)}
+            aria-label={`Add ${tx.merchant} for $${tx.amount.toFixed(2)}`}
             className="flex items-center gap-3 px-3 py-2 bg-white border border-brand-100 rounded-xl shadow-sm hover:shadow-md hover:border-brand-200 active:scale-95 transition-all whitespace-nowrap group"
           >
             <div className="flex flex-col items-start">
