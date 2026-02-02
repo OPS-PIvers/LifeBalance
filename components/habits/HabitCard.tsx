@@ -66,6 +66,21 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleEdit = () => {
+    setIsEditModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const handleViewLog = () => {
+    setIsLogModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const handleDelete = () => {
+    deleteHabit(habit.id);
+    setIsMenuOpen(false);
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
     const menuItems = 3; // Edit, View Log, Delete
     
@@ -87,14 +102,11 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         e.preventDefault();
         // Trigger the focused menu item
         if (focusedMenuIndex === 0) {
-          setIsEditModalOpen(true);
-          setIsMenuOpen(false);
+          handleEdit();
         } else if (focusedMenuIndex === 1) {
-          setIsLogModalOpen(true);
-          setIsMenuOpen(false);
+          handleViewLog();
         } else if (focusedMenuIndex === 2) {
-          deleteHabit(habit.id);
-          setIsMenuOpen(false);
+          handleDelete();
         }
         break;
     }
@@ -250,8 +262,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsEditModalOpen(true);
-                  setIsMenuOpen(false);
+                  handleEdit();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
@@ -265,8 +276,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsLogModalOpen(true);
-                  setIsMenuOpen(false);
+                  handleViewLog();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
@@ -280,8 +290,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteHabit(habit.id);
-                  setIsMenuOpen(false);
+                  handleDelete();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
@@ -308,10 +317,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             variant="ghost"
             className="w-full justify-start text-lg py-4"
             leftIcon={<Edit2 className="text-brand-500" />}
-            onClick={() => {
-              setIsEditModalOpen(true);
-              setIsMenuOpen(false);
-            }}
+            onClick={handleEdit}
           >
             Edit Habit
           </Button>
@@ -319,10 +325,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             variant="ghost"
             className="w-full justify-start text-lg py-4"
             leftIcon={<Calendar className="text-brand-500" />}
-            onClick={() => {
-              setIsLogModalOpen(true);
-              setIsMenuOpen(false);
-            }}
+            onClick={handleViewLog}
           >
             View History Log
           </Button>
@@ -331,10 +334,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             variant="ghost-destructive"
             className="w-full justify-start text-lg py-4"
             leftIcon={<Trash2 />}
-            onClick={() => {
-              deleteHabit(habit.id);
-              setIsMenuOpen(false);
-            }}
+            onClick={handleDelete}
           >
             Delete Habit
           </Button>

@@ -66,24 +66,26 @@ const mockHabit: Habit = {
   totalCount: 0
 };
 
+const setupMatchMedia = (isDesktop: boolean) => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation(query => ({
+      matches: query === '(min-width: 640px)' ? isDesktop : false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(), // Deprecated
+      removeListener: vi.fn(), // Deprecated
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+};
+
 describe('HabitCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Default to Desktop
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: vi.fn().mockImplementation(query => ({
-        matches: query === '(min-width: 640px)',
-        media: query,
-        onchange: null,
-        addListener: vi.fn(), // Deprecated
-        removeListener: vi.fn(), // Deprecated
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
+    setupMatchMedia(true); // Default to Desktop
   });
 
   it('renders dropdown menu on desktop', async () => {
@@ -101,20 +103,7 @@ describe('HabitCard', () => {
   });
 
   it('renders drawer menu on mobile', async () => {
-    // Mock Mobile
-    Object.defineProperty(window, 'matchMedia', {
-        writable: true,
-        value: vi.fn().mockImplementation(query => ({
-          matches: false, // Desktop query returns false
-          media: query,
-          onchange: null,
-          addListener: vi.fn(),
-          removeListener: vi.fn(),
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-          dispatchEvent: vi.fn(),
-        })),
-    });
+    setupMatchMedia(false); // Mock Mobile
 
     const user = userEvent.setup();
     render(<HabitCard habit={mockHabit} />);
