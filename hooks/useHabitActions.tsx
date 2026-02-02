@@ -127,11 +127,11 @@ export const useHabitActions = (
     }
   }, [householdId]);
 
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
-    if (!householdId || !currentUser || !householdSettings) return;
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', options?: { suppressToast?: boolean }): Promise<number> => {
+    if (!householdId || !currentUser || !householdSettings) return 0;
 
     const habit = habits.find(h => h.id === id);
-    if (!habit) return;
+    if (!habit) return 0;
 
     // LAZY RESET CHECK
     const isStale = isHabitStale(habit);
@@ -145,8 +145,10 @@ export const useHabitActions = (
           lastUpdated: serverTimestamp(),
         });
 
-        toast("Habit reset to 0 for today. Previous points preserved.", { icon: '📅' });
-        return;
+        if (!options?.suppressToast) {
+          toast("Habit reset to 0 for today. Previous points preserved.", { icon: '📅' });
+        }
+        return 0;
       }
 
       // If toggling up, proceed as if count was 0.
@@ -160,7 +162,7 @@ export const useHabitActions = (
 
     // Use extracted business logic
     const result = processToggleHabit(effectiveHabit, direction);
-    if (!result) return;
+    if (!result) return 0;
 
     // Update habit in Firestore
     await updateDoc(doc(db, `households/${householdId}/habits`, id), {
@@ -179,24 +181,28 @@ export const useHabitActions = (
         'points.total': increment(result.pointsChange),
       });
 
-      // Toast feedback
-      const sign = result.pointsChange > 0 ? '+' : '';
-      toast(
-        <div className="flex items-center gap-2">
-          <span className="font-bold">{sign}{result.pointsChange} pts</span>
-          <span className="text-sm opacity-80">({result.multiplier}x)</span>
-        </div>,
-        {
-          duration: 1500,
-          icon: result.pointsChange > 0 ? '🌟' : '📉',
-          style: {
-            background: result.pointsChange > 0 ? '#ECFDF5' : '#FFF1F2',
-            color: result.pointsChange > 0 ? '#065F46' : '#9F1239',
-            border: result.pointsChange > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
-          },
-        }
-      );
+      if (!options?.suppressToast) {
+        // Toast feedback
+        const sign = result.pointsChange > 0 ? '+' : '';
+        toast(
+          <div className="flex items-center gap-2">
+            <span className="font-bold">{sign}{result.pointsChange} pts</span>
+            <span className="text-sm opacity-80">({result.multiplier}x)</span>
+          </div>,
+          {
+            duration: 1500,
+            icon: result.pointsChange > 0 ? '🌟' : '📉',
+            style: {
+              background: result.pointsChange > 0 ? '#ECFDF5' : '#FFF1F2',
+              color: result.pointsChange > 0 ? '#065F46' : '#9F1239',
+              border: result.pointsChange > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
+            },
+          }
+        );
+      }
     }
+
+    return result.pointsChange;
   }, [householdId, currentUser, householdSettings, habits]);
 
   const resetHabit = useCallback(async (id: string) => {

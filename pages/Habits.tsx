@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Habit } from '../types/schema';
 import HabitCategoryList from '../components/habits/HabitCategoryList';
-import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar, Zap, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
@@ -19,10 +19,11 @@ import { format } from 'date-fns';
 
 const Habits: React.FC = () => {
   const navigate = useNavigate();
-  const { habits } = useHousehold();
+  const { habits, toggleHabit } = useHousehold();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
+  const [boostingCategory, setBoostingCategory] = useState<string | null>(null);
 
   // Check if there are habits that need migration
   const habitsNeedingMigration = habits.filter(
@@ -77,6 +78,45 @@ const Habits: React.FC = () => {
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Failed to export habits');
+    }
+  };
+
+  const handleBatchBoost = async (category: string, habitsToBoost: Habit[]) => {
+    if (boostingCategory) return;
+
+    // Filter actionable habits (incomplete)
+    const incomplete = habitsToBoost.filter(h => h.count < h.targetCount);
+    if (incomplete.length === 0) return;
+
+    setBoostingCategory(category);
+    try {
+      // Execute in parallel
+      const results = await Promise.allSettled(
+        incomplete.map(h => toggleHabit(h.id, 'up', { suppressToast: true }))
+      );
+
+      // Aggregate results
+      let successCount = 0;
+      let totalPoints = 0;
+
+      results.forEach(res => {
+        if (res.status === 'fulfilled') {
+          successCount++;
+          totalPoints += res.value;
+        }
+      });
+
+      if (successCount > 0) {
+        toast.success(
+          `Boosted ${successCount} habits!${totalPoints > 0 ? ` (+${totalPoints} pts)` : ''}`,
+          { icon: '⚡' }
+        );
+      }
+    } catch (error) {
+      console.error('Batch boost failed:', error);
+      toast.error('Failed to boost habits');
+    } finally {
+      setBoostingCategory(null);
     }
   };
 
@@ -185,14 +225,36 @@ const Habits: React.FC = () => {
               </div>
             )}
 
-            {categories.map((category) => (
-              <div key={category}>
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-2">
-                  {category}
-                </h2>
-                <HabitCategoryList category={category} habits={groupedHabits[category]} />
-              </div>
-            ))}
+            {categories.map((category) => {
+              const categoryHabits = groupedHabits[category];
+              const incompleteCount = categoryHabits.filter(h => h.count < h.targetCount).length;
+
+              return (
+                <div key={category}>
+                  <div className="flex items-center justify-between mb-3 ml-2 pr-2">
+                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      {category}
+                    </h2>
+                    {incompleteCount > 1 && (
+                      <button
+                        onClick={() => handleBatchBoost(category, categoryHabits)}
+                        disabled={!!boostingCategory}
+                        className="text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                        title="Boost all incomplete habits in this category"
+                      >
+                        {boostingCategory === category ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Zap size={12} className="fill-brand-600" />
+                        )}
+                        Boost All
+                      </button>
+                    )}
+                  </div>
+                  <HabitCategoryList category={category} habits={categoryHabits} />
+                </div>
+              );
+            })}
           </TabsContent>
           <TabsContent value="history">
             <HabitHistoryCalendar />

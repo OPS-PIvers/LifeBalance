@@ -69,6 +69,12 @@ const SEED_HABITS: Habit[] = [
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
   },
+  {
+    id: 'h3', title: 'Eat a Fruit', category: 'Health', type: 'positive',
+    basePoints: 5, scoringType: 'incremental', period: 'daily', targetCount: 3,
+    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
+  },
 ];
 
 const SEED_MEMBERS: HouseholdMember[] = [
@@ -206,13 +212,16 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habits reordered');
   }, []);
 
-  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
+  const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down', options?: { suppressToast?: boolean }): Promise<number> => {
     setHabits(prev => prev.map(h => {
       if (h.id !== id) return h;
       const change = direction === 'up' ? 1 : -1;
       return { ...h, count: Math.max(0, h.count + change), totalCount: Math.max(0, h.totalCount + change) };
     }));
-    toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+    if (!options?.suppressToast) {
+      toast.success(`Mock: Habit ${direction === 'up' ? 'incremented' : 'decremented'}`);
+    }
+    return direction === 'up' ? 10 : -10; // Mock point change
   }, []);
 
   // Calendar operations

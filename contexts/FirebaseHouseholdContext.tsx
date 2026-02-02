@@ -150,7 +150,7 @@ export interface HouseholdContextType {
   updateHabit: (habit: Habit) => Promise<void>;
   deleteHabit: (id: string) => Promise<void>;
   reorderHabits: (updates: { id: string; order: number; category?: string }[]) => Promise<void>;
-  toggleHabit: (id: string, direction: 'up' | 'down') => Promise<void>;
+  toggleHabit: (id: string, direction: 'up' | 'down', options?: { suppressToast?: boolean }) => Promise<number>;
   resetHabit: (id: string) => Promise<void>;
 
   // Habit Submission Actions
