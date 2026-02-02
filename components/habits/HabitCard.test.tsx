@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import HabitCard from './HabitCard';
 import { Habit } from '../../types/schema';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import React from 'react';
 
 // Mock dependencies
@@ -20,7 +21,7 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
 
 // Mock Drawer to render children directly (no portal)
 vi.mock('../ui/Drawer', () => ({
-  Drawer: ({ isOpen, children, title }: any) => (
+  Drawer: ({ isOpen, children, title }: { isOpen: boolean; children: React.ReactNode; title?: string }) => (
     isOpen ? (
       <div data-testid="mock-drawer">
         {title && <h3>{title}</h3>}
@@ -39,16 +40,14 @@ vi.mock('../modals/HabitSubmissionLogModal', () => ({
 }));
 
 // Mock useMediaQuery
-const mockUseMediaQuery = vi.fn();
 vi.mock('../../hooks/useMediaQuery', () => ({
-  useMediaQuery: (query: string) => mockUseMediaQuery(query),
+  useMediaQuery: vi.fn(),
 }));
 
 // Mock Data
 const mockHabit: Habit = {
   id: 'habit-1',
   title: 'Test Habit',
-  description: 'Test Description',
   category: 'Health',
   type: 'positive',
   period: 'daily',
@@ -57,7 +56,7 @@ const mockHabit: Habit = {
   totalCount: 10,
   streakDays: 5,
   lastUpdated: '2023-01-01',
-  scoringType: 'default',
+  scoringType: 'incremental',
   basePoints: 10,
   completedDates: [],
   weatherSensitive: false,
@@ -69,7 +68,7 @@ describe('HabitCard Responsive Actions', () => {
   });
 
   it('renders Dropdown on Desktop', () => {
-    (mockUseMediaQuery as Mock).mockReturnValue(true); // isDesktop = true
+    (useMediaQuery as Mock).mockReturnValue(true); // isDesktop = true
 
     render(<HabitCard habit={mockHabit} />);
 
@@ -92,7 +91,7 @@ describe('HabitCard Responsive Actions', () => {
   });
 
   it('renders Drawer on Mobile', () => {
-    (mockUseMediaQuery as Mock).mockReturnValue(false); // isDesktop = false
+    (useMediaQuery as Mock).mockReturnValue(false); // isDesktop = false
 
     render(<HabitCard habit={mockHabit} />);
 
@@ -116,7 +115,7 @@ describe('HabitCard Responsive Actions', () => {
   });
 
   it('triggers delete action from Mobile Drawer', () => {
-    (mockUseMediaQuery as Mock).mockReturnValue(false); // Mobile
+    (useMediaQuery as Mock).mockReturnValue(false); // Mobile
 
     render(<HabitCard habit={mockHabit} />);
 
