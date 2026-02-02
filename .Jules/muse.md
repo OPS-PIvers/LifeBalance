@@ -28,3 +28,7 @@
 - **Shopping List:** Applied "Glassmorphism" to the Quick Add area. Refined typography (`tracking-tight`, `text-slate-900`) and replaced item borders with `ring-1 ring-black/5`.
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
+
+## 2025-05-25 - Meal Planning Visual Upgrade
+**Critique:** "Developer UI" in Meal Planning. Flat white cards, heavy `border-gray-200`, standard `shadow-sm`, and generic inputs. Typography lacked sophistication (default weight/tracking).
+**Polish:** Implemented full Glassmorphism suite (`bg-white/80 backdrop-blur-xl`, `shadow-glass`, `ring-1 ring-black/5`). Updated typography to `slate-900` tracking-tight headings. Elevated inputs to borderless slate style.
