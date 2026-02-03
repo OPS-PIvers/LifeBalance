@@ -8,6 +8,7 @@ import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
 import Input from '../components/ui/Input';
+import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -27,6 +28,7 @@ const ToDosPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isBatchRescheduleOpen, setIsBatchRescheduleOpen] = useState(false);
 
   // Clear selection when mode is toggled off
   useEffect(() => {
@@ -203,6 +205,19 @@ const ToDosPage: React.FC = () => {
       } catch (error) {
           console.error('Failed to restore task:', error);
           toast.error('Failed to restore task');
+      }
+  };
+
+  const handleMoveToTomorrow = async (todo: ToDo) => {
+      try {
+          const tomorrow = addDays(startOfToday(), 1);
+          await updateToDo(todo.id, {
+              completeByDate: format(tomorrow, 'yyyy-MM-dd')
+          });
+          toast.success('Task moved to tomorrow');
+      } catch (error) {
+          console.error('Failed to move task:', error);
+          toast.error('Failed to move task');
       }
   };
 
@@ -383,6 +398,32 @@ const ToDosPage: React.FC = () => {
     }
   };
 
+  const handleBatchReschedule = async (date: string) => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id =>
+        updateToDo(id, { completeByDate: date })
+      );
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Rescheduled ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Rescheduled ${selectedIds.size} tasks`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch reschedule failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
   return (
     <div className="pb-32 pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
@@ -487,6 +528,7 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -503,6 +545,7 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -519,6 +562,7 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -602,6 +646,16 @@ const ToDosPage: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setIsBatchRescheduleOpen(true)}
+              disabled={isBatchProcessing}
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+              aria-label="Reschedule selected items"
+            >
+              <Calendar size={18} />
+              <span className="text-xxs font-medium">Reschedule</span>
+            </button>
+
+            <button
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
               className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-lg transition-colors disabled:opacity-50"
@@ -613,6 +667,14 @@ const ToDosPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Batch Reschedule Modal */}
+      <BatchRescheduleModal
+        isOpen={isBatchRescheduleOpen}
+        onClose={() => setIsBatchRescheduleOpen(false)}
+        onConfirm={handleBatchReschedule}
+        count={selectedIds.size}
+      />
 
       {/* Add/Edit Modal */}
       <Modal
@@ -757,11 +819,12 @@ const Section: React.FC<{
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
+  onMoveToTomorrow: (todo: ToDo) => void;
   members: HouseholdMember[];
   isSelectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, members, isSelectionMode, selectedIds, onToggleSelection }) => {
+}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, members, isSelectionMode, selectedIds, onToggleSelection }) => {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -876,6 +939,14 @@ const Section: React.FC<{
                  {/* Actions */}
                  {!isSelectionMode && (
                    <div className="flex items-center gap-1 pl-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
+                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                        aria-label="Move to Tomorrow"
+                        title="Move to Tomorrow"
+                      >
+                        <Calendar size={16} />
+                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
                         className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
