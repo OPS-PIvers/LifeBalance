@@ -29,7 +29,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const bgColor = useTransform(
     x,
     [-100, -50, 0, 50, 100],
-    ['#fee2e2', '#fee2e2', '#ffffff', '#d1fae5', '#d1fae5']
+    ['#fef2f2', '#fef2f2', '#ffffff', '#ecfdf5', '#ecfdf5'] // Tailwind red-50 / emerald-50
   );
 
   // Icon opacity/scale based on drag position
@@ -92,15 +92,15 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onDragEnd={handleDragEnd}
         style={{ x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm ring-1 ring-black/5 border-transparent",
-          item.isPurchased && "opacity-60 bg-slate-50"
+          "relative z-10 flex items-center gap-3 p-3.5 bg-white/90 backdrop-blur-sm rounded-xl shadow-sm ring-1 ring-black/5 transition-all hover:shadow-soft",
+          item.isPurchased && "opacity-60 bg-slate-50/50 grayscale"
         )}
       >
         {/* Drag Handle - Only render if reorderable */}
         {isReorderable && (
             <div
                 onPointerDown={(e) => dragControls.start(e)}
-                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+                className="touch-none cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
                 aria-label="Drag to reorder"
             >
                 <GripVertical size={20} />
@@ -111,10 +111,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         <button
             onClick={() => onCheck(item)}
             className={clsx(
-                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                "w-6 h-6 rounded-full border flex items-center justify-center transition-all shrink-0",
                 item.isPurchased
-                    ? "bg-green-500 border-green-500 text-white"
-                    : "border-gray-300 hover:border-brand-500 text-transparent"
+                    ? "bg-emerald-500 border-emerald-500 text-white shadow-sm scale-90"
+                    : "bg-white border-slate-300 hover:border-emerald-500 hover:ring-2 hover:ring-emerald-100 text-transparent"
             )}
         >
             <Check size={14} strokeWidth={3} />
@@ -123,22 +123,22 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Content */}
         <div className="flex-1 min-w-0">
             <div className={clsx(
-                "font-medium truncate transition-all",
-                item.isPurchased ? "text-slate-500 line-through decoration-slate-400" : "text-slate-900"
+                "font-medium truncate transition-all text-base tracking-tight",
+                item.isPurchased ? "text-slate-400 line-through decoration-slate-300" : "text-slate-900"
             )}>
                 {item.name}
             </div>
 
             {/* Metadata Chips */}
-            <div className="flex flex-wrap items-center gap-2 mt-1">
+            <div className="flex flex-wrap items-center gap-2 mt-1.5">
                  {item.quantity && (
-                    <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full ring-1 ring-slate-200">
                         {item.quantity}
                     </span>
                  )}
                  <div className="relative group">
                     <span className={clsx(
-                        "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                        "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                         // Focus ring logic for accessibility (when hidden select is focused)
                         "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                         item.store && stores
@@ -148,10 +148,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                                 const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                 return `${color.bg} ${color.text} ${color.border}`;
                             })()
-                            : "bg-gray-100 text-gray-500 border-gray-200"
+                            : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100"
                     )}>
                         <Store size={10} />
-                        {item.store || "No store selected"}
+                        {item.store || "No store"}
                     </span>
                     {stores && onUpdate && (
                         <select
@@ -176,7 +176,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                  {quickStockLists && onQuickListChange && (
                    <div className="relative group">
                       <span className={clsx(
-                          "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                          "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                           "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                           activeQuickList
                               ? (() => {
@@ -184,10 +184,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                                   const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                   return `${color.bg} ${color.text} ${color.border}`;
                               })()
-                              : "bg-gray-50 text-gray-400 border-gray-200 border-dashed"
+                              : "bg-white text-slate-300 border-slate-200 border-dashed hover:text-brand-500 hover:border-brand-300"
                       )}>
                           <ActiveIcon size={10} />
-                          {activeQuickList ? activeQuickList.name : "Add to Quick List"}
+                          {activeQuickList ? activeQuickList.name : "List"}
                       </span>
                       <select
                           value={activeQuickList ? activeQuickList.id : ""}

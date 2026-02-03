@@ -411,24 +411,24 @@ const MealPlanTab: React.FC = () => {
   return (
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
-      <div className="bg-white rounded-2xl shadow-sm p-4 flex flex-col items-center gap-4">
+      <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass ring-1 ring-black/5 p-6 flex flex-col items-center gap-4">
         <div className="flex items-center justify-between w-full">
             <button
                 onClick={() => setSelectedDate(d => addDays(d, -7))}
-                className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
                 aria-label="Previous week"
             >
                 <ChevronLeft className="w-6 h-6" />
             </button>
             <div className="text-center">
-                <h2 className="text-xl font-bold text-brand-900">
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-900">
                     {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
                 </h2>
-                <div className="text-xs text-gray-500 font-medium uppercase tracking-wider mt-1">Weekly Plan</div>
+                <div className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Weekly Plan</div>
             </div>
             <button
                 onClick={() => setSelectedDate(d => addDays(d, 7))}
-                className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
                 aria-label="Next week"
             >
                 <ChevronRight className="w-6 h-6" />
@@ -438,14 +438,14 @@ const MealPlanTab: React.FC = () => {
         <div className="flex gap-3 w-full sm:w-auto">
             <button
                 onClick={handleCopyLastWeek}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white/50 border border-slate-200/50 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-white hover:border-slate-300 transition-all shadow-sm"
             >
                 <Copy className="w-3.5 h-3.5" />
                 Copy Last Week
             </button>
             <button
                 onClick={handleShopForWeek}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-brand-100 text-brand-700 border border-brand-200 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-brand-200 transition-all shadow-sm"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-brand-50 text-brand-700 ring-1 ring-brand-200/50 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-brand-100 transition-all shadow-sm"
             >
                 <ShoppingCart className="w-3.5 h-3.5" />
                 Shop This Week
@@ -463,14 +463,16 @@ const MealPlanTab: React.FC = () => {
             return (
                 <div
                     key={dateStr}
-                    className={`bg-white rounded-2xl shadow-sm p-5 ring-1 ring-black/5 ${isToday ? 'ring-brand-200 bg-brand-50/30' : ''}`}
+                    className={`bg-white/60 backdrop-blur-md rounded-2xl p-5 ring-1 ring-black/5 transition-all ${
+                        isToday ? 'ring-brand-200 bg-brand-50/40 shadow-soft' : 'shadow-sm hover:shadow-soft'
+                    }`}
                 >
                     <div className="flex flex-col sm:flex-row gap-4">
                         {/* Date Column */}
                         <div className="min-w-[80px] shrink-0 flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
                             <div>
-                                <div className="text-2xl font-bold text-brand-900 leading-none">{format(day, 'd')}</div>
-                                <div className="text-sm font-medium text-gray-500 uppercase tracking-wide mt-1">{format(day, 'EEEE')}</div>
+                                <div className="text-2xl font-bold text-slate-900 leading-none tracking-tight">{format(day, 'd')}</div>
+                                <div className="text-sm font-medium text-slate-500 uppercase tracking-wide mt-1">{format(day, 'EEEE')}</div>
                             </div>
                             <button
                                 onClick={() => handleAddMealToDate(day)}
@@ -487,17 +489,17 @@ const MealPlanTab: React.FC = () => {
                                 const mealName = planItem.mealName || linkedMeal?.name;
 
                                 return (
-                                    <div key={planItem.id} className="group bg-white border border-gray-100 rounded-xl p-3 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-3">
+                                    <div key={planItem.id} className="group bg-white/80 ring-1 ring-black/5 rounded-xl p-3 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-3 backdrop-blur-sm">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 ring-1 ring-brand-100">
                                                     {planItem.type || 'dinner'}
                                                 </span>
                                             </div>
-                                            <div className="font-semibold text-gray-900 truncate pr-2">{mealName}</div>
+                                            <div className="font-semibold text-slate-900 truncate pr-2 tracking-tight">{mealName}</div>
 
                                             {linkedMeal?.description && (
-                                                <div className="text-xs text-gray-500 mt-1 line-clamp-1">{linkedMeal.description}</div>
+                                                <div className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
                                             )}
 
                                             {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (

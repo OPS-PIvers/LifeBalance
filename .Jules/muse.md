@@ -28,3 +28,11 @@
 - **Shopping List:** Applied "Glassmorphism" to the Quick Add area. Refined typography (`tracking-tight`, `text-slate-900`) and replaced item borders with `ring-1 ring-black/5`.
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
+
+## 2025-05-25 - Meals & Shopping Polish
+**Critique:** "Developer UI" detected in Meals and Shopping tabs. Headers were standard white with flat shadows. Meal cards lacked definition. Shopping list input was boxy and helper buttons added visual noise.
+**Polish:**
+- **Surface:** Applied `bg-white/80 backdrop-blur-xl` and `ring-1 ring-black/5` to headers and containers.
+- **Typography:** Upgraded headings to `slate-900` with `tracking-tight` and body text to `slate-500`.
+- **List Items:** Elevated shopping items with `bg-white/90` and `hover:shadow-soft`.
+- **Details:** Converted chips to pill-shaped elements and softened input borders.
