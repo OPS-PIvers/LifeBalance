@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
+import { Search, Filter, X, Trash2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
@@ -360,41 +360,41 @@ const TransactionMasterList: React.FC = () => {
           </select>
 
           {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
-            <button
+            <Button
+              variant="subtle"
+              size="sm"
               onClick={clearFilters}
-              className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"
+              className="whitespace-nowrap"
             >
               Clear
-            </button>
+            </Button>
           )}
 
           {/* Select Mode Toggle */}
-          <button
+          <Button
+            variant={isSelectionMode ? 'primary' : 'subtle'}
+            size="sm"
             onClick={() => setIsSelectionMode(!isSelectionMode)}
-            className={`ml-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-              isSelectionMode
-                ? 'bg-brand-600 text-white hover:bg-brand-700'
-                : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
-            }`}
+            className="ml-auto whitespace-nowrap"
+            leftIcon={<Layers size={16} />}
             title="Toggle selection mode"
           >
-            <Layers size={16} />
             <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>
-          </button>
+          </Button>
 
           {/* Export Button */}
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={handleExport}
             disabled={filteredTransactions.length === 0 || isSelectionMode}
-            className={`px-3 py-2 bg-brand-800 text-white rounded-lg text-sm font-medium hover:bg-brand-900 transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              isSelectionMode ? 'hidden sm:flex' : ''
-            }`}
+            className={isSelectionMode ? 'hidden sm:flex' : ''}
             title="Export filtered transactions to CSV"
             aria-label="Export filtered transactions to CSV"
+            leftIcon={<Download size={16} />}
           >
-            <Download size={16} />
             <span className="hidden sm:inline">Export</span>
-          </button>
+          </Button>
         </div>
 
         <SavedViewChips
@@ -549,21 +549,25 @@ const TransactionMasterList: React.FC = () => {
             </p>
 
             <div className="flex gap-3 pt-2">
-              <button
+              <Button
+                variant="subtle"
+                size="lg"
                 onClick={() => setShowBatchDeleteConfirm(false)}
                 disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
+                size="lg"
                 onClick={handleBatchDelete}
-                disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                isLoading={isBatchProcessing}
+                leftIcon={<Trash2 size={18} />}
+                className="flex-1"
               >
-                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>Delete All</span>
-              </button>
+                Delete All
+              </Button>
             </div>
           </div>
         </Modal>
@@ -604,21 +608,25 @@ const TransactionMasterList: React.FC = () => {
             </p>
 
             <div className="flex gap-3 pt-2">
-              <button
+              <Button
+                variant="subtle"
+                size="lg"
                 onClick={() => setTransactionToDelete(null)}
                 disabled={isDeleting}
-                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
+                size="lg"
                 onClick={confirmDelete}
-                disabled={isDeleting}
-                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                isLoading={isDeleting}
+                leftIcon={<Trash2 size={18} />}
+                className="flex-1"
               >
-                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>Delete</span>
-              </button>
+                Delete
+              </Button>
             </div>
           </div>
         </Modal>

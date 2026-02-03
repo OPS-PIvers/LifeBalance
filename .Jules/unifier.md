@@ -29,3 +29,7 @@
 ## 2025-03-02 - Standardizing Points Breakdown Buttons
 **Drift:** `PointsBreakdownModal` contained hardcoded increment/decrement buttons using raw `<button>` tags with manual borders and padding, inconsistent with the system's button styles.
 **Fix:** Refactored the increment/decrement controls in `PointsBreakdownModal.tsx` to use the standardized `<Button />` component with `variant="secondary"` and `size="icon-sm"`.
+
+## 2026-02-03 - Standardizing Transaction List Buttons
+**Drift:** `TransactionMasterList` contained 7 instances of hardcoded `<button>` elements for filters, export, and modal actions, duplicating logic for loading states and styling.
+**Fix:** Refactored `TransactionMasterList` to use the standardized `<Button />` component, ensuring consistent loading states, disabled states, and hover effects.
