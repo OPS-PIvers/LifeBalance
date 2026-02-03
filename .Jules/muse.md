@@ -29,7 +29,7 @@
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
 
-## 2025-05-24 - Login & Capture Polish
+## 2025-05-25 - Login & Capture Polish
 **Critique:** "Developer UI" detected in Login page and Capture flows.
 - **Login:** Used a generic gradient (`bg-gradient-to-br`) and standard `shadow-2xl`. Typography was warm (`brand`) instead of cool (`slate`).
 - **Capture:** Tab switcher was a basic `bg-slate-100/50`. Action menu buttons lacked depth and sophistication.
