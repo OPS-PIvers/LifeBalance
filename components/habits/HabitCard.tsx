@@ -7,6 +7,8 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
 import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
+import { Drawer } from '../ui/Drawer';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -24,6 +26,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   
+  const isDesktop = useMediaQuery('(min-width: 640px)');
+
   // Logic helpers
   const isPositive = habit.type === 'positive';
   const isActive = habit.count > 0;
@@ -223,8 +227,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           </div>
         </div>
 
-        {/* Menu Dropdown */}
-        {isMenuOpen && (
+        {/* Desktop Menu Dropdown */}
+        {isMenuOpen && isDesktop && (
           <>
             <div 
               className="fixed inset-0" 
@@ -290,6 +294,45 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               </button>
             </div>
           </>
+        )}
+
+        {/* Mobile Drawer */}
+        {!isDesktop && (
+          <Drawer
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
+            title="Habit Options"
+          >
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setIsEditModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center gap-3 p-4 w-full bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-brand-700 font-semibold"
+              >
+                <Edit2 size={20} /> Edit Habit
+              </button>
+              <button
+                onClick={() => {
+                  setIsLogModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center gap-3 p-4 w-full bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-brand-700 font-semibold"
+              >
+                <Calendar size={20} /> View History
+              </button>
+              <button
+                onClick={() => {
+                  deleteHabit(habit.id);
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center gap-3 p-4 w-full bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors text-rose-600 font-semibold"
+              >
+                <Trash2 size={20} /> Delete Habit
+              </button>
+            </div>
+          </Drawer>
         )}
       </div>
 
