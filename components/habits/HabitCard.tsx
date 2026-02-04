@@ -103,14 +103,13 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         {/* Invisible clickable overlay for main card interaction */}
         <button
           onClick={handleCardClick}
-          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card"
+          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card z-0"
           aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
           tabIndex={0}
-          style={{ zIndex: 1 }}
         />
         
         {/* ACTION INDICATOR */}
-        <div className="flex-shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
+        <div className="flex-shrink-0 mr-4 relative group pointer-events-none z-10">
           <div className={buttonClasses}>
             {isThreshold && !isCompleted ? (
               <span className="text-lg font-bold font-mono">{habit.count}</span>
@@ -152,9 +151,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto z-dropdown"
               aria-label="Reset habit progress"
-              style={{ zIndex: 20 }}
             >
               <X size={12} strokeWidth={3} />
             </button>
@@ -162,7 +160,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
+        <div className="flex-1 min-w-0 pointer-events-none z-10">
           <div className="flex justify-between items-start">
             <div>
               <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-slate-900" : "text-slate-600")}>
@@ -171,7 +169,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             </div>
             
             {/* Context Menu Trigger & Drag Handle */}
-            <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
+            <div className="flex items-center gap-1 -mr-2 relative z-20">
               {dragHandle && (
                 <div className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
                   {dragHandle}
@@ -227,21 +225,19 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         {isMenuOpen && (
           <>
             <div 
-              className="fixed inset-0" 
+              className="fixed inset-0 z-sticky"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
               }} 
               aria-hidden="true"
-              style={{ zIndex: 10 }}
             />
             <div
-              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
+              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100 z-dropdown"
               role="menu"
               aria-orientation="vertical"
               aria-label="Habit actions menu"
               onKeyDown={handleMenuKeyDown}
-              style={{ zIndex: 20 }}
             >
               <button
                 onClick={(e) => {
