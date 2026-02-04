@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2, Save } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2, Save, ClipboardList } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
+import BulkAddModal from '@/components/meals/BulkAddModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -103,6 +104,7 @@ const ShoppingListTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
 
   // Optimizer Hook
@@ -389,6 +391,14 @@ const ShoppingListTab: React.FC = () => {
                     <Share2 className="w-5 h-5" />
                 </button>
                 <button
+                    onClick={() => setIsBulkAddOpen(true)}
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
+                    title="Bulk Add Items"
+                    aria-label="Bulk Add Items"
+                >
+                    <ClipboardList className="w-5 h-5" />
+                </button>
+                <button
                     onClick={handleExport}
                     disabled={shoppingList.length === 0}
                     className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
@@ -592,6 +602,11 @@ const ShoppingListTab: React.FC = () => {
               setSettingsInitialTemplate(null);
             }}
             initialTemplateData={settingsInitialTemplate}
+        />
+
+        <BulkAddModal
+            isOpen={isBulkAddOpen}
+            onClose={() => setIsBulkAddOpen(false)}
         />
 
         {/* Edit Modal */}
