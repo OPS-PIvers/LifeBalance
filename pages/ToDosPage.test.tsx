@@ -42,6 +42,7 @@ vi.mock('lucide-react', () => ({
   RotateCcw: () => <div data-testid="rotate-ccw-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
   History: () => <div data-testid="history-icon" />,
+  MoreVertical: () => <div data-testid="more-vertical-icon" />,
 }));
 
 describe('ToDosPage', () => {
@@ -359,6 +360,23 @@ describe('ToDosPage', () => {
       expect(createBtn).toBeDisabled();
 
       expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();
+    });
+  });
+
+  describe('Mobile Interaction', () => {
+    it('opens drawer when more button is clicked', () => {
+      setup();
+      // There are multiple items, so multiple more buttons.
+      const moreButtons = screen.getAllByLabelText('More options');
+      expect(moreButtons.length).toBeGreaterThan(0);
+
+      fireEvent.click(moreButtons[0]);
+
+      // Drawer should open and show actions
+      // Note: The title might be truncated or full text depending on item length
+      expect(screen.getByText('Complete Task')).toBeInTheDocument();
+      expect(screen.getByText('Edit Task')).toBeInTheDocument();
+      expect(screen.getByText('Delete Task')).toBeInTheDocument();
     });
   });
 });

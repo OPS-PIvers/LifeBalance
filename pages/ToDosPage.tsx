@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
+import { Drawer } from '../components/ui/Drawer';
 import Input from '../components/ui/Input';
 
 const ToDosPage: React.FC = () => {
@@ -21,6 +22,12 @@ const ToDosPage: React.FC = () => {
   // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Mobile Action Drawer State
+  const [drawerConfig, setDrawerConfig] = useState<{ isOpen: boolean; todo: ToDo | null }>({
+    isOpen: false,
+    todo: null
+  });
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -491,6 +498,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
 
             {/* Upcoming Section */}
@@ -507,6 +515,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
 
             {/* On The Radar Section */}
@@ -523,6 +532,7 @@ const ToDosPage: React.FC = () => {
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
 
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
@@ -545,6 +555,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 members={members}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
             <CompletedSection
                 title="Completed Yesterday"
@@ -553,6 +564,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 members={members}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
             <CompletedSection
                 title="This Week"
@@ -561,6 +573,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 members={members}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
             <CompletedSection
                 title="Older History"
@@ -569,6 +582,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 members={members}
+                onOpenDrawer={(todo) => setDrawerConfig({ isOpen: true, todo })}
             />
 
             {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && (
@@ -743,6 +757,131 @@ const ToDosPage: React.FC = () => {
         </Modal>
       )}
 
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={drawerConfig.isOpen}
+        onClose={() => setDrawerConfig(prev => ({ ...prev, isOpen: false }))}
+        title={drawerConfig.todo ? (drawerConfig.todo.text.length > 25 ? `${drawerConfig.todo.text.substring(0, 25)}...` : drawerConfig.todo.text) : 'Task Actions'}
+      >
+        <div className="flex flex-col gap-2">
+          {drawerConfig.todo && (
+            <>
+              {drawerConfig.todo.isCompleted ? (
+                // Completed Item Actions
+                <>
+                   <button
+                    onClick={() => {
+                       if (drawerConfig.todo) handleUncomplete(drawerConfig.todo.id);
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-slate-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <RotateCcw size={20} className="text-brand-600" />
+                    </div>
+                    <span>Mark as Incomplete</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                       if (drawerConfig.todo) handleDuplicate(drawerConfig.todo);
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-slate-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Copy size={20} className="text-brand-600" />
+                    </div>
+                    <span>Duplicate Task</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                       if (drawerConfig.todo) {
+                         const id = drawerConfig.todo.id;
+                         showDeleteConfirmation(async () => {
+                            await deleteToDo(id);
+                            toast.success('Task deleted');
+                         });
+                       }
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors text-rose-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Trash2 size={20} className="text-rose-500" />
+                    </div>
+                    <span>Delete Forever</span>
+                  </button>
+                </>
+              ) : (
+                // Active Item Actions
+                <>
+                  <button
+                    onClick={() => {
+                       if (drawerConfig.todo) completeToDo(drawerConfig.todo.id);
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                       toast.success('To-Do completed! 🎉');
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors text-emerald-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Check size={20} className="text-emerald-600" />
+                    </div>
+                    <span>Complete Task</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                       if (drawerConfig.todo) openEditModal(drawerConfig.todo);
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-slate-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Edit2 size={20} className="text-brand-600" />
+                    </div>
+                    <span>Edit Task</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                       if (drawerConfig.todo) handleDuplicate(drawerConfig.todo);
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors text-slate-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Copy size={20} className="text-brand-600" />
+                    </div>
+                    <span>Duplicate Task</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                       setDrawerConfig(prev => ({ ...prev, isOpen: false }));
+                       if (drawerConfig.todo) {
+                         const id = drawerConfig.todo.id;
+                         showDeleteConfirmation(async () => {
+                            await deleteToDo(id);
+                            toast.success('Task deleted');
+                         });
+                       }
+                    }}
+                    className="w-full flex items-center gap-3 p-4 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors text-rose-700 font-medium"
+                  >
+                    <div className="p-2 bg-white rounded-lg shadow-sm">
+                      <Trash2 size={20} className="text-rose-500" />
+                    </div>
+                    <span>Delete Task</span>
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </Drawer>
+
     </div>
   );
 };
@@ -761,7 +900,8 @@ const Section: React.FC<{
   isSelectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, members, isSelectionMode, selectedIds, onToggleSelection }) => {
+  onOpenDrawer: (todo: ToDo) => void;
+}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, members, isSelectionMode, selectedIds, onToggleSelection, onOpenDrawer }) => {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -876,33 +1016,43 @@ const Section: React.FC<{
                  {/* Actions */}
                  {!isSelectionMode && (
                    <div className="flex items-center gap-1 pl-2">
+                      <div className="hidden sm:flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
+                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                          aria-label="Duplicate task"
+                          title="Duplicate"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                          aria-label="Edit task"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showDeleteConfirmation(async () => {
+                              await onDelete(item.id);
+                              toast.success('Task deleted');
+                            });
+                          }}
+                          className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
+                          aria-label="Delete task"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                      {/* Mobile Actions Trigger */}
                       <button
-                        onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                        aria-label="Duplicate task"
-                        title="Duplicate"
+                        onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
+                        className="sm:hidden p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                        aria-label="More options"
                       >
-                        <Copy size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                        aria-label="Edit task"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showDeleteConfirmation(async () => {
-                            await onDelete(item.id);
-                            toast.success('Task deleted');
-                          });
-                        }}
-                        className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
-                        aria-label="Delete task"
-                      >
-                        <Trash2 size={16} />
+                        <MoreVertical size={20} />
                       </button>
                    </div>
                  )}
@@ -923,7 +1073,8 @@ const CompletedSection: React.FC<{
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
   members: HouseholdMember[];
-}> = ({ title, items, onUncomplete, onDelete, onDuplicate, members }) => {
+  onOpenDrawer: (todo: ToDo) => void;
+}> = ({ title, items, onUncomplete, onDelete, onDuplicate, members, onOpenDrawer }) => {
     const memberMap = useMemo(() => {
         const map = new Map<string, HouseholdMember>();
         members.forEach(member => map.set(member.uid, member));
@@ -975,23 +1126,33 @@ const CompletedSection: React.FC<{
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1">
+                                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => onDuplicate(item)}
+                                        className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                        title="Duplicate task"
+                                    >
+                                        <Copy size={14} />
+                                    </button>
+                                    <button
+                                        onClick={() => showDeleteConfirmation(async () => {
+                                            await onDelete(item.id);
+                                            toast.success('Task deleted');
+                                        })}
+                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                        title="Delete forever"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                                {/* Mobile Actions Trigger (Always Visible) */}
                                 <button
-                                    onClick={() => onDuplicate(item)}
-                                    className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                    title="Duplicate task"
+                                    onClick={(e) => { e.stopPropagation(); onOpenDrawer(item); }}
+                                    className="sm:hidden p-2 text-slate-400 hover:text-slate-600 rounded-lg transition-colors"
+                                    aria-label="More options"
                                 >
-                                    <Copy size={14} />
-                                </button>
-                                <button
-                                    onClick={() => showDeleteConfirmation(async () => {
-                                        await onDelete(item.id);
-                                        toast.success('Task deleted');
-                                    })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                    title="Delete forever"
-                                >
-                                    <Trash2 size={14} />
+                                    <MoreVertical size={20} />
                                 </button>
                             </div>
                         </div>
