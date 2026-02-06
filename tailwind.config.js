@@ -60,6 +60,8 @@ export default {
         dropdown: '50',
         modal: '60',
         popover: '70',
+        banner: '100',
+        toast: '110',
       },
       transitionTimingFunction: {
         'spring': 'cubic-bezier(0.175, 0.885, 0.32, 1.275)',

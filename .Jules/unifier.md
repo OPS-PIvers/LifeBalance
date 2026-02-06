@@ -29,3 +29,7 @@
 ## 2025-03-02 - Standardizing Points Breakdown Buttons
 **Drift:** `PointsBreakdownModal` contained hardcoded increment/decrement buttons using raw `<button>` tags with manual borders and padding, inconsistent with the system's button styles.
 **Fix:** Refactored the increment/decrement controls in `PointsBreakdownModal.tsx` to use the standardized `<Button />` component with `variant="secondary"` and `size="icon-sm"`.
+
+## 2025-03-03 - Standardizing Global Overlay Z-Indices
+**Drift:** `App.tsx` used hardcoded "magic number" z-indices (`z-[9999]`, `zIndex: 99999`) for the Test Mode banner and Toast notifications, breaking the semantic stacking context.
+**Fix:** Added `banner: '100'` and `toast: '110'` to the Tailwind z-index scale and refactored `App.tsx` to use `z-banner` and `z-toast` tokens.
