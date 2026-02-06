@@ -24,7 +24,6 @@ import {
   FreezeBank
 } from '@/types/schema';
 import toast from 'react-hot-toast';
-import { format, subDays } from 'date-fns';
 
 // Helper to generate unique IDs
 const generateId = () => `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
