@@ -160,7 +160,7 @@ const BudgetHistory: React.FC = () => {
                     <div className={`text-lg font-bold ${savings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
                       {savings >= 0 ? '+' : ''}${savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {savings >= 0 ? 'saved' : 'overspent'}
                     </p>
                   </div>
