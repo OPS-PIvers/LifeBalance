@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
@@ -22,6 +22,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
+  const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -151,8 +152,17 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   </div>
                 </button>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                {/* Mobile Actions */}
+                <button
+                    onClick={() => setActionItem(item)}
+                    className="sm:hidden p-2 text-gray-400 active:text-brand-600 rounded-full"
+                    aria-label="More options"
+                >
+                    <MoreVertical className="w-5 h-5" />
+                </button>
+
+                {/* Desktop Actions */}
+                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
                     className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full"
@@ -172,6 +182,44 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             ))
           )}
       </div>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionItem}
+        onClose={() => setActionItem(null)}
+        title="Item Options"
+      >
+          <div className="space-y-3 p-4">
+             <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                <p className="font-bold text-lg">{actionItem?.name}</p>
+                <p className="text-gray-500">{actionItem?.category}</p>
+             </div>
+
+             <button
+               onClick={() => {
+                 setEditingItem(actionItem);
+                 setActionItem(null);
+               }}
+               className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl font-bold text-slate-700 active:bg-slate-50"
+             >
+                <Edit2 className="w-5 h-5" />
+                Edit Details
+             </button>
+
+             <button
+               onClick={() => {
+                 if (actionItem) {
+                     handleDeleteItem(actionItem.id);
+                     setActionItem(null);
+                 }
+               }}
+               className="w-full flex items-center gap-3 p-4 bg-white border border-red-100 text-red-600 rounded-xl font-bold active:bg-red-50"
+             >
+                <Trash2 className="w-5 h-5" />
+                Remove from History
+             </button>
+          </div>
+      </Drawer>
 
       {/* Nested Edit Drawer Overlay */}
       {editingItem && (
