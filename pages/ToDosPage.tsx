@@ -764,87 +764,54 @@ const ToDosPage: React.FC = () => {
         <div className="space-y-2">
           {actionTodo && (
             <>
-              {!actionTodo.isCompleted ? (
-                <>
-                   <Button
-                    variant="ghost"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<Edit2 className="text-brand-500" />}
-                    onClick={() => {
-                      openEditModal(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Edit Task
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<Copy className="text-brand-500" />}
-                    onClick={() => {
-                      handleDuplicate(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Duplicate
-                  </Button>
-                  <div className="h-px bg-gray-100 my-2" />
-                  <Button
-                    variant="ghost-destructive"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<Trash2 />}
-                    onClick={() => {
-                      setActionTodo(null);
-                      showDeleteConfirmation(async () => {
-                         await deleteToDo(actionTodo.id);
-                         toast.success('Task deleted');
-                      });
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<RotateCcw className="text-brand-500" />}
-                    onClick={() => {
-                      handleUncomplete(actionTodo.id);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Mark as Active
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<Copy className="text-brand-500" />}
-                    onClick={() => {
-                      handleDuplicate(actionTodo);
-                      setActionTodo(null);
-                    }}
-                  >
-                    Duplicate
-                  </Button>
-                  <div className="h-px bg-gray-100 my-2" />
-                  <Button
-                    variant="ghost-destructive"
-                    className="w-full justify-start text-lg py-4"
-                    leftIcon={<Trash2 />}
-                    onClick={() => {
-                      setActionTodo(null);
-                      showDeleteConfirmation(async () => {
-                        await deleteToDo(actionTodo.id);
-                        toast.success('Task deleted');
-                      });
-                    }}
-                  >
-                    Delete Forever
-                  </Button>
-                </>
-              )}
+              {/* Primary Action (Edit or Uncomplete) */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={actionTodo.isCompleted ? <RotateCcw className="text-brand-500" /> : <Edit2 className="text-brand-500" />}
+                onClick={() => {
+                  if (actionTodo.isCompleted) {
+                    handleUncomplete(actionTodo.id);
+                  } else {
+                    openEditModal(actionTodo);
+                  }
+                  setActionTodo(null);
+                }}
+              >
+                {actionTodo.isCompleted ? 'Mark as Active' : 'Edit Task'}
+              </Button>
+
+              {/* Common Actions */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Copy className="text-brand-500" />}
+                onClick={() => {
+                  handleDuplicate(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                Duplicate
+              </Button>
+
+              <div className="h-px bg-gray-100 my-2" />
+
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                   // Close drawer immediately before confirmation to prevent visual clutter
+                   // and potential interaction issues with the toast/modal overlay
+                   setActionTodo(null);
+                   showDeleteConfirmation(async () => {
+                     await deleteToDo(actionTodo.id);
+                     toast.success('Task deleted');
+                   });
+                }}
+              >
+                {actionTodo.isCompleted ? 'Delete Forever' : 'Delete'}
+              </Button>
             </>
           )}
         </div>
