@@ -127,4 +127,34 @@ describe('HabitCard Responsive Actions', () => {
 
     expect(mockDeleteHabit).toHaveBeenCalledWith(mockHabit.id);
   });
+
+  it('opens Edit Modal from Mobile Drawer', () => {
+    (useMediaQuery as Mock).mockReturnValue(false); // Mobile
+
+    render(<HabitCard habit={mockHabit} />);
+
+    // Open menu
+    fireEvent.click(screen.getByLabelText('Habit options menu'));
+
+    // Click Edit Habit
+    fireEvent.click(screen.getByText('Edit Habit'));
+
+    // Check if modal is open (mock renders a div with this test id when open)
+    expect(screen.getByTestId('mock-habit-form-modal')).toBeInTheDocument();
+  });
+
+  it('opens View History Modal from Mobile Drawer', () => {
+    (useMediaQuery as Mock).mockReturnValue(false); // Mobile
+
+    render(<HabitCard habit={mockHabit} />);
+
+    // Open menu
+    fireEvent.click(screen.getByLabelText('Habit options menu'));
+
+    // Click View History
+    fireEvent.click(screen.getByText('View History'));
+
+    // Check if modal is open
+    expect(screen.getByTestId('mock-log-modal')).toBeInTheDocument();
+  });
 });

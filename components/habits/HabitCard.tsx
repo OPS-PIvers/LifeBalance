@@ -307,7 +307,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit2 className="text-brand-500" />}
+                leftIcon={<Edit2 size={20} className="text-brand-500" />}
                 onClick={() => {
                   setIsEditModalOpen(true);
                   setIsMenuOpen(false);
@@ -318,7 +318,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
-                leftIcon={<Calendar className="text-brand-500" />}
+                leftIcon={<Calendar size={20} className="text-brand-500" />}
                 onClick={() => {
                   setIsLogModalOpen(true);
                   setIsMenuOpen(false);
@@ -330,7 +330,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
+                leftIcon={<Trash2 size={20} />}
                 onClick={() => {
                   deleteHabit(habit.id);
                   setIsMenuOpen(false);
