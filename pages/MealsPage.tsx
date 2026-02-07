@@ -12,7 +12,7 @@ const MealsPage: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 pb-24 pt-8">
+    <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
       <Tabs defaultValue="meal-plan">
         {/* Tab Navigation */}
         <TabsList className="mb-6">

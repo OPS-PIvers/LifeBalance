@@ -121,7 +121,7 @@ const App: React.FC = () => {
         <HouseholdProviderComponent>
           <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
             {isTestMode && (
-              <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-popover shadow-lg">
+              <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-[9999] shadow-lg">
                 🧪 TEST MODE - MOCK DATA (Development Only)
               </div>
             )}
