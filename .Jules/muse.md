@@ -29,10 +29,10 @@
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
 
-## 2025-05-25 - Meals & Shopping Polish
-**Critique:** "Developer UI" detected in Meals and Shopping tabs. Headers were standard white with flat shadows. Meal cards lacked definition. Shopping list input was boxy and helper buttons added visual noise.
-**Polish:**
-- **Surface:** Applied `bg-white/80 backdrop-blur-xl` and `ring-1 ring-black/5` to headers and containers.
-- **Typography:** Upgraded headings to `slate-900` with `tracking-tight` and body text to `slate-500`.
-- **List Items:** Elevated shopping items with `bg-white/90` and `hover:shadow-soft`.
-- **Details:** Converted chips to pill-shaped elements and softened input borders.
+## 2025-05-24 - [Meal Plan Polish]
+**Critique:** "Developer UI" detected in Meal Plan tab. Heavy reliance on `brand` palette (warm grays) and flat `bg-white` cards with simple borders. Headers lacked typographic hierarchy.
+**Polish:** Applied "Muse" glassmorphism.
+- **Surface:** Upgraded container and day cards to `bg-white/80 backdrop-blur-xl` and `bg-white/60` respectively, with `ring-1 ring-black/5`.
+- **Depth:** Added `shadow-glass` to headers and hover lift (`-translate-y-0.5`) to meal items.
+- **Typography:** Switched to `slate` palette (`text-slate-900`) and added `tracking-tight` for a premium editorial feel.
+- **Palette:** Replaced generic `brand` colors with sophisticated `slate` neutrals and refined accent buttons (`bg-slate-900`).
