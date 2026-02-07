@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { MealIngredient, ShoppingItem } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -22,27 +22,26 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   shoppingList,
   onConfirm
 }) => {
-  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  // Initialize state lazily to calculate default selection only once on mount (or re-mount)
+  // Since the modal is conditionally rendered in the parent (MealPlanTab),
+  // this component unmounts when closed and remounts when opened.
+  // This allows us to avoid useEffect for state initialization.
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() => {
+    const newSelected = new Set<number>();
+    ingredients.forEach((ing, index) => {
+      const normalizedName = normalizeToKey(ing.name);
+      // Check if item is already in shopping list (and not purchased)
+      const isInList = shoppingList.some(
+        item => normalizeToKey(item.name) === normalizedName && !item.isPurchased
+      );
 
-  // Initialize selection when modal opens or ingredients change
-  useEffect(() => {
-    if (isOpen) {
-      const newSelected = new Set<number>();
-      ingredients.forEach((ing, index) => {
-        const normalizedName = normalizeToKey(ing.name);
-        // Check if item is already in shopping list (and not purchased)
-        const isInList = shoppingList.some(
-          item => normalizeToKey(item.name) === normalizedName && !item.isPurchased
-        );
-
-        // Default to selected ONLY if not already in list
-        if (!isInList) {
-          newSelected.add(index);
-        }
-      });
-      setSelectedIndices(newSelected);
-    }
-  }, [isOpen, ingredients, shoppingList]);
+      // Default to selected ONLY if not already in list
+      if (!isInList) {
+        newSelected.add(index);
+      }
+    });
+    return newSelected;
+  });
 
   const toggleSelection = (index: number) => {
     const newSelected = new Set(selectedIndices);
