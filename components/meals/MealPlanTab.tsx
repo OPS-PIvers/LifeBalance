@@ -694,7 +694,7 @@ const MealPlanTab: React.FC = () => {
                                                       : [...(currentMeal.tags || []), tag];
                                                   setCurrentMeal({...currentMeal, tags: newTags});
                                               }}
-                                              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
                                                   isSelected
                                                       ? 'bg-slate-900 text-white border-transparent shadow-md'
                                                       : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
