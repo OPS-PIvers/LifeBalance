@@ -43,6 +43,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   // Streak Repair Logic
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
   const canRepairStreak =
+    habit.type === 'positive' &&
     habit.period === 'daily' &&
     !!freezeBank &&
     freezeBank.tokens > 0 &&
@@ -101,7 +102,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         } else if (canRepairStreak && focusedMenuIndex === 2) {
           consumeFreezeBankToken(habit.id, yesterday);
           setIsMenuOpen(false);
-        } else if ((!canRepairStreak && focusedMenuIndex === 2) || (canRepairStreak && focusedMenuIndex === 3)) {
+        } else if (focusedMenuIndex === (canRepairStreak ? 3 : 2)) {
           deleteHabit(habit.id);
           setIsMenuOpen(false);
         }
@@ -311,7 +312,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  ((!canRepairStreak && focusedMenuIndex === 2) || (canRepairStreak && focusedMenuIndex === 3)) && "bg-rose-50"
+                  focusedMenuIndex === (canRepairStreak ? 3 : 2) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}

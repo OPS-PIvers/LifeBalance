@@ -390,9 +390,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
     setHabits(prev => prev.map(h => {
       if (h.id !== habitId) return h;
+      const updatedCompletedDates = (
+        h.completedDates.includes(targetDate)
+          ? [...h.completedDates]
+          : [...h.completedDates, targetDate]
+      ).sort().reverse();
       return {
         ...h,
-        completedDates: [...h.completedDates, targetDate].sort().reverse(),
+        completedDates: updatedCompletedDates,
         // Simple streak update for mock
         streakDays: h.streakDays + 1
       };
