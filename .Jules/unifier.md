@@ -32,4 +32,4 @@
 
 ## 2025-03-03 - Standardizing Global Overlay Z-Indices
 **Drift:** `App.tsx` used hardcoded "magic number" z-indices (`z-[9999]`, `zIndex: 99999`) for the Test Mode banner and Toast notifications, breaking the semantic stacking context.
-**Fix:** Added `banner: '100'` and `toast: '110'` to the Tailwind z-index scale and refactored `App.tsx` to use `z-banner` and `z-toast` tokens.
+**Fix:** Added `banner: '55'` and `toast: '110'` to the Tailwind z-index scale and refactored `App.tsx` to use `z-banner` and `z-toast` tokens.
