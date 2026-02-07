@@ -415,13 +415,13 @@ const ShoppingListTab: React.FC = () => {
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-slate-50/50 border border-slate-200/50 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400 text-slate-900 shadow-inner"
+                    className="w-full pl-4 pr-12 py-3 bg-slate-50/50 border border-slate-200/50 rounded-xl focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all outline-none placeholder:text-slate-400 text-slate-900 shadow-inner"
                     autoFocus
                 />
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:bg-slate-200 transition-all shadow-md active:scale-95"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-500 transition-all shadow-md active:scale-95"
                 >
                     <Plus size={18} />
                 </button>

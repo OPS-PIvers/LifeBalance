@@ -140,7 +140,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                     <span className={clsx(
                         "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                         // Focus ring logic for accessibility (when hidden select is focused)
-                        "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
+                        "group-focus-within:ring-2 group-focus-within:ring-brand-600 group-focus-within:ring-offset-1",
                         item.store && stores
                             ? (() => {
                                 const storeObj = stores.find(s => s.name === item.store);
@@ -177,7 +177,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                    <div className="relative group">
                       <span className={clsx(
                           "flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
-                          "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
+                          "group-focus-within:ring-2 group-focus-within:ring-brand-600 group-focus-within:ring-offset-1",
                           activeQuickList
                               ? (() => {
                                   const colorKey = activeQuickList.color || DEFAULT_STORE_COLOR;

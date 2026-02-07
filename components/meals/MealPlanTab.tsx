@@ -6,6 +6,7 @@ import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, Shop
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+import { cn } from '@/utils/cn';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -463,9 +464,10 @@ const MealPlanTab: React.FC = () => {
             return (
                 <div
                     key={dateStr}
-                    className={`bg-white/60 backdrop-blur-md rounded-2xl p-5 ring-1 ring-black/5 transition-all ${
+                    className={cn(
+                        "bg-white/60 backdrop-blur-md rounded-2xl p-5 ring-1 ring-black/5 transition-all",
                         isToday ? 'ring-brand-200 bg-brand-50/40 shadow-soft' : 'shadow-sm hover:shadow-soft'
-                    }`}
+                    )}
                 >
                     <div className="flex flex-col sm:flex-row gap-4">
                         {/* Date Column */}
