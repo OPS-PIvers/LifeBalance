@@ -122,7 +122,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
       <div className="text-center pt-2">
         <p className="text-xs text-slate-400">
           <span className="inline-flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.4)]"></span>
+            <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/60"></span>
             Review = shows in Action Queue
           </span>
           <span className="mx-2">•</span>

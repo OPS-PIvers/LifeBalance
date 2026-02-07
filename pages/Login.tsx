@@ -86,7 +86,7 @@ const Login: React.FC = () => {
               <div className="w-full border-t border-slate-200/60"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase tracking-wider">
-              <span className="bg-white/50 backdrop-blur-xl px-3 text-slate-400 font-medium">Sign in to continue</span>
+              <span className="bg-white/50 backdrop-blur-xl px-3 text-slate-500 font-medium">Sign in to continue</span>
             </div>
           </div>
 

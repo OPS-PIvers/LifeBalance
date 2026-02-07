@@ -1,5 +1,4 @@
-from playwright.sync_api import sync_playwright, expect
-import time
+from playwright.sync_api import sync_playwright
 
 def verify_muse_polish():
     with sync_playwright() as p:
@@ -14,12 +13,12 @@ def verify_muse_polish():
             # Wait for "Sign in to continue" text to appear
             try:
                 page.get_by_text("Sign in to continue").wait_for(timeout=5000)
-            except:
+            except TimeoutError:
                 # Fallback if text changed or not found immediately, wait for network idle
                 page.wait_for_load_state("networkidle")
 
-            # Additional wait to ensure styles render
-            time.sleep(1)
+            # Wait for page to be fully loaded and styled
+            page.wait_for_load_state("networkidle")
 
             print("Capturing Login Screenshot...")
             page.screenshot(path="login_polish.png")
@@ -42,8 +41,8 @@ def verify_muse_polish():
             # Wait for the "Expense", "To-Do", "Shop" tabs
             page.get_by_text("Expense").wait_for()
 
-            # Additional wait for animations
-            time.sleep(1)
+            # Wait for modal animations to complete
+            page.wait_for_timeout(1000)
 
             print("Capturing Capture Modal Screenshot...")
             page.screenshot(path="capture_modal_polish.png")
