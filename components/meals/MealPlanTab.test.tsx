@@ -39,6 +39,7 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <div data-testid="loader-icon" />,
   X: () => <div data-testid="x-icon" />,
   Copy: () => <div data-testid="copy-icon" />,
+  MoreVertical: () => <div data-testid="more-vertical-icon" />,
 }));
 
 describe('MealPlanTab', () => {
