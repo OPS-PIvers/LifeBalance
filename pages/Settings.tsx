@@ -259,7 +259,7 @@ const Settings: React.FC = () => {
           icon={<User className="w-5 h-5" />}
           isOpen={openSection === 'profile'}
           onToggle={() => handleToggleSection('profile')}
-          className="bg-white/80 backdrop-blur-xl border-white/20"
+          className="bg-white/80 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* User Profile Card */}
@@ -364,7 +364,7 @@ const Settings: React.FC = () => {
           icon={<Users className="w-5 h-5" />}
           isOpen={openSection === 'household'}
           onToggle={() => handleToggleSection('household')}
-          className="bg-white/80 backdrop-blur-xl border-white/20"
+          className="bg-white/80 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* Household Info */}
@@ -514,7 +514,7 @@ const Settings: React.FC = () => {
           icon={<Download className="w-5 h-5" />}
           isOpen={openSection === 'data'}
           onToggle={() => handleToggleSection('data')}
-          className="bg-white/80 backdrop-blur-xl border-white/20"
+          className="bg-white/80 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* Data Management */}
@@ -578,7 +578,7 @@ const Settings: React.FC = () => {
           icon={<Smartphone className="w-5 h-5" />}
           isOpen={openSection === 'shortcuts'}
           onToggle={() => handleToggleSection('shortcuts')}
-          className="bg-white/80 backdrop-blur-xl border-white/20"
+          className="bg-white/80 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           <div className="space-y-8">
@@ -608,7 +608,7 @@ const Settings: React.FC = () => {
           icon={<LogOut className="w-5 h-5" />}
           isOpen={openSection === 'account'}
           onToggle={() => handleToggleSection('account')}
-          className="bg-white/80 backdrop-blur-xl border-white/20"
+          className="bg-white/80 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           <div className="py-2">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Card from './Card';
 import { cn } from '../../utils/cn';
@@ -17,7 +17,7 @@ export interface CollapsibleCardProps {
 }
 
 export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
-  id,
+  id: providedId,
   title,
   icon,
   defaultOpen = false,
@@ -28,6 +28,11 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
   contentClassName,
   headerClassName
 }) => {
+  const generatedId = useId();
+  const id = providedId || generatedId;
+  const contentId = `section-content-${id}`;
+  const headerId = `section-title-${id}`;
+
   const [internalIsOpen, setInternalIsOpen] = useState(defaultOpen);
   const isControlled = controlledIsOpen !== undefined;
   const isOpen = isControlled ? controlledIsOpen : internalIsOpen;
@@ -54,7 +59,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
         aria-expanded={isOpen}
-        aria-controls={id ? `section-content-${id}` : undefined}
+        aria-controls={contentId}
         className={cn(
           "w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all duration-300 group text-left",
           headerClassName
@@ -62,7 +67,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
       >
         <div className="flex items-center gap-4">
           {icon && <div className="text-brand-500 group-hover:text-brand-600 transition-colors">{icon}</div>}
-          <h3 id={id ? `section-title-${id}` : undefined} className="text-lg font-semibold tracking-tight text-slate-900 group-hover:text-brand-900 transition-colors">
+          <h3 id={headerId} className="text-lg font-semibold tracking-tight text-slate-900 group-hover:text-brand-900 transition-colors">
             {title}
           </h3>
         </div>
@@ -74,9 +79,9 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         />
       </button>
       <div
-        id={id ? `section-content-${id}` : undefined}
+        id={contentId}
         role="region"
-        aria-labelledby={id ? `section-title-${id}` : undefined}
+        aria-labelledby={headerId}
         className={cn(
           "grid transition-[grid-template-rows,opacity] duration-300 ease-in-out",
           isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
