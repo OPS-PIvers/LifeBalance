@@ -89,42 +89,44 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       noPadding={true}
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-        <Clock className="w-5 h-5 text-brand-500" />
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2 bg-white/80 backdrop-blur-md sticky top-0 z-10">
+        <div className="p-2 bg-brand-50 rounded-xl">
+           <Clock className="w-5 h-5 text-brand-600" />
+        </div>
         <div>
-          <h3 className="text-lg font-bold text-gray-800">Previously Purchased</h3>
-          <p className="text-xs text-gray-500">Quickly add items back to your list</p>
+          <h3 className="text-lg font-bold text-slate-900 tracking-tight">Previously Purchased</h3>
+          <p className="text-xs text-slate-500 font-medium">Quickly add items back to your list</p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="px-6 py-3 border-b border-slate-100 bg-white sticky top-[73px] z-10">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search history..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
             autoFocus
           />
         </div>
       </div>
 
       {/* List */}
-      <div className="p-4 space-y-2">
+      <div className="p-4 space-y-2.5 bg-slate-50/50 min-h-full">
           {filteredCatalog.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-16 text-slate-400">
               <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p>No history found matching &quot;{searchQuery}&quot;</p>
-              <p className="text-xs mt-1">Items you check off your shopping list will appear here.</p>
+              <p className="font-medium">No history found matching &quot;{searchQuery}&quot;</p>
+              <p className="text-xs mt-1 text-slate-500">Items you check off your shopping list will appear here.</p>
             </div>
           ) : (
             filteredCatalog.map(item => (
               <div
                 key={item.id}
-                className="group flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-brand-200 hover:shadow-sm transition-all"
+                className="group flex items-center gap-3 p-3 bg-white shadow-sm ring-1 ring-black/5 rounded-xl hover:shadow-md transition-all"
               >
                 {/* Add Button Area */}
                 <button
@@ -141,12 +143,12 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
                   onClick={() => handleAddItem(item)}
                 >
-                  <div className="font-medium text-gray-900 truncate">{item.name}</div>
-                  <div className="text-xs text-gray-500 flex items-center gap-2">
-                    <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{item.category}</span>
-                    {item.defaultStore && <span className="truncate max-w-[80px] text-gray-400">• {item.defaultStore}</span>}
+                  <div className="font-semibold text-slate-900 truncate">{item.name}</div>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                    <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">{item.category}</span>
+                    {item.defaultStore && <span className="truncate max-w-[80px] text-slate-400">• {item.defaultStore}</span>}
                     {item.lastPurchased && (
-                      <span className="text-gray-300">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
+                      <span className="text-slate-400">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
                     )}
                   </div>
                 </button>
@@ -155,14 +157,14 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
-                    className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full"
+                    className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
                     aria-label="Edit history item"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                     aria-label="Delete from history"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -183,42 +185,42 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
           <div className="space-y-4">
 
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Name</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Name</label>
               <input
                 type="text"
                 value={editingItem.name}
                 onChange={e => setEditingItem({...editingItem, name: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Category</label>
               <input
                 type="text"
                 value={editingItem.category}
                 onChange={e => setEditingItem({...editingItem, category: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Qty</label>
+                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Default Qty</label>
                  <input
                   type="text"
                   value={editingItem.defaultQuantity || ''}
                   onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
                   placeholder="e.g. 1"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Store</label>
+                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">Default Store</label>
                  <input
                   type="text"
                   value={editingItem.defaultStore || ''}
                   onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
                   placeholder="Optional"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full p-3 bg-slate-50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
             </div>
