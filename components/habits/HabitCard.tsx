@@ -394,41 +394,6 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         )}
       </div>
 
-      {/* Mobile Drawer Actions */}
-      <Drawer
-        isOpen={isMenuOpen && !isDesktop}
-        onClose={() => setIsMenuOpen(false)}
-        title="Habit Options"
-      >
-        <div className="space-y-2">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-lg py-4"
-            leftIcon={<Edit2 className="text-brand-500" />}
-            onClick={handleEdit}
-          >
-            Edit Habit
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-lg py-4"
-            leftIcon={<Calendar className="text-brand-500" />}
-            onClick={handleViewLog}
-          >
-            View History Log
-          </Button>
-          <div className="h-px bg-gray-100 my-2" />
-          <Button
-            variant="ghost-destructive"
-            className="w-full justify-start text-lg py-4"
-            leftIcon={<Trash2 />}
-            onClick={handleDelete}
-          >
-            Delete Habit
-          </Button>
-        </div>
-      </Drawer>
-
       <HabitFormModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
