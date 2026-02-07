@@ -6,6 +6,7 @@ import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, Shop
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+import { IngredientSelectorModal } from './IngredientSelectorModal';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -15,7 +16,9 @@ const MealPlanTab: React.FC = () => {
     addMeal,
     updateMeal,
     addShoppingItem,
+    addShoppingItems,
     shoppingList,
+    groceryCatalog,
     mealPlan,
     addMealPlanItem,
     updateMealPlanItem,
@@ -30,6 +33,8 @@ const MealPlanTab: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
+  const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -61,6 +66,41 @@ const MealPlanTab: React.FC = () => {
       }));
       setTagInput('');
     }
+  };
+
+  const handleOpenIngredientSelector = (name: string, ingredients: MealIngredient[], mealId?: string) => {
+      setIngredientSelectorData({ name, ingredients, mealId });
+      setIsIngredientSelectorOpen(true);
+  };
+
+  const handleConfirmIngredients = async (selectedIngredients: MealIngredient[]) => {
+      if (selectedIngredients.length === 0) return;
+
+      const itemsToAdd = selectedIngredients.map(ing => {
+          const normalizedName = normalizeToKey(ing.name);
+          // Try to find category in history
+          const historyItem = groceryCatalog.find(
+              item => normalizeToKey(item.name) === normalizedName
+          );
+
+          return {
+              name: ing.name,
+              quantity: ing.quantity || '',
+              category: historyItem?.category || 'Uncategorized',
+              isPurchased: false,
+              addedFromMealId: ingredientSelectorData?.mealId,
+              order: shoppingList.length // Append to end
+          };
+      });
+
+      try {
+        await addShoppingItems(itemsToAdd);
+        toast.success(`Added ${itemsToAdd.length} items to shopping list`);
+      } catch (error) {
+        console.error('Failed to add items:', error);
+        toast.error('Failed to add items');
+      }
+      setIngredientSelectorData(null);
   };
 
   const handleAddIngredient = () => {
@@ -504,7 +544,11 @@ const MealPlanTab: React.FC = () => {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        addIngredientsToShoppingList(linkedMeal.ingredients);
+                                                        handleOpenIngredientSelector(
+                                                            mealName || 'Meal',
+                                                            linkedMeal.ingredients,
+                                                            linkedMeal.id
+                                                        );
                                                     }}
                                                     className="mt-2 text-xxs font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
                                                 >
@@ -954,6 +998,18 @@ const MealPlanTab: React.FC = () => {
                   </button>
               </div>
           </div>
+      )}
+
+      {/* Ingredient Selector Modal */}
+      {isIngredientSelectorOpen && ingredientSelectorData && (
+          <IngredientSelectorModal
+              isOpen={isIngredientSelectorOpen}
+              onClose={() => setIsIngredientSelectorOpen(false)}
+              mealName={ingredientSelectorData.name}
+              ingredients={ingredientSelectorData.ingredients}
+              shoppingList={shoppingList}
+              onConfirm={handleConfirmIngredients}
+          />
       )}
     </div>
   );
