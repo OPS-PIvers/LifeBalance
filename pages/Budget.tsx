@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 const Budget: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100/50 pb-28 pt-6">
+    <div className="min-h-screen bg-slate-50 pb-28 pt-6">
       <Tabs defaultValue="calendar">
         <div className="px-4">
           {/* Sub-Navigation */}
