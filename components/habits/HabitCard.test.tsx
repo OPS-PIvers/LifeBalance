@@ -62,7 +62,7 @@ vi.mock('date-fns', async () => {
       // Use real format for most cases, but control for testing
       return actual.format(date, formatStr);
     },
-    subDays: (date: Date | number, days: number) => {
+    subDays: (_date: Date | number, _days: number) => {
       // Return a fixed "yesterday" date for testing
       return new Date('2024-02-09T12:00:00Z');
     },
