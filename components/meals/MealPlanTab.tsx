@@ -167,6 +167,7 @@ const MealPlanTab: React.FC = () => {
                 if (!ingredientMap.has(key)) {
                     ingredientMap.set(key, ing);
                 }
+                // TODO: Future improvement: Parse and sum quantities (e.g. "1 cup" + "2 cups")
             });
             mealCount++;
         }
@@ -216,6 +217,7 @@ const MealPlanTab: React.FC = () => {
         const newDate = addDays(itemDate, 7);
         const newDateStr = format(newDate, 'yyyy-MM-dd');
 
+        // TODO: Check if item already exists at target to prevent duplicates
         return addMealPlanItem(
           {
             date: newDateStr,
@@ -567,13 +569,13 @@ const MealPlanTab: React.FC = () => {
                               onClick={() => setIsPreviousMealsModalOpen(true)}
                               className="flex items-center justify-center gap-2 py-3 px-4 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 font-bold text-sm transition-colors border border-blue-100/50"
                           >
-                              <ChefHat className="w-4.5 h-4.5" /> Cookbook
+                              <ChefHat className="w-5 h-5" /> Cookbook
                           </button>
                           <button
                               onClick={() => setIsAIModalOpen(true)}
                               className="flex items-center justify-center gap-2 py-3 px-4 bg-purple-50 text-purple-700 rounded-xl hover:bg-purple-100 font-bold text-sm transition-colors border border-purple-100/50"
                           >
-                              <Sparkles className="w-4.5 h-4.5" /> AI Suggest
+                              <Sparkles className="w-5 h-5" /> AI Suggest
                           </button>
                       </div>
 
