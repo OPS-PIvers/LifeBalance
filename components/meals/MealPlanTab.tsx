@@ -76,22 +76,39 @@ const MealPlanTab: React.FC = () => {
   const handleConfirmIngredients = async (selectedIngredients: MealIngredient[]) => {
       if (selectedIngredients.length === 0) return;
 
-      const itemsToAdd = selectedIngredients.map(ing => {
-          const normalizedName = normalizeToKey(ing.name);
-          // Try to find category in history
-          const historyItem = groceryCatalog.find(
-              item => normalizeToKey(item.name) === normalizedName
-          );
+      // 1. Create a Map of grocery catalog for O(1) lookups
+      const catalogMap = new Map(groceryCatalog.map(item => [normalizeToKey(item.name), item]));
 
-          return {
-              name: ing.name,
-              quantity: ing.quantity || '',
-              category: historyItem?.category || 'Uncategorized',
-              isPurchased: false,
-              addedFromMealId: ingredientSelectorData?.mealId,
-              order: shoppingList.length // Append to end
-          };
-      });
+      // 2. Filter out items that are already in the unpurchased shopping list
+      // This prevents duplicates if the user manually re-selected "In List" items
+      const unpurchasedSet = new Set(
+          shoppingList
+            .filter(item => !item.isPurchased)
+            .map(item => normalizeToKey(item.name))
+      );
+
+      const itemsToAdd = selectedIngredients
+        .filter(ing => !unpurchasedSet.has(normalizeToKey(ing.name)))
+        .map((ing, index) => {
+            const normalizedName = normalizeToKey(ing.name);
+            const historyItem = catalogMap.get(normalizedName);
+
+            return {
+                name: ing.name,
+                quantity: ing.quantity || '',
+                category: historyItem?.category || 'Uncategorized',
+                isPurchased: false,
+                addedFromMealId: ingredientSelectorData?.mealId,
+                // Increment order for each new item to maintain sequence
+                order: shoppingList.length + index
+            };
+        });
+
+      if (itemsToAdd.length === 0) {
+          toast('All selected items are already in your list.', { icon: 'ℹ️' });
+          setIngredientSelectorData(null);
+          return;
+      }
 
       try {
         await addShoppingItems(itemsToAdd);
@@ -99,8 +116,9 @@ const MealPlanTab: React.FC = () => {
       } catch (error) {
         console.error('Failed to add items:', error);
         toast.error('Failed to add items');
+      } finally {
+        setIngredientSelectorData(null);
       }
-      setIngredientSelectorData(null);
   };
 
   const handleAddIngredient = () => {

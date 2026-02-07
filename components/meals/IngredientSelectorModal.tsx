@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MealIngredient, ShoppingItem } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -22,21 +22,24 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   shoppingList,
   onConfirm
 }) => {
+  // Memoize the set of unpurchased shopping list items for O(1) lookups
+  // This avoids O(N*M) complexity in the render loop
+  const unpurchasedItemNames = useMemo(() =>
+    new Set(
+      shoppingList
+        .filter(item => !item.isPurchased)
+        .map(item => normalizeToKey(item.name))
+    ),
+  [shoppingList]);
+
   // Initialize state lazily to calculate default selection only once on mount (or re-mount)
-  // Since the modal is conditionally rendered in the parent (MealPlanTab),
-  // this component unmounts when closed and remounts when opened.
-  // This allows us to avoid useEffect for state initialization.
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(() => {
     const newSelected = new Set<number>();
     ingredients.forEach((ing, index) => {
       const normalizedName = normalizeToKey(ing.name);
-      // Check if item is already in shopping list (and not purchased)
-      const isInList = shoppingList.some(
-        item => normalizeToKey(item.name) === normalizedName && !item.isPurchased
-      );
 
-      // Default to selected ONLY if not already in list
-      if (!isInList) {
+      // Default to selected ONLY if not already in unpurchased shopping list
+      if (!unpurchasedItemNames.has(normalizedName)) {
         newSelected.add(index);
       }
     });
@@ -80,6 +83,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            aria-label="Close"
           >
             <X size={20} />
           </button>
@@ -96,15 +100,22 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                 ingredients.map((ing, index) => {
                     const isSelected = selectedIndices.has(index);
                     const normalizedName = normalizeToKey(ing.name);
-                    const inList = shoppingList.some(
-                        item => normalizeToKey(item.name) === normalizedName && !item.isPurchased
-                    );
+                    const inList = unpurchasedItemNames.has(normalizedName);
 
                     return (
                         <div
-                            key={index}
+                            key={`${ing.name}-${index}`}
                             onClick={() => toggleSelection(index)}
-                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            onKeyDown={(e) => {
+                                if (e.key === ' ' || e.key === 'Enter') {
+                                    e.preventDefault();
+                                    toggleSelection(index);
+                                }
+                            }}
+                            role="checkbox"
+                            aria-checked={isSelected}
+                            tabIndex={0}
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/50 ${
                                 isSelected
                                     ? 'bg-brand-50 border-brand-200 shadow-sm'
                                     : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
@@ -143,12 +154,14 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col gap-3">
             <div className="flex justify-between items-center px-1">
-                <button
-                    onClick={handleSelectAll}
-                    className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline"
-                >
-                    {selectedIndices.size === ingredients.length ? 'Deselect All' : 'Select All'}
-                </button>
+                {ingredients.length > 0 && (
+                    <button
+                        onClick={handleSelectAll}
+                        className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline"
+                    >
+                        {selectedIndices.size === ingredients.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                )}
                 <span className="text-xs text-slate-500 font-medium">
                     {selectedIndices.size} selected
                 </span>
