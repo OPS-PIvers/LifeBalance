@@ -498,8 +498,8 @@ const TransactionMasterList: React.FC = () => {
               onClick={() => setIsBatchCategorizeOpen(true)}
               disabled={isBatchProcessing}
               className="flex-col h-auto py-1 px-3 gap-0.5 text-white hover:bg-brand-800 hover:text-white rounded-lg"
+              leftIcon={<Tag size={18} />}
             >
-              <Tag size={18} />
               <span className="text-xxs font-medium">Categorize</span>
             </Button>
 
@@ -508,8 +508,8 @@ const TransactionMasterList: React.FC = () => {
               onClick={handleBatchVerify}
               disabled={isBatchProcessing}
               className="flex-col h-auto py-1 px-3 gap-0.5 text-white hover:bg-brand-800 hover:text-white rounded-lg"
+              leftIcon={<Check size={18} />}
             >
-              <Check size={18} />
               <span className="text-xxs font-medium">Verify</span>
             </Button>
 
@@ -518,8 +518,8 @@ const TransactionMasterList: React.FC = () => {
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
               className="flex-col h-auto py-1 px-3 gap-0.5 text-red-300 hover:text-red-200 hover:bg-red-900 rounded-lg"
+              leftIcon={<Trash2 size={18} />}
             >
-              <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
             </Button>
           </div>
