@@ -34,3 +34,5 @@ functions/node_modules/
 
 # Testing
 coverage/
+__pycache__/
+*.pyc

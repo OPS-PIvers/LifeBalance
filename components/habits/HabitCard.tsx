@@ -253,7 +253,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           </div>
         </div>
 
-        {/* Menu Dropdown (Desktop Only) */}
+        {/* Menu Dropdown - Desktop */}
         {isMenuOpen && isDesktop && (
           <>
             <div 
@@ -332,6 +332,52 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               </button>
             </div>
           </>
+        )}
+
+        {/* Mobile Actions Drawer */}
+        {!isDesktop && (
+          <Drawer
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
+            title="Habit Options"
+          >
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Edit2 size={20} className="text-brand-500" />}
+                onClick={() => {
+                  setIsEditModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+              >
+                Edit Habit
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Calendar size={20} className="text-brand-500" />}
+                onClick={() => {
+                  setIsLogModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+              >
+                View History
+              </Button>
+              <div className="h-px bg-gray-100 my-2" />
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 size={20} />}
+                onClick={() => {
+                  deleteHabit(habit.id);
+                  setIsMenuOpen(false);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </Drawer>
         )}
       </div>
 
