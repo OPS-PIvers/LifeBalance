@@ -29,11 +29,10 @@
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
 
-## 2025-05-25 - Login & Capture Polish
-**Critique:** "Developer UI" detected in Login page and Capture flows.
-- **Login:** Used a generic gradient (`bg-gradient-to-br`) and standard `shadow-2xl`. Typography was warm (`brand`) instead of cool (`slate`).
-- **Capture:** Tab switcher was a basic `bg-slate-100/50`. Action menu buttons lacked depth and sophistication.
-**Polish:** Applied "Muse" principles of Glassmorphism and Refinement.
-- **Login:** Switched to `bg-slate-50`. Card upgraded to `bg-white/80 backdrop-blur-xl` with `shadow-glass` and `ring-1 ring-black/5`. Typography refined to `slate-900` (headings) and `slate-500` (body) with `tracking-tight`.
-- **Capture Modal:** Refined tab switcher with `backdrop-blur` and crisp shadow states. Header floated with glass effect.
-- **Capture Menu:** Upgraded buttons to use `ring-1 ring-slate-200/50` and subtle hover states (`hover:bg-slate-50/50`). "AI Processing" alert softened to be informative rather than alarming.
+## 2025-05-24 - [Meal Plan Polish]
+**Critique:** "Developer UI" detected in Meal Plan tab. Heavy reliance on `brand` palette (warm grays) and flat `bg-white` cards with simple borders. Headers lacked typographic hierarchy.
+**Polish:** Applied "Muse" glassmorphism.
+- **Surface:** Upgraded container and day cards to `bg-white/80 backdrop-blur-xl` and `bg-white/60` respectively, with `ring-1 ring-black/5`.
+- **Depth:** Added `shadow-glass` to headers and hover lift (`-translate-y-0.5`) to meal items.
+- **Typography:** Switched to `slate` palette (`text-slate-900`) and added `tracking-tight` for a premium editorial feel.
+- **Palette:** Replaced generic `brand` colors with sophisticated `slate` neutrals and refined accent buttons (`bg-slate-900`).
