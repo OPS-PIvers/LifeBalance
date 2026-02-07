@@ -50,6 +50,12 @@ const SEED_TRANSACTIONS: Transaction[] = [
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
   {
+    id: 'tx1-copy', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
+    date: new Date().toISOString().split('T')[0],
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: '2024-01-01'
+  },
+  {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
     date: new Date().toISOString().split('T')[0],
     status: 'verified', isRecurring: true, source: 'manual',
