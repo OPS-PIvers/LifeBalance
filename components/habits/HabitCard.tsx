@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
+import { format, subDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -18,7 +19,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -38,6 +39,16 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   // Multipliers
   const streakMultiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
   const totalMultiplier = streakMultiplier;
+
+  // Streak Repair Logic
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const canRepairStreak =
+    habit.type === 'positive' &&
+    habit.period === 'daily' &&
+    !!freezeBank &&
+    freezeBank.tokens > 0 &&
+    !habit.completedDates.includes(yesterday) &&
+    habit.completedDates.length > 0;
 
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
@@ -63,7 +74,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   };
 
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = canRepairStreak ? 4 : 3; // Edit, View Log, (Repair), Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -88,7 +99,10 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         } else if (focusedMenuIndex === 1) {
           setIsLogModalOpen(true);
           setIsMenuOpen(false);
-        } else if (focusedMenuIndex === 2) {
+        } else if (canRepairStreak && focusedMenuIndex === 2) {
+          consumeFreezeBankToken(habit.id, yesterday);
+          setIsMenuOpen(false);
+        } else if (focusedMenuIndex === (canRepairStreak ? 3 : 2)) {
           deleteHabit(habit.id);
           setIsMenuOpen(false);
         }
@@ -273,6 +287,23 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               >
                 <Calendar size={14} /> View Log
               </button>
+              {canRepairStreak && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    consumeFreezeBankToken(habit.id, yesterday);
+                    setIsMenuOpen(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-2 text-xs font-bold text-sky-600 hover:bg-sky-50 flex items-center gap-2 focus:outline-none",
+                    focusedMenuIndex === 2 && "bg-sky-50"
+                  )}
+                  role="menuitem"
+                  tabIndex={-1}
+                >
+                  <Snowflake size={14} /> Repair Streak ({freezeBank?.tokens})
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -281,7 +312,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === (canRepairStreak ? 3 : 2) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
