@@ -42,7 +42,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
           ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
-          : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-md'
+          : 'bg-white/80 backdrop-blur-xl border-transparent ring-1 ring-black/5 hover:bg-white hover:shadow-glass hover:ring-black/10'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
