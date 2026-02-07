@@ -30,6 +30,12 @@
 **Drift:** `PointsBreakdownModal` contained hardcoded increment/decrement buttons using raw `<button>` tags with manual borders and padding, inconsistent with the system's button styles.
 **Fix:** Refactored the increment/decrement controls in `PointsBreakdownModal.tsx` to use the standardized `<Button />` component with `variant="secondary"` and `size="icon-sm"`.
 
-## 2025-03-03 - Standardizing Transaction List Buttons
-**Drift:** `TransactionMasterList` contained 19 instances of raw `<button>` elements with hardcoded styles for actions like "Clear Filters", "Select", "Export", and batch operations, creating visual inconsistency and maintenance debt.
-**Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component, leveraging `variant="subtle"`, `variant="primary"`, and `variant="ghost"` to match the intended design while enforcing system consistency.
+## 2025-02-18 - [Modal Standardization] **Drift:** Repeated hardcoded modal structures (`fixed inset-0 z-[60]...`) across 14+ files. **Fix:** Created `components/ui/Modal.tsx` and refactored `CaptureModal` and `BucketFormModal` to use it.
+## 2025-02-18 - [EditTransactionModal Standardization] **Drift:** `EditTransactionModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) and lacked backdrop click-to-close functionality. **Fix:** Refactored to use the shared `Modal` component, ensuring consistency and adding backdrop click behavior.
+## 2025-02-18 - [AnalyticsModal Standardization] **Drift:** `AnalyticsModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) instead of the shared `Modal` component. **Fix:** Refactored `AnalyticsModal` to use the shared `Modal` component, ensuring consistency in z-index, backdrop, and behavior.
+## 2025-02-18 - [HabitSubmissionLogModal Standardization] **Drift:** `HabitSubmissionLogModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) with manual mobile safe area padding. **Fix:** Refactored to use the shared `Modal` component, ensuring consistent z-index, backdrop behavior, and layout.
+## 2025-02-27 - [Button Standardization] **Drift:** `ActionQueueItem` contained hardcoded solid-color buttons (`bg-emerald-500`, `bg-rose-500`, `bg-amber-500`) instead of using the shared `Button` component, creating duplicate styles and inconsistency. `TopToolbar` used hardcoded `text-[9px]` instead of the design system token `text-xxs`. **Fix:** Added `success`, `warning`, and `destructive` variants to `components/ui/Button.tsx`. Refactored `ActionQueueItem` to use these variants. Replaced `text-[9px]` with `text-xxs` in `TopToolbar`.
+
+## 2025-03-05 - Standardizing Z-Index and Typography
+**Drift:** `HabitCard.tsx` relied on inline `style={{ zIndex: ... }}` to manage complex stacking contexts, while `ActionQueueItem.tsx` and `App.tsx` used hardcoded values like `text-[8px]` and `z-[9999]`, violating the design system tokens.
+**Fix:** Refactored `HabitCard.tsx` to use standard Tailwind classes (`z-0`, `z-10`, `z-20`, `z-sticky`, `z-dropdown`) and replaced hardcoded tokens in `ActionQueueItem` (`text-xxs`) and `App` (`z-popover`).

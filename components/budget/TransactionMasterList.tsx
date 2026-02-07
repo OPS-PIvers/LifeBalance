@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
+import { SmartTransactionShortcuts } from './SmartTransactionShortcuts';
 
 // --- Main Component ---
 
@@ -301,6 +302,12 @@ const TransactionMasterList: React.FC = () => {
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Smart Shortcuts */}
+      <SmartTransactionShortcuts
+        transactions={transactions}
+        onAddTransaction={addTransaction}
+      />
+
       {/* Filters Card */}
       <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
         {/* Search Bar */}
