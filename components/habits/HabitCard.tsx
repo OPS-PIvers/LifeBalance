@@ -353,6 +353,19 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               >
                 View History
               </Button>
+              {canRepairStreak && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-lg py-4"
+                  leftIcon={<Snowflake size={20} className="text-sky-500" />}
+                  onClick={() => {
+                    consumeFreezeBankToken(habit.id, yesterday);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Repair Streak ({freezeBank?.tokens})
+                </Button>
+              )}
               <div className="h-px bg-gray-100 my-2" />
               <Button
                 variant="ghost-destructive"
