@@ -60,6 +60,14 @@ def run():
         expect(page.get_by_role("button", name="Edit Meal")).to_be_visible()
         expect(page.get_by_role("button", name="Remove from Plan")).to_be_visible()
 
+        # Click "Remove from Plan" to test the action and clean up
+        print("Verifying remove action and cleaning up...")
+        page.get_by_role("button", name="Remove from Plan").click()
+
+        # Verify the drawer closes and the item is gone
+        expect(drawer).not_to_be_visible()
+        expect(page.get_by_text("Flux Burger")).not_to_be_visible()
+
         # Screenshot
         page.screenshot(path="verification/verification.png")
         print("Verification successful, screenshot saved.")
