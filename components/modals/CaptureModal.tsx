@@ -458,9 +458,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   };
 
   const headerContent = (
-    <div className="flex flex-col border-b border-slate-200/50 bg-white/80 backdrop-blur-xl z-10 relative">
+    <div className="flex flex-col border-b border-brand-100 bg-white">
       <div className="flex items-center justify-between px-6 py-4">
-        <h2 id="capture-drawer-title" className="text-xl font-bold text-slate-900 tracking-tight">
+        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800">
           {activeTab === 'transaction' && (
             view === 'menu' ? 'Add Transaction' :
             view === 'camera' ? 'Scan Receipt' :
@@ -485,13 +485,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Tab Switcher - Only show if not in deep transaction flow */}
       {view === 'menu' && (
         <div className="px-6 pb-4">
-          <div className="flex p-1 bg-slate-100/80 backdrop-blur-sm rounded-2xl ring-1 ring-black/5">
+          <div className="flex p-1 bg-slate-100/50 rounded-xl border border-slate-200/50">
             <button
               onClick={() => setActiveTab('transaction')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'transaction'
                 ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <Wallet size={16} />
@@ -499,10 +499,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
             </button>
             <button
               onClick={() => setActiveTab('todo')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'todo'
                 ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <CheckSquare size={16} />
@@ -510,10 +510,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
             </button>
             <button
               onClick={() => setActiveTab('shopping')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'shopping'
                 ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white/40'
+                : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <ShoppingBag size={16} />

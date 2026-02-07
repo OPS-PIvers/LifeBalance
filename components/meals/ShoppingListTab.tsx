@@ -407,21 +407,21 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Quick Add Input */}
-        <div className="bg-white/80 backdrop-blur-xl p-4 rounded-2xl shadow-glass ring-1 ring-black/5 space-y-4">
+        <div className="bg-white/80 backdrop-blur-xl p-4 rounded-xl shadow-glass ring-1 ring-black/5 space-y-3">
              <QuickRestockRow />
-             <form onSubmit={handleSmartAdd} className="relative group">
+             <form onSubmit={handleSmartAdd} className="relative">
                 <input
                     type="text"
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-slate-50/50 border border-slate-200/50 rounded-xl focus:ring-2 focus:ring-brand-600/20 focus:border-brand-600 transition-all outline-none placeholder:text-slate-400 text-slate-900 shadow-inner"
+                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400"
                     autoFocus
                 />
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-500 transition-all shadow-md active:scale-95"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
                 >
                     <Plus size={18} />
                 </button>
@@ -429,11 +429,11 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Helper Actions Row: AI, History, Scan */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/50 backdrop-blur-sm ring-1 ring-black/5 rounded-xl shadow-sm text-xs font-medium text-slate-600 hover:text-brand-600 hover:bg-white active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all disabled:opacity-50"
                 title="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -442,7 +442,7 @@ const ShoppingListTab: React.FC = () => {
 
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/50 backdrop-blur-sm ring-1 ring-black/5 rounded-xl shadow-sm text-xs font-medium text-slate-600 hover:text-brand-600 hover:bg-white active:scale-95 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all"
                 title="View Item History"
              >
                 <Clock className="w-3.5 h-3.5" />
@@ -452,10 +452,10 @@ const ShoppingListTab: React.FC = () => {
              <div className="relative flex-1">
                <button
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 ring-1 rounded-xl shadow-sm text-xs font-medium transition-all ${
+                  className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-lg shadow-sm text-xs font-medium transition-all ${
                     filterStore
-                      ? 'bg-brand-50 ring-brand-200 text-brand-700'
-                      : 'bg-white/50 backdrop-blur-sm ring-black/5 text-slate-600 hover:text-brand-600 hover:bg-white'
+                      ? 'bg-brand-50 border-brand-200 text-brand-700'
+                      : 'bg-white border-gray-200 text-gray-600 hover:text-brand-600 hover:bg-gray-50'
                   }`}
                >
                   <Filter className="w-3.5 h-3.5" />
