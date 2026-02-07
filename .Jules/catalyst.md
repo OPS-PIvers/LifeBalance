@@ -1,1 +1,3 @@
 ## 2025-05-22 - Hidden History **Discovery:** The `todos` array from `useHousehold` contains ALL tasks (active & completed), but the UI strictly filters out `isCompleted: true` items. **Opportunity:** Expose a "Completed" view to let users track achievements, restore accidentally completed tasks, and delete old history, with zero backend changes.
+
+## 2025-05-23 - The Frozen Asset **Discovery:** `useFreezeBankToken` logic was fully implemented in `FirebaseHouseholdContext` (backend & logic) but completely inaccessible in the `HabitCard` UI. **Opportunity:** Exposed "Repair Streak" option in the habit menu, instantly gamifying the "Freeze Bank" mechanic and increasing habit retention without writing new logic.

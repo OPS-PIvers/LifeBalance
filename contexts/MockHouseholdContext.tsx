@@ -20,7 +20,8 @@ import {
   QuickStockList,
   YearlyGoal,
   BucketPeriodSnapshot,
-  Household
+  Household,
+  FreezeBank
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -44,6 +45,12 @@ const SEED_BUCKETS: BudgetBucket[] = [
 const SEED_TRANSACTIONS: Transaction[] = [
   {
     id: 'tx1', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
+    date: new Date().toISOString().split('T')[0],
+    status: 'verified', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: '2024-01-01'
+  },
+  {
+    id: 'tx1-copy', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
     date: new Date().toISOString().split('T')[0],
     status: 'verified', isRecurring: false, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
@@ -102,6 +109,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
+  const [freezeBank, setFreezeBank] = useState<FreezeBank | null>({
+    tokens: 3,
+    maxTokens: 3,
+    lastRolloverDate: '2024-01-01',
+    lastRolloverMonth: '2024-01',
+    history: []
+  });
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
@@ -379,6 +393,25 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     return [];
   }, []);
 
+  const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
+    setHabits(prev => prev.map(h => {
+      if (h.id !== habitId) return h;
+      const updatedCompletedDates = (
+        h.completedDates.includes(targetDate)
+          ? [...h.completedDates]
+          : [...h.completedDates, targetDate]
+      ).sort().reverse();
+      return {
+        ...h,
+        completedDates: updatedCompletedDates,
+        // Simple streak update for mock
+        streakDays: h.streakDays + 1
+      };
+    }));
+    setFreezeBank(prev => prev ? ({ ...prev, tokens: Math.max(0, prev.tokens - 1) }) : null);
+    toast.success(`Mock: Used freeze token for ${targetDate}`);
+  }, []);
+
   // Computed/derived state to match interface
   const safeToSpend = 4000; // Mock value
   const dailyPoints = 30;
@@ -389,14 +422,13 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const activeYearlyGoals: YearlyGoal[] = [];
   const primaryYearlyGoal = null;
   const rewardsInventory = rewards;
-  const freezeBank = null;
   const isGeneratingInsight = false;
   const householdSettings = {
     id: 'test-household-id',
     name: 'Test Household',
     inviteCode: 'TEST-1234',
     members: members,
-    freezeBank: { tokens: 3, maxTokens: 3, lastRolloverDate: '2024-01-01', lastRolloverMonth: '2024-01', history: [] },
+    freezeBank: freezeBank || { tokens: 0, maxTokens: 3, lastRolloverDate: '2024-01-01', lastRolloverMonth: '2024-01', history: [] },
     accounts: accounts,
     rewardsInventory: rewards,
     coreTemplates: { expenses: [], buckets: [] },
@@ -519,7 +551,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateYearlyGoal: noOp,
     updateYearlyGoalProgress: noOp,
     deleteYearlyGoal: noOp,
-    useFreezeBankToken: noOp,
+    useFreezeBankToken,
     rolloverFreezeBankTokens: noOp,
     addMember: noOp,
     updateMember: noOp,

@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Snowflake } from 'lucide-react';
+import { format, subDays } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -21,7 +22,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -42,6 +43,16 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   // Multipliers
   const streakMultiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
   const totalMultiplier = streakMultiplier;
+
+  // Streak Repair Logic
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const canRepairStreak =
+    habit.type === 'positive' &&
+    habit.period === 'daily' &&
+    !!freezeBank &&
+    freezeBank.tokens > 0 &&
+    !habit.completedDates.includes(yesterday) &&
+    habit.completedDates.length > 0;
 
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
@@ -82,7 +93,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   };
 
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = canRepairStreak ? 4 : 3; // Edit, View Log, (Repair), Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -104,9 +115,14 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         if (focusedMenuIndex === 0) {
           handleEdit();
         } else if (focusedMenuIndex === 1) {
-          handleViewLog();
-        } else if (focusedMenuIndex === 2) {
-          handleDelete();
+          setIsLogModalOpen(true);
+          setIsMenuOpen(false);
+        } else if (canRepairStreak && focusedMenuIndex === 2) {
+          consumeFreezeBankToken(habit.id, yesterday);
+          setIsMenuOpen(false);
+        } else if (focusedMenuIndex === (canRepairStreak ? 3 : 2)) {
+          deleteHabit(habit.id);
+          setIsMenuOpen(false);
         }
         break;
     }
@@ -119,14 +135,13 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         {/* Invisible clickable overlay for main card interaction */}
         <button
           onClick={handleCardClick}
-          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card"
+          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card z-0"
           aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
           tabIndex={0}
-          style={{ zIndex: 1 }}
         />
         
         {/* ACTION INDICATOR */}
-        <div className="flex-shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
+        <div className="flex-shrink-0 mr-4 relative group pointer-events-none z-10">
           <div className={buttonClasses}>
             {isThreshold && !isCompleted ? (
               <span className="text-lg font-bold font-mono">{habit.count}</span>
@@ -168,9 +183,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto z-dropdown"
               aria-label="Reset habit progress"
-              style={{ zIndex: 20 }}
             >
               <X size={12} strokeWidth={3} />
             </button>
@@ -178,7 +192,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         </div>
 
         {/* CONTENT */}
-        <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
+        <div className="flex-1 min-w-0 pointer-events-none z-10">
           <div className="flex justify-between items-start">
             <div>
               <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-slate-900" : "text-slate-600")}>
@@ -187,7 +201,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             </div>
             
             {/* Context Menu Trigger & Drag Handle */}
-            <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
+            <div className="flex items-center gap-1 -mr-2 relative z-20">
               {dragHandle && (
                 <div className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
                   {dragHandle}
@@ -243,21 +257,19 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         {isMenuOpen && isDesktop && (
           <>
             <div 
-              className="fixed inset-0" 
+              className="fixed inset-0 z-sticky"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
               }} 
               aria-hidden="true"
-              style={{ zIndex: 10 }}
             />
             <div
-              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
+              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100 z-dropdown"
               role="menu"
               aria-orientation="vertical"
               aria-label="Habit actions menu"
               onKeyDown={handleMenuKeyDown}
-              style={{ zIndex: 20 }}
             >
               <button
                 onClick={(e) => {
@@ -287,6 +299,23 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               >
                 <Calendar size={14} /> View Log
               </button>
+              {canRepairStreak && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    consumeFreezeBankToken(habit.id, yesterday);
+                    setIsMenuOpen(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-2 text-xs font-bold text-sky-600 hover:bg-sky-50 flex items-center gap-2 focus:outline-none",
+                    focusedMenuIndex === 2 && "bg-sky-50"
+                  )}
+                  role="menuitem"
+                  tabIndex={-1}
+                >
+                  <Snowflake size={14} /> Repair Streak ({freezeBank?.tokens})
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -294,7 +323,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === (canRepairStreak ? 3 : 2) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
