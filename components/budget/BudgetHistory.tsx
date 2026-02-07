@@ -207,7 +207,7 @@ const BudgetHistory: React.FC = () => {
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-bold text-slate-900">{bucket.bucketName}</span>
                         <span className={`text-sm font-bold ${bucketSavings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
-                          ${bucket.totalSpent.toLocaleString()} <span className="text-slate-300 font-normal">/ ${bucket.limit.toLocaleString()}</span>
+                          ${bucket.totalSpent.toLocaleString()} <span className="text-slate-500 font-normal">/ ${bucket.limit.toLocaleString()}</span>
                         </span>
                       </div>
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
