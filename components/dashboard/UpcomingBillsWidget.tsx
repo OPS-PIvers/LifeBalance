@@ -5,6 +5,9 @@ import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from '
 import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+const UPCOMING_DAYS_WINDOW = 14;
+const MAX_BILLS_TO_SHOW = 3;
+
 interface UpcomingBillsWidgetProps {
   onPay: (id: string) => void;
 }
@@ -14,16 +17,36 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
 
   const upcomingBills = useMemo(() => {
     const today = startOfToday();
-    const twoWeeksOut = addDays(today, 14);
+    const twoWeeksOut = addDays(today, UPCOMING_DAYS_WINDOW);
 
     // Expand recurring items
     const expanded = expandCalendarItems(calendarItems, today, twoWeeksOut);
 
-    // Filter and sort
+    // Filter, sort, and transform
     return expanded
       .filter(item => item.type === 'expense' && !item.isPaid)
       .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, 3);
+      .slice(0, MAX_BILLS_TO_SHOW)
+      .map(bill => {
+        const date = parseISO(bill.date);
+        let dateLabel = format(date, 'MMM d');
+        let urgencyClass = 'text-slate-500';
+
+        if (isSameDay(date, today)) {
+          dateLabel = 'Today';
+          urgencyClass = 'text-rose-600 font-bold';
+        } else if (isTomorrow(date)) {
+          dateLabel = 'Tomorrow';
+          urgencyClass = 'text-amber-600 font-bold';
+        }
+
+        return {
+          ...bill,
+          displayDate: format(date, 'd'),
+          dateLabel,
+          urgencyClass
+        };
+      });
   }, [calendarItems]);
 
   if (upcomingBills.length === 0) return null;
@@ -46,28 +69,15 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
       </div>
 
       <div className="space-y-3">
-        {upcomingBills.map(bill => {
-           const date = parseISO(bill.date);
-           let dateLabel = format(date, 'MMM d');
-           let urgencyClass = 'text-slate-500';
-
-           if (isSameDay(date, startOfToday())) {
-             dateLabel = 'Today';
-             urgencyClass = 'text-rose-600 font-bold';
-           } else if (isTomorrow(date)) {
-             dateLabel = 'Tomorrow';
-             urgencyClass = 'text-amber-600 font-bold';
-           }
-
-           return (
+        {upcomingBills.map(bill => (
             <div key={bill.id} className="flex items-center justify-between group">
               <div className="flex items-center gap-3">
                  <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-sm transition-all">
-                    {format(date, 'd')}
+                    {bill.displayDate}
                  </div>
                  <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-700 truncate max-w-[120px]">{bill.title}</p>
-                    <p className={`text-xs ${urgencyClass}`}>{dateLabel}</p>
+                    <p className={`text-xs ${bill.urgencyClass}`}>{bill.dateLabel}</p>
                  </div>
               </div>
               <div className="flex items-center gap-3">
@@ -84,8 +94,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
                  </button>
               </div>
             </div>
-           );
-        })}
+        ))}
       </div>
     </div>
   );
