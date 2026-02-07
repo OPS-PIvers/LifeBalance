@@ -18,7 +18,6 @@ import {
   Download,
   FileJson,
   FileSpreadsheet,
-  ChevronDown,
   Smartphone,
   Terminal
 } from 'lucide-react';
@@ -30,6 +29,7 @@ import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences } from '@/types/schema';
@@ -39,70 +39,6 @@ import { db } from '@/firebase.config';
 import DeveloperConsole from '@/components/modals/DeveloperConsole';
 
 const APP_VERSION = '0.8.0-alpha';
-
-interface SettingsSectionProps {
-  id: string;
-  title: string;
-  icon?: React.ReactNode;
-  isOpen: boolean;
-  onToggle: (id: string) => void;
-  children: React.ReactNode;
-}
-
-const SettingsSection: React.FC<SettingsSectionProps> = ({
-  id,
-  title,
-  icon,
-  isOpen,
-  onToggle,
-  children
-}) => {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onToggle(id);
-    }
-  };
-
-  return (
-    <Card className="overflow-hidden bg-white/80 backdrop-blur-xl border-white/20">
-      <button
-        type="button"
-        onClick={() => onToggle(id)}
-        onKeyDown={handleKeyDown}
-        aria-expanded={isOpen}
-        aria-controls={`section-content-${id}`}
-        className="w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all duration-300 group"
-      >
-        <div className="flex items-center gap-4">
-          {icon && <div className="text-brand-500 group-hover:text-brand-600 transition-colors">{icon}</div>}
-          <h3 id={`section-title-${id}`} className="text-lg font-semibold tracking-tight text-slate-900 group-hover:text-brand-900 transition-colors">{title}</h3>
-        </div>
-        <ChevronDown
-          className={`w-5 h-5 text-slate-400 transition-transform duration-300 ease-spring ${
-            isOpen ? 'rotate-180 text-brand-500' : ''
-          }`}
-        />
-      </button>
-      <div
-        id={`section-content-${id}`}
-        role="region"
-        aria-labelledby={`section-title-${id}`}
-        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
-          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-        }`}
-      >
-        <div className="overflow-hidden">
-          <div className="p-5 pt-0 border-t border-slate-100/50 space-y-6">
-            <div className="pt-4">
-              {children}
-            </div>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-};
 
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
@@ -317,12 +253,14 @@ const Settings: React.FC = () => {
           </Card>
         )}
 
-        <SettingsSection
+        <CollapsibleCard
           id="profile"
           title="Profile & Preferences"
           icon={<User className="w-5 h-5" />}
           isOpen={openSection === 'profile'}
-          onToggle={handleToggleSection}
+          onToggle={() => handleToggleSection('profile')}
+          className="bg-white/80 backdrop-blur-xl border-white/20"
+          contentClassName="space-y-6"
         >
           {/* User Profile Card */}
           <div>
@@ -418,14 +356,16 @@ const Settings: React.FC = () => {
               />
             </div>
           )}
-        </SettingsSection>
+        </CollapsibleCard>
 
-        <SettingsSection
+        <CollapsibleCard
           id="household"
           title="Household"
           icon={<Users className="w-5 h-5" />}
           isOpen={openSection === 'household'}
-          onToggle={handleToggleSection}
+          onToggle={() => handleToggleSection('household')}
+          className="bg-white/80 backdrop-blur-xl border-white/20"
+          contentClassName="space-y-6"
         >
           {/* Household Info */}
           <div className="space-y-6">
@@ -566,14 +506,16 @@ const Settings: React.FC = () => {
                 ))}
             </div>
           </div>
-        </SettingsSection>
+        </CollapsibleCard>
 
-        <SettingsSection
+        <CollapsibleCard
           id="data"
           title="Data Management"
           icon={<Download className="w-5 h-5" />}
           isOpen={openSection === 'data'}
-          onToggle={handleToggleSection}
+          onToggle={() => handleToggleSection('data')}
+          className="bg-white/80 backdrop-blur-xl border-white/20"
+          contentClassName="space-y-6"
         >
           {/* Data Management */}
           <div>
@@ -627,15 +569,17 @@ const Settings: React.FC = () => {
               </button>
             </div>
           </div>
-        </SettingsSection>
+        </CollapsibleCard>
 
         {/* iOS Shortcuts Section */}
-        <SettingsSection
+        <CollapsibleCard
           id="shortcuts"
           title="iOS Shortcuts"
           icon={<Smartphone className="w-5 h-5" />}
           isOpen={openSection === 'shortcuts'}
-          onToggle={handleToggleSection}
+          onToggle={() => handleToggleSection('shortcuts')}
+          className="bg-white/80 backdrop-blur-xl border-white/20"
+          contentClassName="space-y-6"
         >
           <div className="space-y-8">
             {/* API Key Management */}
@@ -655,15 +599,17 @@ const Settings: React.FC = () => {
               <ShortcutSetupGuide />
             </div>
           </div>
-        </SettingsSection>
+        </CollapsibleCard>
 
         {/* Account Section */}
-        <SettingsSection
+        <CollapsibleCard
           id="account"
           title="Account"
           icon={<LogOut className="w-5 h-5" />}
           isOpen={openSection === 'account'}
-          onToggle={handleToggleSection}
+          onToggle={() => handleToggleSection('account')}
+          className="bg-white/80 backdrop-blur-xl border-white/20"
+          contentClassName="space-y-6"
         >
           <div className="py-2">
              <Button
@@ -680,7 +626,7 @@ const Settings: React.FC = () => {
               <p className="text-xs text-slate-400 font-mono">v{APP_VERSION}</p>
             </div>
           </div>
-        </SettingsSection>
+        </CollapsibleCard>
 
       </div>
 

@@ -39,3 +39,7 @@
 ## 2025-03-05 - Standardizing Z-Index and Typography
 **Drift:** `HabitCard.tsx` relied on inline `style={{ zIndex: ... }}` to manage complex stacking contexts, while `ActionQueueItem.tsx` and `App.tsx` used hardcoded values like `text-[8px]` and `z-[9999]`, violating the design system tokens.
 **Fix:** Refactored `HabitCard.tsx` to use standard Tailwind classes (`z-0`, `z-10`, `z-20`, `z-sticky`, `z-dropdown`) and replaced hardcoded tokens in `ActionQueueItem` (`text-xxs`) and `App` (`z-popover`).
+
+## 2025-03-06 - Standardizing Collapsible Sections and Card Utilities
+**Drift:** The `Settings` page used a custom `SettingsSection` component with hardcoded styles and logic for accordion-like behavior. Additionally, `components/ui/Card.tsx` duplicated the `cn` utility logic instead of importing the shared `utils/cn.ts` helper.
+**Fix:** Created `components/ui/CollapsibleCard.tsx` to standardize the accordion pattern, refactored `Settings.tsx` to use it, and updated `Card.tsx` to use the shared `cn` utility.
