@@ -45,6 +45,18 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
 }));
 
+// Mock Drawer to render children directly (bypassing portal)
+vi.mock('../components/ui/Drawer', () => ({
+  Drawer: ({ isOpen, children, title }: { isOpen: boolean; children: React.ReactNode; title?: string }) => (
+    isOpen ? (
+      <div role="dialog" aria-modal="true">
+        {title && <h2>{title}</h2>}
+        {children}
+      </div>
+    ) : null
+  ),
+}));
+
 describe('ToDosPage', () => {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
