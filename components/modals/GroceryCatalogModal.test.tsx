@@ -37,7 +37,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
 
 // Mock Drawer to verify it's being used
 vi.mock('@/components/ui/Drawer', () => ({
-  Drawer: ({ children, isOpen, title }: any) => isOpen ? (
+  Drawer: ({ children, isOpen, title }: { children: React.ReactNode, isOpen: boolean, title?: string }) => isOpen ? (
     <div data-testid="drawer">
       {title && <h1>{title}</h1>}
       {children}
