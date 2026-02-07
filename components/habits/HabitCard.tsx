@@ -22,7 +22,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -91,11 +91,6 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     setIsMenuOpen(false);
   };
 
-  const handleRepairStreak = () => {
-    useFreezeBankToken(habit.id, yesterday);
-    setIsMenuOpen(false);
-  };
-
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
     const menuItems = isEligibleForRepair ? 4 : 3; // Edit, View Log, (Repair), Delete
     
@@ -121,7 +116,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         } else if (focusedMenuIndex === 1) {
           handleViewLog();
         } else if (isEligibleForRepair && focusedMenuIndex === 2) {
-          handleRepairStreak();
+          consumeFreezeBankToken(habit.id, yesterday);
+          setIsMenuOpen(false);
         } else if ((isEligibleForRepair && focusedMenuIndex === 3) || (!isEligibleForRepair && focusedMenuIndex === 2)) {
           handleDelete();
         }
@@ -308,7 +304,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleRepairStreak();
+                    consumeFreezeBankToken(habit.id, yesterday);
+          setIsMenuOpen(false);
                   }}
                   className={cn(
                     "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 focus:outline-none",
@@ -367,7 +364,10 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               variant="ghost"
               className="w-full justify-start text-lg py-4 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
               leftIcon={<Wrench className="text-indigo-500" />}
-              onClick={handleRepairStreak}
+              onClick={() => {
+                consumeFreezeBankToken(habit.id, yesterday);
+                setIsMenuOpen(false);
+              }}
             >
               Repair Streak ({freezeBank?.tokens})
             </Button>
