@@ -8,6 +8,9 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
 import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
+import { Drawer } from '../ui/Drawer';
+import { Button } from '../ui/Button';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -24,6 +27,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
+  const isDesktop = useMediaQuery('(min-width: 640px)');
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
@@ -235,8 +239,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           </div>
         </div>
 
-        {/* Menu Dropdown */}
-        {isMenuOpen && (
+        {/* Menu Dropdown - Desktop */}
+        {isMenuOpen && isDesktop && (
           <>
             <div 
               className="fixed inset-0 z-sticky"
@@ -317,6 +321,52 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               </button>
             </div>
           </>
+        )}
+
+        {/* Mobile Actions Drawer */}
+        {!isDesktop && (
+          <Drawer
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
+            title="Habit Options"
+          >
+            <div className="space-y-2">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Edit2 size={20} className="text-brand-500" />}
+                onClick={() => {
+                  setIsEditModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+              >
+                Edit Habit
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Calendar size={20} className="text-brand-500" />}
+                onClick={() => {
+                  setIsLogModalOpen(true);
+                  setIsMenuOpen(false);
+                }}
+              >
+                View History
+              </Button>
+              <div className="h-px bg-gray-100 my-2" />
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 size={20} />}
+                onClick={() => {
+                  deleteHabit(habit.id);
+                  setIsMenuOpen(false);
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          </Drawer>
         )}
       </div>
 
