@@ -592,7 +592,7 @@ const MealPlanTab: React.FC = () => {
                       {/* Meal Details */}
                       <div className="space-y-5">
                           <div>
-                              <label htmlFor="meal-name" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Meal Name</label>
+                              <label htmlFor="meal-name" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Name</label>
                               <input
                                   id="meal-name"
                                   type="text"
@@ -625,7 +625,7 @@ const MealPlanTab: React.FC = () => {
                           </div>
 
                           <div>
-                              <label htmlFor="meal-description" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Description</label>
+                              <label htmlFor="meal-description" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</label>
                               <textarea
                                   id="meal-description"
                                   value={currentMeal.description}
@@ -638,7 +638,7 @@ const MealPlanTab: React.FC = () => {
 
                           {/* Collapsible Sections could go here if content gets too long */}
                           <div>
-                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Instructions</label>
+                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Instructions</label>
                               <textarea
                                   id="meal-instructions"
                                   value={currentMeal.instructions?.join('\n') || ''}
@@ -658,7 +658,7 @@ const MealPlanTab: React.FC = () => {
                           </div>
 
                           <div>
-                              <label htmlFor="meal-url" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Recipe URL</label>
+                              <label htmlFor="meal-url" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Recipe URL</label>
                               <input
                                   id="meal-url"
                                   type="url"
@@ -671,7 +671,7 @@ const MealPlanTab: React.FC = () => {
 
                           {/* Tags Section */}
                           <div>
-                              <label id="tags-label" className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Tags</label>
+                              <label id="tags-label" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tags</label>
 
                               {/* Common Tags */}
                               <div className="flex flex-wrap gap-2 mb-4" role="group" aria-labelledby="tags-label">
@@ -735,7 +735,7 @@ const MealPlanTab: React.FC = () => {
 
                       {/* Ingredients Section */}
                       <div>
-                           <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Ingredients</label>
+                           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Ingredients</label>
 
                            {/* Current Ingredients List */}
                            {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
