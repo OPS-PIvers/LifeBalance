@@ -60,7 +60,7 @@ export default {
         dropdown: '50',
         modal: '60',
         popover: '70',
-        banner: '100',
+        banner: '55',
         toast: '110',
       },
       transitionTimingFunction: {
