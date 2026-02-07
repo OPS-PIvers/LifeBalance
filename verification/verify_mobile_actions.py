@@ -52,7 +52,7 @@ def run():
 
         # Verify Drawer Opens
         print("Verifying Drawer...")
-        drawer = page.get_by_role("dialog").last # Last dialog should be the drawer
+        drawer = page.get_by_test_id("drawer-content") # Use a robust test-id selector
         expect(drawer).to_be_visible()
         expect(drawer).to_contain_text("Flux Burger") # Title
 
