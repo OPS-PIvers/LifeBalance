@@ -141,7 +141,7 @@ const BudgetHistory: React.FC = () => {
           : 100;
 
         return (
-          <Card key={group.periodId} className="overflow-hidden shadow-glass border-transparent">
+          <Card key={group.periodId} className="overflow-hidden">
             <button
               onClick={() => toggleExpand(group.periodId)}
               className="w-full text-left"
