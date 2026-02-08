@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
 import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
@@ -23,6 +23,15 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
   const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
+
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setEditingItem(null);
+      setActionItem(null);
+      setSearchQuery('');
+    }
+  }, [isOpen]);
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -80,6 +89,10 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   const handleDeleteItem = async (id: string) => {
     if (window.confirm('Remove from history? This won\'t affect your current list.')) {
       await deleteGroceryCatalogItem(id);
+      // Close action drawer if open for this item
+      if (actionItem?.id === id) {
+        setActionItem(null);
+      }
     }
   };
 
@@ -155,7 +168,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 {/* Mobile Actions */}
                 <button
                     onClick={() => setActionItem(item)}
-                    className="sm:hidden p-2 text-gray-400 active:text-brand-600 rounded-full"
+                    className="sm:hidden w-10 h-10 flex items-center justify-center text-gray-400 active:text-brand-600 active:bg-gray-100 rounded-full"
                     aria-label="More options"
                 >
                     <MoreVertical className="w-5 h-5" />
@@ -189,7 +202,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
         onClose={() => setActionItem(null)}
         title="Item Options"
       >
-          <div className="space-y-3 p-4">
+          <div className="space-y-3">
              <div className="bg-gray-50 rounded-xl p-4 mb-4">
                 <p className="font-bold text-lg">{actionItem?.name}</p>
                 <p className="text-gray-500">{actionItem?.category}</p>
@@ -210,7 +223,6 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                onClick={() => {
                  if (actionItem) {
                      handleDeleteItem(actionItem.id);
-                     setActionItem(null);
                  }
                }}
                className="w-full flex items-center gap-3 p-4 bg-white border border-red-100 text-red-600 rounded-xl font-bold active:bg-red-50"

@@ -48,7 +48,7 @@ vi.mock('@/components/ui/Drawer', () => ({
 describe('GroceryCatalogModal Mobile Optimization', () => {
   it('renders without crashing', () => {
     render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
-    expect(screen.getByText('Previously Purchased')).toBeDefined();
+    expect(screen.getByText('Previously Purchased')).toBeInTheDocument();
   });
 
   it('renders mobile action button for each item', () => {
@@ -67,10 +67,10 @@ describe('GroceryCatalogModal Mobile Optimization', () => {
     fireEvent.click(moreButtons[0]);
 
     // Check if the drawer with "Item Options" title appears
-    expect(screen.getByText('Item Options')).toBeDefined();
+    expect(screen.getByText('Item Options')).toBeInTheDocument();
 
     // Check for action buttons
-    expect(screen.getByText('Edit Details')).toBeDefined();
-    expect(screen.getByText('Remove from History')).toBeDefined();
+    expect(screen.getByText('Edit Details')).toBeInTheDocument();
+    expect(screen.getByText('Remove from History')).toBeInTheDocument();
   });
 });
