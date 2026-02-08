@@ -13,6 +13,85 @@ import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 
+interface FilterControlsProps {
+  categoryFilter: string;
+  setCategoryFilter: (value: string) => void;
+  sourceFilter: string;
+  setSourceFilter: (value: string) => void;
+  storeFilter: string;
+  setStoreFilter: (value: string) => void;
+  categories: string[];
+  stores: { id: string; name: string }[];
+  layout: 'row' | 'stack';
+}
+
+const FilterControls: React.FC<FilterControlsProps> = ({
+  categoryFilter,
+  setCategoryFilter,
+  sourceFilter,
+  setSourceFilter,
+  storeFilter,
+  setStoreFilter,
+  categories,
+  stores,
+  layout
+}) => {
+  const isRow = layout === 'row';
+  const selectClass = isRow
+    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
+
+  return (
+    <>
+      {/* Category Filter */}
+      <div className={isRow ? "" : "space-y-1"}>
+        {!isRow && <label className="text-sm font-medium text-brand-600">Category</label>}
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className={selectClass}
+        >
+          <option value="all">All Categories</option>
+          {categories.map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Source Filter */}
+      <div className={isRow ? "" : "space-y-1"}>
+        {!isRow && <label className="text-sm font-medium text-brand-600">Source</label>}
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className={selectClass}
+        >
+          <option value="all">All Sources</option>
+          <option value="recurring">Recurring</option>
+          <option value="manual">Manual Entry</option>
+          <option value="camera-scan">Camera Scan</option>
+          <option value="file-upload">File Upload</option>
+        </select>
+      </div>
+
+      {/* Store Filter */}
+      <div className={isRow ? "" : "space-y-1"}>
+        {!isRow && <label className="text-sm font-medium text-brand-600">Store</label>}
+        <select
+          value={storeFilter}
+          onChange={(e) => setStoreFilter(e.target.value)}
+          className={selectClass}
+        >
+          <option value="all">All Stores</option>
+          {stores.map(s => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+};
+
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
@@ -90,7 +169,10 @@ const TransactionMasterList: React.FC = () => {
       });
   }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
 
-  const activeFilterCount = (categoryFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0) + (storeFilter !== 'all' ? 1 : 0);
+  const activeFilterCount = useMemo(() =>
+    (categoryFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0) + (storeFilter !== 'all' ? 1 : 0),
+    [categoryFilter, sourceFilter, storeFilter]
+  );
 
   // Derived State: Summary Statistics
   const summary = useMemo(() => {
@@ -302,6 +384,24 @@ const TransactionMasterList: React.FC = () => {
     }
   };
 
+  // Reusable filter props
+  const filterProps = {
+    categoryFilter,
+    setCategoryFilter,
+    sourceFilter,
+    setSourceFilter,
+    storeFilter,
+    setStoreFilter,
+    categories,
+    stores,
+  };
+
+  const selectionModeClass = `px-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-2 ${
+    isSelectionMode
+      ? 'bg-brand-600 text-white hover:bg-brand-700'
+      : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
+  }`;
+
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
@@ -340,11 +440,7 @@ const TransactionMasterList: React.FC = () => {
            <Button
             onClick={() => setIsSelectionMode(!isSelectionMode)}
             variant="ghost"
-            className={`h-11 px-3 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-2 ${
-              isSelectionMode
-                ? 'bg-brand-600 text-white hover:bg-brand-700'
-                : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
-            }`}
+            className={`h-11 ${selectionModeClass}`}
             aria-label="Toggle selection mode"
           >
             <Layers size={16} />
@@ -353,39 +449,7 @@ const TransactionMasterList: React.FC = () => {
 
         {/* Filter Chips / Dropdowns */}
         <div className="hidden md:flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-          >
-            <option value="all">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-          >
-            <option value="all">All Sources</option>
-            <option value="recurring">Recurring</option>
-            <option value="manual">Manual Entry</option>
-            <option value="camera-scan">Camera Scan</option>
-            <option value="file-upload">File Upload</option>
-          </select>
-
-          <select
-            value={storeFilter}
-            onChange={(e) => setStoreFilter(e.target.value)}
-            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-          >
-            <option value="all">All Stores</option>
-            {stores.map(s => (
-              <option key={s.id} value={s.name}>{s.name}</option>
-            ))}
-          </select>
+          <FilterControls {...filterProps} layout="row" />
 
           {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
             <button
@@ -400,11 +464,7 @@ const TransactionMasterList: React.FC = () => {
           <Button
             onClick={() => setIsSelectionMode(!isSelectionMode)}
             variant="ghost"
-            className={`ml-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-              isSelectionMode
-                ? 'bg-brand-600 text-white hover:bg-brand-700'
-                : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
-            }`}
+            className={`ml-auto py-2 ${selectionModeClass}`}
             title="Toggle selection mode"
             aria-label="Toggle selection mode"
           >
@@ -720,51 +780,7 @@ const TransactionMasterList: React.FC = () => {
         title="Filter Transactions"
       >
         <div className="space-y-4 pt-2">
-          {/* Category Filter */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-brand-600">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400"
-            >
-              <option value="all">All Categories</option>
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Source Filter */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-brand-600">Source</label>
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-              className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400"
-            >
-              <option value="all">All Sources</option>
-              <option value="recurring">Recurring</option>
-              <option value="manual">Manual Entry</option>
-              <option value="camera-scan">Camera Scan</option>
-              <option value="file-upload">File Upload</option>
-            </select>
-          </div>
-
-          {/* Store Filter */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-brand-600">Store</label>
-            <select
-              value={storeFilter}
-              onChange={(e) => setStoreFilter(e.target.value)}
-              className="w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400"
-            >
-              <option value="all">All Stores</option>
-              {stores.map(s => (
-                <option key={s.id} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-          </div>
+          <FilterControls {...filterProps} layout="stack" />
 
           <div className="pt-4 space-y-3 border-t border-gray-100">
             {/* Export Button */}
