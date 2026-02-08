@@ -36,6 +36,10 @@
 ## 2025-02-18 - [HabitSubmissionLogModal Standardization] **Drift:** `HabitSubmissionLogModal` was using a hardcoded modal structure (`fixed inset-0 z-[60]...`) with manual mobile safe area padding. **Fix:** Refactored to use the shared `Modal` component, ensuring consistent z-index, backdrop behavior, and layout.
 ## 2025-02-27 - [Button Standardization] **Drift:** `ActionQueueItem` contained hardcoded solid-color buttons (`bg-emerald-500`, `bg-rose-500`, `bg-amber-500`) instead of using the shared `Button` component, creating duplicate styles and inconsistency. `TopToolbar` used hardcoded `text-[9px]` instead of the design system token `text-xxs`. **Fix:** Added `success`, `warning`, and `destructive` variants to `components/ui/Button.tsx`. Refactored `ActionQueueItem` to use these variants. Replaced `text-[9px]` with `text-xxs` in `TopToolbar`.
 
+## 2025-03-03 - Standardizing Global Overlay Z-Indices
+**Drift:** `App.tsx` used hardcoded "magic number" z-indices (`z-[9999]`, `zIndex: 99999`) for the Test Mode banner and Toast notifications, breaking the semantic stacking context.
+**Fix:** Added `banner: '55'` and `toast: '110'` to the Tailwind z-index scale and refactored `App.tsx` to use `z-banner` and `z-toast` tokens.
+
 ## 2025-03-05 - Standardizing Z-Index and Typography
 **Drift:** `HabitCard.tsx` relied on inline `style={{ zIndex: ... }}` to manage complex stacking contexts, while `ActionQueueItem.tsx` and `App.tsx` used hardcoded values like `text-[8px]` and `z-[9999]`, violating the design system tokens.
 **Fix:** Refactored `HabitCard.tsx` to use standard Tailwind classes (`z-0`, `z-10`, `z-20`, `z-sticky`, `z-dropdown`) and replaced hardcoded tokens in `ActionQueueItem` (`text-xxs`) and `App` (`z-popover`).
