@@ -1,5 +1,4 @@
-/* eslint-disable */
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
@@ -367,7 +366,7 @@ const MealPlanTab: React.FC = () => {
                 tags: currentMeal.tags || [],
                 rating: 0
             });
-          } catch (error) {
+          } catch (_error) {
             toast.error('Failed to save meal');
             return;
           }
@@ -459,7 +458,7 @@ const MealPlanTab: React.FC = () => {
         });
         setIsAIModalOpen(false); // Close AI options modal
         setIsAddModalOpen(true); // Ensure Add Meal modal is open
-    } catch (e) {
+    } catch (_e) {
         toast.error("Failed to generate meal");
     } finally {
         setIsGeneratingAI(false);
@@ -515,7 +514,7 @@ const MealPlanTab: React.FC = () => {
       <div className="space-y-4">
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
-            const planItems = mealPlan ? mealPlan.filter((i: any) => i.date === dateStr) : [];
+            const planItems = mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === dateStr) : [];
             const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
 
             return (
@@ -673,7 +672,7 @@ const MealPlanTab: React.FC = () => {
                                           key={type}
                                           role="radio"
                                           aria-checked={mealType === type}
-                                          onClick={() => setMealType(type as any)}
+                                          onClick={() => setMealType(type as 'breakfast' | 'lunch' | 'dinner' | 'snack')}
                                           className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-all ${
                                               mealType === type
                                                   ? 'bg-white text-brand-700 shadow-sm'
