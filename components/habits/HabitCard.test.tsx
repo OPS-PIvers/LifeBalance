@@ -11,6 +11,7 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     toggleHabit: vi.fn(),
     deleteHabit: vi.fn(),
     resetHabit: vi.fn(),
+    addHabit: vi.fn(),
     activeChallenge: null,
     freezeBank: { tokens: 3 },
     useFreezeBankToken: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('lucide-react', () => ({
   Calendar: () => <span data-testid="icon-calendar" />,
   Wrench: () => <span data-testid="icon-wrench" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  Copy: () => <span data-testid="icon-copy" />,
 }));
 
 // Mock date-fns with controlled dates
@@ -266,5 +268,56 @@ describe('HabitCard - Streak Repair', () => {
     await user.click(screen.getByLabelText('Habit options menu'));
 
     expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
+  });
+});
+
+describe('HabitCard - Duplicate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true); // Default to Desktop
+  });
+
+  it('calls addHabit with correct parameters when Duplicate is clicked (desktop)', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    // Open menu
+    await user.click(screen.getByLabelText('Habit options menu'));
+
+    // Click Duplicate
+    await user.click(screen.getByText('Duplicate'));
+
+    // Verify addHabit call
+    expect(mockHouseholdContext.addHabit).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Test Habit (Copy)',
+      count: 0,
+      streakDays: 0,
+      totalCount: 0,
+      completedDates: [],
+      // Ensure other fields are preserved
+      category: mockHabit.category,
+      basePoints: mockHabit.basePoints,
+    }));
+  });
+
+  it('calls addHabit with correct parameters when Duplicate is clicked (mobile)', async () => {
+    setupMatchMedia(false); // Mobile
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    // Open menu
+    await user.click(screen.getByLabelText('Habit options menu'));
+
+    // Click Duplicate Habit (Mobile text)
+    await user.click(screen.getByText('Duplicate Habit'));
+
+    // Verify addHabit call
+    expect(mockHouseholdContext.addHabit).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Test Habit (Copy)',
+      count: 0,
+      streakDays: 0,
+      totalCount: 0,
+      completedDates: [],
+    }));
   });
 });
