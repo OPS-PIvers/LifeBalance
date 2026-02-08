@@ -59,8 +59,8 @@ export const QuickRestockRow: React.FC = () => {
   return (
     <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
       <div className="flex items-center gap-2 px-1">
-        <span className="text-xxs font-bold text-brand-400 uppercase tracking-wider">Quick Restock</span>
-        <div className="h-px bg-brand-100 flex-1"></div>
+        <span className="text-xxs font-bold text-slate-400 uppercase tracking-wider">Quick Restock</span>
+        <div className="h-px bg-slate-100 flex-1"></div>
       </div>
 
       <div
@@ -78,14 +78,15 @@ export const QuickRestockRow: React.FC = () => {
               key={list.id}
               onClick={() => handleRestock(list)}
               className={clsx(
-                "flex-shrink-0 flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-all active:scale-95",
-                `${color.bg} ${color.text} ${color.border} ${color.hoverBg}`
+                "flex-shrink-0 flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-all active:scale-95 shadow-sm",
+                // Use a subtle glass effect with the store color as tint
+                `${color.bg} ${color.text} ${color.border} hover:shadow-md hover:brightness-95 backdrop-blur-sm bg-opacity-60`
               )}
               aria-label={`Quick add items from ${list.name}`}
             >
-              <ListIcon size={12} />
-              <span className="font-medium">{list.name}</span>
-              <span className="opacity-70 font-bold ml-0.5">
+              <ListIcon size={14} />
+              <span className="font-bold tracking-tight">{list.name}</span>
+              <span className="opacity-60 font-medium ml-0.5 text-[10px] bg-black/5 px-1.5 py-0.5 rounded-full">
                 {list.items.length}
               </span>
             </button>
