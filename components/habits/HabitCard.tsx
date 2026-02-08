@@ -2,11 +2,15 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
 import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
+import { Drawer } from '../ui/Drawer';
+import { Button } from '../ui/Button';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { subDays, format } from 'date-fns';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,11 +22,12 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
+  const isDesktop = useMediaQuery('(min-width: 640px)');
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
@@ -41,6 +46,15 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
 
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
+
+  // Streak Repair Eligibility
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const isEligibleForRepair =
+    isPositive &&
+    habit.period === 'daily' &&
+    habit.streakDays === 0 &&
+    !habit.completedDates.includes(yesterday) &&
+    (freezeBank?.tokens || 0) > 0;
 
   const containerClasses = cn(
     "relative flex items-center justify-between p-5 rounded-2xl transition-all duration-300 select-none group/card shadow-glass",
@@ -62,8 +76,23 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     toggleHabit(habit.id, 'up');
   };
 
+  const handleEdit = () => {
+    setIsEditModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const handleViewLog = () => {
+    setIsLogModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const handleDelete = () => {
+    deleteHabit(habit.id);
+    setIsMenuOpen(false);
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = 3; // Edit, View Log, Delete
+    const menuItems = isEligibleForRepair ? 4 : 3; // Edit, View Log, (Repair), Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -83,14 +112,14 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         e.preventDefault();
         // Trigger the focused menu item
         if (focusedMenuIndex === 0) {
-          setIsEditModalOpen(true);
-          setIsMenuOpen(false);
+          handleEdit();
         } else if (focusedMenuIndex === 1) {
-          setIsLogModalOpen(true);
+          handleViewLog();
+        } else if (isEligibleForRepair && focusedMenuIndex === 2) {
+          consumeFreezeBankToken(habit.id, yesterday);
           setIsMenuOpen(false);
-        } else if (focusedMenuIndex === 2) {
-          deleteHabit(habit.id);
-          setIsMenuOpen(false);
+        } else if ((isEligibleForRepair && focusedMenuIndex === 3) || (!isEligibleForRepair && focusedMenuIndex === 2)) {
+          handleDelete();
         }
         break;
     }
@@ -223,11 +252,11 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           </div>
         </div>
 
-        {/* Menu Dropdown */}
-        {isMenuOpen && (
+        {/* Menu Dropdown (Desktop Only) */}
+        {isMenuOpen && isDesktop && (
           <>
             <div 
-              className="fixed inset-0" 
+              className="fixed inset-0"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
@@ -246,8 +275,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsEditModalOpen(true);
-                  setIsMenuOpen(false);
+                  handleEdit();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
@@ -261,8 +289,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsLogModalOpen(true);
-                  setIsMenuOpen(false);
+                  handleViewLog();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
@@ -273,15 +300,31 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               >
                 <Calendar size={14} /> View Log
               </button>
+              {isEligibleForRepair && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    consumeFreezeBankToken(habit.id, yesterday);
+          setIsMenuOpen(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 focus:outline-none",
+                    focusedMenuIndex === 2 && "bg-indigo-50"
+                  )}
+                  role="menuitem"
+                  tabIndex={-1}
+                >
+                  <Wrench size={14} /> Repair Streak ({freezeBank?.tokens})
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  deleteHabit(habit.id);
-                  setIsMenuOpen(false);
+                  handleDelete();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 2 && "bg-rose-50"
+                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -292,6 +335,54 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           </>
         )}
       </div>
+
+      {/* Mobile Drawer Actions */}
+      <Drawer
+        isOpen={isMenuOpen && !isDesktop}
+        onClose={() => setIsMenuOpen(false)}
+        title="Habit Options"
+      >
+        <div className="space-y-2">
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={<Edit2 className="text-brand-500" />}
+            onClick={handleEdit}
+          >
+            Edit Habit
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={<Calendar className="text-brand-500" />}
+            onClick={handleViewLog}
+          >
+            View History Log
+          </Button>
+          {isEligibleForRepair && (
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-lg py-4 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+              leftIcon={<Wrench className="text-indigo-500" />}
+              onClick={() => {
+                consumeFreezeBankToken(habit.id, yesterday);
+                setIsMenuOpen(false);
+              }}
+            >
+              Repair Streak ({freezeBank?.tokens})
+            </Button>
+          )}
+          <div className="h-px bg-gray-100 my-2" />
+          <Button
+            variant="ghost-destructive"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={<Trash2 />}
+            onClick={handleDelete}
+          >
+            Delete Habit
+          </Button>
+        </div>
+      </Drawer>
 
       <HabitFormModal
         isOpen={isEditModalOpen}
