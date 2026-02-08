@@ -75,9 +75,6 @@ const ShoppingListTab: React.FC = () => {
   const isDraggingRef = useRef(false);
 
   // Sync local items with context shoppingList, respecting order
-  // Note: This effect synchronizes external state (shoppingList from context) with local state
-  // (items) required by the Reorder.Group drag-and-drop component. The isDraggingRef prevents
-  // infinite loops, and this pattern is necessary for react-use-gesture/framer-motion integration.
   useEffect(() => {
     // Avoid resetting items while user is dragging
     if (isDraggingRef.current) return;
@@ -376,7 +373,7 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     onClick={handleSaveAsTemplate}
                     disabled={shoppingList.length === 0}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50"
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
                     title="Save as Template"
                     aria-label="Save as Template"
                 >
@@ -385,7 +382,7 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     onClick={handleShareList}
                     disabled={!hasPendingItems}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50"
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
                     title="Copy list to clipboard"
                     aria-label="Copy list to clipboard"
                 >
@@ -394,14 +391,14 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     onClick={handleExport}
                     disabled={shoppingList.length === 0}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50"
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
                     aria-label="Export to CSV"
                 >
                     <Download className="w-5 h-5" />
                 </button>
                 <button
                     onClick={() => setIsSettingsOpen(true)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                    className="p-2 text-gray-500 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors"
                     aria-label="Settings"
                 >
                     <Settings className="w-5 h-5" />
@@ -436,7 +433,7 @@ const ShoppingListTab: React.FC = () => {
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 backdrop-blur-sm border border-slate-200/50 rounded-xl shadow-sm text-xs font-medium text-slate-600 hover:text-violet-600 hover:bg-violet-50/50 hover:border-violet-200/50 active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all disabled:opacity-50"
                 title="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -445,7 +442,7 @@ const ShoppingListTab: React.FC = () => {
 
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 backdrop-blur-sm border border-slate-200/50 rounded-xl shadow-sm text-xs font-medium text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50 hover:border-indigo-200/50 active:scale-95 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2 bg-white border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-600 hover:text-brand-600 hover:bg-gray-50 active:bg-gray-100 transition-all"
                 title="View Item History"
              >
                 <Clock className="w-3.5 h-3.5" />
@@ -455,10 +452,10 @@ const ShoppingListTab: React.FC = () => {
              <div className="relative flex-1">
                <button
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-xl shadow-sm text-xs font-medium transition-all ${
+                  className={`w-full flex items-center justify-center gap-1.5 p-2 border rounded-lg shadow-sm text-xs font-medium transition-all ${
                     filterStore
                       ? 'bg-brand-50 border-brand-200 text-brand-700'
-                      : 'bg-white/60 backdrop-blur-sm border-slate-200/50 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      : 'bg-white border-gray-200 text-gray-600 hover:text-brand-600 hover:bg-gray-50'
                   }`}
                >
                   <Filter className="w-3.5 h-3.5" />
@@ -468,14 +465,14 @@ const ShoppingListTab: React.FC = () => {
                {isFilterOpen && (
                  <>
                    <div className="fixed inset-0 z-10" onClick={() => setIsFilterOpen(false)} />
-                   <div className="absolute top-full right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200">
+                   <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200">
                      <div className="max-h-60 overflow-y-auto">
                         <button
                           onClick={() => {
                             setFilterStore(null);
                             setIsFilterOpen(false);
                           }}
-                          className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50/50' : 'text-slate-700'}`}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50' : 'text-gray-700'}`}
                         >
                           All Items
                           {!filterStore && <Filter size={14} />}
@@ -487,14 +484,14 @@ const ShoppingListTab: React.FC = () => {
                               setFilterStore(store.name);
                               setIsFilterOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50/50' : 'text-slate-700'}`}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50' : 'text-gray-700'}`}
                           >
                             {store.name}
                             {filterStore === store.name && <Filter size={14} />}
                           </button>
                         ))}
                         {stores.length === 0 && (
-                          <div className="px-4 py-2 text-xs text-slate-400 italic">No stores configured</div>
+                          <div className="px-4 py-2 text-xs text-gray-400 italic">No stores configured</div>
                         )}
                      </div>
                    </div>
@@ -535,11 +532,11 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Main List */}
         {items.length === 0 ? (
-             <div className="text-center py-12 text-slate-400 bg-white/50 rounded-xl border border-dashed border-slate-200/60">
-                <div className="mb-3 text-4xl opacity-50">🛒</div>
-                <p className="text-sm font-medium">{filterStore ? `No items for ${filterStore}` : 'Shopping list is empty.'}</p>
+             <div className="text-center py-12 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+                <div className="mb-2 text-4xl">🛒</div>
+                <p>{filterStore ? `No items for ${filterStore}` : 'Shopping list is empty.'}</p>
                 {filterStore && (
-                    <button onClick={() => setFilterStore(null)} className="mt-2 text-brand-600 font-medium text-xs hover:underline">
+                    <button onClick={() => setFilterStore(null)} className="mt-2 text-brand-600 font-medium text-sm hover:underline">
                         Clear Filter
                     </button>
                 )}
@@ -604,50 +601,50 @@ const ShoppingListTab: React.FC = () => {
                     className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                     onClick={() => setEditingItem(null)}
                 />
-                <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
-                        <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100">
+                        <h3 className="text-lg font-bold text-brand-800">Edit Item</h3>
+                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-gray-400" /></button>
                     </div>
                     <div className="p-6 space-y-4">
                         <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
+                            <label className="text-xs font-bold text-brand-400 uppercase">Item Name</label>
                             <input
                                 type="text"
                                 value={editingItem.name}
                                 onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-900 font-medium"
+                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                              <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
+                                <label className="text-xs font-bold text-brand-400 uppercase">Category</label>
                                 <select
                                     value={editingItem.category || 'Uncategorized'}
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                                 >
                                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quantity</label>
+                                <label className="text-xs font-bold text-brand-400 uppercase">Quantity</label>
                                 <input
                                     type="text"
                                     value={editingItem.quantity || ''}
                                     onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                                 />
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store</label>
+                            <label className="text-xs font-bold text-brand-400 uppercase">Store</label>
                             <input
                                 type="text"
                                 value={editingItem.store || ''}
                                 onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
                                 placeholder="Optional"
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500"
                             />
                              {/* Quick Store Chips in Edit Modal */}
                              {stores.length > 0 && (
@@ -660,7 +657,7 @@ const ShoppingListTab: React.FC = () => {
                                             className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
                                                 editingItem.store === store.name
                                                 ? 'bg-brand-100 text-brand-800 border-brand-200'
-                                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                                : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
                                             }`}
                                         >
                                             <Store size={10} /> {store.name}
@@ -670,11 +667,11 @@ const ShoppingListTab: React.FC = () => {
                             )}
                         </div>
                     </div>
-                    <div className="p-4 border-t border-slate-200/50 bg-white/50">
+                    <div className="p-4 border-t border-brand-100">
                         <button
                             onClick={handleSaveEdit}
                             disabled={!editingItem.name.trim()}
-                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-50 hover:bg-brand-900 transition-all"
+                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-50"
                         >
                             Save Changes
                         </button>

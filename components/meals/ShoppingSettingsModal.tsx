@@ -292,58 +292,58 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
       noPadding={true}
     >
       {/* Tabs */}
-      <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
+      <div className="flex border-b border-gray-100">
           <button
             onClick={() => setActiveTab('stores')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'stores' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'stores' ? 'text-brand-600 bg-brand-50/50' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             Stores
             {activeTab === 'stores' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('categories')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'categories' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'categories' ? 'text-brand-600 bg-brand-50/50' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             Categories
             {activeTab === 'categories' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('templates')}
-            className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'templates' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              activeTab === 'templates' ? 'text-brand-600 bg-brand-50/50' : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
             Templates
             {activeTab === 'templates' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-500" />
             )}
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-gray-50">
 
           {activeTab === 'stores' && (
             <div className="space-y-6">
               {/* Add Store */}
-              <div className="bg-white p-5 rounded-2xl shadow-glass border border-slate-100">
-                <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Add New Store</h4>
-                <form onSubmit={handleAddStore} className="space-y-4">
-                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <h4 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Add New Store</h4>
+                <form onSubmit={handleAddStore} className="space-y-3">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
                     {Object.values(STORE_COLORS).map((color) => (
                       <button
                         key={color.id}
                         type="button"
                         onClick={() => setNewStoreColor(color.id)}
-                        className={`w-7 h-7 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
-                          newStoreColor === color.id ? 'border-slate-600 scale-110 ring-2 ring-slate-200' : 'border-transparent hover:scale-105'
+                        className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
+                          newStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
                         }`}
                         title={color.label}
                         aria-label={`Select color ${color.label}`}
@@ -356,12 +356,12 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none"
+                      className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
                     />
                     <button
                       type="submit"
                       disabled={!newStoreName.trim()}
-                      className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1 shadow-lg shadow-slate-200"
+                      className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
                     >
                       <Plus className="w-4 h-4" />
                       Add
@@ -371,14 +371,14 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
               </div>
 
               {/* Store List */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">My Stores</h4>
+              <div className="space-y-2">
+                <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wide pl-1">My Stores</h4>
                 {stores.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic pl-1">No stores added yet.</p>
+                  <p className="text-sm text-gray-400 italic pl-1">No stores added yet.</p>
                 ) : (
                   <div className="grid gap-2">
                     {stores.map(store => (
-                      <div key={store.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
+                      <div key={store.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between group">
                         {editingStoreId === store.id ? (
                            <div className="flex-1 space-y-2 mr-2">
                              <div className="flex gap-2 overflow-x-auto pb-1">

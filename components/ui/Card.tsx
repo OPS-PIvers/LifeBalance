@@ -1,5 +1,10 @@
 import React, { HTMLAttributes } from 'react';
-import { cn } from '../../utils/cn';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;

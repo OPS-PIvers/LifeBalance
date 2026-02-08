@@ -13,85 +13,6 @@ import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 
-interface FilterControlsProps {
-  categoryFilter: string;
-  setCategoryFilter: (value: string) => void;
-  sourceFilter: string;
-  setSourceFilter: (value: string) => void;
-  storeFilter: string;
-  setStoreFilter: (value: string) => void;
-  categories: string[];
-  stores: { id: string; name: string }[];
-  layout: 'row' | 'stack';
-}
-
-const FilterControls: React.FC<FilterControlsProps> = ({
-  categoryFilter,
-  setCategoryFilter,
-  sourceFilter,
-  setSourceFilter,
-  storeFilter,
-  setStoreFilter,
-  categories,
-  stores,
-  layout
-}) => {
-  const isRow = layout === 'row';
-  const selectClass = isRow
-    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
-
-  return (
-    <>
-      {/* Category Filter */}
-      <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Category</label>}
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className={selectClass}
-        >
-          <option value="all">All Categories</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Source Filter */}
-      <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Source</label>}
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className={selectClass}
-        >
-          <option value="all">All Sources</option>
-          <option value="recurring">Recurring</option>
-          <option value="manual">Manual Entry</option>
-          <option value="camera-scan">Camera Scan</option>
-          <option value="file-upload">File Upload</option>
-        </select>
-      </div>
-
-      {/* Store Filter */}
-      <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Store</label>}
-        <select
-          value={storeFilter}
-          onChange={(e) => setStoreFilter(e.target.value)}
-          className={selectClass}
-        >
-          <option value="all">All Stores</option>
-          {stores.map(s => (
-            <option key={s.id} value={s.name}>{s.name}</option>
-          ))}
-        </select>
-      </div>
-    </>
-  );
-};
-
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
@@ -122,7 +43,6 @@ const TransactionMasterList: React.FC = () => {
 
   // Mobile Action Drawer State
   const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
-  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // Clear selection when mode is toggled off
   React.useEffect(() => {
@@ -168,11 +88,6 @@ const TransactionMasterList: React.FC = () => {
         return 0;
       });
   }, [transactions, searchTerm, categoryFilter, sourceFilter, storeFilter]);
-
-  const activeFilterCount = useMemo(() =>
-    (categoryFilter !== 'all' ? 1 : 0) + (sourceFilter !== 'all' ? 1 : 0) + (storeFilter !== 'all' ? 1 : 0),
-    [categoryFilter, sourceFilter, storeFilter]
-  );
 
   // Derived State: Summary Statistics
   const summary = useMemo(() => {
@@ -384,19 +299,6 @@ const TransactionMasterList: React.FC = () => {
     }
   };
 
-  // Reusable filter props
-  const filterProps = {
-    categoryFilter,
-    setCategoryFilter,
-    sourceFilter,
-    setSourceFilter,
-    storeFilter,
-    setStoreFilter,
-    categories,
-    stores,
-  };
-
-
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
@@ -412,79 +314,87 @@ const TransactionMasterList: React.FC = () => {
             className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
           />
           {searchTerm && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600 h-auto p-0 hover:bg-transparent shadow-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600"
             >
               <X size={16} />
-            </Button>
+            </button>
           )}
-        </div>
-
-        {/* Mobile Filter & Select Toggle */}
-        <div className="flex md:hidden items-center gap-2 mb-2">
-           <Button
-             variant="secondary"
-             className="flex-1 justify-center"
-             onClick={() => setIsFilterDrawerOpen(true)}
-           >
-             <Filter size={16} className="mr-2" />
-             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
-           </Button>
-
-           <Button
-            onClick={() => setIsSelectionMode(!isSelectionMode)}
-            variant={isSelectionMode ? 'primary' : 'subtle'}
-            size="icon"
-            aria-label="Toggle selection mode"
-            className="h-11"
-          >
-            <Layers size={16} />
-          </Button>
         </div>
 
         {/* Filter Chips / Dropdowns */}
-        <div className="hidden md:flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <FilterControls {...filterProps} layout="row" />
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Sources</option>
+            <option value="recurring">Recurring</option>
+            <option value="manual">Manual Entry</option>
+            <option value="camera-scan">Camera Scan</option>
+            <option value="file-upload">File Upload</option>
+          </select>
+
+          <select
+            value={storeFilter}
+            onChange={(e) => setStoreFilter(e.target.value)}
+            className="px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
+          >
+            <option value="all">All Stores</option>
+            {stores.map(s => (
+              <option key={s.id} value={s.name}>{s.name}</option>
+            ))}
+          </select>
 
           {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
-            <Button
-              variant="subtle"
-              size="sm"
+            <button
               onClick={clearFilters}
+              className="px-3 py-2 bg-brand-100 text-brand-600 rounded-lg text-sm font-medium hover:bg-brand-200 transition-colors whitespace-nowrap"
             >
               Clear
-            </Button>
+            </button>
           )}
 
           {/* Select Mode Toggle */}
-          <Button
-            variant={isSelectionMode ? 'primary' : 'subtle'}
-            size="sm"
+          <button
             onClick={() => setIsSelectionMode(!isSelectionMode)}
-            leftIcon={<Layers size={16} />}
+            className={`ml-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+              isSelectionMode
+                ? 'bg-brand-600 text-white hover:bg-brand-700'
+                : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
+            }`}
             title="Toggle selection mode"
-            aria-label="Toggle selection mode"
-            className="ml-auto"
           >
+            <Layers size={16} />
             <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>
-          </Button>
+          </button>
 
           {/* Export Button */}
-          <Button
-            variant="primary"
-            size="sm"
+          <button
             onClick={handleExport}
             disabled={filteredTransactions.length === 0 || isSelectionMode}
-            leftIcon={<Download size={16} />}
-            className={isSelectionMode ? 'hidden sm:flex' : ''}
+            className={`px-3 py-2 bg-brand-800 text-white rounded-lg text-sm font-medium hover:bg-brand-900 transition-colors whitespace-nowrap flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              isSelectionMode ? 'hidden sm:flex' : ''
+            }`}
             title="Export filtered transactions to CSV"
             aria-label="Export filtered transactions to CSV"
           >
+            <Download size={16} />
             <span className="hidden sm:inline">Export</span>
-          </Button>
+          </button>
         </div>
 
         <SavedViewChips
@@ -536,14 +446,13 @@ const TransactionMasterList: React.FC = () => {
       {/* Select All Bar */}
       {isSelectionMode && (
         <div className="flex items-center justify-between px-2 text-sm text-brand-600">
-          <Button
-            variant="link"
+          <button
             onClick={handleSelectAll}
-            className="flex items-center gap-2 font-bold hover:no-underline"
+            className="flex items-center gap-2 font-bold hover:text-brand-800"
           >
             <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
             Select All ({filteredTransactions.length})
-          </Button>
+          </button>
           <span className="text-xs">{selectedIds.size} selected</span>
         </div>
       )}
@@ -554,13 +463,9 @@ const TransactionMasterList: React.FC = () => {
           <div className="text-center py-10 text-brand-400">
             <Filter className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p>No transactions found matching your filters.</p>
-            <Button
-              variant="link"
-              onClick={clearFilters}
-              className="mt-2 font-bold text-sm"
-            >
+            <button onClick={clearFilters} className="mt-2 text-brand-600 font-bold text-sm hover:underline">
               Clear all filters
-            </Button>
+            </button>
           </div>
         ) : (
           filteredTransactions.map(tx => (
@@ -588,35 +493,32 @@ const TransactionMasterList: React.FC = () => {
               {selectedIds.size} selected
             </div>
 
-            <Button
-              variant="ghost-inverted"
+            <button
               onClick={() => setIsBatchCategorizeOpen(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
             >
               <Tag size={18} />
               <span className="text-xxs font-medium">Categorize</span>
-            </Button>
+            </button>
 
-            <Button
-              variant="ghost-inverted"
+            <button
               onClick={handleBatchVerify}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-brand-800 rounded-lg transition-colors disabled:opacity-50"
             >
               <Check size={18} />
               <span className="text-xxs font-medium">Verify</span>
-            </Button>
+            </button>
 
-            <Button
-              variant="ghost-inverted"
+            <button
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5 text-red-300 hover:text-red-200 hover:bg-white/10"
+              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-red-900 text-red-300 hover:text-red-200 rounded-lg transition-colors disabled:opacity-50"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
-            </Button>
+            </button>
           </div>
         </div>
       )}
@@ -647,25 +549,21 @@ const TransactionMasterList: React.FC = () => {
             </p>
 
             <div className="flex gap-3 pt-2">
-              <Button
-                variant="subtle"
-                size="lg"
+              <button
                 onClick={() => setShowBatchDeleteConfirm(false)}
                 disabled={isBatchProcessing}
-                className="flex-1"
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
               >
                 Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="lg"
+              </button>
+              <button
                 onClick={handleBatchDelete}
                 disabled={isBatchProcessing}
-                className="flex-1"
-                leftIcon={isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
+                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
                 <span>Delete All</span>
-              </Button>
+              </button>
             </div>
           </div>
         </Modal>
@@ -706,25 +604,21 @@ const TransactionMasterList: React.FC = () => {
             </p>
 
             <div className="flex gap-3 pt-2">
-              <Button
-                variant="subtle"
-                size="lg"
+              <button
                 onClick={() => setTransactionToDelete(null)}
                 disabled={isDeleting}
-                className="flex-1"
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
               >
                 Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="lg"
+              </button>
+              <button
                 onClick={confirmDelete}
                 disabled={isDeleting}
-                className="flex-1"
-                leftIcon={isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
+                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
               >
+                {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
                 <span>Delete</span>
-              </Button>
+              </button>
             </div>
           </div>
         </Modal>
@@ -786,47 +680,6 @@ const TransactionMasterList: React.FC = () => {
               </Button>
             </>
           )}
-        </div>
-      </Drawer>
-
-      {/* Mobile Filter Drawer */}
-      <Drawer
-        isOpen={isFilterDrawerOpen}
-        onClose={() => setIsFilterDrawerOpen(false)}
-        title="Filter Transactions"
-      >
-        <div className="space-y-4 pt-2">
-          <FilterControls {...filterProps} layout="stack" />
-
-          <div className="pt-4 space-y-3 border-t border-gray-100">
-            {/* Export Button */}
-            <Button
-               variant="primary"
-               className="w-full justify-center py-4"
-               leftIcon={<Download />}
-               onClick={() => {
-                 handleExport();
-                 setIsFilterDrawerOpen(false);
-               }}
-               disabled={filteredTransactions.length === 0}
-            >
-              Export to CSV
-            </Button>
-
-            {/* Clear Filters */}
-            {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
-              <Button
-                variant="ghost-destructive"
-                className="w-full justify-center py-4"
-                onClick={() => {
-                  clearFilters();
-                  setIsFilterDrawerOpen(false);
-                }}
-              >
-                Clear All Filters
-              </Button>
-            )}
-          </div>
         </div>
       </Drawer>
     </div>

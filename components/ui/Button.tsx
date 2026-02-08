@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive';
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -25,8 +25,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_1px_2px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
       warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-[0_1px_2px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
       destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_1px_2px_rgba(244,63,94,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      link: 'bg-transparent text-brand-600 hover:text-brand-800 hover:underline px-0 shadow-none h-auto',
-      'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
     };
 
     const sizes = {

@@ -1,14 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
-import { Drawer } from '../components/ui/Drawer';
-import { Button } from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
 const ToDosPage: React.FC = () => {
@@ -23,9 +21,6 @@ const ToDosPage: React.FC = () => {
   // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  // Mobile Action Drawer State
-  const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -492,7 +487,6 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -509,7 +503,6 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -526,7 +519,6 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -552,7 +544,6 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -561,7 +552,6 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -570,7 +560,6 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -579,7 +568,6 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
-                onMore={setActionTodo}
                 members={members}
             />
 
@@ -755,68 +743,6 @@ const ToDosPage: React.FC = () => {
         </Modal>
       )}
 
-      {/* Mobile Actions Drawer */}
-      <Drawer
-        isOpen={!!actionTodo}
-        onClose={() => setActionTodo(null)}
-        title="Task Options"
-      >
-        <div className="space-y-2">
-          {actionTodo && (
-            <>
-              {/* Primary Action (Edit or Uncomplete) */}
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={actionTodo.isCompleted ? <RotateCcw className="text-brand-500" /> : <Edit2 className="text-brand-500" />}
-                onClick={() => {
-                  if (actionTodo.isCompleted) {
-                    handleUncomplete(actionTodo.id);
-                  } else {
-                    openEditModal(actionTodo);
-                  }
-                  setActionTodo(null);
-                }}
-              >
-                {actionTodo.isCompleted ? 'Mark as Active' : 'Edit Task'}
-              </Button>
-
-              {/* Common Actions */}
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Copy className="text-brand-500" />}
-                onClick={() => {
-                  handleDuplicate(actionTodo);
-                  setActionTodo(null);
-                }}
-              >
-                Duplicate
-              </Button>
-
-              <div className="h-px bg-gray-100 my-2" />
-
-              <Button
-                variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
-                onClick={() => {
-                   // Close drawer immediately before confirmation to prevent visual clutter
-                   // and potential interaction issues with the toast/modal overlay
-                   setActionTodo(null);
-                   showDeleteConfirmation(async () => {
-                     await deleteToDo(actionTodo.id);
-                     toast.success('Task deleted');
-                   });
-                }}
-              >
-                {actionTodo.isCompleted ? 'Delete Forever' : 'Delete'}
-              </Button>
-            </>
-          )}
-        </div>
-      </Drawer>
-
     </div>
   );
 };
@@ -831,12 +757,11 @@ const Section: React.FC<{
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
-  onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
   isSelectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMore, members, isSelectionMode, selectedIds, onToggleSelection }) => {
+}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, members, isSelectionMode, selectedIds, onToggleSelection }) => {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -950,49 +875,36 @@ const Section: React.FC<{
 
                  {/* Actions */}
                  {!isSelectionMode && (
-                   <>
-                     {/* Desktop Actions */}
-                     <div className="hidden sm:flex items-center gap-1 pl-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                          aria-label="Duplicate task"
-                          title="Duplicate"
-                        >
-                          <Copy size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                          aria-label="Edit task"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            showDeleteConfirmation(async () => {
-                              await onDelete(item.id);
-                              toast.success('Task deleted');
-                            });
-                          }}
-                          className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
-                          aria-label="Delete task"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                     </div>
-                     {/* Mobile Actions */}
-                     <div className="flex sm:hidden pl-2">
-                       <button
-                         onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                         aria-label="More options"
-                       >
-                         <MoreVertical size={20} />
-                       </button>
-                     </div>
-                   </>
+                   <div className="flex items-center gap-1 pl-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
+                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                        aria-label="Duplicate task"
+                        title="Duplicate"
+                      >
+                        <Copy size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                        aria-label="Edit task"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          showDeleteConfirmation(async () => {
+                            await onDelete(item.id);
+                            toast.success('Task deleted');
+                          });
+                        }}
+                        className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
+                        aria-label="Delete task"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                   </div>
                  )}
                </div>
              </div>
@@ -1010,9 +922,8 @@ const CompletedSection: React.FC<{
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
-  onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
-}> = ({ title, items, onUncomplete, onDelete, onDuplicate, onMore, members }) => {
+}> = ({ title, items, onUncomplete, onDelete, onDuplicate, members }) => {
     const memberMap = useMemo(() => {
         const map = new Map<string, HouseholdMember>();
         members.forEach(member => map.set(member.uid, member));
@@ -1064,8 +975,7 @@ const CompletedSection: React.FC<{
                                 </div>
                             </div>
 
-                            {/* Desktop Actions */}
-                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                     onClick={() => onDuplicate(item)}
                                     className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
@@ -1083,16 +993,6 @@ const CompletedSection: React.FC<{
                                 >
                                     <Trash2 size={14} />
                                 </button>
-                            </div>
-                            {/* Mobile Actions */}
-                            <div className="flex sm:hidden">
-                               <button
-                                 onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                                 aria-label="More options"
-                               >
-                                 <MoreVertical size={20} />
-                               </button>
                             </div>
                         </div>
                     );
