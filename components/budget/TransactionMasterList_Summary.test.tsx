@@ -145,6 +145,10 @@ describe('TransactionMasterList Summary Widget', () => {
     expect(incomeAndNet.length).toBeGreaterThanOrEqual(2); // One for Income, one for Net
 
     expect(screen.getByText('-$0.00')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
+
+    // Find the count element specifically to avoid ambiguity with filter badges
+    const countLabel = screen.getByText('Count');
+    const countValue = countLabel.nextElementSibling; // The p tag following the label
+    expect(countValue).toHaveTextContent('1');
   });
 });

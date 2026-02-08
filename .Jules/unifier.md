@@ -43,3 +43,7 @@
 ## 2025-03-06 - Standardizing Collapsible Sections and Card Utilities
 **Drift:** The `Settings` page used a custom `SettingsSection` component with hardcoded styles and logic for accordion-like behavior. Additionally, `components/ui/Card.tsx` duplicated the `cn` utility logic instead of importing the shared `utils/cn.ts` helper.
 **Fix:** Created `components/ui/CollapsibleCard.tsx` to standardize the accordion pattern, refactored `Settings.tsx` to use it, and updated `Card.tsx` to use the shared `cn` utility.
+
+## 2026-02-08 - Standardized TransactionMasterList Buttons
+**Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
+**Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
