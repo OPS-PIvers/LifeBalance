@@ -28,3 +28,11 @@
 - **Shopping List:** Applied "Glassmorphism" to the Quick Add area. Refined typography (`tracking-tight`, `text-slate-900`) and replaced item borders with `ring-1 ring-black/5`.
 - **Quick Restock:** Converted chips to pill-shaped glass elements (`bg-white/60 backdrop-blur-md`).
 - **To-Do:** Elevated cards with `shadow-glass` and `backdrop-blur-xl`. Increased page breathing room (`pb-32 pt-8`). Standardized typography.
+
+## 2025-05-25 - Meals & Shopping Polish
+**Critique:** "Developer UI" markers found in Meals and Shopping features. `MealPlanTab` used heavy `bg-brand-50` and `font-bold` excessively. Modals lacked depth and used default white backgrounds. Shopping list rows relied on generic swipe colors and tight spacing.
+**Polish:**
+- **Meal Plan:** Elevated calendar and day cards with `bg-white/80 backdrop-blur-xl` and `shadow-glass`. Refined typography to `text-slate-900` with `tracking-tight`.
+- **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
+- **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
+- **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
