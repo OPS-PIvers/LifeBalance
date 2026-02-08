@@ -89,33 +89,35 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       noPadding={true}
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
-        <Clock className="w-5 h-5 text-brand-500" />
+      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+            <Clock className="w-5 h-5 text-slate-500" />
+        </div>
         <div>
-          <h3 className="text-lg font-bold text-gray-800">Previously Purchased</h3>
-          <p className="text-xs text-gray-500">Quickly add items back to your list</p>
+          <h3 className="text-lg font-bold text-slate-900 tracking-tight">Previously Purchased</h3>
+          <p className="text-xs text-slate-500">Quickly add items back to your list</p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search history..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
             autoFocus
           />
         </div>
       </div>
 
       {/* List */}
-      <div className="p-4 space-y-2">
+      <div className="p-4 space-y-2 bg-slate-50/30 min-h-[50vh]">
           {filteredCatalog.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-slate-400">
               <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p>No history found matching &quot;{searchQuery}&quot;</p>
               <p className="text-xs mt-1">Items you check off your shopping list will appear here.</p>
@@ -124,12 +126,12 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             filteredCatalog.map(item => (
               <div
                 key={item.id}
-                className="group flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-brand-200 hover:shadow-sm transition-all"
+                className="group flex items-center gap-3 p-3 bg-white/80 border border-slate-100 rounded-2xl hover:border-slate-200 hover:shadow-glass hover:bg-white transition-all"
               >
                 {/* Add Button Area */}
                 <button
                   onClick={() => handleAddItem(item)}
-                  className="w-10 h-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center hover:bg-brand-100 hover:scale-105 transition-all shrink-0"
+                  className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-brand-50 hover:text-brand-600 hover:scale-105 transition-all shrink-0"
                   aria-label={`Add ${item.name} to list`}
                 >
                   <Plus className="w-5 h-5" />
@@ -141,12 +143,12 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
                   onClick={() => handleAddItem(item)}
                 >
-                  <div className="font-medium text-gray-900 truncate">{item.name}</div>
-                  <div className="text-xs text-gray-500 flex items-center gap-2">
-                    <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{item.category}</span>
-                    {item.defaultStore && <span className="truncate max-w-[80px] text-gray-400">• {item.defaultStore}</span>}
+                  <div className="font-medium text-slate-900 truncate">{item.name}</div>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                    <span className="bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-medium">{item.category}</span>
+                    {item.defaultStore && <span className="truncate max-w-[80px] text-slate-400">• {item.defaultStore}</span>}
                     {item.lastPurchased && (
-                      <span className="text-gray-300">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
+                      <span className="text-slate-300">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
                     )}
                   </div>
                 </button>
@@ -155,14 +157,14 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
-                    className="p-2 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-full"
+                    className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
                     aria-label="Edit history item"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full"
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
                     aria-label="Delete from history"
                   >
                     <Trash2 className="w-4 h-4" />
