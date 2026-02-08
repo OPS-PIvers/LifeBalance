@@ -75,6 +75,9 @@ const ShoppingListTab: React.FC = () => {
   const isDraggingRef = useRef(false);
 
   // Sync local items with context shoppingList, respecting order
+  // Note: This effect synchronizes external state (shoppingList from context) with local state
+  // (items) required by the Reorder.Group drag-and-drop component. The isDraggingRef prevents
+  // infinite loops, and this pattern is necessary for react-use-gesture/framer-motion integration.
   useEffect(() => {
     // Avoid resetting items while user is dragging
     if (isDraggingRef.current) return;
