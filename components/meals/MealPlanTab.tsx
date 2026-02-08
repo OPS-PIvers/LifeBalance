@@ -5,6 +5,7 @@ import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, Shop
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+import { IngredientSelectorModal } from './IngredientSelectorModal';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -14,7 +15,9 @@ const MealPlanTab: React.FC = () => {
     addMeal,
     updateMeal,
     addShoppingItem,
+    addShoppingItems,
     shoppingList,
+    groceryCatalog,
     mealPlan,
     addMealPlanItem,
     updateMealPlanItem,
@@ -29,6 +32,8 @@ const MealPlanTab: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
+  const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -60,6 +65,59 @@ const MealPlanTab: React.FC = () => {
       }));
       setTagInput('');
     }
+  };
+
+  const handleOpenIngredientSelector = (name: string, ingredients: MealIngredient[], mealId?: string) => {
+      setIngredientSelectorData({ name, ingredients, mealId });
+      setIsIngredientSelectorOpen(true);
+  };
+
+  const handleConfirmIngredients = async (selectedIngredients: MealIngredient[]) => {
+      if (selectedIngredients.length === 0) return;
+
+      // 1. Create a Map of grocery catalog for O(1) lookups
+      const catalogMap = new Map(groceryCatalog.map(item => [normalizeToKey(item.name), item]));
+
+      // 2. Filter out items that are already in the unpurchased shopping list
+      // This prevents duplicates if the user manually re-selected "In List" items
+      const unpurchasedSet = new Set(
+          shoppingList
+            .filter(item => !item.isPurchased)
+            .map(item => normalizeToKey(item.name))
+      );
+
+      const itemsToAdd = selectedIngredients
+        .filter(ing => !unpurchasedSet.has(normalizeToKey(ing.name)))
+        .map((ing, index) => {
+            const normalizedName = normalizeToKey(ing.name);
+            const historyItem = catalogMap.get(normalizedName);
+
+            return {
+                name: ing.name,
+                quantity: ing.quantity || '',
+                category: historyItem?.category || 'Uncategorized',
+                isPurchased: false,
+                addedFromMealId: ingredientSelectorData?.mealId,
+                // Increment order for each new item to maintain sequence
+                order: shoppingList.length + index
+            };
+        });
+
+      if (itemsToAdd.length === 0) {
+          toast('All selected items are already in your list.', { icon: 'ℹ️' });
+          setIngredientSelectorData(null);
+          return;
+      }
+
+      try {
+        await addShoppingItems(itemsToAdd);
+        toast.success(`Added ${itemsToAdd.length} items to shopping list`);
+      } catch (error) {
+        console.error('Failed to add items:', error);
+        toast.error('Failed to add items');
+      } finally {
+        setIngredientSelectorData(null);
+      }
   };
 
   const handleAddIngredient = () => {
@@ -503,7 +561,11 @@ const MealPlanTab: React.FC = () => {
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        addIngredientsToShoppingList(linkedMeal.ingredients);
+                                                        handleOpenIngredientSelector(
+                                                            mealName || 'Meal',
+                                                            linkedMeal.ingredients,
+                                                            linkedMeal.id
+                                                        );
                                                     }}
                                                     className="mt-2 text-xxs font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
                                                 >
@@ -953,6 +1015,18 @@ const MealPlanTab: React.FC = () => {
                   </button>
               </div>
           </div>
+      )}
+
+      {/* Ingredient Selector Modal */}
+      {isIngredientSelectorOpen && ingredientSelectorData && (
+          <IngredientSelectorModal
+              isOpen={isIngredientSelectorOpen}
+              onClose={() => setIsIngredientSelectorOpen(false)}
+              mealName={ingredientSelectorData.name}
+              ingredients={ingredientSelectorData.ingredients}
+              shoppingList={shoppingList}
+              onConfirm={handleConfirmIngredients}
+          />
       )}
     </div>
   );
