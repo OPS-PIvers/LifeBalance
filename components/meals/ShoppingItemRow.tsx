@@ -6,6 +6,10 @@ import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import clsx from 'clsx';
 
+const SWIPE_DELETE_COLOR = '#fef2f2'; // red-50
+const SWIPE_DEFAULT_BG = '#ffffff'; // white
+const SWIPE_COMPLETE_COLOR = '#ecfdf5'; // emerald-50
+
 interface ShoppingItemRowProps {
   item: ShoppingItem;
   stores?: StoreType[];
@@ -29,7 +33,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const bgColor = useTransform(
     x,
     [-100, -50, 0, 50, 100],
-    ['#fef2f2', '#fef2f2', '#ffffff', '#ecfdf5', '#ecfdf5']
+    [
+      SWIPE_DELETE_COLOR,
+      SWIPE_DELETE_COLOR,
+      SWIPE_DEFAULT_BG,
+      SWIPE_COMPLETE_COLOR,
+      SWIPE_COMPLETE_COLOR
+    ]
   );
 
   // Icon opacity/scale based on drag position
