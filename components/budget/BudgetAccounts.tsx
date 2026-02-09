@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
+import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical } from 'lucide-react';
 import { Account } from '../../types/schema';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 
@@ -26,6 +27,9 @@ const BudgetAccounts: React.FC = () => {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mobile Actions
+  const [actionAccount, setActionAccount] = useState<Account | null>(null);
 
   // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -202,7 +206,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="subtle"
                 size="icon-sm"
                 onClick={() => setIsGoalModalOpen(account.id)}
-                className="hover:text-habit-gold hover:bg-yellow-50"
+                className="hover:text-habit-gold hover:bg-yellow-50 hidden sm:flex"
                 aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
@@ -211,16 +215,29 @@ const BudgetAccounts: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Delete button */}
+            {/* Delete button (Desktop) */}
             <Button
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300"
+              className="text-brand-300 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
             </Button>
+
+            {/* Mobile Actions (replacing small buttons) */}
+            <div className="sm:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setActionAccount(account)}
+                className="text-brand-300"
+                aria-label="Account options"
+              >
+                <MoreVertical size={20} />
+              </Button>
+            </div>
 
             {isEditing ? (
               <div className="flex items-center gap-2">
@@ -433,6 +450,71 @@ const BudgetAccounts: React.FC = () => {
           </Button>
         </div>
       </Modal>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionAccount}
+        onClose={() => setActionAccount(null)}
+        title={actionAccount?.name || 'Account Options'}
+      >
+        <div className="space-y-3 pb-6">
+          {actionAccount && (
+            <>
+              {/* Edit Balance Action */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Pencil className="text-brand-500" />}
+                onClick={() => {
+                  startEditing(actionAccount.id, actionAccount.balance);
+                  setActionAccount(null);
+                }}
+              >
+                Edit Balance
+              </Button>
+
+              {/* Set Savings Goal (if applicable) */}
+              {actionAccount.type === 'savings' && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-lg py-4"
+                  leftIcon={<Target className="text-brand-500" />}
+                  onClick={() => {
+                    setIsGoalModalOpen(actionAccount.id);
+                    setActionAccount(null);
+                  }}
+                >
+                  Set Savings Goal
+                </Button>
+              )}
+
+              <div className="h-px bg-gray-100 my-2" />
+
+              {/* Delete Action */}
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                  setDeletingId(actionAccount.id);
+                  setActionAccount(null);
+                }}
+              >
+                Delete Account
+              </Button>
+
+              {/* Cancel */}
+              <Button
+                variant="ghost"
+                className="w-full justify-center py-4"
+                onClick={() => setActionAccount(null)}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
 
       {/* Delete Confirmation Modal */}
       {deletingId && (

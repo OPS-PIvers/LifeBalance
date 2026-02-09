@@ -71,6 +71,7 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <span data-testid="trash-icon" />,
   Loader2: () => <span data-testid="loader-icon" />,
   ChevronDown: () => <span data-testid="chevron-down-icon" />,
+  MoreVertical: () => <span data-testid="more-vertical-icon" />,
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
@@ -80,6 +81,19 @@ vi.mock('../ui/Modal', () => ({
     return (
       <div data-testid="modal">
         <button onClick={onClose} aria-label="Close">X</button>
+        {children}
+      </div>
+    );
+  }
+}));
+
+// Mock Drawer
+vi.mock('../ui/Drawer', () => ({
+  Drawer: ({ children, isOpen, title }: any) => {
+    if (!isOpen) return null;
+    return (
+      <div data-testid="drawer">
+        <h3>{title}</h3>
         {children}
       </div>
     );
