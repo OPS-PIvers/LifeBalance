@@ -96,7 +96,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   };
 
   return (
-    <div className="bg-white/90 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 relative group overflow-hidden transition-all duration-300 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]">
+    <div className="bg-white/90 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass-card border border-white/20 relative group overflow-hidden transition-all duration-300 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]">
       {/* Header - Clickable for toggle */}
       <div
         className="flex items-center justify-between mb-4 cursor-pointer"
@@ -120,7 +120,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium flex flex-col items-end">
             <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-slate-700'}`}>
-              <span className="font-mono tracking-tight font-bold">${spent.verified.toFixed(2)}</span>
+              <span className="font-mono tracking-tight font-bold" aria-label={`Verified spending: $${spent.verified.toFixed(2)}`}>${spent.verified.toFixed(2)}</span>
               {spent.pending > 0 && (
                 <span className="text-slate-400 font-mono text-xs">
                   +${spent.pending.toFixed(2)}
