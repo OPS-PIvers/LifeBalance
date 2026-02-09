@@ -89,7 +89,7 @@ vi.mock('../ui/Modal', () => ({
 
 // Mock Drawer
 vi.mock('../ui/Drawer', () => ({
-  Drawer: ({ children, isOpen, title }: any) => {
+  Drawer: ({ children, isOpen, title }: { children: React.ReactNode; isOpen: boolean; title?: string }) => {
     if (!isOpen) return null;
     return (
       <div data-testid="drawer">
