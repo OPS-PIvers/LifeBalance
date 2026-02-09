@@ -151,9 +151,9 @@ describe('BudgetBuckets', () => {
     fireEvent.click(toggleButton);
 
     // Check transactions are visible
-    expect(screen.getByText('Transactions This Period (1)')).toBeInTheDocument();
+    expect(screen.getByText('Transactions (1)')).toBeInTheDocument();
     expect(screen.getByText('Grocery Store')).toBeInTheDocument();
-    expect(screen.getByText('$50')).toBeInTheDocument();
+    expect(screen.getByText('$50.00')).toBeInTheDocument();
   });
 
   it('opens edit transaction modal', async () => {
