@@ -6,6 +6,7 @@ import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
+import { CookbookModal } from './CookbookModal';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -419,6 +420,19 @@ const MealPlanTab: React.FC = () => {
       setIsPreviousMealsModalOpen(false);
       setIsAddModalOpen(true);
       toast.success('Cloned! You are editing a new copy.');
+  };
+
+  const handleSelectMeal = (meal: Meal) => {
+      setCurrentMeal({
+          name: meal.name,
+          description: meal.description || '',
+          ingredients: meal.ingredients || [],
+          instructions: meal.instructions || [],
+          recipeUrl: meal.recipeUrl || '',
+          tags: meal.tags || []
+      });
+      setEditingMealId(meal.id);
+      setIsPreviousMealsModalOpen(false);
   };
 
   const handleCancel = () => {
@@ -892,53 +906,14 @@ const MealPlanTab: React.FC = () => {
           </div>
       )}
 
-      {/* Previous Meals Modal */}
-      {isPreviousMealsModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="previous-meals-title"
-          >
-               <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-md p-6 max-h-[80vh] flex flex-col shadow-2xl ring-1 ring-black/5">
-                   <h3 id="previous-meals-title" className="text-xl font-bold text-slate-900 mb-4 tracking-tight">Your Cookbook</h3>
-                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                       {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
-                           <div key={meal.id} className="flex items-stretch gap-2">
-                               <button
-                                    onClick={() => {
-                                        setCurrentMeal(meal);
-                                        setEditingMealId(meal.id);
-                                        setIsPreviousMealsModalOpen(false);
-                                    }}
-                                    className="flex-1 text-left p-4 hover:bg-slate-50/50 rounded-xl border border-slate-200/60 flex justify-between items-center group transition-colors"
-                               >
-                                   <span className="font-semibold text-slate-700 group-hover:text-brand-700">{meal.name}</span>
-                                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-400" />
-                               </button>
-                               <button
-                                    onClick={() => handleCloneMeal(meal)}
-                                    className="px-4 text-slate-400 hover:text-brand-600 hover:bg-brand-50 border border-slate-200/60 rounded-xl transition-colors"
-                                    title="Clone Meal"
-                               >
-                                    <Copy className="w-5 h-5" />
-                               </button>
-                           </div>
-                       ))}
-                       {meals.length === 0 && <p className="text-slate-500 text-center py-8">No saved meals yet.</p>}
-                   </div>
-                   <button
-                        onClick={() => setIsPreviousMealsModalOpen(false)}
-                        className="mt-6 w-full py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                   >
-                       Close
-                   </button>
-               </div>
-          </div>
-      )}
+      {/* Previous Meals Modal (Smart Cookbook) */}
+      <CookbookModal
+        isOpen={isPreviousMealsModalOpen}
+        onClose={() => setIsPreviousMealsModalOpen(false)}
+        meals={meals}
+        onSelect={handleSelectMeal}
+        onClone={handleCloneMeal}
+      />
 
       {/* AI Modal */}
       {isAIModalOpen && (
