@@ -39,10 +39,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between transition-all group cursor-pointer ${
+      className={`p-4 rounded-2xl border flex items-center justify-between transition-all duration-300 group cursor-pointer ${
         isSelected
-          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
-          : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-md'
+          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300 shadow-sm'
+          : 'bg-white/80 backdrop-blur-sm border-slate-100 hover:bg-white hover:border-slate-200 hover:shadow-glass hover:-translate-y-0.5'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
@@ -53,18 +53,20 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           </div>
         )}
 
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-           tx.category === INCOME_CATEGORY ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-500'
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-black/5 shadow-sm ${
+           tx.category === INCOME_CATEGORY
+            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-600'
+            : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-500'
         }`}>
           {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-slate-900 truncate text-base">{tx.merchant}</p>
+            <p className="font-bold tracking-tight text-slate-900 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+          <p className="text-xs font-medium text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
             {format(parseISO(tx.date), 'MMM d, yyyy')}
             <span className="w-1 h-1 rounded-full bg-slate-300" />
             <span className="font-medium text-slate-600">{tx.category}</span>
@@ -80,7 +82,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
 
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
-          <p className={`font-mono font-semibold text-base ${
+          <p className={`font-mono font-bold tracking-tight text-base ${
             tx.category === INCOME_CATEGORY ? 'text-emerald-600' : 'text-slate-900'
           }`}>
             {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}

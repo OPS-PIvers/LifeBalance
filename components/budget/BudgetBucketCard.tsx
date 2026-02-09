@@ -96,10 +96,10 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative group">
+    <div className="bg-white/90 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/20 relative group overflow-hidden transition-all duration-300 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]">
       {/* Header - Clickable for toggle */}
       <div
-        className="flex items-center justify-between mb-3 cursor-pointer"
+        className="flex items-center justify-between mb-4 cursor-pointer"
         onClick={() => onExpand(bucket.id)}
         role="button"
         tabIndex={0}
@@ -113,20 +113,20 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
-          <span className="font-semibold tracking-tight text-slate-900">{bucket.name}</span>
+          <div className={`w-3 h-3 rounded-full shadow-sm ${bucket.color}`} />
+          <span className="font-bold tracking-tight text-slate-900 text-lg">{bucket.name}</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="text-sm font-mono flex flex-col items-end">
-            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-slate-600'}`}>
-              <span>${spent.verified.toFixed(2)}</span>
+          <div className="text-sm font-medium flex flex-col items-end">
+            <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-slate-700'}`}>
+              <span className="font-mono tracking-tight font-bold">${spent.verified.toFixed(2)}</span>
               {spent.pending > 0 && (
-                <span className="text-slate-400">
-                  +${spent.pending.toFixed(2)}*
+                <span className="text-slate-400 font-mono text-xs">
+                  +${spent.pending.toFixed(2)}
                 </span>
               )}
-              <span className="text-slate-300">/</span>
+              <span className="text-slate-300 font-light">/</span>
 
               {isEditingLimit ? (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -199,39 +199,41 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
+      <div className="h-3 w-full bg-slate-100/80 rounded-full overflow-hidden mb-4 ring-1 ring-black/5 shadow-inner">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
+          className={`h-full rounded-full transition-all duration-500 relative ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}
-        />
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent" />
+        </div>
       </div>
 
       {/* Expandable Transaction List */}
       {isExpanded && bucketTransactions.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs font-bold text-slate-400 uppercase mb-2">
-            Transactions This Period ({bucketTransactions.length})
+        <div className="mt-4 pt-4 border-t border-slate-100/50 space-y-3 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+            Transactions ({bucketTransactions.length})
           </p>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {bucketTransactions.map(tx => (
               <div
                 key={tx.id}
-                className="flex justify-between items-center text-sm py-2 px-3 bg-slate-50/50 rounded-lg hover:bg-slate-100 transition-colors group"
+                className="flex justify-between items-center text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-white rounded-xl border border-transparent hover:border-slate-100 hover:shadow-sm transition-all group"
               >
                 <div className="flex-1">
-                  <p className="font-medium text-slate-900">{tx.merchant}</p>
-                  <p className="text-xs text-slate-400">
-                    {format(parseISO(tx.date), 'MMM d, yyyy')}
+                  <p className="font-semibold text-slate-900">{tx.merchant}</p>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {format(parseISO(tx.date), 'MMM d')}
                     {tx.status === 'pending_review' && (
-                      <span className="ml-2 text-amber-600">• Pending</span>
+                      <span className="ml-2 text-amber-600 font-bold">• Pending</span>
                     )}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <span className={`font-mono font-bold ${
-                    tx.status === 'pending_review' ? 'text-slate-400' : 'text-slate-800'
+                    tx.status === 'pending_review' ? 'text-slate-400' : 'text-slate-900'
                   }`}>
-                    ${tx.amount}
+                    ${tx.amount.toFixed(2)}
                   </span>
 
                   {/* Actions: Buttons on Desktop, More Menu on Mobile */}
