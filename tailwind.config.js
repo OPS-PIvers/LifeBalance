@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const btnHighlight = 'inset 0 1px 0 rgba(255,255,255,0.1)';
+
 export default {
   content: [
     "./index.html",
@@ -48,11 +50,11 @@ export default {
         soft: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
         glass: '0 8px 30px rgba(0, 0, 0, 0.04)',
         nav: '0 -10px 40px -15px rgba(0, 0, 0, 0.05)',
-        'btn-primary': '0 1px 2px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
-        'btn-primary-hover': '0 4px 12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1)',
-        'btn-success': '0 1px 2px rgba(16,185,129,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
-        'btn-warning': '0 1px 2px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
-        'btn-destructive': '0 1px 2px rgba(244,63,94,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
+        'btn-primary': `0 1px 2px rgba(0,0,0,0.1), ${btnHighlight}`,
+        'btn-primary-hover': `0 4px 12px rgba(0,0,0,0.1), ${btnHighlight}`,
+        'btn-success': `0 1px 2px rgba(16,185,129,0.2), ${btnHighlight}`,
+        'btn-warning': `0 1px 2px rgba(245,158,11,0.2), ${btnHighlight}`,
+        'btn-destructive': `0 1px 2px rgba(244,63,94,0.2), ${btnHighlight}`,
       },
       spacing: {
         'safe': 'env(safe-area-inset-bottom)',
