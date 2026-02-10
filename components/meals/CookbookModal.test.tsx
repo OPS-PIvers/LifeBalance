@@ -1,19 +1,20 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { CookbookModal } from './CookbookModal';
 import { Meal } from '@/types/schema';
+import React, { PropsWithChildren } from 'react';
 
 // Mock dependencies
 vi.mock('@/components/ui/Modal', () => ({
-  Modal: ({ children, isOpen, ariaLabelledBy }: any) => isOpen ? <div role="dialog" aria-labelledby={ariaLabelledBy}>{children}</div> : null,
+  Modal: ({ children, isOpen, ariaLabelledBy }: PropsWithChildren<{ isOpen: boolean; ariaLabelledBy?: string }>) => isOpen ? <div role="dialog" aria-labelledby={ariaLabelledBy}>{children}</div> : null,
 }));
 
 vi.mock('@/components/ui/Button', () => ({
-  Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  Button: ({ children, onClick, ...props }: PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>) => <button onClick={onClick} {...props}>{children}</button>,
 }));
 
 vi.mock('@/components/ui/Input', () => ({
-  default: ({ value, onChange, placeholder }: any) => (
+  default: ({ value, onChange, placeholder }: React.InputHTMLAttributes<HTMLInputElement>) => (
     <input value={value} onChange={onChange} placeholder={placeholder} />
   ),
 }));
@@ -32,7 +33,7 @@ vi.mock('lucide-react', () => ({
 
 // Mock date-fns
 vi.mock('date-fns', () => ({
-  format: (date: Date, fmt: string) => `Formatted(${date.toISOString()})`,
+  format: (date: Date, _fmt: string) => `Formatted(${date.toISOString()})`,
   parseISO: (str: string) => new Date(str),
 }));
 
@@ -166,7 +167,7 @@ describe('CookbookModal', () => {
       />
     );
 
-    const sortButton = screen.getByTitle('Sort by Rating');
+    const sortButton = screen.getByLabelText('Sort by Rating');
     fireEvent.click(sortButton);
 
     const items = screen.getAllByText(/Adobo Chicken|Beef Stir Fry|Vegetable Curry/);
@@ -188,7 +189,8 @@ describe('CookbookModal', () => {
     );
 
     const mealButton = screen.getByText('Adobo Chicken').closest('button');
-    fireEvent.click(mealButton!);
+    if (!mealButton) throw new Error('Meal button not found');
+    fireEvent.click(mealButton);
 
     expect(mockOnSelect).toHaveBeenCalledWith(mockMeals[0]);
   });
@@ -204,7 +206,7 @@ describe('CookbookModal', () => {
       />
     );
 
-    const cloneButtons = screen.getAllByTitle('Clone as New Meal');
+    const cloneButtons = screen.getAllByLabelText('Clone as New Meal');
     fireEvent.click(cloneButtons[0]);
 
     expect(mockOnClone).toHaveBeenCalledWith(mockMeals[0]);
