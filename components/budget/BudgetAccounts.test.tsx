@@ -59,6 +59,19 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
   }),
 }));
 
+// Mock framer-motion
+vi.mock('framer-motion', () => ({
+  Reorder: {
+    Group: ({ children, className }: { children: React.ReactNode, className?: string }) => (
+      <div className={className}>{children}</div>
+    ),
+    Item: ({ children, className }: { children: React.ReactNode, className?: string }) => (
+      <div className={className}>{children}</div>
+    ),
+  },
+  useDragControls: () => ({ start: vi.fn() }),
+}));
+
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   Pencil: () => <span data-testid="pencil-icon" />,

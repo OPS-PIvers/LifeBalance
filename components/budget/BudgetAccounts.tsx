@@ -1,12 +1,151 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
+import { Reorder, useDragControls } from 'framer-motion';
 import { Account } from '../../types/schema';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+
+interface AccountRowProps {
+  account: Account;
+  editingId: string | null;
+  editValue: string;
+  setEditValue: (val: string) => void;
+  startEditing: (id: string, bal: number) => void;
+  saveEditing: (id: string) => void;
+  onDelete: (id: string) => void;
+  onSetGoal: (id: string) => void;
+}
+
+const AccountRow: React.FC<AccountRowProps> = ({
+  account,
+  editingId,
+  editValue,
+  setEditValue,
+  startEditing,
+  saveEditing,
+  onDelete,
+  onSetGoal
+}) => {
+  const dragControls = useDragControls();
+  const isLiability = account.type === 'credit';
+  const isEditing = editingId === account.id;
+  const isSavings = account.type === 'savings';
+  const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
+  const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
+
+  return (
+    <Reorder.Item
+      value={account}
+      id={account.id}
+      dragListener={false}
+      dragControls={dragControls}
+      className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative overflow-hidden mb-2 touch-manipulation list-none"
+      whileDrag={{ scale: 1.02, zIndex: 10, boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {/* Drag Handle */}
+          <div
+            onPointerDown={(e) => dragControls.start(e)}
+            className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none p-1 -ml-1"
+            aria-label="Drag to reorder"
+          >
+            <GripVertical size={20} />
+          </div>
+          <div>
+            <p className="font-bold text-brand-800">{account.name}</p>
+            <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
+              isLiability ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+            }`}>
+              {account.type}
+            </span>
+          </div>
+          {isSavings && (
+            <Button
+              variant="subtle"
+              size="icon-sm"
+              onClick={() => onSetGoal(account.id)}
+              className="hover:text-habit-gold hover:bg-yellow-50"
+              aria-label={`Set savings goal for ${account.name}`}
+            >
+              <Target size={14} />
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Delete button */}
+          <Button
+            variant="ghost-destructive"
+            size="icon-sm"
+            onClick={() => onDelete(account.id)}
+            className="text-brand-300"
+            aria-label={`Delete ${account.name} account`}
+          >
+            <Trash2 size={14} />
+          </Button>
+
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="w-24 bg-brand-50 border border-brand-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
+                autoFocus
+              />
+              <Button
+                variant="primary"
+                size="icon-sm"
+                onClick={() => saveEditing(account.id)}
+                aria-label="Save balance"
+              >
+                <Check size={16} />
+              </Button>
+            </div>
+          ) : (
+            <div
+              onClick={() => startEditing(account.id, account.balance)}
+              className="group cursor-pointer text-right"
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit balance for ${account.name}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  startEditing(account.id, account.balance);
+                }
+              }}
+            >
+              <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
+                ${account.balance.toLocaleString()}
+              </p>
+              <p className="text-xxs text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
+                Tap to edit <Pencil size={8} />
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Savings Goal Bar */}
+      {isSavings && account.monthlyGoal && (
+        <div className="mt-2 ml-7">
+          <div className="flex justify-between text-xxs text-brand-400 mb-1">
+            <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
+            <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
+          </div>
+          <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
+            <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+    </Reorder.Item>
+  );
+};
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
@@ -26,10 +165,6 @@ const BudgetAccounts: React.FC = () => {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Drag state
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Group and sort accounts
   const { assetAccounts, liabilityAccounts, assets, debts, netWorth } = useMemo(() => {
@@ -51,6 +186,28 @@ const BudgetAccounts: React.FC = () => {
       netWorth: assetsTotal - debtsTotal
     };
   }, [accounts]);
+
+  // Local state for Reorder
+  const [localAssets, setLocalAssets] = useState<Account[]>(assetAccounts);
+  const [localLiabilities, setLocalLiabilities] = useState<Account[]>(liabilityAccounts);
+
+  useEffect(() => {
+    setLocalAssets(assetAccounts);
+  }, [assetAccounts]);
+
+  useEffect(() => {
+    setLocalLiabilities(liabilityAccounts);
+  }, [liabilityAccounts]);
+
+  const handleReorderAssets = (newOrder: Account[]) => {
+    setLocalAssets(newOrder);
+    reorderAccounts(newOrder.map(a => a.id));
+  };
+
+  const handleReorderLiabilities = (newOrder: Account[]) => {
+    setLocalLiabilities(newOrder);
+    reorderAccounts(newOrder.map(a => a.id));
+  };
 
   const handleAddAccount = () => {
     if (!newName || !newBalance) return;
@@ -108,177 +265,14 @@ const BudgetAccounts: React.FC = () => {
     setEditingId(null);
   };
 
-  // Drag handlers
-  const handleDragStart = (e: React.DragEvent, accountId: string) => {
-    setDraggedId(accountId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', accountId);
-  };
-
-  const handleDragOver = (e: React.DragEvent, accountId: string) => {
-    e.preventDefault();
-    if (draggedId !== accountId) {
-      setDragOverId(accountId);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverId(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string, isLiabilityGroup: boolean) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-
-    const relevantAccounts = isLiabilityGroup ? liabilityAccounts : assetAccounts;
-    const draggedAccount = relevantAccounts.find(a => a.id === draggedId);
-
-    // Only allow reordering within same group
-    if (!draggedAccount) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-
-    // Reorder
-    const newOrder = relevantAccounts.filter(a => a.id !== draggedId);
-    const targetIndex = newOrder.findIndex(a => a.id === targetId);
-    newOrder.splice(targetIndex, 0, draggedAccount);
-
-    // Save new order
-    reorderAccounts(newOrder.map(a => a.id));
-
-    setDraggedId(null);
-    setDragOverId(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedId(null);
-    setDragOverId(null);
-  };
-
-  const renderAccountCard = (account: Account, isLiabilityGroup: boolean) => {
-    const isLiability = account.type === 'credit';
-    const isEditing = editingId === account.id;
-    const isSavings = account.type === 'savings';
-    const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
-    const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
-    const isDragging = draggedId === account.id;
-    const isDragOver = dragOverId === account.id;
-
-    return (
-      <div
-        key={account.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, account.id)}
-        onDragOver={(e) => handleDragOver(e, account.id)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
-        onDragEnd={handleDragEnd}
-        className={`bg-white p-4 rounded-2xl border shadow-sm relative overflow-hidden transition-all duration-200 ${
-          isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-brand-500 border-2' : 'border-brand-100'}`}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none">
-              <GripVertical size={18} />
-            </div>
-            <div>
-              <p className="font-bold text-brand-800">{account.name}</p>
-              <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
-                isLiability ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
-              }`}>
-                {account.type}
-              </span>
-            </div>
-            {isSavings && (
-              <Button
-                variant="subtle"
-                size="icon-sm"
-                onClick={() => setIsGoalModalOpen(account.id)}
-                className="hover:text-habit-gold hover:bg-yellow-50"
-                aria-label={`Set savings goal for ${account.name}`}
-              >
-                <Target size={14} />
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Delete button */}
-            <Button
-              variant="ghost-destructive"
-              size="icon-sm"
-              onClick={() => setDeletingId(account.id)}
-              className="text-brand-300"
-              aria-label={`Delete ${account.name} account`}
-            >
-              <Trash2 size={14} />
-            </Button>
-
-            {isEditing ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="w-24 bg-brand-50 border border-brand-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
-                  autoFocus
-                />
-                <Button
-                  variant="primary"
-                  size="icon-sm"
-                  onClick={() => saveEditing(account.id)}
-                  aria-label="Save balance"
-                >
-                  <Check size={16} />
-                </Button>
-              </div>
-            ) : (
-              <div
-                onClick={() => startEditing(account.id, account.balance)}
-                className="group cursor-pointer text-right"
-                role="button"
-                tabIndex={0}
-                aria-label={`Edit balance for ${account.name}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    startEditing(account.id, account.balance);
-                  }
-                }}
-              >
-                <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
-                  ${account.balance.toLocaleString()}
-                </p>
-                <p className="text-xxs text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
-                  Tap to edit <Pencil size={8} />
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Savings Goal Bar */}
-        {isSavings && account.monthlyGoal && (
-          <div className="mt-2 ml-7">
-            <div className="flex justify-between text-xxs text-brand-400 mb-1">
-              <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
-              <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
-            </div>
-            <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
-              <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        )}
-      </div>
-    );
+  const rowProps = {
+    editingId,
+    editValue,
+    setEditValue,
+    startEditing,
+    saveEditing,
+    onDelete: (id: string) => setDeletingId(id),
+    onSetGoal: (id: string) => setIsGoalModalOpen(id),
   };
 
   return (
@@ -302,30 +296,42 @@ const BudgetAccounts: React.FC = () => {
       </div>
 
       {/* Assets Section */}
-      {assetAccounts.length > 0 && (
+      {localAssets.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Assets</h3>
             <div className="flex-1 h-px bg-brand-100"></div>
             <span className="text-sm font-mono text-emerald-600">${assets.toLocaleString()}</span>
           </div>
-          <div className="space-y-2">
-            {assetAccounts.map(account => renderAccountCard(account, false))}
-          </div>
+          <Reorder.Group axis="y" values={localAssets} onReorder={handleReorderAssets} className="space-y-2">
+            {localAssets.map(account => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                {...rowProps}
+              />
+            ))}
+          </Reorder.Group>
         </div>
       )}
 
       {/* Liabilities Section */}
-      {liabilityAccounts.length > 0 && (
+      {localLiabilities.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Liabilities</h3>
             <div className="flex-1 h-px bg-brand-100"></div>
             <span className="text-sm font-mono text-rose-600">${debts.toLocaleString()}</span>
           </div>
-          <div className="space-y-2">
-            {liabilityAccounts.map(account => renderAccountCard(account, true))}
-          </div>
+          <Reorder.Group axis="y" values={localLiabilities} onReorder={handleReorderLiabilities} className="space-y-2">
+            {localLiabilities.map(account => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                {...rowProps}
+              />
+            ))}
+          </Reorder.Group>
         </div>
       )}
 
