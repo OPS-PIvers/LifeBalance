@@ -233,7 +233,7 @@ const BudgetAccounts: React.FC = () => {
                 size="icon"
                 onClick={() => setActionAccount(account)}
                 className="text-brand-300"
-                aria-label="Account options"
+                aria-label={`Options for ${account.name}`}
               >
                 <MoreVertical size={20} />
               </Button>

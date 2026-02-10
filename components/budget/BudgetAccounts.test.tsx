@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetAccounts from './BudgetAccounts';
@@ -88,17 +88,24 @@ vi.mock('../ui/Modal', () => ({
 }));
 
 // Mock Drawer
-vi.mock('../ui/Drawer', () => ({
-  Drawer: ({ children, isOpen, title }: { children: React.ReactNode; isOpen: boolean; title?: string }) => {
-    if (!isOpen) return null;
-    return (
-      <div data-testid="drawer">
-        <h3>{title}</h3>
-        {children}
-      </div>
-    );
+vi.mock('../ui/Drawer', () => {
+  interface MockDrawerProps {
+    children: React.ReactNode;
+    isOpen: boolean;
+    title?: string;
   }
-}));
+  return {
+    Drawer: ({ children, isOpen, title }: MockDrawerProps) => {
+      if (!isOpen) return null;
+      return (
+        <div data-testid="drawer">
+          <h3>{title}</h3>
+          {children}
+        </div>
+      );
+    },
+  };
+});
 
 describe('BudgetAccounts', () => {
   beforeEach(() => {
@@ -230,5 +237,61 @@ describe('BudgetAccounts', () => {
     await waitFor(() => {
         expect(deleteAccountMock).toHaveBeenCalledWith('acc3');
     });
+  });
+
+  // Mobile specific tests
+  it('opens drawer and triggers actions for account', async () => {
+    const user = userEvent.setup();
+    render(<BudgetAccounts />);
+
+    // Click 'More Options' for Savings Account
+    const moreBtn = screen.getByLabelText('Options for My Savings');
+    await user.click(moreBtn);
+
+    // Verify Drawer opens
+    const drawer = screen.getByTestId('drawer');
+    expect(drawer).toBeInTheDocument();
+    expect(within(drawer).getByText('My Savings')).toBeInTheDocument();
+
+    // Verify actions exist
+    expect(within(drawer).getByRole('button', { name: /Edit Balance/i })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: /Set Savings Goal/i })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: /Delete Account/i })).toBeInTheDocument();
+
+    // Test Edit Balance trigger
+    await user.click(within(drawer).getByRole('button', { name: /Edit Balance/i }));
+    expect(drawer).not.toBeInTheDocument(); // Drawer should close
+    // Edit input should appear
+    expect(screen.getByRole('spinbutton')).toHaveValue(10000);
+
+    // Re-open drawer for next action
+    await user.click(moreBtn);
+
+    // Get the new drawer instance
+    const drawer2 = screen.getByTestId('drawer');
+
+    // Test Set Goal trigger
+    // Use fireEvent to ensure click handler fires immediately
+    fireEvent.click(within(drawer2).getByRole('button', { name: /Set Savings Goal/i }));
+
+    // Modal should open
+    // using findByText to wait for state update
+    expect(await screen.findByText('What is your target balance for this account?')).toBeInTheDocument();
+
+    // Drawer should close (eventually)
+    await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
+
+    // Close goal modal to reset (using X button from mock)
+    await user.click(screen.getByText('X'));
+
+    // Re-open drawer for delete
+    await user.click(moreBtn);
+
+    // Get the new drawer instance
+    const drawer3 = screen.getByTestId('drawer');
+
+    // Test Delete trigger
+    await user.click(within(drawer3).getByRole('button', { name: /Delete Account/i }));
+    expect(screen.getByText('Delete Account?')).toBeInTheDocument();
   });
 });
