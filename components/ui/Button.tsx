@@ -22,9 +22,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 border border-transparent hover:border-brand-200/50',
       'ghost-danger': 'bg-transparent text-rose-500 hover:text-rose-600 hover:bg-rose-50',
       'ghost-destructive': 'bg-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50',
-      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-btn-success',
-      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-btn-warning',
-      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-btn-destructive',
+      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-btn-success shadow-emerald-500/20',
+      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-btn-warning shadow-amber-500/20',
+      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-btn-destructive shadow-rose-500/20',
       link: 'bg-transparent text-brand-600 hover:text-brand-800 hover:underline px-0 shadow-none h-auto',
       'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
     };
