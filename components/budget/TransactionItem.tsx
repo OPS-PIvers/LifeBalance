@@ -39,10 +39,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between transition-all group cursor-pointer ${
+      className={`p-4 rounded-2xl border-0 shadow-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
-          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
-          : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-md'
+          ? 'bg-slate-50 border border-slate-300 ring-1 ring-slate-300'
+          : 'bg-white/60 backdrop-blur-md border border-white/40 ring-1 ring-black/5 hover:bg-white/90 hover:shadow-glass'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
@@ -80,7 +80,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
 
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
-          <p className={`font-mono font-semibold text-base ${
+          <p className={`font-mono font-bold tracking-tight text-base ${
             tx.category === INCOME_CATEGORY ? 'text-emerald-600' : 'text-slate-900'
           }`}>
             {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}

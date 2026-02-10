@@ -253,7 +253,7 @@ const BudgetBuckets: React.FC = () => {
           <ArrowRightLeft size={20} /> Fix Overspending
         </h3>
 
-        <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
+        <div className="mb-4 text-sm text-brand-600 bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-slate-200/50">
           Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
         </div>
 

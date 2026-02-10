@@ -36,3 +36,10 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Budget Experience Polish
+**Critique:** "Developer UI" markers found in `TransactionMasterList` (boxy white containers, standard inputs) and `BudgetAccounts` (flat cards, heavy headers).
+**Polish:** Applied "Glassmorphism" to `TransactionMasterList` filters and summary. Elevated `TransactionItem` to floating glass plates. Refined `BudgetAccounts` with premium cards and a sophisticated Net Worth header. Softened overspend alerts in `BudgetBucketCard`.
+- **Depth:** Added `bg-white/80 backdrop-blur-xl` and `shadow-glass` to containers.
+- **Typography:** Added `tracking-tight` to financial figures for a premium number feel.
+- **Details:** Softened inputs to `bg-white/50` and borders to `slate-200/50`.

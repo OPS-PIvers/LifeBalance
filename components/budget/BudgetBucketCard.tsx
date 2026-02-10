@@ -279,7 +279,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
 
       {/* Overspend Action */}
       {isOverspent && (
-        <div className="mt-3 bg-money-bgNeg p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+        <div className="mt-3 bg-rose-50/90 backdrop-blur-sm ring-1 ring-rose-200/50 p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-2 text-money-neg text-xs font-bold">
             <AlertTriangle size={14} />
             <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>

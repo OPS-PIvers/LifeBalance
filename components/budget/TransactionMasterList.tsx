@@ -38,8 +38,8 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
+    ? "px-3 py-2 bg-white/50 backdrop-blur-sm border border-slate-200/50 rounded-lg text-sm text-slate-700 outline-none focus:border-brand-400 min-w-[120px]"
+    : "w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-slate-200/50 rounded-xl text-base text-slate-700 outline-none focus:border-brand-400";
 
   return (
     <>
@@ -400,16 +400,16 @@ const TransactionMasterList: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-white/20 ring-1 ring-black/5 shadow-glass space-y-4">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+            className="w-full pl-10 pr-4 py-3 bg-white/50 backdrop-blur-sm border border-slate-200/50 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all placeholder:text-slate-400"
           />
           {searchTerm && (
             <Button
@@ -504,29 +504,29 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl border border-white/20 ring-1 ring-black/5 shadow-glass">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
-            <p className="text-lg font-bold text-money-pos font-mono">
+          <div className="bg-white/50 ring-1 ring-black/5 p-4 rounded-2xl backdrop-blur-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Income</p>
+            <p className="text-lg font-bold text-money-pos font-mono tracking-tight">
               +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
-            <p className="text-lg font-bold text-money-neg font-mono">
+          <div className="bg-white/50 ring-1 ring-black/5 p-4 rounded-2xl backdrop-blur-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Expense</p>
+            <p className="text-lg font-bold text-money-neg font-mono tracking-tight">
               -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
-            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+          <div className="bg-white/50 ring-1 ring-black/5 p-4 rounded-2xl backdrop-blur-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Net</p>
+            <p className={`text-lg font-bold font-mono tracking-tight ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
               {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-brand-700 font-mono">
+          <div className="bg-white/50 ring-1 ring-black/5 p-4 rounded-2xl backdrop-blur-sm">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-slate-700 font-mono tracking-tight">
               {summary.count}
             </p>
           </div>
