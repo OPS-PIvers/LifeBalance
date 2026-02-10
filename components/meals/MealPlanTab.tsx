@@ -402,16 +402,18 @@ const MealPlanTab: React.FC = () => {
       handleCancel();
   };
 
+  const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> => ({
+      name: isClone ? `${meal.name} (Copy)` : meal.name,
+      description: meal.description || '',
+      ingredients: meal.ingredients || [],
+      instructions: meal.instructions || [],
+      recipeUrl: meal.recipeUrl || '',
+      tags: meal.tags || []
+  });
+
   const handleCloneMeal = (meal: Meal) => {
       // 1. Populate form with meal data (copy)
-      setCurrentMeal({
-          name: `${meal.name} (Copy)`,
-          description: meal.description,
-          ingredients: meal.ingredients || [],
-          instructions: meal.instructions || [],
-          recipeUrl: meal.recipeUrl || '',
-          tags: meal.tags || []
-      });
+      setCurrentMeal(mealToFormState(meal, true));
 
       // 2. Ensure it's treated as a NEW meal
       setEditingMealId(null);
@@ -423,14 +425,7 @@ const MealPlanTab: React.FC = () => {
   };
 
   const handleSelectMeal = (meal: Meal) => {
-      setCurrentMeal({
-          name: meal.name,
-          description: meal.description || '',
-          ingredients: meal.ingredients || [],
-          instructions: meal.instructions || [],
-          recipeUrl: meal.recipeUrl || '',
-          tags: meal.tags || []
-      });
+      setCurrentMeal(mealToFormState(meal));
       setEditingMealId(meal.id);
       setIsPreviousMealsModalOpen(false);
   };

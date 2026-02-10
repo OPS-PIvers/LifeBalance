@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 
 interface CookbookModalProps {
   isOpen: boolean;
@@ -28,36 +29,41 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
 
   // Derive unique tags from all meals
   const allTags = useMemo(() => {
+    if (!isOpen) return []; // Short-circuit if closed
     const tags = new Set<string>();
     meals.forEach(meal => {
       meal.tags?.forEach(tag => tags.add(tag));
     });
     return Array.from(tags).sort();
-  }, [meals]);
+  }, [meals, isOpen]);
 
   // Filter and Sort Logic
   const filteredMeals = useMemo(() => {
-    let result = [...meals];
+    if (!isOpen) return []; // Short-circuit if closed
 
-    // 1. Search Filter
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(meal =>
-        meal.name.toLowerCase().includes(term) ||
-        meal.description?.toLowerCase().includes(term) ||
-        meal.ingredients?.some(ing => ing.name.toLowerCase().includes(term))
-      );
-    }
+    const lowerCaseSearchTerm = searchTerm.trim().toLowerCase();
 
-    // 2. Tag Filter
-    if (selectedTags.length > 0) {
-      result = result.filter(meal =>
-        selectedTags.every(tag => meal.tags?.includes(tag))
-      );
-    }
+    const filtered = meals.filter(meal => {
+      // 1. Tag Filter (Fail fast)
+      if (selectedTags.length > 0) {
+        const hasAllTags = selectedTags.every(tag => meal.tags?.includes(tag));
+        if (!hasAllTags) return false;
+      }
+
+      // 2. Search Filter
+      if (lowerCaseSearchTerm) {
+        const matchesName = meal.name.toLowerCase().includes(lowerCaseSearchTerm);
+        const matchesDesc = meal.description?.toLowerCase().includes(lowerCaseSearchTerm);
+        const matchesIng = meal.ingredients?.some(ing => ing.name.toLowerCase().includes(lowerCaseSearchTerm));
+
+        if (!matchesName && !matchesDesc && !matchesIng) return false;
+      }
+
+      return true;
+    });
 
     // 3. Sort
-    result.sort((a, b) => {
+    return filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
@@ -72,9 +78,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           return 0;
       }
     });
-
-    return result;
-  }, [meals, searchTerm, selectedTags, sortBy]);
+  }, [meals, searchTerm, selectedTags, sortBy, isOpen]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags(prev =>
@@ -85,8 +89,8 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
-      <div className="flex flex-col h-[80vh]">
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" ariaLabelledBy="cookbook-modal-title">
+      <div className="flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -94,12 +98,14 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                 <ChefHat size={20} />
             </div>
             <div>
-                <h3 className="text-lg font-bold text-slate-900 tracking-tight">Cookbook</h3>
+                <h3 id="cookbook-modal-title" className="text-lg font-bold text-slate-900 tracking-tight">Cookbook</h3>
                 <p className="text-xs text-slate-500 font-medium">{filteredMeals.length} recipes found</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close"
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
           >
             <X size={20} />
@@ -120,23 +126,29 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
              {/* Sort Dropdown (Simplified as buttons for mobile friendliness) */}
              <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm shrink-0">
                 <button
+                    type="button"
                     onClick={() => setSortBy('name')}
                     className={`p-1.5 rounded-md transition-colors ${sortBy === 'name' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Name"
+                    aria-label="Sort by Name"
                 >
                     <ArrowUpAZ size={16} />
                 </button>
                 <button
+                    type="button"
                     onClick={() => setSortBy('lastCooked')}
                     className={`p-1.5 rounded-md transition-colors ${sortBy === 'lastCooked' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Recently Cooked"
+                    aria-label="Sort by Recently Cooked"
                 >
                     <Calendar size={16} />
                 </button>
                 <button
+                    type="button"
                     onClick={() => setSortBy('rating')}
                     className={`p-1.5 rounded-md transition-colors ${sortBy === 'rating' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Rating"
+                    aria-label="Sort by Rating"
                 >
                     <Star size={16} />
                 </button>
@@ -148,7 +160,9 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
              {allTags.map(tag => (
                 <button
                     key={tag}
+                    type="button"
                     onClick={() => toggleTag(tag)}
+                    aria-pressed={selectedTags.includes(tag)}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap ${
                         selectedTags.includes(tag)
                         ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
@@ -192,7 +206,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 ) : null}
                                 {meal.lastCooked && (
                                     <div className="text-xs text-slate-400">
-                                        Last: {meal.lastCooked}
+                                        Last: {format(parseISO(meal.lastCooked), 'MMM d, yyyy')}
                                     </div>
                                 )}
                                 {meal.tags && meal.tags.length > 0 && (
@@ -208,6 +222,8 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                         <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-brand-400 transition-colors" />
                     </button>
                     <button
+                        type="button"
+                        aria-label="Clone as New Meal"
                         onClick={() => onClone(meal)}
                         className="px-4 text-slate-400 hover:text-brand-600 hover:bg-brand-50 border border-slate-200/60 bg-white hover:border-brand-200 rounded-2xl transition-colors shadow-sm"
                         title="Clone as New Meal"
