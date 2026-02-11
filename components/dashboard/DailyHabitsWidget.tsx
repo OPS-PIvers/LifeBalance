@@ -1,0 +1,170 @@
+import React, { useMemo } from 'react';
+import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { isHabitStale } from '../../utils/habitLogic';
+import { format, startOfToday } from 'date-fns';
+import { Check, Flame, ArrowRight, LayoutList, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+export const DailyHabitsWidget: React.FC = () => {
+  const { habits, toggleHabit } = useHousehold();
+
+  const today = format(startOfToday(), 'yyyy-MM-dd');
+
+  // Filter and Sort Habits
+  const dailyHabits = useMemo(() => {
+    return habits
+      .filter(h => h.period === 'daily') // Show all daily habits (presets and custom)
+      .map(habit => {
+        const isStale = isHabitStale(habit);
+        const isCompleted = habit.completedDates.includes(today);
+        const currentCount = isStale ? 0 : habit.count;
+        const target = habit.targetCount || 1;
+        const progress = Math.min(100, Math.round((currentCount / target) * 100));
+
+        return {
+          ...habit,
+          isCompleted,
+          currentCount,
+          progress
+        };
+      })
+      .sort((a, b) => {
+        // 1. Pending first
+        if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
+        // 2. Then by Order
+        return (a.order ?? 999) - (b.order ?? 999);
+      });
+  }, [habits, today]);
+
+  // Calculate Overall Progress
+  const stats = useMemo(() => {
+    const total = dailyHabits.length;
+    const completed = dailyHabits.filter(h => h.isCompleted).length;
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, percent };
+  }, [dailyHabits]);
+
+  if (dailyHabits.length === 0) return null;
+
+  // Limit to top 5 to save space
+  const visibleHabits = dailyHabits.slice(0, 5);
+  const remainingCount = dailyHabits.length - 5;
+
+  return (
+    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <div className="p-1.5 bg-violet-100 text-violet-600 rounded-lg">
+             <LayoutList size={14} />
+          </div>
+          Daily Habits
+        </h2>
+        <Link
+          to="/habits"
+          className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+        >
+          View All <ArrowRight size={12} />
+        </Link>
+      </div>
+
+      {/* Progress Header */}
+      <div className="mb-6 px-1 flex items-center justify-between">
+         <div>
+            <p className="text-xs text-slate-500 font-medium mb-1">Today&apos;s Progress</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold tracking-tight text-slate-900">
+                {stats.completed}/{stats.total}
+              </span>
+              <span className="text-sm font-bold text-slate-400">done</span>
+            </div>
+         </div>
+
+         {/* Circular Progress (CSS based) */}
+         <div className="relative w-12 h-12 flex items-center justify-center">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+              <path
+                className="text-slate-100"
+                d="M18 2.0845
+                  a 15.9155 15.9155 0 0 1 0 31.831
+                  a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className={`${stats.percent === 100 ? 'text-emerald-500' : 'text-violet-500'} transition-all duration-1000 ease-out`}
+                strokeDasharray={`${stats.percent}, 100`}
+                d="M18 2.0845
+                  a 15.9155 15.9155 0 0 1 0 31.831
+                  a 15.9155 15.9155 0 0 1 0 -31.831"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+            </svg>
+            <div className="absolute text-xs font-bold text-slate-600">
+               {stats.percent}%
+            </div>
+         </div>
+      </div>
+
+      {/* List */}
+      <div className="space-y-2">
+        {visibleHabits.map(habit => (
+          <div
+            key={habit.id}
+            className={`flex items-center justify-between py-2 px-3 rounded-xl transition-all border ${
+                habit.isCompleted
+                ? 'bg-emerald-50/50 border-emerald-100/50'
+                : 'bg-white border-transparent hover:bg-slate-50 hover:border-slate-100'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+               {/* Toggle Button */}
+               <button
+                  onClick={() => toggleHabit(habit.id, habit.isCompleted ? 'down' : 'up')}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm flex-shrink-0 ${
+                      habit.isCompleted
+                      ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                      : 'bg-slate-100 text-slate-300 hover:bg-slate-200 hover:text-slate-400'
+                  }`}
+                  aria-label={habit.isCompleted ? "Mark as incomplete" : "Mark as complete"}
+               >
+                  {habit.isCompleted ? <Check size={16} strokeWidth={3} /> : <Plus size={16} strokeWidth={3} />}
+               </button>
+
+               <div className="min-w-0">
+                  <p className={`text-sm font-bold truncate ${habit.isCompleted ? 'text-emerald-800 line-through decoration-emerald-300' : 'text-slate-700'}`}>
+                    {habit.title}
+                  </p>
+                  <div className="flex items-center gap-2 text-xxs font-medium">
+                     {/* Count / Target */}
+                     {habit.targetCount > 1 && (
+                         <span className={`${habit.isCompleted ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {habit.currentCount}/{habit.targetCount}
+                         </span>
+                     )}
+
+                     {/* Streak */}
+                     {habit.streakDays > 0 && (
+                        <span className={`flex items-center gap-0.5 ${habit.streakDays >= 3 ? 'text-orange-500' : 'text-slate-400'}`}>
+                           <Flame size={10} className={habit.streakDays >= 3 ? 'fill-orange-500' : ''} />
+                           {habit.streakDays}
+                        </span>
+                     )}
+                  </div>
+               </div>
+            </div>
+          </div>
+        ))}
+
+        {remainingCount > 0 && (
+           <Link to="/habits" className="block text-center text-xs font-bold text-slate-400 hover:text-slate-600 py-2">
+              + {remainingCount} more habits
+           </Link>
+        )}
+      </div>
+    </div>
+  );
+};
