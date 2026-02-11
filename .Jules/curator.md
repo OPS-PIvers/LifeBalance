@@ -9,3 +9,12 @@
 **Blocker:** @google/genai (pinned to v1.37.0)
 **Reason:** Updating to v1.38.0 introduces a stricter API key validation in the `GoogleGenAI` constructor that causes the application to crash on startup (and in tests) if the `VITE_GEMINI_API_KEY` is missing or empty. This requires a code change to handle lazy initialization or a more robust fallback strategy before the dependency can be safely updated.
 **Plan:** Defer update until a developer can refactor `services/geminiService.ts` to handle missing API keys gracefully without crashing the app module-level initialization.
+
+## 2026-02-18 - Dependencies Grouping
+**Discovery:** Grouping safe minor/patch updates (e.g., firebase, framer-motion, dev tools) is efficient and stable if verified by tests.
+**Decision:** Adopted grouped updates for non-breaking changes to reduce PR noise.
+
+## 2026-02-18 - Google GenAI Blocker Confirmation
+**Blocker:** @google/genai (1.37.0 -> 1.40.0)
+**Reason:** Confirmed that updating to 1.38+ breaks the app due to stricter API key validation in the constructor.
+**Plan:** Keep pinned until `services/geminiService.ts` is refactored to handle lazy initialization.
