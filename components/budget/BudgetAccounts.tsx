@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
 import { Account } from '../../types/schema';
@@ -7,186 +7,55 @@ import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+import { Reorder, useDragControls } from 'framer-motion';
 
-const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
+// --- Sub-Components for Reorder Logic ---
 
-  // Add Account Modal
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<Account['type']>('checking');
-  const [newBalance, setNewBalance] = useState('');
+interface SortableAccountItemProps {
+  account: Account;
+  isEditing: boolean;
+  editValue: string;
+  setEditValue: (val: string) => void;
+  saveEditing: (id: string) => void;
+  startEditing: (id: string, balance: number) => void;
+  setDeletingId: (id: string) => void;
+  setIsGoalModalOpen: (id: string) => void;
+  onDragEnd: () => void;
+}
 
-  // Set Goal Modal
-  const [isGoalModalOpen, setIsGoalModalOpen] = useState<string | null>(null);
-  const [goalAmount, setGoalAmount] = useState('');
+const SortableAccountItem = ({
+  account,
+  isEditing,
+  editValue,
+  setEditValue,
+  saveEditing,
+  startEditing,
+  setDeletingId,
+  setIsGoalModalOpen,
+  onDragEnd
+}: SortableAccountItemProps) => {
+  const controls = useDragControls();
+  const isLiability = account.type === 'credit';
+  const isSavings = account.type === 'savings';
+  const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
+  const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
 
-  // Delete confirmation
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  // Drag state
-  const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
-
-  // Group and sort accounts
-  const { assetAccounts, liabilityAccounts, assets, debts, netWorth } = useMemo(() => {
-    const assetAccts = accounts
-      .filter(a => a.type !== 'credit')
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    const liabilityAccts = accounts
-      .filter(a => a.type === 'credit')
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-
-    const assetsTotal = assetAccts.reduce((sum, a) => sum + a.balance, 0);
-    const debtsTotal = liabilityAccts.reduce((sum, a) => sum + a.balance, 0);
-
-    return {
-      assetAccounts: assetAccts,
-      liabilityAccounts: liabilityAccts,
-      assets: assetsTotal,
-      debts: debtsTotal,
-      netWorth: assetsTotal - debtsTotal
-    };
-  }, [accounts]);
-
-  const handleAddAccount = () => {
-    if (!newName || !newBalance) return;
-    const isLiability = newType === 'credit';
-    const relevantAccounts = isLiability ? liabilityAccounts : assetAccounts;
-    const maxOrder = relevantAccounts.length > 0
-      ? Math.max(...relevantAccounts.map(a => a.order ?? 0))
-      : -1;
-
-    const newAccount: Account = {
-      id: crypto.randomUUID(),
-      name: newName,
-      type: newType,
-      balance: parseFloat(newBalance),
-      lastUpdated: new Date().toISOString(),
-      order: maxOrder + 1
-    };
-    addAccount(newAccount);
-    setIsAddModalOpen(false);
-    setNewName('');
-    setNewBalance('');
-  };
-
-  const handleSetGoal = () => {
-    if (isGoalModalOpen && goalAmount) {
-      setAccountGoal(isGoalModalOpen, parseFloat(goalAmount));
-      setIsGoalModalOpen(null);
-      setGoalAmount('');
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (!deletingId || isDeleting) return;
-    setIsDeleting(true);
-    try {
-      await deleteAccount(deletingId);
-      setDeletingId(null);
-    } catch (error) {
-      console.error('Failed to delete account', error);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const startEditing = (id: string, currentBalance: number) => {
-    setEditingId(id);
-    setEditValue(currentBalance.toString());
-  };
-
-  const saveEditing = (id: string) => {
-    const num = parseFloat(editValue);
-    if (!isNaN(num)) {
-      updateAccountBalance(id, num);
-    }
-    setEditingId(null);
-  };
-
-  // Drag handlers
-  const handleDragStart = (e: React.DragEvent, accountId: string) => {
-    setDraggedId(accountId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', accountId);
-  };
-
-  const handleDragOver = (e: React.DragEvent, accountId: string) => {
-    e.preventDefault();
-    if (draggedId !== accountId) {
-      setDragOverId(accountId);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverId(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, targetId: string, isLiabilityGroup: boolean) => {
-    e.preventDefault();
-    if (!draggedId || draggedId === targetId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-
-    const relevantAccounts = isLiabilityGroup ? liabilityAccounts : assetAccounts;
-    const draggedAccount = relevantAccounts.find(a => a.id === draggedId);
-
-    // Only allow reordering within same group
-    if (!draggedAccount) {
-      setDraggedId(null);
-      setDragOverId(null);
-      return;
-    }
-
-    // Reorder
-    const newOrder = relevantAccounts.filter(a => a.id !== draggedId);
-    const targetIndex = newOrder.findIndex(a => a.id === targetId);
-    newOrder.splice(targetIndex, 0, draggedAccount);
-
-    // Save new order
-    reorderAccounts(newOrder.map(a => a.id));
-
-    setDraggedId(null);
-    setDragOverId(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedId(null);
-    setDragOverId(null);
-  };
-
-  const renderAccountCard = (account: Account, isLiabilityGroup: boolean) => {
-    const isLiability = account.type === 'credit';
-    const isEditing = editingId === account.id;
-    const isSavings = account.type === 'savings';
-    const progress = account.monthlyGoal ? Math.min(100, (account.balance / account.monthlyGoal) * 100) : 0;
-    const hitGoal = account.monthlyGoal && account.balance >= account.monthlyGoal;
-    const isDragging = draggedId === account.id;
-    const isDragOver = dragOverId === account.id;
-
-    return (
-      <div
-        key={account.id}
-        draggable
-        onDragStart={(e) => handleDragStart(e, account.id)}
-        onDragOver={(e) => handleDragOver(e, account.id)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
-        onDragEnd={handleDragEnd}
-        className={`bg-white p-4 rounded-2xl border shadow-sm relative overflow-hidden transition-all duration-200 ${
-          isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-brand-500 border-2' : 'border-brand-100'}`}
-      >
+  return (
+    <Reorder.Item
+      value={account}
+      id={account.id}
+      dragListener={false}
+      dragControls={controls}
+      onDragEnd={onDragEnd}
+      className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm relative overflow-hidden mb-2"
+    >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none">
+            <div
+              onPointerDown={(e) => controls.start(e)}
+              className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none p-1 -ml-1"
+            >
               <GripVertical size={18} />
             </div>
             <div>
@@ -277,8 +146,168 @@ const BudgetAccounts: React.FC = () => {
             </div>
           </div>
         )}
-      </div>
-    );
+    </Reorder.Item>
+  );
+};
+
+interface SortableAccountListProps {
+  initialAccounts: Account[];
+  onReorderSave: (orderedIds: string[]) => void;
+  // Passthrough props for Item
+  editingId: string | null;
+  editValue: string;
+  setEditValue: (val: string) => void;
+  saveEditing: (id: string) => void;
+  startEditing: (id: string, balance: number) => void;
+  setDeletingId: (id: string) => void;
+  setIsGoalModalOpen: (id: string) => void;
+}
+
+const SortableAccountList = ({
+  initialAccounts,
+  onReorderSave,
+  ...itemProps
+}: SortableAccountListProps) => {
+  const [items, setItems] = useState(initialAccounts);
+  const itemsRef = useRef(items);
+
+  // Sync with prop updates
+  useEffect(() => {
+    setItems(initialAccounts);
+  }, [initialAccounts]);
+
+  // Keep ref in sync for event handlers
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const handleReorder = (newOrder: Account[]) => {
+    setItems(newOrder);
+  };
+
+  const handleDragEnd = () => {
+    onReorderSave(itemsRef.current.map(a => a.id));
+  };
+
+  return (
+    <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-2">
+      {items.map(account => (
+        <SortableAccountItem
+          key={account.id}
+          account={account}
+          onDragEnd={handleDragEnd}
+          isEditing={itemProps.editingId === account.id}
+          {...itemProps}
+        />
+      ))}
+    </Reorder.Group>
+  );
+};
+
+const BudgetAccounts: React.FC = () => {
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  // Add Account Modal
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<Account['type']>('checking');
+  const [newBalance, setNewBalance] = useState('');
+
+  // Set Goal Modal
+  const [isGoalModalOpen, setIsGoalModalOpen] = useState<string | null>(null);
+  const [goalAmount, setGoalAmount] = useState('');
+
+  // Delete confirmation
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Group and sort accounts
+  const { assetAccounts, liabilityAccounts, assets, debts, netWorth } = useMemo(() => {
+    const assetAccts = accounts
+      .filter(a => a.type !== 'credit')
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    const liabilityAccts = accounts
+      .filter(a => a.type === 'credit')
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+    const assetsTotal = assetAccts.reduce((sum, a) => sum + a.balance, 0);
+    const debtsTotal = liabilityAccts.reduce((sum, a) => sum + a.balance, 0);
+
+    return {
+      assetAccounts: assetAccts,
+      liabilityAccounts: liabilityAccts,
+      assets: assetsTotal,
+      debts: debtsTotal,
+      netWorth: assetsTotal - debtsTotal
+    };
+  }, [accounts]);
+
+  const handleAddAccount = () => {
+    if (!newName || !newBalance) return;
+    const isLiability = newType === 'credit';
+    const relevantAccounts = isLiability ? liabilityAccounts : assetAccounts;
+    const maxOrder = relevantAccounts.length > 0
+      ? Math.max(...relevantAccounts.map(a => a.order ?? 0))
+      : -1;
+
+    const newAccount: Account = {
+      id: crypto.randomUUID(),
+      name: newName,
+      type: newType,
+      balance: parseFloat(newBalance),
+      lastUpdated: new Date().toISOString(),
+      order: maxOrder + 1
+    };
+    addAccount(newAccount);
+    setIsAddModalOpen(false);
+    setNewName('');
+    setNewBalance('');
+  };
+
+  const handleSetGoal = () => {
+    if (isGoalModalOpen && goalAmount) {
+      setAccountGoal(isGoalModalOpen, parseFloat(goalAmount));
+      setIsGoalModalOpen(null);
+      setGoalAmount('');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletingId || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await deleteAccount(deletingId);
+      setDeletingId(null);
+    } catch (error) {
+      console.error('Failed to delete account', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const startEditing = (id: string, currentBalance: number) => {
+    setEditingId(id);
+    setEditValue(currentBalance.toString());
+  };
+
+  const saveEditing = (id: string) => {
+    const num = parseFloat(editValue);
+    if (!isNaN(num)) {
+      updateAccountBalance(id, num);
+    }
+    setEditingId(null);
+  };
+
+  const itemProps = {
+    editingId,
+    editValue,
+    setEditValue,
+    saveEditing,
+    startEditing,
+    setDeletingId,
+    setIsGoalModalOpen: setIsGoalModalOpen as (id: string) => void
   };
 
   return (
@@ -309,9 +338,11 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-100"></div>
             <span className="text-sm font-mono text-emerald-600">${assets.toLocaleString()}</span>
           </div>
-          <div className="space-y-2">
-            {assetAccounts.map(account => renderAccountCard(account, false))}
-          </div>
+          <SortableAccountList
+            initialAccounts={assetAccounts}
+            onReorderSave={reorderAccounts}
+            {...itemProps}
+          />
         </div>
       )}
 
@@ -323,9 +354,11 @@ const BudgetAccounts: React.FC = () => {
             <div className="flex-1 h-px bg-brand-100"></div>
             <span className="text-sm font-mono text-rose-600">${debts.toLocaleString()}</span>
           </div>
-          <div className="space-y-2">
-            {liabilityAccounts.map(account => renderAccountCard(account, true))}
-          </div>
+          <SortableAccountList
+            initialAccounts={liabilityAccounts}
+            onReorderSave={reorderAccounts}
+            {...itemProps}
+          />
         </div>
       )}
 

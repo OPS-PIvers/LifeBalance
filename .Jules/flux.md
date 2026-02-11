@@ -12,3 +12,5 @@
 
 ## 2026-02-24 - [ToDo Actions Cramp] **Squeeze:** On mobile (375px), the inline actions (Copy, Edit, Delete) for active ToDos were small and cramped, leading to fat-finger errors. For completed ToDos, actions were hidden behind hover, making them inaccessible. **Reflow:** Replaced inline buttons with a single "More" button (`MoreVertical`) on mobile that opens a touch-friendly `Drawer` with large action buttons. Desktop retains the original layout.
 ## 2026-02-22 - [Habit Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in `HabitCard` menu were inside a small dropdown with small touch targets, making them hard to tap without misclicking. **Reflow:** Replaced the dropdown on mobile with a Bottom Drawer containing large, full-width action buttons (48px+) for better accessibility.
+
+## 2026-02-25 - [Budget Accounts Reorder Trap] **Squeeze:** HTML5 Drag/Drop fails on mobile (375px), making account reordering impossible on touch screens. **Reflow:** Implemented `framer-motion`'s `Reorder` list with a dedicated `touch-none` grip handle for smooth, native-like touch reordering.
