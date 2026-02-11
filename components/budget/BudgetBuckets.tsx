@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { ArrowRightLeft, Plus, Edit, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Plus, Edit, Trash2, AlertTriangle } from 'lucide-react';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -221,10 +221,10 @@ const BudgetBuckets: React.FC = () => {
       <Button
         variant="dashed"
         onClick={handleAddBucket}
-        className="w-full py-4 rounded-2xl"
-        leftIcon={<Plus size={20} />}
+        className="w-full py-6 rounded-2xl border-2 border-slate-200/60 hover:border-brand-300/60 hover:bg-brand-50/30 text-slate-400 hover:text-brand-600 transition-all group"
+        leftIcon={<Plus size={20} className="group-hover:scale-110 transition-transform" />}
       >
-        Add Bucket
+        Create New Bucket
       </Button>
 
       {/* Bucket Form Modal (Add/Edit) */}
@@ -249,15 +249,26 @@ const BudgetBuckets: React.FC = () => {
         ariaLabelledBy="reallocate-title"
         className="p-6"
       >
-        <h3 id="reallocate-title" className="font-bold text-lg text-brand-800 mb-4 flex items-center gap-2">
-          <ArrowRightLeft size={20} /> Fix Overspending
-        </h3>
-
-        <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
-          Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
+        <div className="flex items-center justify-between mb-6">
+          <h3 id="reallocate-title" className="font-bold text-xl text-slate-900 flex items-center gap-2">
+            <div className="p-2 bg-brand-50 rounded-full text-brand-600">
+              <ArrowRightLeft size={20} />
+            </div>
+            Fix Overspending
+          </h3>
         </div>
 
-        <div className="space-y-3">
+        <div className="mb-6 p-4 bg-amber-50 rounded-2xl border border-amber-100/50 flex items-start gap-3 shadow-sm">
+          <div className="p-1.5 bg-amber-100 rounded-full text-amber-600 shrink-0 mt-0.5">
+             <AlertTriangle size={14} />
+          </div>
+          <div className="text-sm text-amber-900/80 leading-relaxed">
+            <p className="font-semibold text-amber-900 mb-0.5">Coverage Needed</p>
+            You need <strong className="text-amber-950">${amountToCover}</strong> to cover the overspending in <span className="font-bold text-amber-950">{targetForPreview?.name}</span>.
+          </div>
+        </div>
+
+        <div className="space-y-4">
           <div>
             <Select
               label="Source of Funds"

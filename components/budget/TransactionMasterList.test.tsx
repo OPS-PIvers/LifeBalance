@@ -78,6 +78,7 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div data-testid="bookmark-icon" />,
   Plus: () => <div data-testid="plus-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  ChevronDown: () => <div data-testid="chevron-down-icon" />,
 }));
 
 describe('TransactionMasterList', () => {

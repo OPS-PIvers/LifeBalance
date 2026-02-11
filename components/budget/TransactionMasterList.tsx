@@ -8,6 +8,8 @@ import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { TransactionItem } from './TransactionItem';
@@ -37,16 +39,15 @@ const FilterControls: React.FC<FilterControlsProps> = ({
   layout
 }) => {
   const isRow = layout === 'row';
-  const selectClass = isRow
-    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
+  // Use slightly more compact styling for row layout, standard for stack
+  const selectClass = isRow ? "py-2 min-w-[140px] text-sm" : "";
 
   return (
     <>
       {/* Category Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Category</label>}
-        <select
+        <Select
+          label={!isRow ? "Category" : undefined}
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
           className={selectClass}
@@ -55,13 +56,13 @@ const FilterControls: React.FC<FilterControlsProps> = ({
           {categories.map(cat => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {/* Source Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Source</label>}
-        <select
+        <Select
+          label={!isRow ? "Source" : undefined}
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
           className={selectClass}
@@ -71,13 +72,13 @@ const FilterControls: React.FC<FilterControlsProps> = ({
           <option value="manual">Manual Entry</option>
           <option value="camera-scan">Camera Scan</option>
           <option value="file-upload">File Upload</option>
-        </select>
+        </Select>
       </div>
 
       {/* Store Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Store</label>}
-        <select
+        <Select
+          label={!isRow ? "Store" : undefined}
           value={storeFilter}
           onChange={(e) => setStoreFilter(e.target.value)}
           className={selectClass}
@@ -86,7 +87,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
           {stores.map(s => (
             <option key={s.id} value={s.name}>{s.name}</option>
           ))}
-        </select>
+        </Select>
       </div>
     </>
   );
@@ -400,25 +401,24 @@ const TransactionMasterList: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+      <div className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl border border-white/20 ring-1 ring-black/5 shadow-glass space-y-4">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
-          <input
-            type="text"
+          <Input
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+            icon={<Search size={18} />}
+            className="bg-white/50 border-slate-200/60 focus:bg-white transition-all"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600 h-auto p-0 hover:bg-transparent shadow-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-auto p-1 hover:bg-slate-100/50 shadow-none rounded-full"
             >
-              <X size={16} />
+              <X size={14} />
             </Button>
           )}
         </div>
@@ -504,47 +504,56 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
-            <p className="text-lg font-bold text-money-pos font-mono">
-              +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
-            </p>
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl border border-white/20 ring-1 ring-black/5 shadow-glass">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-8">
+
+          <div className="grid grid-cols-2 md:grid-cols-4 w-full gap-4 md:gap-8 divide-x-0 md:divide-x divide-slate-100">
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Income</p>
+              <p className="text-2xl font-bold text-emerald-600 tracking-tight">
+                +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1 md:pl-8">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Expense</p>
+              <p className="text-2xl font-bold text-rose-600 tracking-tight">
+                -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1 md:pl-8">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Net</p>
+              <p className={`text-2xl font-bold tracking-tight ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1 md:pl-8">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Count</p>
+              <p className="text-2xl font-bold text-slate-700 tracking-tight">
+                {summary.count}
+              </p>
+            </div>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
-            <p className="text-lg font-bold text-money-neg font-mono">
-              -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
-            </p>
-          </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
-            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
-            </p>
-          </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-brand-700 font-mono">
-              {summary.count}
-            </p>
-          </div>
+
         </div>
       </div>
 
       {/* Select All Bar */}
       {isSelectionMode && (
-        <div className="flex items-center justify-between px-2 text-sm text-brand-600">
+        <div className="flex items-center justify-between px-4 py-3 bg-brand-50/50 rounded-xl border border-brand-100/50 text-sm text-brand-700 animate-in fade-in slide-in-from-top-2">
           <Button
             variant="link"
             onClick={handleSelectAll}
-            className="flex items-center gap-2 font-bold hover:no-underline"
+            className="flex items-center gap-2 font-semibold hover:no-underline text-brand-700 hover:text-brand-900 p-0 h-auto"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+            <CheckSquare size={18} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
             Select All ({filteredTransactions.length})
           </Button>
-          <span className="text-xs">{selectedIds.size} selected</span>
+          <span className="text-xs font-medium bg-white px-2 py-1 rounded-md shadow-sm border border-brand-100">
+            {selectedIds.size} selected
+          </span>
         </div>
       )}
 

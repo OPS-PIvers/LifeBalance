@@ -135,7 +135,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-slate-50 border border-slate-200 rounded text-right font-bold"
+                    className="w-20 p-1 bg-white border border-slate-200 rounded-lg text-right font-bold focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all shadow-sm text-slate-900"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
@@ -143,10 +143,10 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     variant="ghost"
                     size="icon-sm"
                     onClick={handleSaveLimit}
-                    className="text-money-pos hover:bg-emerald-50"
+                    className="text-money-pos hover:bg-emerald-50 rounded-lg"
                     aria-label="Save limit"
                   >
-                    <Check size={14} />
+                    <Check size={16} />
                   </Button>
                 </div>
               ) : (
@@ -199,7 +199,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
+      <div className="h-3 w-full bg-slate-100/50 rounded-full overflow-hidden mb-3 ring-1 ring-black/5">
         <div
           className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}
@@ -208,18 +208,18 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
 
       {/* Expandable Transaction List */}
       {isExpanded && bucketTransactions.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 animate-in fade-in slide-in-from-top-2">
-          <p className="text-xs font-bold text-slate-400 uppercase mb-2">
+        <div className="mt-3 pt-3 border-t border-slate-100/50 space-y-1 animate-in fade-in slide-in-from-top-2">
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2 pl-1 tracking-wider">
             Transactions This Period ({bucketTransactions.length})
           </p>
-          <div className="space-y-1 max-h-48 overflow-y-auto">
+          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
             {bucketTransactions.map(tx => (
               <div
                 key={tx.id}
-                className="flex justify-between items-center text-sm py-2 px-3 bg-slate-50/50 rounded-lg hover:bg-slate-100 transition-colors group"
+                className="flex justify-between items-center text-sm py-2.5 px-3 rounded-xl hover:bg-slate-50 transition-colors group border border-transparent hover:border-slate-100"
               >
                 <div className="flex-1">
-                  <p className="font-medium text-slate-900">{tx.merchant}</p>
+                  <p className="font-medium text-slate-700 group-hover:text-slate-900 transition-colors">{tx.merchant}</p>
                   <p className="text-xs text-slate-400">
                     {format(parseISO(tx.date), 'MMM d, yyyy')}
                     {tx.status === 'pending_review' && (

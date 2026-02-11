@@ -45,6 +45,7 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div />,
   Plus: () => <div />,
   MoreVertical: () => <div />,
+  ChevronDown: () => <div />,
 }));
 
 describe('TransactionMasterList Summary Widget', () => {
