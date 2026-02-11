@@ -16,6 +16,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /primary/i });
     expect(button).toHaveClass('bg-brand-800');
     expect(button).toHaveClass('text-white');
+    expect(button).toHaveClass('shadow-btn-primary');
   });
 
   it('applies secondary variant classes', () => {
@@ -24,6 +25,7 @@ describe('Button', () => {
     expect(button).toHaveClass('bg-white');
     expect(button).toHaveClass('text-slate-700');
     expect(button).toHaveClass('border');
+    expect(button).toHaveClass('shadow-btn-secondary');
   });
 
   it('applies ghost variant classes', () => {
@@ -74,6 +76,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /success/i });
     expect(button).toHaveClass('bg-emerald-500');
     expect(button).toHaveClass('text-white');
+    expect(button).toHaveClass('shadow-btn-success');
   });
 
   it('applies warning variant classes', () => {
@@ -81,6 +84,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /warning/i });
     expect(button).toHaveClass('bg-amber-500');
     expect(button).toHaveClass('text-white');
+    expect(button).toHaveClass('shadow-btn-warning');
   });
 
   it('applies destructive variant classes', () => {
@@ -88,6 +92,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /destructive/i });
     expect(button).toHaveClass('bg-rose-500');
     expect(button).toHaveClass('text-white');
+    expect(button).toHaveClass('shadow-btn-destructive');
   });
 
   // Size tests
