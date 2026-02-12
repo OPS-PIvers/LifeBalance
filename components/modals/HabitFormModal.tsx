@@ -109,7 +109,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. Drink Water"
-            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
+            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl text-base"
             disabled={isSaving}
           />
         </div>
@@ -124,17 +124,17 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               value={category}
               onChange={e => setCategory(e.target.value)}
               placeholder="Select or type..."
-              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl"
+              className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl text-base"
               disabled={isSaving}
             />
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {CATEGORIES.map(c => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setCategory(c)}
                   disabled={isSaving}
-                  className={`text-xxs px-2 py-1 rounded-lg border transition-all ${
+                  className={`text-sm px-4 py-2 min-h-[44px] rounded-lg border transition-all ${
                     category === c
                       ? 'bg-brand-200 border-brand-300 text-brand-800 font-bold'
                       : 'bg-white border-brand-100 text-brand-400 hover:bg-brand-50'
@@ -197,7 +197,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                 type="number"
                 value={basePoints}
                 onChange={e => setBasePoints(e.target.value)}
-                className="w-full mt-1 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
+                className="w-full mt-1 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold text-base"
                 disabled={isSaving}
               />
             </div>
@@ -209,14 +209,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   type="number"
                   value={targetCount}
                   onChange={e => setTargetCount(e.target.value)}
-                  className="w-20 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold"
+                  className="w-20 p-2 bg-white border border-brand-200 rounded-lg text-center font-mono font-bold text-base"
                   disabled={isSaving}
                 />
                 <button
                   onClick={() => setPeriod(period === 'daily' ? 'weekly' : 'daily')}
                   disabled={isSaving}
                   type="button"
-                  className="text-xxs font-bold uppercase bg-white border border-brand-200 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
+                  className="text-sm font-bold uppercase bg-white border border-brand-200 px-4 py-2 rounded-lg min-w-[60px] min-h-[44px] disabled:opacity-50"
                 >
                   {period}
                 </button>
