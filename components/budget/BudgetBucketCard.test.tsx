@@ -44,9 +44,8 @@ describe('BudgetBucketCard', () => {
   });
 
   it('renders progress bar correctly', () => {
-    const { container } = render(<BudgetBucketCard {...defaultProps} />);
-    // Target the progress bar specifically
-    const progressBar = container.querySelector('.rounded-full.overflow-hidden > div');
+    render(<BudgetBucketCard {...defaultProps} />);
+    const progressBar = screen.getByTestId('progress-bar');
     expect(progressBar).toHaveStyle('width: 50%'); // (250/500)*100
     expect(progressBar).toHaveClass('bg-green-500');
   });

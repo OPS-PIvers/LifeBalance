@@ -201,6 +201,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       {/* Progress Bar */}
       <div className="h-3 w-full bg-slate-100/50 rounded-full overflow-hidden mb-3 ring-1 ring-black/5">
         <div
+          data-testid="progress-bar"
           className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}
         />

@@ -51,15 +51,15 @@ def run():
             # --- VERIFY TRANSACTIONS TAB ---
             print("Clicking Transactions tab...")
             page.get_by_role("tab", name="Transactions").click()
-            time.sleep(2) # Allow transitions
+
+            # Robust wait: wait for a key element in the tab to be visible
+            expect(page.get_by_text("Income")).to_be_visible()
 
             # Verify TransactionMasterList content
             print("Taking screenshot of Transactions tab...")
             page.screenshot(path="verification_transactions.png")
 
             # Check for specific elements we changed
-            # Check for "Income", "Expense", "Net", "Count" text in the summary widget
-            expect(page.get_by_text("Income")).to_be_visible()
             expect(page.get_by_text("Expense")).to_be_visible()
 
             # Check if Search input is present (it should have placeholder)
@@ -68,15 +68,14 @@ def run():
             # --- VERIFY BUCKETS TAB ---
             print("Clicking Buckets tab...")
             page.get_by_role("tab", name="Buckets").click()
-            time.sleep(2) # Allow transitions
+
+            # Robust wait: wait for the 'Create New Bucket' button to be visible
+            expect(page.get_by_role("button", name="Create New Bucket")).to_be_visible()
 
             # Verify BudgetBuckets content
             print("Taking screenshot of Buckets tab...")
             page.screenshot(path="verification_buckets.png")
 
-            # Verify Add Bucket Button text
-            create_btn = page.get_by_role("button", name="Create New Bucket")
-            expect(create_btn).to_be_visible()
             print("Create New Bucket button found.")
 
         except Exception as e:
