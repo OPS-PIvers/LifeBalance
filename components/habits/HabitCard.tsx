@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench, Copy } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -22,7 +22,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, addHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -91,8 +91,42 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     setIsMenuOpen(false);
   };
 
+  const handleDuplicate = async () => {
+    try {
+      // Destructure to exclude fields that should reset
+      const {
+        id: _id,
+        count: _count,
+        totalCount: _totalCount,
+        completedDates: _completedDates,
+        streakDays: _streakDays,
+        lastUpdated: _lastUpdated,
+        presetId: _presetId,
+        ...rest
+      } = habit;
+
+      const newHabit: Habit = {
+        ...rest,
+        id: crypto.randomUUID(), // Generate new ID to satisfy type
+        title: `${habit.title} (Copy)`,
+        count: 0,
+        totalCount: 0,
+        completedDates: [],
+        streakDays: 0,
+        lastUpdated: new Date().toISOString(),
+        isCustom: true, // Always mark duplicate as custom
+        presetId: undefined // Detach from preset
+      };
+
+      await addHabit(newHabit);
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Failed to duplicate habit:', error);
+    }
+  };
+
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = isEligibleForRepair ? 4 : 3; // Edit, View Log, (Repair), Delete
+    const menuItems = isEligibleForRepair ? 5 : 4; // Edit, Duplicate, View Log, (Repair), Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -114,11 +148,13 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         if (focusedMenuIndex === 0) {
           handleEdit();
         } else if (focusedMenuIndex === 1) {
+          handleDuplicate();
+        } else if (focusedMenuIndex === 2) {
           handleViewLog();
-        } else if (isEligibleForRepair && focusedMenuIndex === 2) {
+        } else if (isEligibleForRepair && focusedMenuIndex === 3) {
           consumeFreezeBankToken(habit.id, yesterday);
           setIsMenuOpen(false);
-        } else if ((isEligibleForRepair && focusedMenuIndex === 3) || (!isEligibleForRepair && focusedMenuIndex === 2)) {
+        } else if ((isEligibleForRepair && focusedMenuIndex === 4) || (!isEligibleForRepair && focusedMenuIndex === 3)) {
           handleDelete();
         }
         break;
@@ -289,11 +325,25 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleViewLog();
+                  handleDuplicate();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
                   focusedMenuIndex === 1 && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
+              >
+                <Copy size={14} /> Duplicate
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewLog();
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 2 && "bg-brand-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -309,7 +359,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   }}
                   className={cn(
                     "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 focus:outline-none",
-                    focusedMenuIndex === 2 && "bg-indigo-50"
+                    focusedMenuIndex === 3 && "bg-indigo-50"
                   )}
                   role="menuitem"
                   tabIndex={-1}
@@ -324,7 +374,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50"
+                  focusedMenuIndex === (isEligibleForRepair ? 4 : 3) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -350,6 +400,14 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             onClick={handleEdit}
           >
             Edit Habit
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={<Copy className="text-brand-500" />}
+            onClick={handleDuplicate}
+          >
+            Duplicate Habit
           </Button>
           <Button
             variant="ghost"
