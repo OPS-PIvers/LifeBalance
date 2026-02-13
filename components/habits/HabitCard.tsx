@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
+import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench, Copy } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -25,6 +25,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const isDesktop = useMediaQuery('(min-width: 640px)');
@@ -81,6 +82,11 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
     setIsMenuOpen(false);
   };
 
+  const handleClone = () => {
+    setIsCloneModalOpen(true);
+    setIsMenuOpen(false);
+  };
+
   const handleViewLog = () => {
     setIsLogModalOpen(true);
     setIsMenuOpen(false);
@@ -92,7 +98,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
   };
 
   const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = isEligibleForRepair ? 4 : 3; // Edit, View Log, (Repair), Delete
+    const menuItems = isEligibleForRepair ? 5 : 4; // Edit, View Log, (Repair), Duplicate, Delete
     
     switch (e.key) {
       case 'ArrowDown':
@@ -119,6 +125,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           consumeFreezeBankToken(habit.id, yesterday);
           setIsMenuOpen(false);
         } else if ((isEligibleForRepair && focusedMenuIndex === 3) || (!isEligibleForRepair && focusedMenuIndex === 2)) {
+          handleClone();
+        } else if ((isEligibleForRepair && focusedMenuIndex === 4) || (!isEligibleForRepair && focusedMenuIndex === 3)) {
           handleDelete();
         }
         break;
@@ -305,7 +313,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   onClick={(e) => {
                     e.stopPropagation();
                     consumeFreezeBankToken(habit.id, yesterday);
-          setIsMenuOpen(false);
+                    setIsMenuOpen(false);
                   }}
                   className={cn(
                     "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 focus:outline-none",
@@ -320,11 +328,25 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  handleClone();
+                }}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-brand-50"
+                )}
+                role="menuitem"
+                tabIndex={-1}
+              >
+                <Copy size={14} /> Duplicate
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   handleDelete();
                 }}
                 className={cn(
                   "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50"
+                  focusedMenuIndex === (isEligibleForRepair ? 4 : 3) && "bg-rose-50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -372,6 +394,14 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               Repair Streak ({freezeBank?.tokens})
             </Button>
           )}
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-lg py-4"
+            leftIcon={<Copy className="text-brand-500" />}
+            onClick={handleClone}
+          >
+            Duplicate Habit
+          </Button>
           <div className="h-px bg-gray-100 my-2" />
           <Button
             variant="ghost-destructive"
@@ -388,6 +418,21 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         editingHabit={habit}
+      />
+      <HabitFormModal
+        isOpen={isCloneModalOpen}
+        onClose={() => setIsCloneModalOpen(false)}
+        initialValues={{
+          ...habit,
+          title: `${habit.title} (Copy)`,
+          count: 0,
+          streakDays: 0,
+          completedDates: [],
+          totalCount: 0,
+          lastUpdated: new Date().toISOString(),
+          isCustom: true,
+          hasSubmissionTracking: false,
+        }}
       />
       <HabitSubmissionLogModal
         isOpen={isLogModalOpen}
