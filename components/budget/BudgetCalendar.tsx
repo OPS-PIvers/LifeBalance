@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, CheckSquare, Download, MoreVertical, Repeat } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { useCalendarGrid } from '../../hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
@@ -10,31 +9,22 @@ import { generateCsvExport } from '../../utils/exportUtils';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
-import { SegmentedControl } from '../ui/SegmentedControl';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
+import { CalendarEventForm } from './CalendarEventForm';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo, accounts } = useHousehold();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRecurringModalOpen, setIsRecurringModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<CalendarItem | null>(null);
   const [activeActionItem, setActiveActionItem] = useState<CalendarItem | null>(null);
-
-  // Form State
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState<'income' | 'expense'>('expense');
-  const [date, setDate] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
   const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -56,13 +46,6 @@ const BudgetCalendar: React.FC = () => {
   );
 
   const openAddModal = () => {
-    setTitle('');
-    setAmount('');
-    setType('expense');
-    setDate(format(selectedDate, 'yyyy-MM-dd'));
-    setAccountId('');
-    setIsRecurring(false);
-    setFrequency('monthly');
     setEditingItem(null);
     setIsAddModalOpen(true);
   };
@@ -87,73 +70,25 @@ const BudgetCalendar: React.FC = () => {
         toast.error('Cannot edit this recurring instance. The original template may have been deleted.');
         return;
       }
-      setTitle(originalItem.title);
-      setAmount(originalItem.amount.toString());
-      setType(originalItem.type);
-      setDate(originalItem.date);
-      setAccountId(originalItem.accountId || '');
-      setIsRecurring(!!originalItem.isRecurring);
-      setFrequency(originalItem.frequency || 'monthly');
       setEditingItem(originalItem);
     } else {
-      setTitle(item.title);
-      setAmount(item.amount.toString());
-      setType(item.type);
-      setDate(item.date);
-      setAccountId(item.accountId || '');
-      setIsRecurring(!!item.isRecurring);
-      setFrequency(item.frequency || 'monthly');
       setEditingItem(item);
     }
     setIsAddModalOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!title || !amount || !date) return;
-
-    const newItem: CalendarItem = {
-      id: editingItem ? editingItem.id : crypto.randomUUID(),
-      title,
-      amount: parseFloat(amount),
-      date: date,
-      type,
-      isPaid: editingItem ? editingItem.isPaid : false,
-      isRecurring,
-      frequency: isRecurring ? frequency : undefined,
-      accountId: accountId || undefined
-    };
-
+  const handleSave = async (item: CalendarItem) => {
     try {
-      if (editingItem) {
-        await updateCalendarItem(newItem);
+      if (editingItem && item.id === editingItem.id) {
+        await updateCalendarItem(item);
       } else {
-        await addCalendarItem(newItem);
+        await addCalendarItem(item);
       }
       setIsAddModalOpen(false);
     } catch (error) {
       console.error("Failed to save calendar item:", error);
       toast.error("Failed to save event");
     }
-  };
-
-  const handleDuplicate = () => {
-    if (!title || !amount || !date) return;
-
-    const newItem: CalendarItem = {
-      id: crypto.randomUUID(),
-      title: `${title} (Copy)`,
-      amount: parseFloat(amount),
-      date: date,
-      type,
-      isPaid: false, // Reset status for duplicate
-      isRecurring,
-      frequency: isRecurring ? frequency : undefined,
-      accountId: accountId || undefined
-    };
-
-    addCalendarItem(newItem);
-    toast.success('Event duplicated');
-    setIsAddModalOpen(false);
   };
 
   const handleExport = () => {
@@ -457,125 +392,53 @@ const BudgetCalendar: React.FC = () => {
         </div>
       </Drawer>
 
-      {/* Add/Edit Modal */}
-      <Modal
-        isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        maxWidth="max-w-sm"
-      >
-        <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-lg text-slate-900">
-              {editingItem ? 'Edit Event' : 'Add Calendar Item'}
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsAddModalOpen(false)}
-              aria-label="Close modal"
-              className="text-slate-400 hover:text-slate-600"
-            >
-              <X size={20} />
-            </Button>
+      {/* Add/Edit Modal (Desktop) or Drawer (Mobile) */}
+      {isDesktop ? (
+        <Modal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          maxWidth="max-w-sm"
+        >
+          <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-lg text-slate-900">
+                {editingItem ? 'Edit Event' : 'Add Calendar Item'}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAddModalOpen(false)}
+                aria-label="Close modal"
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </Button>
+            </div>
+
+            <CalendarEventForm
+              initialData={editingItem}
+              selectedDate={selectedDate}
+              accounts={accounts}
+              onSave={handleSave}
+              onCancel={() => setIsAddModalOpen(false)}
+            />
           </div>
-
-          <div className="space-y-4">
-             {/* Type Toggle */}
-             <SegmentedControl
-               value={type}
-               onChange={(val) => setType(val as 'income' | 'expense')}
-               name="Transaction Type"
-               options={[
-                 { value: 'expense', label: 'Expense', activeClassName: 'text-money-neg' },
-                 { value: 'income', label: 'Income', activeClassName: 'text-money-pos' },
-               ]}
-               className="mb-4"
-               showBorder={false}
-             />
-
-             <Input
-               label="Title"
-               type="text"
-               placeholder="Title (e.g. Rent)"
-               value={title}
-               onChange={e => setTitle(e.target.value)}
-             />
-
-             <Input
-               label="Amount"
-               type="number"
-               placeholder="Amount"
-               value={amount}
-               onChange={e => setAmount(e.target.value)}
-               className="font-mono"
-             />
-
-             <Input
-               label="Date"
-               type="date"
-               value={date}
-               onChange={e => setDate(e.target.value)}
-               className="font-medium"
-             />
-
-             <Select
-               label="Account (Optional)"
-               value={accountId}
-               onChange={(e) => setAccountId(e.target.value)}
-             >
-               <option value="">(None)</option>
-               {accounts.map(a => (
-                 <option key={a.id} value={a.id}>{a.name}</option>
-               ))}
-             </Select>
-
-             <div className="flex items-center justify-between">
-               <label id="recurring-label" className="text-sm font-bold text-slate-700">Recurring?</label>
-               <button
-                role="switch"
-                aria-checked={isRecurring}
-                aria-labelledby="recurring-label"
-                onClick={() => setIsRecurring(!isRecurring)}
-                className={`w-11 h-6 rounded-full relative transition-colors ${isRecurring ? 'bg-slate-900' : 'bg-slate-200'}`}
-               >
-                 <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${isRecurring ? 'translate-x-5' : ''}`} />
-               </button>
-             </div>
-
-             {isRecurring && (
-               <Select
-                 label="Frequency"
-                 value={frequency}
-                 onChange={(e) => setFrequency(e.target.value as 'monthly' | 'bi-weekly' | 'weekly')}
-               >
-                 <option value="monthly">Monthly</option>
-                 <option value="bi-weekly">Bi-Weekly</option>
-                 <option value="weekly">Weekly</option>
-               </Select>
-             )}
-
-             <div className="flex gap-2 mt-2">
-               {editingItem && (
-                 <Button
-                   variant="secondary"
-                   onClick={handleDuplicate}
-                   className="flex-1 py-3 h-auto"
-                 >
-                   <Copy size={18} />
-                   Duplicate
-                 </Button>
-               )}
-               <Button
-                 variant="primary"
-                 onClick={handleSave}
-                 className="flex-1 py-3 h-auto shadow-lg"
-               >
-                 {editingItem ? 'Save Changes' : 'Add Event'}
-               </Button>
-             </div>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      ) : (
+        <Drawer
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
+        >
+          <CalendarEventForm
+            initialData={editingItem}
+            selectedDate={selectedDate}
+            accounts={accounts}
+            onSave={handleSave}
+            onCancel={() => setIsAddModalOpen(false)}
+          />
+        </Drawer>
+      )}
 
       <RecurringBillsModal
         isOpen={isRecurringModalOpen}

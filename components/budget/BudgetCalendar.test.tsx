@@ -386,7 +386,10 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('Edit Event', { selector: 'h3' })).toBeInTheDocument();
 
     // Re-open drawer for Cancel test
-    fireEvent.click(screen.getByLabelText('Close modal')); // Close edit modal first
+    // On mobile, it's a Drawer ("Close drawer"). On desktop, it's a Modal ("Close modal").
+    // Since default test env is likely mobile (matchMedia false), we check for either or specifically drawer.
+    const closeButton = screen.queryByLabelText('Close drawer') || screen.getByLabelText('Close modal');
+    fireEvent.click(closeButton);
     fireEvent.click(moreButton);
 
     // Test Cancel Action
