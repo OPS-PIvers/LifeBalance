@@ -48,6 +48,7 @@ export default {
         soft: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
         glass: '0 8px 30px rgba(0, 0, 0, 0.04)',
         nav: '0 -10px 40px -15px rgba(0, 0, 0, 0.05)',
+        premium: '0 20px 40px -4px rgba(0, 0, 0, 0.08), 0 8px 16px -4px rgba(0, 0, 0, 0.04)',
       },
       spacing: {
         'safe': 'env(safe-area-inset-bottom)',
