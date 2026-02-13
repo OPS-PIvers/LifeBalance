@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { Copy } from 'lucide-react';
 import { Account, CalendarItem } from '../../types/schema';
@@ -20,7 +20,7 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
   selectedDate,
   accounts,
   onSave,
-  onCancel,
+  onCancel: _onCancel,
 }) => {
   const [title, setTitle] = useState(initialData?.title || '');
   const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
@@ -29,28 +29,6 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
   const [accountId, setAccountId] = useState(initialData?.accountId || '');
   const [isRecurring, setIsRecurring] = useState(!!initialData?.isRecurring);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>(initialData?.frequency || 'monthly');
-
-  // Reset form when initialData changes
-  useEffect(() => {
-    if (initialData) {
-      setTitle(initialData.title);
-      setAmount(initialData.amount.toString());
-      setType(initialData.type);
-      setDate(initialData.date);
-      setAccountId(initialData.accountId || '');
-      setIsRecurring(!!initialData.isRecurring);
-      setFrequency(initialData.frequency || 'monthly');
-    } else {
-      setTitle('');
-      setAmount('');
-      setType('expense');
-      setDate(format(selectedDate, 'yyyy-MM-dd'));
-      setAccountId('');
-      setIsRecurring(false);
-      setFrequency('monthly');
-    }
-  }, [initialData, selectedDate]);
-
 
   const handleSubmit = async () => {
     if (!title || !amount || !date) return;

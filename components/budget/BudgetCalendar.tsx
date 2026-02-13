@@ -416,6 +416,7 @@ const BudgetCalendar: React.FC = () => {
             </div>
 
             <CalendarEventForm
+              key={editingItem ? editingItem.id : 'new'}
               initialData={editingItem}
               selectedDate={selectedDate}
               accounts={accounts}
@@ -431,6 +432,7 @@ const BudgetCalendar: React.FC = () => {
           title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
         >
           <CalendarEventForm
+            key={editingItem ? editingItem.id : 'new'}
             initialData={editingItem}
             selectedDate={selectedDate}
             accounts={accounts}
