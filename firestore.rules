@@ -332,14 +332,17 @@ service cloud.firestore {
                  (!data.keys().has('currentPeriodId') || isValidOptionalString(data.currentPeriodId, 10)) &&
                  (!data.keys().has('lastResetDate') || isValidOptionalString(data.lastResetDate, 10)) &&
                  (!data.keys().has('subBuckets') || data.subBuckets is list) &&
-                 (!data.keys().has('createdBy') || data.createdBy is string);
+                 (!data.keys().has('createdBy') || data.createdBy is string) &&
+                 // Legacy fields (may exist in old documents)
+                 (!data.keys().has('id') || data.id is string) &&
+                 (!data.keys().has('spent') || data.spent is number);
         }
 
         allow create: if isMemberOf(householdId) &&
                       // Strict validation for create - all required fields must be present
                       request.resource.data.keys().hasAll(['name', 'limit', 'color', 'isVariable', 'isCore']) &&
-                      // Allow only expected fields to prevent storage abuse
-                      request.resource.data.keys().hasOnly(['name', 'limit', 'color', 'isVariable', 'isCore', 'currentPeriodId', 'lastResetDate', 'subBuckets', 'createdBy']) &&
+                      // Allow only expected fields to prevent storage abuse (including legacy fields for compatibility)
+                      request.resource.data.keys().hasOnly(['name', 'limit', 'color', 'isVariable', 'isCore', 'currentPeriodId', 'lastResetDate', 'subBuckets', 'createdBy', 'id', 'spent']) &&
                       isValidBucketData() &&
                       // Ensure createdBy matches authenticated user
                       request.resource.data.createdBy == request.auth.uid;
