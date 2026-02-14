@@ -1071,8 +1071,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const addBucket = useCallback(async (bucket: BudgetBucket) => {
     if (!householdId || !user) return;
+    // Exclude 'id' field - it's not stored in Firestore (document ID is separate)
+    const { id: _id, spent: _spent, ...bucketWithoutId } = bucket;
+    const sanitizedBucket = sanitizeFirestoreData(bucketWithoutId);
     await addDoc(collection(db, `households/${householdId}/buckets`), {
-      ...bucket,
+      ...sanitizedBucket,
       createdBy: user.uid,
     });
     toast.success('Bucket added');
