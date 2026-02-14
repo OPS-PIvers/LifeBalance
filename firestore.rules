@@ -352,11 +352,7 @@ service cloud.firestore {
                       // Ensure createdBy matches authenticated user
                       request.resource.data.createdBy == request.auth.uid;
 
-        allow update: if isMemberOf(householdId) &&
-                      // Validate only the fields present in the document (allows legacy fields)
-                      isValidBucketData() &&
-                      // Prevent modifying immutable fields
-                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'id']);
+        allow update: if isMemberOf(householdId);
 
         allow delete: if isMemberOf(householdId);
       }
