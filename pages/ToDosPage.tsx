@@ -9,6 +9,7 @@ import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
 import { Drawer } from '../components/ui/Drawer';
 import { Button } from '../components/ui/Button';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import Input from '../components/ui/Input';
 import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
 
@@ -457,67 +458,61 @@ const ToDosPage: React.FC = () => {
           <div className="flex gap-2">
             {!isSelectionMode && (
                 <>
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={handleExport}
                     disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
-                    className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={`Export ${viewMode} tasks to CSV`}
                     title={`Export ${viewMode} tasks to CSV`}
+                    leftIcon={<Download size={16} />}
                   >
-                    <Download size={16} />
                     <span className="hidden sm:inline">Export</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     onClick={openAddModal}
-                    className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
                     aria-label="Add new task"
+                    leftIcon={<Plus size={16} />}
                   >
-                    <Plus size={16} /> <span className="hidden xs:inline">New Task</span>
-                  </button>
+                     <span className="hidden sm:inline">New Task</span>
+                  </Button>
                 </>
               )}
 
-              <button
+              <Button
+                variant="secondary"
+                size="icon"
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
                 disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`p-2 rounded-xl transition-colors border ${
-                  isSelectionMode
-                    ? 'bg-slate-100 text-slate-900 border-slate-200'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-                } ${viewMode === 'completed' ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`${isSelectionMode ? 'bg-slate-100 border-slate-200' : ''}`}
                 title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
                 aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
               >
                 {isSelectionMode ? <X size={20} /> : <Layers size={20} />}
-              </button>
+              </Button>
           </div>
         </div>
 
         {/* View Toggle */}
-        <div className="bg-slate-100 p-1 rounded-xl flex items-center self-start">
-             <button
-                onClick={() => setViewMode('active')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                    viewMode === 'active'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
-                 Active
-             </button>
-             <button
-                onClick={() => setViewMode('completed')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
-                    viewMode === 'completed'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
-                 Completed
-                 <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
-                     {todos.filter(t => t.isCompleted).length}
-                 </span>
-             </button>
+        <div className="self-start">
+             <SegmentedControl
+                value={viewMode}
+                onChange={(val) => setViewMode(val as 'active' | 'completed')}
+                options={useMemo(() => [
+                    { value: 'active', label: 'Active' },
+                    {
+                        value: 'completed',
+                        label: (
+                            <span className="flex items-center gap-1.5">
+                                Completed
+                                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
+                                    {todos.filter(t => t.isCompleted).length}
+                                </span>
+                            </span>
+                        )
+                    }
+                ], [todos])}
+             />
         </div>
       </div>
 
@@ -647,35 +642,38 @@ const ToDosPage: React.FC = () => {
               {selectedIds.size} selected
             </div>
 
-            <button
+            <Button
+              variant="ghost-inverted"
               onClick={handleBatchComplete}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal"
               aria-label="Mark selected as completed"
             >
               <Check size={18} />
               <span className="text-xxs font-medium">Complete</span>
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="ghost-inverted"
               onClick={() => setIsBatchRescheduleOpen(true)}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal"
               aria-label="Reschedule selected items"
             >
               <Calendar size={18} />
               <span className="text-xxs font-medium">Reschedule</span>
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="ghost-inverted"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-lg transition-colors disabled:opacity-50"
+              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal text-rose-300 hover:text-rose-200 hover:bg-rose-500/20"
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -698,13 +696,15 @@ const ToDosPage: React.FC = () => {
           <h2 className="text-xl font-bold text-brand-800">
             {editingId ? 'Edit Task' : 'New Task'}
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsAddModalOpen(false)}
-            className="p-2 hover:bg-brand-50 rounded-full transition-colors"
+            className="rounded-full hover:bg-brand-50"
             aria-label="Close dialog"
           >
             <X size={20} className="text-brand-400" />
-          </button>
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -766,17 +766,14 @@ const ToDosPage: React.FC = () => {
             )}
           </fieldset>
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={members.length === 0}
-            className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-              members.length === 0
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-brand-900 active:scale-[0.98]'
-            }`}
+            className="w-full mt-4 py-3.5 shadow-lg"
           >
             {editingId ? 'Save Changes' : 'Create Task'}
-          </button>
+          </Button>
         </form>
       </Modal>
 
@@ -1016,30 +1013,38 @@ const Section: React.FC<{
                    <>
                      {/* Desktop Actions */}
                      <div className="hidden sm:flex items-center gap-1 pl-2">
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Move to Tomorrow"
                           title="Move to Tomorrow"
                         >
                           <Calendar size={16} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Duplicate task"
                           title="Duplicate"
                         >
                           <Copy size={16} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Edit task"
                         >
                           <Edit2 size={16} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="ghost-destructive"
+                          size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
                             showDeleteConfirmation(async () => {
@@ -1047,21 +1052,23 @@ const Section: React.FC<{
                               toast.success('Task deleted');
                             });
                           }}
-                          className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
+                          className="text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50"
                           aria-label="Delete task"
                         >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                      </div>
                      {/* Mobile Actions */}
                      <div className="flex sm:hidden pl-2">
-                       <button
+                       <Button
+                         variant="ghost"
+                         size="icon"
                          onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                         className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                          aria-label="More options"
                        >
                          <MoreVertical size={20} />
-                       </button>
+                       </Button>
                      </div>
                    </>
                  )}
@@ -1137,33 +1144,39 @@ const CompletedSection: React.FC<{
 
                             {/* Desktop Actions */}
                             <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
                                     onClick={() => onDuplicate(item)}
-                                    className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                    className="text-slate-400 hover:text-brand-600 hover:bg-brand-50"
                                     title="Duplicate task"
                                 >
                                     <Copy size={14} />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="ghost-destructive"
+                                    size="icon-sm"
                                     onClick={() => showDeleteConfirmation(async () => {
                                         await onDelete(item.id);
                                         toast.success('Task deleted');
                                     })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                                     title="Delete forever"
                                 >
                                     <Trash2 size={14} />
-                                </button>
+                                </Button>
                             </div>
                             {/* Mobile Actions */}
                             <div className="flex sm:hidden">
-                               <button
+                               <Button
+                                 variant="ghost"
+                                 size="icon"
                                  onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
+                                 className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                                  aria-label="More options"
                                >
                                  <MoreVertical size={20} />
-                               </button>
+                               </Button>
                             </div>
                         </div>
                     );
