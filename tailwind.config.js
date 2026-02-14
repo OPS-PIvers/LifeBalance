@@ -1,3 +1,11 @@
+import colors from 'tailwindcss/colors';
+
+// Helper to convert hex to rgb string for rgba usage
+const hexToRgb = (hex) => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '0, 0, 0';
+};
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -51,9 +59,9 @@ export default {
         'btn-primary': '0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         'btn-primary-hover': '0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
         'btn-secondary': '0 1px 2px rgba(0, 0, 0, 0.05)',
-        'btn-success': '0 1px 2px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        'btn-warning': '0 1px 2px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-        'btn-destructive': '0 1px 2px rgba(244, 63, 94, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        'btn-success': `0 1px 2px rgba(${hexToRgb(colors.emerald[500])}, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+        'btn-warning': `0 1px 2px rgba(${hexToRgb(colors.amber[500])}, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+        'btn-destructive': `0 1px 2px rgba(${hexToRgb(colors.rose[500])}, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
       },
       spacing: {
         'safe': 'env(safe-area-inset-bottom)',
