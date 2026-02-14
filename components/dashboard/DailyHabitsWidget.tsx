@@ -5,6 +5,9 @@ import { format, startOfToday } from 'date-fns';
 import { Check, Flame, ArrowRight, LayoutList, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+const MAX_VISIBLE_HABITS = 5;
+const DEFAULT_ORDER_FALLBACK = 999;
+
 export const DailyHabitsWidget: React.FC = () => {
   const { habits, toggleHabit } = useHousehold();
 
@@ -32,7 +35,7 @@ export const DailyHabitsWidget: React.FC = () => {
         // 1. Pending first
         if (a.isCompleted !== b.isCompleted) return a.isCompleted ? 1 : -1;
         // 2. Then by Order
-        return (a.order ?? 999) - (b.order ?? 999);
+        return (a.order ?? DEFAULT_ORDER_FALLBACK) - (b.order ?? DEFAULT_ORDER_FALLBACK);
       });
   }, [habits, today]);
 
@@ -46,9 +49,9 @@ export const DailyHabitsWidget: React.FC = () => {
 
   if (dailyHabits.length === 0) return null;
 
-  // Limit to top 5 to save space
-  const visibleHabits = dailyHabits.slice(0, 5);
-  const remainingCount = dailyHabits.length - 5;
+  // Limit to top habits to save space
+  const visibleHabits = dailyHabits.slice(0, MAX_VISIBLE_HABITS);
+  const remainingCount = dailyHabits.length - MAX_VISIBLE_HABITS;
 
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
