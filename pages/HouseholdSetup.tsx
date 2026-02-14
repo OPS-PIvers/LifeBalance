@@ -76,18 +76,25 @@ const HouseholdSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-blue-100/40 rounded-full blur-3xl mix-blend-multiply opacity-70 animate-blob" />
+        <div className="absolute top-[20%] -right-[10%] w-[60%] h-[60%] bg-indigo-100/40 rounded-full blur-3xl mix-blend-multiply opacity-70 animate-blob animation-delay-2000" />
+        <div className="absolute -bottom-[10%] left-[20%] w-[40%] h-[40%] bg-slate-200/40 rounded-full blur-3xl mix-blend-multiply opacity-70 animate-blob animation-delay-4000" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl p-8 space-y-8">
           {/* Header */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-900 rounded-2xl mb-6 shadow-[0_8px_16px_rgb(15,23,42,0.2)] ring-1 ring-white/20">
               <Home className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 mb-2">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">
               {mode === 'success' ? 'All Set!' : 'Set Up Your Household'}
             </h1>
-            <p className="text-brand-500 text-sm">
+            <p className="text-slate-500 text-sm leading-relaxed">
               {mode === 'success'
                 ? 'Your household is ready to use'
                 : 'Create a new household or join an existing one'}
@@ -96,18 +103,18 @@ const HouseholdSetup: React.FC = () => {
 
           {/* Choice View */}
           {mode === 'choice' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <button
                 onClick={() => setMode('create')}
-                className="w-full bg-brand-600 text-white font-semibold py-4 px-6 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+                className="w-full bg-slate-900 text-white font-semibold py-4 px-6 rounded-2xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
               >
-                <Plus size={20} />
+                <Plus size={20} className="text-slate-300 group-hover:text-white transition-colors" />
                 <span>Create New Household</span>
               </button>
 
               <button
                 onClick={() => setMode('join')}
-                className="w-full bg-white border-2 border-brand-200 text-brand-800 font-semibold py-4 px-6 rounded-xl hover:bg-brand-50 hover:border-brand-300 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+                className="w-full bg-white/50 border border-slate-200/60 backdrop-blur-sm text-slate-700 font-semibold py-4 px-6 rounded-2xl shadow-sm hover:bg-white/80 hover:text-slate-900 hover:shadow-md active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3"
               >
                 <LogIn size={20} />
                 <span>Join Existing Household</span>
@@ -117,18 +124,18 @@ const HouseholdSetup: React.FC = () => {
 
           {/* Create View */}
           {mode === 'create' && (
-            <form onSubmit={handleCreateHousehold} className="space-y-4">
+            <form onSubmit={handleCreateHousehold} className="space-y-6">
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-medium text-sm transition-colors"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2 ml-1">
                   Household Name
                 </label>
                 <input
@@ -136,7 +143,7 @@ const HouseholdSetup: React.FC = () => {
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-300 transition-all duration-200 placeholder:text-slate-400"
                   required
                   disabled={loading}
                 />
@@ -145,16 +152,16 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || !householdName.trim()}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                     <span>Creating...</span>
                   </>
                 ) : (
                   <>
-                    <Users size={20} />
+                    <Users size={20} className="text-slate-300" />
                     <span>Create Household</span>
                   </>
                 )}
@@ -164,18 +171,18 @@ const HouseholdSetup: React.FC = () => {
 
           {/* Join View */}
           {mode === 'join' && (
-            <form onSubmit={handleJoinHousehold} className="space-y-4">
+            <form onSubmit={handleJoinHousehold} className="space-y-6">
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-medium text-sm transition-colors"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2 ml-1">
                   Invite Code
                 </label>
                 <input
@@ -183,12 +190,12 @@ const HouseholdSetup: React.FC = () => {
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-lg tracking-wider text-center uppercase"
+                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-300 font-mono text-lg tracking-wider text-center uppercase placeholder:text-slate-300 transition-all duration-200"
                   maxLength={6}
                   required
                   disabled={loading}
                 />
-                <p className="text-xs text-brand-500 mt-2">
+                <p className="text-xs text-slate-500 mt-2 text-center">
                   Enter the 6-character code shared by your household admin
                 </p>
               </div>
@@ -196,16 +203,16 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || inviteCode.length !== 6}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
                     <span>Joining...</span>
                   </>
                 ) : (
                   <>
-                    <LogIn size={20} />
+                    <LogIn size={20} className="text-slate-300" />
                     <span>Join Household</span>
                   </>
                 )}
@@ -215,13 +222,13 @@ const HouseholdSetup: React.FC = () => {
 
           {/* Success View */}
           {mode === 'success' && createdInviteCode && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
+            <div className="space-y-6">
+              <div className="bg-emerald-50/50 border border-emerald-100/50 rounded-2xl p-6 text-center backdrop-blur-sm">
+                <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10">
                   <Users className="w-6 h-6 text-white" />
                 </div>
-                <p className="text-green-800 font-semibold">Household Created!</p>
-                <p className="text-green-600 text-sm mt-1">
+                <p className="text-emerald-900 font-semibold tracking-tight">Household Created!</p>
+                <p className="text-emerald-600/80 text-sm mt-1">
                   Invite family members to join
                 </p>
               </div>
@@ -230,7 +237,7 @@ const HouseholdSetup: React.FC = () => {
 
               <button
                 onClick={handleContinue}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200"
               >
                 Continue to Dashboard
               </button>
