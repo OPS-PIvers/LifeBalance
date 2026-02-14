@@ -12,7 +12,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { SegmentedControl, SegmentedControlOption } from '../ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -458,7 +458,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const tabOptions = [
+  const tabOptions: SegmentedControlOption<ModalTab>[] = [
     {
       value: 'transaction',
       label: (
@@ -516,10 +516,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Tab Switcher - Only show if not in deep transaction flow */}
       {view === 'menu' && (
         <div className="px-6 pb-4">
-          <SegmentedControl
+          <SegmentedControl<ModalTab>
             options={tabOptions}
             value={activeTab}
-            onChange={(val) => setActiveTab(val as ModalTab)}
+            onChange={setActiveTab}
           />
         </div>
       )}
