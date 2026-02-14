@@ -25,7 +25,7 @@ def verify_buttons():
                 # Since test=true, it should redirect or show a banner
 
                 # Let's just wait a bit for any JS to execute
-                page.wait_for_timeout(5000)
+                page.wait_for_load_state('networkidle')
 
             except Exception as e:
                 print(f"Wait failed: {e}")
