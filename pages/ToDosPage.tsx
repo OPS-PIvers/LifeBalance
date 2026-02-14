@@ -155,6 +155,21 @@ const ToDosPage: React.FC = () => {
     };
   }, [todos, currentDate]);
 
+  const viewModeOptions = useMemo(() => [
+    { value: 'active', label: 'Active' },
+    {
+        value: 'completed',
+        label: (
+            <span className="flex items-center gap-1.5">
+                Completed
+                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
+                    {todos.filter(t => t.isCompleted).length}
+                </span>
+            </span>
+        )
+    }
+  ], [todos]);
+
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
@@ -498,20 +513,7 @@ const ToDosPage: React.FC = () => {
              <SegmentedControl
                 value={viewMode}
                 onChange={(val) => setViewMode(val as 'active' | 'completed')}
-                options={useMemo(() => [
-                    { value: 'active', label: 'Active' },
-                    {
-                        value: 'completed',
-                        label: (
-                            <span className="flex items-center gap-1.5">
-                                Completed
-                                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
-                                    {todos.filter(t => t.isCompleted).length}
-                                </span>
-                            </span>
-                        )
-                    }
-                ], [todos])}
+                options={viewModeOptions}
              />
         </div>
       </div>
