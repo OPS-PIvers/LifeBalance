@@ -646,9 +646,10 @@ const ToDosPage: React.FC = () => {
 
             <Button
               variant="ghost-inverted"
+              layout="vertical"
               onClick={handleBatchComplete}
               disabled={isBatchProcessing}
-              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal"
+              className="h-auto py-1 px-3 font-normal"
               aria-label="Mark selected as completed"
             >
               <Check size={18} />
@@ -657,9 +658,10 @@ const ToDosPage: React.FC = () => {
 
             <Button
               variant="ghost-inverted"
+              layout="vertical"
               onClick={() => setIsBatchRescheduleOpen(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal"
+              className="h-auto py-1 px-3 font-normal"
               aria-label="Reschedule selected items"
             >
               <Calendar size={18} />
@@ -668,9 +670,10 @@ const ToDosPage: React.FC = () => {
 
             <Button
               variant="ghost-inverted"
+              layout="vertical"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto py-1 px-3 gap-0.5 font-normal text-rose-300 hover:text-rose-200 hover:bg-rose-500/20"
+              className="h-auto py-1 px-3 font-normal text-rose-300 hover:text-rose-200 hover:bg-rose-500/20"
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
@@ -1016,36 +1019,33 @@ const Section: React.FC<{
                      {/* Desktop Actions */}
                      <div className="hidden sm:flex items-center gap-1 pl-2">
                         <Button
-                          variant="ghost"
+                          variant="ghost-brand"
                           size="icon"
                           onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
-                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Move to Tomorrow"
                           title="Move to Tomorrow"
                         >
                           <Calendar size={16} />
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="ghost-brand"
                           size="icon"
                           onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Duplicate task"
                           title="Duplicate"
                         >
                           <Copy size={16} />
                         </Button>
                         <Button
-                          variant="ghost"
+                          variant="ghost-brand"
                           size="icon"
                           onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                          className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                           aria-label="Edit task"
                         >
                           <Edit2 size={16} />
                         </Button>
                         <Button
-                          variant="ghost-destructive"
+                          variant="ghost-brand"
                           size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1054,7 +1054,7 @@ const Section: React.FC<{
                               toast.success('Task deleted');
                             });
                           }}
-                          className="text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50"
+                          className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50"
                           aria-label="Delete task"
                         >
                           <Trash2 size={16} />
@@ -1063,10 +1063,9 @@ const Section: React.FC<{
                      {/* Mobile Actions */}
                      <div className="flex sm:hidden pl-2">
                        <Button
-                         variant="ghost"
+                         variant="ghost-brand"
                          size="icon"
                          onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
                          aria-label="More options"
                        >
                          <MoreVertical size={20} />
@@ -1162,7 +1161,6 @@ const CompletedSection: React.FC<{
                                         await onDelete(item.id);
                                         toast.success('Task deleted');
                                     })}
-                                    className="text-slate-400 hover:text-rose-600 hover:bg-rose-50"
                                     title="Delete forever"
                                 >
                                     <Trash2 size={14} />
