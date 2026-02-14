@@ -96,6 +96,8 @@ service cloud.firestore {
       allow update: if isMemberOf(householdId) &&
                         // 🛡️ SENTINEL FIX: Validate household name if being updated
                         isValidOptionalString(request.resource.data.get('name', null), 50) &&
+                        // Validate lastPaycheckDate if being updated
+                        isValidOptionalString(request.resource.data.get('lastPaycheckDate', null), 10) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
                         // 🛡️ SENTINEL FIX: Protect AI Usage Quota
@@ -129,7 +131,10 @@ service cloud.firestore {
       // Members subcollection
       match /members/{memberId} {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
-        allow read: if isMemberOf(householdId) || request.auth.uid == memberId;
+        // Also allow reading if user is in household's memberUids (for legacy migration auto-fix)
+        allow read: if isMemberOf(householdId) ||
+                       request.auth.uid == memberId ||
+                       (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []));
 
         // Secure creation: Must be creator OR provide valid invite code
         // - Household creator can create their member doc with any role.
