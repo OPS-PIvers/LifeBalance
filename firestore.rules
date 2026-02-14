@@ -324,21 +324,25 @@ service cloud.firestore {
         // Helper to validate bucket fields
         function isValidBucketData() {
           let data = request.resource.data;
-          return (!data.keys().hasAny(['name']) || isValidString(data.name, 50)) &&
-                 (!data.keys().hasAny(['limit']) || isValidNumber(data.limit)) &&
-                 (!data.keys().hasAny(['color']) || isValidString(data.color, 20)) &&
-                 (!data.keys().hasAny(['isVariable']) || isValidBoolean(data.isVariable)) &&
-                 (!data.keys().hasAny(['isCore']) || isValidBoolean(data.isCore)) &&
-                 (!data.keys().hasAny(['currentPeriodId']) || isValidOptionalString(data.currentPeriodId, 10)) &&
-                 (!data.keys().hasAny(['lastResetDate']) || isValidOptionalString(data.lastResetDate, 10)) &&
-                 (!data.keys().hasAny(['subBuckets']) || data.subBuckets is list) &&
-                 (!data.keys().hasAny(['createdBy']) || data.createdBy is string);
+          return (!data.keys().has('name') || isValidString(data.name, 50)) &&
+                 (!data.keys().has('limit') || isValidNumber(data.limit)) &&
+                 (!data.keys().has('color') || isValidString(data.color, 20)) &&
+                 (!data.keys().has('isVariable') || isValidBoolean(data.isVariable)) &&
+                 (!data.keys().has('isCore') || isValidBoolean(data.isCore)) &&
+                 (!data.keys().has('currentPeriodId') || isValidOptionalString(data.currentPeriodId, 10)) &&
+                 (!data.keys().has('lastResetDate') || isValidOptionalString(data.lastResetDate, 10)) &&
+                 (!data.keys().has('subBuckets') || data.subBuckets is list) &&
+                 (!data.keys().has('createdBy') || data.createdBy is string);
         }
 
         allow create: if isMemberOf(householdId) &&
                       // Strict validation for create - all required fields must be present
                       request.resource.data.keys().hasAll(['name', 'limit', 'color', 'isVariable', 'isCore']) &&
-                      isValidBucketData();
+                      // Allow only expected fields to prevent storage abuse
+                      request.resource.data.keys().hasOnly(['name', 'limit', 'color', 'isVariable', 'isCore', 'currentPeriodId', 'lastResetDate', 'subBuckets', 'createdBy']) &&
+                      isValidBucketData() &&
+                      // Ensure createdBy matches authenticated user
+                      request.resource.data.createdBy == request.auth.uid;
 
         allow update: if isMemberOf(householdId) &&
                       // Validate only the fields present in the document (allows legacy fields)
