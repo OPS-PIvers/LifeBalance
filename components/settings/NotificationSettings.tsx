@@ -180,7 +180,6 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           size="sm"
           onClick={handleSendTest}
           leftIcon={<Send size={16} />}
-          className="bg-brand-50 border border-brand-200"
           title="Send a test notification to your device"
         >
           <span className="hidden sm:inline">Test</span>
@@ -261,7 +260,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.habitReminders.time}
                 onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
                 containerClassName="w-auto"
-                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
+                size="sm"
+                className="bg-white"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -297,7 +297,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.actionQueueReminders.time}
                 onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
                 containerClassName="w-auto"
-                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
+                size="sm"
+                className="bg-white"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -338,7 +339,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   value={preferences.budgetAlerts.threshold || 100}
                   onChange={(e) => handleThresholdChange(Number(e.target.value))}
                   containerClassName="w-20"
-                  className="py-1.5 px-3 text-sm bg-white border-brand-200 rounded-lg h-9"
+                  size="sm"
+                  className="bg-white"
                 />
               </div>
             </div>
@@ -369,7 +371,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 value={preferences.streakWarnings.time}
                 onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
                 containerClassName="w-auto"
-                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
+                size="sm"
+                className="bg-white"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -409,7 +412,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   value={preferences.billReminders.daysBeforeDue}
                   onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
                   containerClassName="w-16"
-                  className="py-1.5 px-3 text-sm bg-white border-brand-200 rounded-lg h-9"
+                  size="sm"
+                  className="bg-white"
                 />
                 <span className="text-sm text-brand-500">day(s) before due</span>
               </div>
@@ -419,7 +423,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   value={preferences.billReminders.time}
                   onChange={(e) => handleTimeChange('billReminders', e.target.value)}
                   containerClassName="w-auto"
-                  className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
+                  size="sm"
+                  className="bg-white"
                 >
                   {hourOptions.map((option) => (
                     <option key={option.value} value={option.value}>

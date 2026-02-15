@@ -7,10 +7,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   icon?: React.ReactNode;
   showCount?: boolean;
   containerClassName?: string;
+  size?: 'sm' | 'md';
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, icon, id, showCount, onChange, containerClassName, ...props }, ref) => {
+  ({ className, label, error, icon, id, showCount, onChange, containerClassName, size = 'md', ...props }, ref) => {
     // Generate a unique ID if none is provided
     const generatedId = useId();
     const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : generatedId);
@@ -35,6 +36,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     };
 
     const hasHeader = label || (showCount && props.maxLength);
+
+    const sizes = {
+      sm: 'p-2 text-sm',
+      md: 'p-3',
+    };
 
     return (
       <div className={cn("w-full", containerClassName)}>
@@ -69,7 +75,8 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={error ? errorId : undefined}
             onChange={handleChange}
             className={cn(
-              "w-full p-3 bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 transition-all shadow-sm placeholder:text-slate-400 disabled:opacity-50 disabled:bg-slate-50",
+              "w-full bg-white/80 backdrop-blur-sm border border-slate-200/60 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 transition-all shadow-sm placeholder:text-slate-400 disabled:opacity-50 disabled:bg-slate-50",
+              sizes[size],
               icon && "pl-10",
               error && "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10",
               className
