@@ -199,6 +199,31 @@ export const useHabitActions = (
     }
   }, [householdId, currentUser, householdSettings, habits]);
 
+  const duplicateHabit = useCallback(async (habit: Habit) => {
+    // We don't check currentUser here because addHabit will do it
+    const { id, ...rest } = habit;
+
+    // Create copy with reset tracking data
+    const newHabit: Habit = {
+      ...rest,
+      id: '', // Placeholder, will be ignored/overwritten by addHabit's addDoc logic
+      title: `${habit.title} (Copy)`,
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+      streakDays: 0,
+      lastUpdated: new Date().toISOString(),
+      isCustom: true,
+      presetId: undefined,
+      // Preserve original ownership/sharing logic
+      isShared: habit.isShared,
+      ownerId: habit.ownerId,
+    };
+
+    // addHabit handles Firestore write and toast
+    await addHabit(newHabit);
+  }, [addHabit]);
+
   const resetHabit = useCallback(async (id: string) => {
     if (!householdId || !householdSettings) return;
 
@@ -508,6 +533,7 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    duplicateHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,
@@ -519,6 +545,7 @@ export const useHabitActions = (
     addHabit,
     updateHabit,
     deleteHabit,
+    duplicateHabit,
     reorderHabits,
     toggleHabit,
     resetHabit,

@@ -195,6 +195,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Habit deleted');
   }, []);
 
+  const duplicateHabit = useCallback(async (habit: Habit) => {
+    const id = generateId();
+    const newHabit: Habit = {
+      ...habit,
+      id,
+      title: `${habit.title} (Copy)`,
+      count: 0,
+      totalCount: 0,
+      completedDates: [],
+      streakDays: 0,
+      lastUpdated: new Date().toISOString(),
+      isCustom: true,
+      presetId: undefined
+    };
+    setHabits(prev => [...prev, newHabit]);
+    toast.success('Mock: Habit duplicated');
+  }, []);
+
   const reorderHabits = useCallback(async (updates: { id: string; order: number; category?: string }[]) => {
     setHabits(prev => prev.map(h => {
       const update = updates.find(u => u.id === h.id);
@@ -474,6 +492,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addHabit,
     updateHabit,
     deleteHabit,
+    duplicateHabit,
     reorderHabits,
     toggleHabit,
     resetHabit: noOp,

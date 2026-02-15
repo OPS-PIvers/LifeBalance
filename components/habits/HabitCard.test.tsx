@@ -10,6 +10,7 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
   mockHouseholdContext: {
     toggleHabit: vi.fn(),
     deleteHabit: vi.fn(),
+    duplicateHabit: vi.fn(),
     resetHabit: vi.fn(),
     activeChallenge: null,
     freezeBank: { tokens: 3 },
@@ -51,6 +52,7 @@ vi.mock('lucide-react', () => ({
   Calendar: () => <span data-testid="icon-calendar" />,
   Wrench: () => <span data-testid="icon-wrench" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  Copy: () => <span data-testid="icon-copy" />,
 }));
 
 // Mock date-fns with controlled dates
@@ -136,6 +138,20 @@ describe('HabitCard', () => {
 
     // Verify Dropdown is NOT present
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('calls duplicateHabit when duplicate button is clicked', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    // Click menu trigger
+    await user.click(screen.getByLabelText('Habit options menu'));
+
+    // Find and click Duplicate
+    const duplicateButton = screen.getByText('Duplicate');
+    await user.click(duplicateButton);
+
+    expect(mockHouseholdContext.duplicateHabit).toHaveBeenCalledWith(mockHabit);
   });
 });
 
