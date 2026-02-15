@@ -6,16 +6,17 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
   icon?: React.ReactNode;
+  containerClassName?: string;
 }
 
 const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, label, error, icon, id, children, ...props }, ref) => {
+  ({ className, label, error, icon, id, children, containerClassName, ...props }, ref) => {
     const generatedId = useId();
     const selectId = id || (label ? `select-${label.toLowerCase().replace(/\s+/g, '-')}` : generatedId);
     const errorId = `${selectId}-error`;
 
     return (
-      <div className="w-full">
+      <div className={cn("w-full", containerClassName)}>
         {label && (
           <label
             htmlFor={selectId}

@@ -7,6 +7,9 @@ import toast from 'react-hot-toast';
 import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
 import Card from '@/components/ui/Card';
 import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -172,14 +175,16 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           </div>
         </div>
 
-        <button
+        <Button
+          variant="subtle"
+          size="sm"
           onClick={handleSendTest}
-          className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-sm font-medium rounded-lg transition-colors border border-brand-200"
+          leftIcon={<Send size={16} />}
+          className="bg-brand-50 border border-brand-200"
           title="Send a test notification to your device"
         >
-          <Send className="w-4 h-4" />
           <span className="hidden sm:inline">Test</span>
-        </button>
+        </Button>
       </div>
 
       {/* iOS-specific notice - show helpful guidance based on current state */}
@@ -252,17 +257,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.habitReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <select
+              <Select
                 value={preferences.habitReminders.time}
                 onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                containerClassName="w-auto"
+                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
         </div>
@@ -287,17 +293,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.actionQueueReminders.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <select
+              <Select
                 value={preferences.actionQueueReminders.time}
                 onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                containerClassName="w-auto"
+                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
         </div>
@@ -324,13 +331,14 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               <span className="text-sm text-brand-600">Threshold:</span>
               <div className="flex items-center gap-1">
                 <span className="text-sm text-brand-500">$</span>
-                <input
+                <Input
                   type="number"
                   min="0"
                   step="10"
                   value={preferences.budgetAlerts.threshold || 100}
                   onChange={(e) => handleThresholdChange(Number(e.target.value))}
-                  className="w-20 text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  containerClassName="w-20"
+                  className="py-1.5 px-3 text-sm bg-white border-brand-200 rounded-lg h-9"
                 />
               </div>
             </div>
@@ -357,17 +365,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           {preferences.streakWarnings.enabled && (
             <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
               <Clock className="w-4 h-4 text-brand-500" />
-              <select
+              <Select
                 value={preferences.streakWarnings.time}
                 onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                containerClassName="w-auto"
+                className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
         </div>
@@ -393,43 +402,47 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             <div className="ml-13 pl-3 border-l-2 border-brand-200 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-brand-600">Remind:</span>
-                <input
+                <Input
                   type="number"
                   min="1"
                   max="7"
                   value={preferences.billReminders.daysBeforeDue}
                   onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
-                  className="w-16 text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  containerClassName="w-16"
+                  className="py-1.5 px-3 text-sm bg-white border-brand-200 rounded-lg h-9"
                 />
                 <span className="text-sm text-brand-500">day(s) before due</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-500" />
-                <select
+                <Select
                   value={preferences.billReminders.time}
                   onChange={(e) => handleTimeChange('billReminders', e.target.value)}
-                  className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                  containerClassName="w-auto"
+                  className="py-1.5 pl-3 pr-8 text-sm bg-white border-brand-200 rounded-lg h-9"
                 >
                   {hourOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Save Button */}
-      <button
+      <Button
+        variant="primary"
+        size="lg"
+        className="w-full"
         onClick={handleSave}
         disabled={isSaving}
-        className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        isLoading={isSaving}
       >
-        {isSaving ? 'Saving...' : 'Save Preferences'}
-      </button>
+        Save Preferences
+      </Button>
     </Card>
   );
 };

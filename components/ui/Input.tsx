@@ -6,10 +6,11 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   error?: string;
   icon?: React.ReactNode;
   showCount?: boolean;
+  containerClassName?: string;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, icon, id, showCount, onChange, ...props }, ref) => {
+  ({ className, label, error, icon, id, showCount, onChange, containerClassName, ...props }, ref) => {
     // Generate a unique ID if none is provided
     const generatedId = useId();
     const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : generatedId);
@@ -36,7 +37,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     const hasHeader = label || (showCount && props.maxLength);
 
     return (
-      <div className="w-full">
+      <div className={cn("w-full", containerClassName)}>
         {hasHeader && (
           <div className="flex justify-between items-end mb-1.5">
             {label ? (
