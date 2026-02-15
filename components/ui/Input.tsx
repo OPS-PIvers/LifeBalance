@@ -1,7 +1,7 @@
 import React, { InputHTMLAttributes, forwardRef, useId, useState } from 'react';
 import { cn } from '../../utils/cn';
 
-export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   label?: string;
   error?: string;
   icon?: React.ReactNode;

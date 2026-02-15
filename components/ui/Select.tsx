@@ -2,7 +2,7 @@ import React, { SelectHTMLAttributes, forwardRef, useId } from 'react';
 import { cn } from '../../utils/cn';
 import { ChevronDown } from 'lucide-react';
 
-export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
   label?: string;
   error?: string;
   icon?: React.ReactNode;
