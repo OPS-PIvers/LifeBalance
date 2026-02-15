@@ -421,7 +421,6 @@ const BudgetCalendar: React.FC = () => {
               selectedDate={selectedDate}
               accounts={accounts}
               onSave={handleSave}
-              onCancel={() => setIsAddModalOpen(false)}
             />
           </div>
         </Modal>
@@ -437,7 +436,6 @@ const BudgetCalendar: React.FC = () => {
             selectedDate={selectedDate}
             accounts={accounts}
             onSave={handleSave}
-            onCancel={() => setIsAddModalOpen(false)}
           />
         </Drawer>
       )}

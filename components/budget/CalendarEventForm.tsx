@@ -12,7 +12,6 @@ interface CalendarEventFormProps {
   selectedDate: Date;
   accounts: Account[];
   onSave: (data: CalendarItem) => Promise<void>;
-  onCancel: () => void;
 }
 
 export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
@@ -20,7 +19,6 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
   selectedDate,
   accounts,
   onSave,
-  onCancel: _onCancel,
 }) => {
   const [title, setTitle] = useState(initialData?.title || '');
   const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
@@ -29,9 +27,20 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
   const [accountId, setAccountId] = useState(initialData?.accountId || '');
   const [isRecurring, setIsRecurring] = useState(!!initialData?.isRecurring);
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>(initialData?.frequency || 'monthly');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    if (!title.trim()) newErrors.title = 'Title is required';
+    if (!amount.trim()) newErrors.amount = 'Amount is required';
+    if (!date.trim()) newErrors.date = 'Date is required';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleSubmit = async () => {
-    if (!title || !amount || !date) return;
+    if (!validate()) return;
 
     const newItem: CalendarItem = {
       id: initialData ? initialData.id : crypto.randomUUID(),
@@ -49,7 +58,7 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
   };
 
   const handleDuplicate = async () => {
-    if (!title || !amount || !date) return;
+    if (!validate()) return;
 
     const newItem: CalendarItem = {
       id: crypto.randomUUID(),
@@ -86,7 +95,11 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
         type="text"
         placeholder="Title (e.g. Rent)"
         value={title}
-        onChange={e => setTitle(e.target.value)}
+        onChange={e => {
+          setTitle(e.target.value);
+          if (errors.title) setErrors(prev => ({ ...prev, title: '' }));
+        }}
+        error={errors.title}
       />
 
       <Input
@@ -94,16 +107,24 @@ export const CalendarEventForm: React.FC<CalendarEventFormProps> = ({
         type="number"
         placeholder="Amount"
         value={amount}
-        onChange={e => setAmount(e.target.value)}
+        onChange={e => {
+          setAmount(e.target.value);
+          if (errors.amount) setErrors(prev => ({ ...prev, amount: '' }));
+        }}
         className="font-mono"
+        error={errors.amount}
       />
 
       <Input
         label="Date"
         type="date"
         value={date}
-        onChange={e => setDate(e.target.value)}
+        onChange={e => {
+          setDate(e.target.value);
+          if (errors.date) setErrors(prev => ({ ...prev, date: '' }));
+        }}
         className="font-medium"
+        error={errors.date}
       />
 
       <Select
