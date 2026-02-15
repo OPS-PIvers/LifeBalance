@@ -106,7 +106,7 @@ const HouseholdSetup: React.FC = () => {
             <div className="space-y-4">
               <button
                 onClick={() => setMode('create')}
-                className="w-full bg-slate-900 text-white font-semibold py-4 px-6 rounded-2xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
+                className="w-full bg-slate-900 text-white font-semibold py-4 px-6 rounded-2xl shadow-glass-inset hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 group"
               >
                 <Plus size={20} className="text-slate-300 group-hover:text-white transition-colors" />
                 <span>Create New Household</span>
@@ -143,7 +143,7 @@ const HouseholdSetup: React.FC = () => {
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-300 transition-all duration-200 placeholder:text-slate-400"
+                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-300 transition-all duration-200 placeholder:text-slate-400"
                   required
                   disabled={loading}
                 />
@@ -152,7 +152,7 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || !householdName.trim()}
-                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-glass-inset hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
               >
                 {loading ? (
                   <>
@@ -190,7 +190,7 @@ const HouseholdSetup: React.FC = () => {
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-300 font-mono text-lg tracking-wider text-center uppercase placeholder:text-slate-300 transition-all duration-200"
+                  className="w-full px-4 py-3 bg-white/50 border border-slate-200/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-300 font-mono text-lg tracking-wider text-center uppercase placeholder:text-slate-300 transition-all duration-200"
                   maxLength={6}
                   required
                   disabled={loading}
@@ -203,7 +203,7 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading || inviteCode.length !== 6}
-                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-glass-inset hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 disabled:shadow-none"
               >
                 {loading ? (
                   <>
@@ -237,7 +237,7 @@ const HouseholdSetup: React.FC = () => {
 
               <button
                 onClick={handleContinue}
-                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200"
+                className="w-full bg-slate-900 text-white font-semibold py-3 px-4 rounded-xl shadow-glass-inset hover:shadow-lg hover:shadow-slate-900/20 active:scale-[0.98] transition-all duration-200"
               >
                 Continue to Dashboard
               </button>

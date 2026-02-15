@@ -104,7 +104,7 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-slate-700 hover:text-slate-900 border-slate-200/60 shadow-sm hover:shadow-md transition-all duration-300 h-12"
+            className="w-full hover:shadow-md duration-300 h-12"
             leftIcon={
               !loading && (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
