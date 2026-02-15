@@ -201,7 +201,7 @@ export const useHabitActions = (
 
   const duplicateHabit = useCallback(async (habit: Habit) => {
     // We don't check currentUser here because addHabit will do it
-    const { id, ...rest } = habit;
+    const { id: _id, ...rest } = habit;
 
     // Create copy with reset tracking data
     const newHabit: Habit = {
