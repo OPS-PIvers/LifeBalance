@@ -187,10 +187,10 @@ const BudgetCalendar: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Calendar Card */}
-      <div className="bg-white/50 backdrop-blur-xl rounded-3xl shadow-soft border border-white/20 p-6">
+      <div className="bg-white/50 backdrop-blur-xl rounded-3xl shadow-soft border border-white/20 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="font-bold text-xl text-slate-900 tracking-tight">
+          <h2 className="font-bold text-lg md:text-xl text-slate-900 tracking-tight">
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
@@ -208,7 +208,7 @@ const BudgetCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={handleExport}
-              className="text-slate-400 hover:text-slate-600 mr-2 rounded-xl"
+              className="hidden md:flex text-slate-400 hover:text-slate-600 mr-2 rounded-xl"
               title="Export this month to CSV"
               aria-label="Export this month to CSV"
             >
@@ -244,7 +244,7 @@ const BudgetCalendar: React.FC = () => {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-y-3">
+        <div className="grid grid-cols-7 gap-y-3 gap-1">
           {days.map(day => {
             const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
             const hasIncome = dateItems.some(i => i.type === 'income');
@@ -257,7 +257,7 @@ const BudgetCalendar: React.FC = () => {
                 key={day.toString()} 
                 onClick={() => setSelectedDate(day)}
                 className={`
-                  relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-2xl text-sm font-medium cursor-pointer transition-all duration-200
+                  relative flex flex-col items-center justify-center w-full aspect-square max-w-[3rem] mx-auto rounded-2xl text-sm font-medium cursor-pointer transition-all duration-200
                   ${!isSameMonth(day, monthStart) ? 'text-slate-300' : 'text-slate-600'}
                   ${isSelected ? 'bg-slate-900 text-white shadow-lg scale-110 ring-2 ring-slate-900 ring-offset-2 ring-offset-white' : 'hover:bg-white hover:shadow-sm'}
                   ${isToday(day) && !isSelected ? 'text-slate-900 font-bold bg-white shadow-sm' : ''}
