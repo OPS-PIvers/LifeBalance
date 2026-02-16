@@ -17,6 +17,7 @@ import {
 import { clsx } from 'clsx';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { ProgressBar } from '../ui/ProgressBar';
 import { CustomTooltip } from '../analytics/CustomTooltip';
 import { calculateBurnDown } from '../../utils/analytics/financialMetrics';
 import {
@@ -256,12 +257,14 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                     <div className="text-3xl font-black text-slate-800">{consistencyScore}%</div>
                     <div className="mb-1 text-xs font-medium text-slate-400">consistency</div>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden relative z-10">
-                    <div
-                      className="h-full bg-blue-500 rounded-full transition-all duration-1000"
-                      style={{ width: `${consistencyScore}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={consistencyScore}
+                    size="sm"
+                    className="mt-3 relative z-10"
+                    variant="custom"
+                    colorClass="bg-blue-500"
+                    aria-label={`Consistency score: ${consistencyScore}%`}
+                  />
                 </div>
 
                 {/* Active Streaks */}

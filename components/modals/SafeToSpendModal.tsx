@@ -7,6 +7,7 @@ import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
 import { Drawer } from '../ui/Drawer';
+import { ProgressBar } from '../ui/ProgressBar';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;
@@ -168,19 +169,14 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                        </div>
 
                        {/* Meter */}
-                       <div
-                         className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden"
-                         role="progressbar"
-                         aria-valuemin={0}
-                         aria-valuemax={100}
-                         aria-valuenow={Math.round(percent)}
+                       <ProgressBar
+                         value={percent}
+                         size="sm"
+                         trackClassName="bg-brand-100"
+                         variant="custom"
+                         colorClass={isOverspent ? 'bg-money-neg' : b.color}
                          aria-label={`Spending for ${b.name}: ${Math.round(percent)}% used`}
-                       >
-                         <div
-                           className={`h-full rounded-full ${isOverspent ? 'bg-money-neg' : b.color}`}
-                           style={{ width: `${percent}%` }}
-                         />
-                       </div>
+                       />
                      </div>
                    );
                  })}

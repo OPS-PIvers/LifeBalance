@@ -1,6 +1,7 @@
 import React from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil } from 'lucide-react';
+import { ProgressBar } from '../ui/ProgressBar';
 import { calculateChallengeProgress } from '../../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../../utils/migrations/challengeMigration';
 
@@ -49,12 +50,14 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
         </p>
 
         {/* Progress Bar */}
-        <div className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2">
-          <div
-            className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
-            style={{ width: `${challengeProgress}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={challengeProgress}
+          size="md"
+          trackClassName="bg-brand-900"
+          className="mb-2"
+          barClassName="bg-gradient-to-r from-habit-gold to-orange-400"
+          aria-label={`Challenge progress: ${challengeProgress.toFixed(0)}%`}
+        />
 
         {/* Progress Stats */}
         <div className="flex justify-between text-xxs font-medium text-brand-300 mb-3">

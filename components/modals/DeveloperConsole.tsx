@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
@@ -214,12 +215,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                         <p className="text-xs text-gray-500">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
                                     </div>
                                     <div className="flex items-center gap-4 w-1/2">
-                                        <div className="flex-1 h-3 bg-gray-200 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full transition-all ${percentage > 90 ? 'bg-red-500' : 'bg-brand-500'}`}
-                                                style={{ width: `${percentage}%` }}
-                                            />
-                                        </div>
+                                        <ProgressBar
+                                            value={percentage}
+                                            size="lg"
+                                            className="flex-1"
+                                            trackClassName="bg-gray-200"
+                                            variant="custom"
+                                            colorClass={percentage > 90 ? 'bg-red-500' : 'bg-brand-500'}
+                                            aria-label={`AI Usage: ${percentage.toFixed(0)}%`}
+                                        />
                                         <span className={`text-sm font-mono font-bold w-12 text-right ${percentage > 90 ? 'text-red-600' : 'text-gray-600'}`}>
                                             {usage}/20
                                         </span>
