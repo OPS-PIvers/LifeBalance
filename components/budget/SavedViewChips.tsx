@@ -75,8 +75,8 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
   if (!householdId) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-brand-100 mt-2">
-      <div className="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1 mr-1">
+    <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100/50 mt-2">
+      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 mr-1">
         <Bookmark size={12} />
         <span>Views</span>
       </div>
@@ -84,23 +84,23 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
       {views.map(view => (
         <div
           key={view.id}
-          className="group inline-flex items-center bg-white border border-brand-200 rounded-full text-xs font-medium text-brand-700 hover:bg-brand-50 hover:border-brand-300 transition-all shadow-sm"
+          className="group inline-flex items-center bg-white/60 backdrop-blur-sm border border-slate-200/60 rounded-full text-xs font-medium text-slate-600 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all ring-1 ring-black/5"
         >
           <button
             onClick={() => {
               onApply(view.filters);
               toast.success(`Applied "${view.name}"`);
             }}
-            className="pl-3 pr-1 py-1 rounded-l-full hover:text-brand-900 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
+            className="pl-3 pr-1 py-1 rounded-l-full hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
             title={`Apply ${view.name}`}
           >
             {view.name}
           </button>
-          <div className="w-px h-3 bg-brand-100 mx-0.5" />
+          <div className="w-px h-3 bg-slate-200 mx-0.5" />
           <button
              type="button"
              onClick={(e) => handleDeleteView(view.id, e)}
-             className="pr-2 pl-1 py-1 rounded-r-full text-brand-300 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+             className="pr-2 pl-1 py-1 rounded-r-full text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-1"
              aria-label={`Delete view ${view.name}`}
           >
             <X size={10} />
@@ -115,14 +115,14 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
             value={newViewName}
             onChange={(e) => setNewViewName(e.target.value)}
             placeholder="View Name..."
-            className="w-32 px-2 py-1 text-xs border border-brand-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-32 px-2 py-1 text-xs bg-white/50 backdrop-blur-sm border border-slate-300/50 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-500 text-slate-700 placeholder:text-slate-400"
             autoFocus
             onBlur={() => !newViewName && setIsSaving(false)}
           />
           <button
             type="submit"
             disabled={!newViewName.trim()}
-            className="p-1 bg-brand-600 text-white rounded-md disabled:opacity-50"
+            className="p-1 bg-slate-800 text-white rounded-md disabled:opacity-50 hover:bg-slate-700 transition-colors"
             aria-label="Confirm save view"
           >
             <Plus size={12} />
@@ -130,7 +130,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           <button
             type="button"
             onClick={() => setIsSaving(false)}
-            className="p-1 text-gray-400 hover:text-gray-600"
+            className="p-1 text-slate-400 hover:text-slate-600"
             aria-label="Cancel save view"
           >
             <X size={12} />
@@ -139,7 +139,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
       ) : (
         <button
           onClick={() => setIsSaving(true)}
-          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-brand-500 hover:text-brand-700 hover:bg-brand-50 rounded-md transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
         >
           <Plus size={12} />
           <span>Save View</span>

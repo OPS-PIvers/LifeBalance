@@ -36,3 +36,15 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Transactions & History Polish
+**Critique:** "Developer UI" was prevalent in `TransactionMasterList`, `BudgetHistory`, and `ShoppingSettingsModal`.
+- Transactions: Heavy borders (`border-brand-200`), generic `bg-white`, and boxy summary widgets.
+- History: Flat cards, generic progress bars, and lack of visual hierarchy.
+- Shopping Settings: Default HTML inputs, cheap border-bottom tabs, and uninspired lists.
+**Polish:** Applied "Muse" Glassmorphism & Refinement.
+- **Transactions:** Upgraded to `bg-white/80 backdrop-blur-xl` with `shadow-glass`. Softened filters with `bg-white/50`. Refined summary stats with flex layout and `tracking-tight` mono fonts.
+- **Transaction Items:** Subtle `bg-white/60` default state with a premium hover lift and shadow effect.
+- **Budget History:** Elevated period cards with glassmorphism. Refined progress bars (rounded-full, shadow-inner).
+- **Shopping Settings:** Implemented "Pill" segment tabs (`bg-slate-100` wrapper). Standardized glass inputs and card-based lists for stores/templates.
+- **Typography:** Eradicated `brand-` grays in favor of cool `slate-` tones.

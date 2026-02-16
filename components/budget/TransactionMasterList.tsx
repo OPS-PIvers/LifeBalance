@@ -38,14 +38,14 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
+    ? "px-3 py-2 bg-white/50 backdrop-blur-sm border border-slate-200/60 rounded-xl text-sm text-slate-700 outline-none focus:ring-2 focus:ring-slate-400/20 focus:border-slate-400 min-w-[120px] transition-all"
+    : "w-full px-4 py-3 bg-white/50 backdrop-blur-sm border border-slate-200/60 rounded-xl text-base text-slate-700 outline-none focus:ring-2 focus:ring-slate-400/20 focus:border-slate-400 transition-all";
 
   return (
     <>
       {/* Category Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Category</label>}
+        {!isRow && <label className="text-sm font-medium text-slate-500 ml-1">Category</label>}
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
@@ -60,7 +60,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Source Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Source</label>}
+        {!isRow && <label className="text-sm font-medium text-slate-500 ml-1">Source</label>}
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
@@ -76,7 +76,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Store Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Store</label>}
+        {!isRow && <label className="text-sm font-medium text-slate-500 ml-1">Store</label>}
         <select
           value={storeFilter}
           onChange={(e) => setStoreFilter(e.target.value)}
@@ -398,25 +398,25 @@ const TransactionMasterList: React.FC = () => {
 
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass space-y-4">
         {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
+        <div className="relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-slate-600 transition-colors" size={18} />
           <input
             type="text"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+            className="w-full pl-11 pr-4 py-3 bg-white/50 backdrop-blur-sm border border-slate-200/60 rounded-2xl outline-none focus:ring-2 focus:ring-slate-400/20 focus:border-slate-400 transition-all text-slate-700 placeholder:text-slate-400"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600 h-auto p-0 hover:bg-transparent shadow-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 h-auto p-0 hover:bg-transparent shadow-none"
             >
               <X size={16} />
             </Button>
@@ -427,11 +427,11 @@ const TransactionMasterList: React.FC = () => {
         <div className="flex md:hidden items-center gap-2 mb-2">
            <Button
              variant="secondary"
-             className="flex-1 justify-center"
+             className="flex-1 justify-center bg-white/50 border-slate-200/60 text-slate-700"
              onClick={() => setIsFilterDrawerOpen(true)}
            >
-             <Filter size={16} className="mr-2" />
-             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
+             <Filter size={16} className="mr-2 text-slate-500" />
+             Filters {activeFilterCount > 0 && <span className="ml-1 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-full text-xs font-bold">{activeFilterCount}</span>}
            </Button>
 
            <Button
@@ -439,14 +439,14 @@ const TransactionMasterList: React.FC = () => {
             variant={isSelectionMode ? 'primary' : 'subtle'}
             size="icon"
             aria-label="Toggle selection mode"
-            className="h-11"
+            className="h-11 shadow-sm"
           >
             <Layers size={16} />
           </Button>
         </div>
 
         {/* Filter Chips / Dropdowns */}
-        <div className="hidden md:flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="hidden md:flex gap-3 overflow-x-auto pb-1 no-scrollbar items-center">
           <FilterControls {...filterProps} layout="row" />
 
           {(categoryFilter !== 'all' || sourceFilter !== 'all' || storeFilter !== 'all') && (
@@ -454,6 +454,7 @@ const TransactionMasterList: React.FC = () => {
               variant="subtle"
               size="sm"
               onClick={clearFilters}
+              className="text-slate-500 hover:text-slate-800"
             >
               Clear
             </Button>
@@ -467,7 +468,7 @@ const TransactionMasterList: React.FC = () => {
             leftIcon={<Layers size={16} />}
             title="Toggle selection mode"
             aria-label="Toggle selection mode"
-            className="ml-auto"
+            className="ml-auto rounded-xl"
           >
             <span className="hidden sm:inline">{isSelectionMode ? 'Done' : 'Select'}</span>
           </Button>
@@ -479,7 +480,7 @@ const TransactionMasterList: React.FC = () => {
             onClick={handleExport}
             disabled={filteredTransactions.length === 0 || isSelectionMode}
             leftIcon={<Download size={16} />}
-            className={isSelectionMode ? 'hidden sm:flex' : ''}
+            className={isSelectionMode ? 'hidden sm:flex' : 'rounded-xl shadow-lg shadow-slate-200'}
             title="Export filtered transactions to CSV"
             aria-label="Export filtered transactions to CSV"
           >
@@ -504,29 +505,29 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
-            <p className="text-lg font-bold text-money-pos font-mono">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass">
+        <div className="grid grid-cols-2 md:flex md:justify-between gap-4">
+          <div className="flex-1 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50">
+            <p className="text-xs font-bold text-emerald-600/70 uppercase tracking-wider mb-1">Income</p>
+            <p className="text-xl font-bold text-emerald-600 font-mono tracking-tight">
               +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
-            <p className="text-lg font-bold text-money-neg font-mono">
+          <div className="flex-1 bg-rose-50/50 p-4 rounded-2xl border border-rose-100/50">
+            <p className="text-xs font-bold text-rose-600/70 uppercase tracking-wider mb-1">Expense</p>
+            <p className="text-xl font-bold text-rose-600 font-mono tracking-tight">
               -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
-            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+          <div className="flex-1 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Net</p>
+            <p className={`text-xl font-bold font-mono tracking-tight ${net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-brand-700 font-mono">
+          <div className="flex-1 bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-xl font-bold text-slate-700 font-mono tracking-tight">
               {summary.count}
             </p>
           </div>
@@ -535,29 +536,29 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Select All Bar */}
       {isSelectionMode && (
-        <div className="flex items-center justify-between px-2 text-sm text-brand-600">
+        <div className="flex items-center justify-between px-4 text-sm text-slate-600">
           <Button
             variant="link"
             onClick={handleSelectAll}
-            className="flex items-center gap-2 font-bold hover:no-underline"
+            className="flex items-center gap-2 font-bold hover:no-underline text-slate-700"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-slate-900' : 'text-slate-300'} />
             Select All ({filteredTransactions.length})
           </Button>
-          <span className="text-xs">{selectedIds.size} selected</span>
+          <span className="text-xs font-medium text-slate-500">{selectedIds.size} selected</span>
         </div>
       )}
 
       {/* Transaction List */}
-      <div className="space-y-2 pb-24">
+      <div className="space-y-3 pb-32">
         {filteredTransactions.length === 0 ? (
-          <div className="text-center py-10 text-brand-400">
-            <Filter className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>No transactions found matching your filters.</p>
+          <div className="text-center py-16 text-slate-400">
+            <Filter className="w-12 h-12 mx-auto mb-4 opacity-10" />
+            <p className="font-medium">No transactions found matching your filters.</p>
             <Button
               variant="link"
               onClick={clearFilters}
-              className="mt-2 font-bold text-sm"
+              className="mt-2 font-bold text-sm text-slate-600"
             >
               Clear all filters
             </Button>
@@ -582,9 +583,9 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
-          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-            <div className="px-3 font-bold text-sm border-r border-brand-700">
+        <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
+          <div className="bg-slate-900 text-white p-2.5 rounded-2xl shadow-2xl shadow-slate-900/20 backdrop-blur-md flex items-center gap-3 pointer-events-auto animate-in slide-in-from-bottom-4 ring-1 ring-white/10">
+            <div className="px-3 font-bold text-sm border-r border-slate-700/50">
               {selectedIds.size} selected
             </div>
 
