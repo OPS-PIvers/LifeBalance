@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, MoreVertical } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { Drawer } from '../ui/Drawer';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -56,6 +57,9 @@ const MealPlanTab: React.FC = () => {
   // Ingredient management
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
+
+  // Mobile Drawer State
+  const [drawerItem, setDrawerItem] = useState<{ planItem: MealPlanItem; linkedMeal: Meal | undefined } | null>(null);
 
   const handleAddTag = () => {
     const trimmedInput = tagInput.trim();
@@ -583,20 +587,35 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        {/* Mobile: More Button */}
+                                        <div className="sm:hidden">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDrawerItem({ planItem, linkedMeal: linkedMeal ?? undefined });
+                                                }}
+                                                className="p-3 text-slate-400 hover:text-brand-600 rounded-lg active:bg-slate-100 transition-colors"
+                                                aria-label={`Options for ${mealName}`}
+                                            >
+                                                <MoreVertical className="w-5 h-5" />
+                                            </button>
+                                        </div>
+
+                                        {/* Desktop: Hover Actions */}
+                                        <div className="hidden sm:flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
                                             >
-                                                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                                <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
                                                 onClick={() => deleteMealPlanItem(planItem.id)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
                                             >
-                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
@@ -998,6 +1017,38 @@ const MealPlanTab: React.FC = () => {
               onConfirm={handleConfirmIngredients}
           />
       )}
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+          isOpen={!!drawerItem}
+          onClose={() => setDrawerItem(null)}
+          title="Meal Options"
+      >
+          <div className="space-y-2">
+              <button
+                  onClick={() => {
+                      if (drawerItem) {
+                          handleEditMealPlanItem(drawerItem.planItem, drawerItem.linkedMeal);
+                          setDrawerItem(null);
+                      }
+                  }}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-slate-50 hover:bg-brand-50 text-slate-700 hover:text-brand-700 font-bold transition-colors"
+              >
+                  <Edit2 size={20} /> Edit Meal
+              </button>
+              <button
+                  onClick={() => {
+                      if (drawerItem) {
+                          deleteMealPlanItem(drawerItem.planItem.id);
+                          setDrawerItem(null);
+                      }
+                  }}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-colors"
+              >
+                  <Trash2 size={20} /> Remove from Plan
+              </button>
+          </div>
+      </Drawer>
     </div>
   );
 };
