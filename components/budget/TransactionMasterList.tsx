@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
+import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Upload } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
+import { ImportTransactionsModal } from '../modals/ImportTransactionsModal';
 import { Modal } from '../ui/Modal';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
@@ -119,6 +120,9 @@ const TransactionMasterList: React.FC = () => {
   // Delete Confirmation State
   const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Import Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
@@ -474,7 +478,7 @@ const TransactionMasterList: React.FC = () => {
 
           {/* Export Button */}
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             onClick={handleExport}
             disabled={filteredTransactions.length === 0 || isSelectionMode}
@@ -484,6 +488,19 @@ const TransactionMasterList: React.FC = () => {
             aria-label="Export filtered transactions to CSV"
           >
             <span className="hidden sm:inline">Export</span>
+          </Button>
+
+          {/* Import Button */}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsImportModalOpen(true)}
+            leftIcon={<Upload size={16} />}
+            className={isSelectionMode ? 'hidden' : ''}
+            title="Import transactions from CSV"
+            aria-label="Import transactions from CSV"
+          >
+            <span className="hidden sm:inline">Import</span>
           </Button>
         </div>
 
@@ -628,6 +645,11 @@ const TransactionMasterList: React.FC = () => {
         onConfirm={handleBatchCategorize}
         count={selectedIds.size}
         categories={categories}
+      />
+
+      <ImportTransactionsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
       />
 
       {/* Batch Delete Confirmation */}
