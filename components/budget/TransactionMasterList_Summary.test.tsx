@@ -45,6 +45,7 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div />,
   Plus: () => <div />,
   MoreVertical: () => <div />,
+  Upload: () => <div />,
 }));
 
 describe('TransactionMasterList Summary Widget', () => {
@@ -85,6 +86,8 @@ describe('TransactionMasterList Summary Widget', () => {
       splitTransaction: vi.fn(),
       householdId: 'test-household',
       stores: [],
+      buckets: [],
+      accounts: [],
     });
   });
 

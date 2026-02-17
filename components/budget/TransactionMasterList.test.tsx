@@ -48,12 +48,12 @@ vi.mock('../modals/BatchCategorizeModal', () => ({
 
 // Mock generic Modal
 vi.mock('../ui/Modal', () => ({
-  Modal: ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
+  Modal: ({ children, onClose, isOpen }: { children: React.ReactNode, onClose: () => void, isOpen: boolean }) => isOpen ? (
     <div data-testid="generic-modal">
       <button onClick={onClose} aria-label="Close">X</button>
       {children}
     </div>
-  )
+  ) : null
 }));
 
 // Mock Lucide icons
@@ -78,6 +78,7 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div data-testid="bookmark-icon" />,
   Plus: () => <div data-testid="plus-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  Upload: () => <div data-testid="upload-icon" />,
 }));
 
 describe('TransactionMasterList', () => {
@@ -132,6 +133,8 @@ describe('TransactionMasterList', () => {
       splitTransaction: mockSplitTransaction,
       householdId: 'test-household',
       stores: [],
+      buckets: [],
+      accounts: [],
     } as unknown as ReturnType<typeof useHousehold>);
 
     // Mock window.confirm
