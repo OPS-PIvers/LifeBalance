@@ -301,7 +301,7 @@ const BudgetAccounts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Net Worth Header */}
-      <div className="bg-brand-800 rounded-2xl p-6 text-white shadow-lg text-center">
+      <div className="bg-brand-800 rounded-2xl p-6 text-white shadow-sm border border-white/10 text-center">
         <p className="text-brand-300 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
           ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

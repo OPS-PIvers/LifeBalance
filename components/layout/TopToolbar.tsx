@@ -22,7 +22,7 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative">
-        <header className="z-sticky w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800 border-b border-white/5 shadow-sm px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white backdrop-blur-md bg-brand-800/95 supports-[backdrop-filter]:bg-brand-800/80">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"

@@ -179,7 +179,7 @@ const Dashboard: React.FC = () => {
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-           <div className="bg-white/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 animate-in zoom-in-95">
+           <div className="bg-white/95 supports-[backdrop-filter]:bg-white/90 backdrop-blur-xl w-full max-w-sm rounded-2xl p-6 shadow-premium ring-1 ring-black/5 border border-white/20 animate-in zoom-in-95">
              <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
              <p className="text-sm text-slate-500 mb-6 leading-relaxed">
                Select which account to deduct this payment from.

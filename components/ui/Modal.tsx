@@ -126,7 +126,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <div
         className={clsx(
-          "absolute inset-0 backdrop-blur-sm transition-opacity",
+          "absolute inset-0 backdrop-blur-md transition-opacity",
           backdropColor
         )}
         aria-hidden="true"
@@ -135,7 +135,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Content Container */}
       <div
         className={twMerge(
-          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
+          "relative w-full bg-white/95 supports-[backdrop-filter]:bg-white/90 backdrop-blur-xl rounded-2xl shadow-premium ring-1 ring-black/5 border border-white/20 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
           maxWidth,

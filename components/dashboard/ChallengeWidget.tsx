@@ -21,7 +21,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
   return (
     <div
       onClick={onOpenModal}
-      className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+      className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-sm border border-white/10 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
     >
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>

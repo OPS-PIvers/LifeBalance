@@ -40,7 +40,7 @@ export const HabitCoach: React.FC = () => {
   return (
     <div className="space-y-6">
       {!hasRun ? (
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white text-center shadow-lg">
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white text-center shadow-sm border border-white/10">
           <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Sparkles size={32} className="text-white" />
           </div>
@@ -51,7 +51,7 @@ export const HabitCoach: React.FC = () => {
           <button
             onClick={handleAnalyze}
             disabled={loading}
-            className="px-6 py-3 bg-white text-indigo-600 font-bold rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+            className="px-6 py-3 bg-white text-indigo-600 font-bold rounded-xl shadow-sm active:scale-95 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
           >
             {loading ? <RefreshCw size={20} className="animate-spin" /> : <Sparkles size={20} />}
             {loading ? "Analyzing..." : "Analyze My Habits"}
