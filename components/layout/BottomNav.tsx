@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
+import { Button } from '../ui/Button';
 import CaptureModal from '../modals/CaptureModal';
 
 const BottomNav: React.FC = () => {
@@ -64,13 +65,13 @@ const BottomNav: React.FC = () => {
 
           {/* Actual FAB positioned absolutely */}
           <div className="absolute left-1/2 -translate-x-1/2 -top-6">
-            <button
+            <Button
               onClick={() => setIsModalOpen(true)}
-              className="group flex items-center justify-center w-16 h-16 bg-brand-800 text-white rounded-full shadow-xl shadow-brand-900/20 border-4 border-brand-50 active:scale-95 transition-transform"
+              className="group w-16 h-16 rounded-full shadow-xl shadow-brand-900/20 border-4 border-brand-50 p-0 active:scale-95"
               aria-label="Add Transaction"
             >
               <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
-            </button>
+            </Button>
           </div>
         </div>
       </nav>
