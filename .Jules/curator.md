@@ -9,3 +9,8 @@
 **Blocker:** @google/genai (pinned to v1.37.0)
 **Reason:** Updating to v1.38.0 introduces a stricter API key validation in the `GoogleGenAI` constructor that causes the application to crash on startup (and in tests) if the `VITE_GEMINI_API_KEY` is missing or empty. This requires a code change to handle lazy initialization or a more robust fallback strategy before the dependency can be safely updated.
 **Plan:** Defer update until a developer can refactor `services/geminiService.ts` to handle missing API keys gracefully without crashing the app module-level initialization.
+
+## 2026-02-18 - AJV Vulnerability Blocker
+**Blocker:** ajv (v6 vs v8 conflict)
+**Reason:** `eslint` (v9.x) relies on `ajv` v6.x, while `firebase-tools` relies on `ajv` v8.x. The moderate severity vulnerability (GHSA-2g4f-4pwh-qvx6) affects versions < 8.18.0. Forcing an upgrade to v8 globally via `pnpm.overrides` breaks `eslint`.
+**Plan:** Accept the risk for now (development dependency only). Monitor `eslint` releases for an update that migrates to a newer `ajv` version, or wait for a backported fix for v6.
