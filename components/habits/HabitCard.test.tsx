@@ -51,6 +51,7 @@ vi.mock('lucide-react', () => ({
   Calendar: () => <span data-testid="icon-calendar" />,
   Wrench: () => <span data-testid="icon-wrench" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  Copy: () => <span data-testid="icon-copy" />,
 }));
 
 // Mock date-fns with controlled dates
@@ -136,6 +137,15 @@ describe('HabitCard', () => {
 
     // Verify Dropdown is NOT present
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('shows Duplicate option in menu', async () => {
+    const user = userEvent.setup();
+    render(<HabitCard habit={mockHabit} />);
+
+    await user.click(screen.getByLabelText('Habit options menu'));
+
+    expect(screen.getByText(/Duplicate/)).toBeInTheDocument();
   });
 });
 
