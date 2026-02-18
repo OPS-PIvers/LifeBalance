@@ -36,3 +36,10 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Shadow & Typography Refinement
+**Critique:** "Developer UI" persisted in base components and dashboard widgets. Shadows were inconsistent, and typography relied too heavily on `font-bold`.
+**Polish:**
+- **Shadows:** Standardized on `shadow-premium` for modals and `shadow-btn-primary/secondary` for buttons.
+- **Base Components:** Refined `Select`, `Modal`, `Switch`, and `Badge` to use glassmorphism and sophisticated typography (`tracking-tight`, `font-medium`).
+- **Dashboard:** Softened `MoneyPulse` and `CategorySpend` widgets by reducing font weight and ensuring correct `slate` color usage.

@@ -135,7 +135,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Content Container */}
       <div
         className={twMerge(
-          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
+          "relative w-full bg-white/95 backdrop-blur-xl rounded-2xl shadow-premium ring-1 ring-black/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
           maxWidth,

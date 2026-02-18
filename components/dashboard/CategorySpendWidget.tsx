@@ -51,7 +51,7 @@ export const CategorySpendWidget: React.FC = () => {
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <h2 className="text-sm font-semibold tracking-tight text-slate-900 flex items-center gap-2">
           <div className="p-1.5 bg-purple-100 text-purple-600 rounded-lg">
              <PieChart size={14} />
           </div>
@@ -59,7 +59,7 @@ export const CategorySpendWidget: React.FC = () => {
         </h2>
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+          className="text-xs font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
         >
           Details <ArrowRight size={12} />
         </Link>
@@ -68,9 +68,9 @@ export const CategorySpendWidget: React.FC = () => {
       <div className="space-y-4">
         {categoryStats.displayItems.map((item, idx) => (
           <div key={item.name} className="space-y-2">
-            <div className="flex justify-between text-xs font-bold text-slate-700">
+            <div className="flex justify-between text-xs font-medium text-slate-700">
               <span>{item.name}</span>
-              <span className="font-mono text-slate-900">${item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+              <span className="font-mono font-medium text-slate-900">${item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
             </div>
             <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                <div

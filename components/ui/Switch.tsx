@@ -39,7 +39,7 @@ export const Switch: React.FC<SwitchProps> = ({
         "peer-checked:bg-brand-600",
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
-        "after:bg-white after:border-gray-300 after:border after:rounded-full",
+        "after:bg-white after:border-slate-200 after:border after:rounded-full after:shadow-sm",
         "after:h-5 after:w-5 after:transition-all after:duration-200",
         // Knob checked state
         "peer-checked:after:translate-x-full peer-checked:after:border-white"

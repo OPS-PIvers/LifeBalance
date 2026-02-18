@@ -30,7 +30,7 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   return (
-    <span className={cn('inline-flex items-center justify-center font-bold rounded-full whitespace-nowrap', variants[variant], sizes[size], className)}>
+    <span className={cn('inline-flex items-center justify-center font-semibold tracking-tight rounded-full whitespace-nowrap', variants[variant], sizes[size], className)}>
       {children}
     </span>
   );

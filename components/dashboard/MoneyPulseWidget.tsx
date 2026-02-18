@@ -54,7 +54,7 @@ export const MoneyPulseWidget: React.FC = () => {
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <h2 className="text-sm font-semibold tracking-tight text-slate-900 flex items-center gap-2">
           <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
              <Wallet size={14} />
           </div>
@@ -62,7 +62,7 @@ export const MoneyPulseWidget: React.FC = () => {
         </h2>
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+          className="text-xs font-medium text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
         >
           View Budget <ArrowRight size={12} />
         </Link>
@@ -75,7 +75,7 @@ export const MoneyPulseWidget: React.FC = () => {
             ${spendingStats.thisWeek.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
           <div
-            className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
+            className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
               spendingStats.percentChange === 0 && spendingStats.isHigher
                 ? 'bg-slate-100 text-slate-500'
                 : spendingStats.isHigher
@@ -97,7 +97,7 @@ export const MoneyPulseWidget: React.FC = () => {
       </div>
 
       <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 px-1">Recent Activity</h3>
+        <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">Recent Activity</h3>
         <div className="space-y-1">
           {recentTransactions.map(tx => (
             <div key={tx.id} className="flex items-center justify-between py-3 px-2 hover:bg-slate-50/80 rounded-xl transition-colors">
@@ -106,11 +106,11 @@ export const MoneyPulseWidget: React.FC = () => {
                     <Receipt size={16} />
                  </div>
                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-700 truncate max-w-[140px]">{tx.merchant}</p>
+                    <p className="text-sm font-medium text-slate-900 truncate max-w-[140px]">{tx.merchant}</p>
                     <p className="text-xxs text-slate-400 font-medium">{formatDistanceToNow(parseISO(tx.date), { addSuffix: true })}</p>
                  </div>
               </div>
-              <span className="font-mono font-bold text-slate-900 text-sm">
+              <span className="font-mono font-semibold text-slate-900 text-sm">
                  ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
             </div>
