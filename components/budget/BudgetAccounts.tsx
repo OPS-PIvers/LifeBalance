@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
+import ProgressBar from '../ui/ProgressBar';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
@@ -289,9 +290,7 @@ const BudgetAccounts: React.FC = () => {
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
             </div>
-            <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
-              <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
-            </div>
+            <ProgressBar value={progress} size="sm" variant="warning" trackColorClass="bg-brand-100" />
           </div>
         )}
       </div>
