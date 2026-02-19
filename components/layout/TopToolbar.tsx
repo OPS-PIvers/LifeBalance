@@ -22,20 +22,20 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative">
-        <header className="z-sticky w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-slate-900">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
             aria-label="View Safe to Spend details"
-            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:rounded-lg"
             onClick={() => setIsSafeSpendOpen(true)}
           >
             <span
-              className={`text-2xl font-mono font-bold tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
+              className={`text-2xl font-semibold tracking-tight tabular-nums ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}
             >
               ${Math.abs(safeToSpend).toFixed(2)}
             </span>
-            <span className="text-xxs text-brand-400 uppercase tracking-wider font-bold leading-tight">
+            <span className="text-xs font-medium text-slate-500 tracking-tight leading-tight">
               Safe to Spend
             </span>
           </button>
@@ -44,7 +44,7 @@ const TopToolbar: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsFeedbackOpen(true)}
-              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               aria-label="Send Feedback"
             >
               <AlertCircle size={18} />
@@ -54,32 +54,32 @@ const TopToolbar: React.FC = () => {
             <button
               type="button"
               aria-label="View Rewards and Points breakdown"
-              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:rounded-lg"
               onClick={() => setIsRewardsOpen(true)}
             >
               {/* Daily Points (Gold Star) */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
-                  <span className="text-xl font-bold text-habit-gold tabular-nums">
+                  <span className="text-xl font-bold text-amber-500 tabular-nums">
                     {dailyPoints}
                   </span>
-                  <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
+                  <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
                 </div>
-                <span className="text-xxs text-brand-400 uppercase tracking-wider">Today</span>
+                <span className="text-xs font-medium text-slate-400 tracking-tight">Today</span>
               </div>
 
               {/* Vertical Divider */}
-              <div className="h-8 w-px bg-brand-600"></div>
+              <div className="h-8 w-px bg-slate-200"></div>
 
               {/* Weekly Points (Blue TrendingUp) */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
-                  <span className="text-xl font-bold text-habit-blue tabular-nums">
+                  <span className="text-xl font-bold text-sky-500 tabular-nums">
                     {weeklyPoints}
                   </span>
-                  <TrendingUp className="w-4 h-4 text-habit-blue" />
+                  <TrendingUp className="w-4 h-4 text-sky-500" />
                 </div>
-                <span className="text-xxs text-brand-400 uppercase tracking-wider">Week</span>
+                <span className="text-xs font-medium text-slate-400 tracking-tight">Week</span>
               </div>
             </button>
 
@@ -88,7 +88,7 @@ const TopToolbar: React.FC = () => {
               ref={profileButtonRef}
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="ml-1 w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 border border-slate-200 active:bg-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20"
               aria-label="Open Profile Menu"
               aria-expanded={isProfileOpen}
               aria-haspopup="menu"

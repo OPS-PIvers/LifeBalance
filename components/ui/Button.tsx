@@ -13,18 +13,18 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', isLoading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
     const variants = {
-      primary: 'bg-brand-800 text-white hover:bg-brand-900 shadow-[0_1px_2px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      secondary: 'bg-white text-slate-700 border border-slate-200/60 hover:bg-slate-50 hover:text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+      primary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-btn-primary hover:shadow-lg hover:shadow-slate-900/20',
+      secondary: 'bg-white text-slate-700 border border-slate-200/60 hover:bg-slate-50 hover:text-slate-900 shadow-btn-secondary hover:shadow-md',
       ghost: 'bg-transparent text-slate-600 hover:bg-slate-100/50 hover:text-slate-900',
-      danger: 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 shadow-sm',
+      danger: 'bg-rose-50 text-rose-700 border border-rose-200/60 hover:bg-rose-100 shadow-sm',
       outline: 'bg-transparent border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
       dashed: 'bg-transparent border border-dashed border-slate-300 text-slate-500 font-semibold hover:bg-slate-50 hover:border-slate-400 hover:text-slate-600 shadow-none',
       subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 border border-transparent hover:border-brand-200/50',
       'ghost-danger': 'bg-transparent text-rose-500 hover:text-rose-600 hover:bg-rose-50',
       'ghost-destructive': 'bg-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50',
-      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_1px_2px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-[0_1px_2px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_1px_2px_rgba(244,63,94,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
+      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-btn-primary hover:shadow-lg hover:shadow-emerald-500/20',
+      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-btn-primary hover:shadow-lg hover:shadow-amber-500/20',
+      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-btn-primary hover:shadow-lg hover:shadow-rose-500/20',
       link: 'bg-transparent text-brand-600 hover:text-brand-800 hover:underline px-0 shadow-none h-auto',
       'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
     };

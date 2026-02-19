@@ -8,7 +8,7 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
-    <div className="flex flex-col h-[100dvh] overflow-hidden bg-brand-50">
+    <div className="flex flex-col h-[100dvh] overflow-hidden bg-slate-50">
       <div className="flex-none z-10">
         <TopToolbar />
       </div>

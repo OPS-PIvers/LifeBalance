@@ -14,7 +14,7 @@ describe('Button', () => {
   it('applies primary variant classes by default', () => {
     render(<Button>Primary</Button>);
     const button = screen.getByRole('button', { name: /primary/i });
-    expect(button).toHaveClass('bg-brand-800');
+    expect(button).toHaveClass('bg-slate-900');
     expect(button).toHaveClass('text-white');
   });
 
@@ -36,8 +36,8 @@ describe('Button', () => {
   it('applies danger variant classes', () => {
     render(<Button variant="danger">Danger</Button>);
     const button = screen.getByRole('button', { name: /danger/i });
-    expect(button).toHaveClass('bg-red-50');
-    expect(button).toHaveClass('text-red-700');
+    expect(button).toHaveClass('bg-rose-50');
+    expect(button).toHaveClass('text-rose-700');
   });
 
   it('applies outline variant classes', () => {

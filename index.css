@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-brand-50 text-slate-900 antialiased;
+    /* Use a subtle gradient if desired, or keep it clean slate-50 */
+    background-image: linear-gradient(to bottom, #F8FAFC, #F1F5F9);
+    min-height: 100vh;
+  }
+
+  /* Improve default focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500/20 ring-offset-1 ring-offset-white;
+  }
+}
+
 @layer utilities {
   /* Hide scrollbar for clean UI in chips */
   .no-scrollbar::-webkit-scrollbar {
