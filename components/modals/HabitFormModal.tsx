@@ -7,11 +7,12 @@ interface HabitFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingHabit?: Habit;
+  initialValues?: Partial<Habit>;
 }
 
 const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
-const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
+const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit, initialValues }) => {
   const { addHabit, updateHabit } = useHousehold();
 
   // Form State
@@ -24,14 +25,16 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const [targetCount, setTargetCount] = useState('1');
 
   useEffect(() => {
-    if (editingHabit) {
-      setTitle(editingHabit.title);
-      setCategory(editingHabit.category);
-      setType(editingHabit.type);
-      setScoringType(editingHabit.scoringType || 'threshold');
-      setPeriod(editingHabit.period);
-      setBasePoints(editingHabit.basePoints.toString());
-      setTargetCount(editingHabit.targetCount.toString());
+    const source = editingHabit || initialValues;
+
+    if (source) {
+      setTitle(source.title || '');
+      setCategory(source.category || CATEGORIES[0]);
+      setType(source.type || 'positive');
+      setScoringType(source.scoringType || 'threshold');
+      setPeriod(source.period || 'daily');
+      setBasePoints(source.basePoints?.toString() || '10');
+      setTargetCount(source.targetCount?.toString() || '1');
     } else {
       // Reset defaults
       setTitle('');
@@ -42,7 +45,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setBasePoints('10');
       setTargetCount('1');
     }
-  }, [editingHabit, isOpen]);
+  }, [editingHabit, initialValues, isOpen]);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,10 +71,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       streakDays: editingHabit ? editingHabit.streakDays : 0,
       lastUpdated: new Date().toISOString(),
       weatherSensitive: editingHabit ? editingHabit.weatherSensitive : false,
-      // Preserve ownership fields when editing
-      isShared: editingHabit?.isShared,
-      ownerId: editingHabit?.ownerId,
+      // Preserve ownership fields when editing or initializing
+      isShared: editingHabit?.isShared ?? initialValues?.isShared,
+      ownerId: editingHabit?.ownerId ?? initialValues?.ownerId,
       telegramAlias: editingHabit?.telegramAlias,
+      // Custom habits flag
+      isCustom: editingHabit?.isCustom ?? initialValues?.isCustom,
+      presetId: editingHabit?.presetId ?? initialValues?.presetId,
+      effortLevel: editingHabit?.effortLevel ?? initialValues?.effortLevel,
     };
 
     console.log('[HabitFormModal] Saving habit with scoringType:', scoringType, 'habitData:', habitData);

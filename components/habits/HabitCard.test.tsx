@@ -51,6 +51,7 @@ vi.mock('lucide-react', () => ({
   Calendar: () => <span data-testid="icon-calendar" />,
   Wrench: () => <span data-testid="icon-wrench" />,
   Snowflake: () => <span data-testid="icon-snowflake" />,
+  Copy: () => <span data-testid="icon-copy" />,
 }));
 
 // Mock date-fns with controlled dates
@@ -117,6 +118,9 @@ describe('HabitCard', () => {
 
     // Check for dropdown content (using role="menu")
     expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    // Verify Duplicate option is present
+    expect(screen.getByText('Duplicate')).toBeInTheDocument();
 
     // Verify Drawer is NOT present
     expect(screen.queryByTestId('mobile-drawer')).not.toBeInTheDocument();
