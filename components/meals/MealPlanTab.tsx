@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, MoreVertical } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
+import { Drawer } from '../ui/Drawer';
+import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
@@ -35,6 +37,9 @@ const MealPlanTab: React.FC = () => {
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
+
+  // Mobile Action Drawer State
+  const [actionMealPlanItem, setActionMealPlanItem] = useState<{ item: MealPlanItem, meal?: Meal } | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -583,22 +588,32 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        {/* Desktop Actions (Hover) */}
+                                        <div className="hidden sm:flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                                             <button
                                                 onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
                                             >
-                                                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                                <Edit2 className="w-4 h-4" />
                                             </button>
                                             <button
                                                 onClick={() => deleteMealPlanItem(planItem.id)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
                                             >
-                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
+
+                                        {/* Mobile Actions (More Button) */}
+                                        <button
+                                            onClick={() => setActionMealPlanItem({ item: planItem, meal: linkedMeal ?? undefined })}
+                                            className="sm:hidden p-2 text-gray-400 hover:text-gray-600 active:scale-95 transition-transform"
+                                            aria-label="More options"
+                                        >
+                                            <MoreVertical className="w-5 h-5" />
+                                        </button>
                                     </div>
                                 );
                             }) : (
@@ -998,6 +1013,43 @@ const MealPlanTab: React.FC = () => {
               onConfirm={handleConfirmIngredients}
           />
       )}
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionMealPlanItem}
+        onClose={() => setActionMealPlanItem(null)}
+        title="Meal Options"
+      >
+        <div className="space-y-2">
+            {actionMealPlanItem && (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start text-lg py-4"
+                    leftIcon={<Edit2 className="text-brand-500" />}
+                    onClick={() => {
+                        handleEditMealPlanItem(actionMealPlanItem.item, actionMealPlanItem.meal);
+                        setActionMealPlanItem(null);
+                    }}
+                  >
+                    Edit Meal
+                  </Button>
+                  <div className="h-px bg-gray-100 my-2" />
+                  <Button
+                    variant="ghost-destructive"
+                    className="w-full justify-start text-lg py-4"
+                    leftIcon={<Trash2 />}
+                    onClick={() => {
+                        deleteMealPlanItem(actionMealPlanItem.item.id);
+                        setActionMealPlanItem(null);
+                    }}
+                  >
+                    Delete from Plan
+                  </Button>
+                </>
+            )}
+        </div>
+      </Drawer>
     </div>
   );
 };
