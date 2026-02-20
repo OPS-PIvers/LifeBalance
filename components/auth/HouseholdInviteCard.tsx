@@ -17,23 +17,26 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
   };
 
   return (
-    <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4">
-      <p className="text-xs font-bold text-brand-500 uppercase tracking-wider mb-2">
+    <div className="bg-white/60 backdrop-blur-sm rounded-xl p-5 ring-1 ring-black/5 shadow-sm transition-all hover:shadow-md hover:bg-white/70">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 text-center">
         Household Invite Code
       </p>
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-2xl font-bold text-brand-800 tracking-wider">
-          {inviteCode}
-        </span>
+      <div className="flex items-center justify-between gap-4 bg-white/50 rounded-lg p-2 pr-3 ring-1 ring-black/5">
+        <div className="flex-1 text-center">
+          <span className="font-mono text-3xl font-bold text-slate-900 tracking-[0.2em] ml-2">
+            {inviteCode}
+          </span>
+        </div>
         <button
           onClick={handleCopy}
-          className="flex-shrink-0 p-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 active:scale-95 transition-all duration-200"
+          className="flex-shrink-0 p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-md transition-all active:scale-95"
           aria-label="Copy invite code"
+          title="Copy to clipboard"
         >
-          {copied ? <Check size={20} /> : <Copy size={20} />}
+          {copied ? <Check size={20} className="text-emerald-500" /> : <Copy size={20} />}
         </button>
       </div>
-      <p className="text-xs text-brand-500 mt-3">
+      <p className="text-xs text-slate-400 mt-4 text-center leading-relaxed">
         Share this code with family members to join your household
       </p>
     </div>

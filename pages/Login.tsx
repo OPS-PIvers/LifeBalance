@@ -62,31 +62,32 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-50 to-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-black/5 p-10 space-y-8 transition-all duration-500">
           {/* Logo/Brand */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <div className="inline-flex items-center justify-center w-24 h-24 mb-6 relative group">
+              <div className="absolute inset-0 bg-slate-200/50 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <img
                 src="/lifebalance_icon.png"
                 alt="LifeBalance"
-                className="w-full h-full object-contain rounded-2xl"
+                className="w-full h-full object-contain rounded-2xl shadow-sm relative z-10 transition-transform duration-500 group-hover:scale-[1.02]"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
-              Manage your household finances, habits, and goals
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900 mb-2">LifeBalance</h1>
+            <p className="text-slate-500 text-sm leading-relaxed max-w-xs mx-auto">
+              Manage your household finances, habits, and goals with elegance.
             </p>
           </div>
 
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+            <div className="relative flex justify-center text-xs uppercase tracking-widest">
+              <span className="bg-white/50 backdrop-blur-sm px-3 text-slate-400 font-medium rounded-full">Sign in</span>
             </div>
           </div>
 
@@ -97,10 +98,10 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-brand-800"
+            className="w-full text-slate-700 justify-center h-12 shadow-sm hover:shadow-md transition-all duration-300 border-slate-200/80 bg-white/60 backdrop-blur-sm group"
             leftIcon={
               !loading && (
-                <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5 mr-1 transition-transform group-hover:scale-110 duration-300" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -125,16 +126,21 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
-            By signing in, you agree to manage your household responsibly
+          <p className="text-center text-xs text-slate-400 pt-2 leading-relaxed">
+            By signing in, you verify your household membership.
           </p>
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-sm font-medium text-slate-500 tracking-wide">
             Track finances • Build habits • Earn rewards
           </p>
+          <div className="flex justify-center gap-2 mt-4">
+             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+             <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+          </div>
         </div>
       </div>
     </div>
