@@ -3,6 +3,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { PieChart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { ProgressBar } from '../ui/ProgressBar';
 
 export const CategorySpendWidget: React.FC = () => {
   const { transactions } = useHousehold();
@@ -72,16 +73,16 @@ export const CategorySpendWidget: React.FC = () => {
               <span>{item.name}</span>
               <span className="font-mono text-slate-900">${item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
             </div>
-            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-               <div
-                 className={`h-full rounded-full transition-all duration-500 ${
-                    idx === 0 ? 'bg-purple-500' :
-                    idx === 1 ? 'bg-purple-400' :
-                    idx === 2 ? 'bg-purple-300' : 'bg-slate-300'
-                 }`}
-                 style={{ width: `${item.percentage}%` }}
-               />
-            </div>
+            <ProgressBar
+              value={item.percentage}
+              size="sm"
+              trackColorClass="bg-slate-100"
+              colorClass={
+                idx === 0 ? 'bg-purple-500' :
+                idx === 1 ? 'bg-purple-400' :
+                idx === 2 ? 'bg-purple-300' : 'bg-slate-300'
+              }
+            />
           </div>
         ))}
       </div>

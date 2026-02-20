@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { ChevronDown, ChevronUp, History, Download } from 'lucide-react';
 import Card from '../ui/Card';
 import { Button } from '../ui/Button';
+import { ProgressBar } from '../ui/ProgressBar';
 import { generateCsvExport } from '../../utils/exportUtils';
 import toast from 'react-hot-toast';
 
@@ -172,12 +173,11 @@ const BudgetHistory: React.FC = () => {
                     <span>${group.totalSpent.toLocaleString()} spent</span>
                     <span>${group.totalLimit.toLocaleString()} limit</span>
                   </div>
-                  <div className="h-3 bg-brand-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${getProgressColor(group.totalSpent, group.totalLimit)}`}
-                      style={{ width: `${percentUsed}%` }}
-                    />
-                  </div>
+                  <ProgressBar
+                    value={percentUsed}
+                    size="lg"
+                    colorClass={getProgressColor(group.totalSpent, group.totalLimit)}
+                  />
                 </div>
               </div>
 
@@ -210,12 +210,11 @@ const BudgetHistory: React.FC = () => {
                           ${bucket.totalSpent.toLocaleString()} <span className="text-brand-300 font-normal">/ ${bucket.limit.toLocaleString()}</span>
                         </span>
                       </div>
-                      <div className="h-1.5 bg-brand-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${getProgressColor(bucket.totalSpent, bucket.limit)}`}
-                          style={{ width: `${bucketPercent}%` }}
-                        />
-                      </div>
+                      <ProgressBar
+                        value={bucketPercent}
+                        size="sm"
+                        colorClass={getProgressColor(bucket.totalSpent, bucket.limit)}
+                      />
                     </div>
                   );
                 })}
