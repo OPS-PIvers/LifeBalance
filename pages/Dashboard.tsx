@@ -13,6 +13,7 @@ import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
 import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import MagicInput from '../components/dashboard/MagicInput';
 import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
@@ -73,6 +74,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="px-4 space-y-8">
+
+        {/* Magic Input */}
+        <MagicInput />
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
