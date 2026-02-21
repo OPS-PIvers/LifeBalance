@@ -212,9 +212,9 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 {meal.tags && meal.tags.length > 0 && (
                                     <div className="hidden sm:flex gap-1">
                                         {meal.tags.slice(0, 2).map(t => (
-                                            <span key={t} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-medium">{t}</span>
+                                            <span key={t} className="text-xxs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-medium">{t}</span>
                                         ))}
-                                        {meal.tags.length > 2 && <span className="text-[10px] text-slate-400">+{meal.tags.length - 2}</span>}
+                                        {meal.tags.length > 2 && <span className="text-xxs text-slate-400">+{meal.tags.length - 2}</span>}
                                     </div>
                                 )}
                             </div>

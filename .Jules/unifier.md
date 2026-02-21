@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2025-03-09 - Standardizing Micro Typography
+**Drift:** The codebase contained persistent hardcoded font sizes: `text-[8px]` in `ActionQueueItem` and `text-[10px]` in `QuickRestockRow` and `CookbookModal`.
+**Fix:** Added `xxxs: '8px'` to `tailwind.config.js` and refactored `ActionQueueItem.tsx` to use `text-xxxs`, and `QuickRestockRow.tsx` / `CookbookModal.tsx` to use `text-xxs`.

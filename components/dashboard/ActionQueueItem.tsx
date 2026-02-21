@@ -156,7 +156,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         className="w-4 h-4 rounded-full border border-white object-cover flex-shrink-0"
       />
     ) : (
-      <div className="w-4 h-4 rounded-full bg-brand-200 flex items-center justify-center text-[8px] font-bold text-brand-600 border border-white flex-shrink-0">
+      <div className="w-4 h-4 rounded-full bg-brand-200 flex items-center justify-center text-xxxs font-bold text-brand-600 border border-white flex-shrink-0">
         {assignee.displayName?.charAt(0) || '?'}
       </div>
     );
