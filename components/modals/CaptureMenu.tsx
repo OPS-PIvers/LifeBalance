@@ -65,7 +65,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
       <button
         onClick={onScan}
-        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
+        className="w-full flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm border-transparent ring-1 ring-black/5 rounded-2xl shadow-glass hover:ring-black/10 hover:shadow-lg transition-all active:scale-[0.98] group"
       >
         <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600">
           <Camera size={24} />
@@ -81,7 +81,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
       <button
         onClick={() => fileInputRef.current?.click()}
-        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
+        className="w-full flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm border-transparent ring-1 ring-black/5 rounded-2xl shadow-glass hover:ring-black/10 hover:shadow-lg transition-all active:scale-[0.98] group"
       >
         <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-purple-50 text-purple-600">
           <Upload size={24} />
@@ -97,7 +97,7 @@ export const CaptureMenu: React.FC<CaptureMenuProps> = ({
 
       <button
         onClick={onManual}
-        className="w-full flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:shadow-md transition-all active:scale-[0.98] group"
+        className="w-full flex items-center gap-4 p-4 bg-white/80 backdrop-blur-sm border-transparent ring-1 ring-black/5 rounded-2xl shadow-glass hover:ring-black/10 hover:shadow-lg transition-all active:scale-[0.98] group"
       >
         <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600">
           <Type size={24} />
