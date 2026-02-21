@@ -118,13 +118,17 @@ describe('Button', () => {
   it('applies icon size classes', () => {
     render(<Button size="icon">Icon</Button>);
     const button = screen.getByRole('button', { name: /icon/i });
-    expect(button).toHaveClass('p-2');
+    expect(button).toHaveClass('h-11');
+    expect(button).toHaveClass('w-11');
+    expect(button).toHaveClass('p-0');
   });
 
   it('applies icon-sm size classes', () => {
     render(<Button size="icon-sm">Icon SM</Button>);
     const button = screen.getByRole('button', { name: /icon sm/i });
-    expect(button).toHaveClass('p-1');
+    expect(button).toHaveClass('h-9');
+    expect(button).toHaveClass('w-9');
+    expect(button).toHaveClass('p-0');
   });
 
   // State & Icon tests

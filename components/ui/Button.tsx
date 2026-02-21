@@ -33,8 +33,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       sm: 'px-3 py-1 text-xs',
       md: 'px-4 py-2 text-sm',
       lg: 'px-6 py-3 text-base',
-      icon: 'p-2',
-      'icon-sm': 'p-1',
+      icon: 'h-11 w-11 p-0',
+      'icon-sm': 'h-9 w-9 p-0',
     };
 
     return (
