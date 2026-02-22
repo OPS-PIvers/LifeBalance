@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
+import { Home, Users, Plus, LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createHousehold, joinHousehold, getHouseholdDetails } from '@/services/householdService';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
