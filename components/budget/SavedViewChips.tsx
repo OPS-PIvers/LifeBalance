@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bookmark, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Tag } from '../ui/Tag';
 
 interface SavedView {
   id: string;
@@ -82,30 +83,16 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
       </div>
 
       {views.map(view => (
-        <div
+        <Tag
           key={view.id}
-          className="group inline-flex items-center bg-white border border-brand-200 rounded-full text-xs font-medium text-brand-700 hover:bg-brand-50 hover:border-brand-300 transition-all shadow-sm"
-        >
-          <button
-            onClick={() => {
-              onApply(view.filters);
-              toast.success(`Applied "${view.name}"`);
-            }}
-            className="pl-3 pr-1 py-1 rounded-l-full hover:text-brand-900 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1"
-            title={`Apply ${view.name}`}
-          >
-            {view.name}
-          </button>
-          <div className="w-px h-3 bg-brand-100 mx-0.5" />
-          <button
-             type="button"
-             onClick={(e) => handleDeleteView(view.id, e)}
-             className="pr-2 pl-1 py-1 rounded-r-full text-brand-300 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
-             aria-label={`Delete view ${view.name}`}
-          >
-            <X size={10} />
-          </button>
-        </div>
+          label={view.name}
+          onClick={() => {
+            onApply(view.filters);
+            toast.success(`Applied "${view.name}"`);
+          }}
+          onRemove={(e) => handleDeleteView(view.id, e)}
+          size="sm"
+        />
       ))}
 
       {isSaving ? (

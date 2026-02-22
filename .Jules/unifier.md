@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-02-09 - Standardizing Interactive Tags
+**Drift:** `SavedViewChips.tsx` contained a complex, hardcoded "split button" pattern for filter chips (clickable label + remove button) using raw `div` and `button` elements with manual borders and separators.
+**Fix:** Created `components/ui/Tag.tsx` with standardized support for `onClick`, `onRemove`, and split-button behavior. Refactored `SavedViewChips.tsx` to use this reusable component.
