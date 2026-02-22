@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2, MoreVertical } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
@@ -22,6 +22,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [submissions, setSubmissions] = useState<HabitSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [editingSubmission, setEditingSubmission] = useState<HabitSubmission | null>(null);
+  const [actionSubmission, setActionSubmission] = useState<HabitSubmission | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isAddMode, setIsAddMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -91,10 +93,10 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   };
 
   const handleDelete = async (submissionId: string) => {
-    if (!confirm('Delete this submission? This will adjust your points.')) return;
-
     await deleteHabitSubmission(habit.id, submissionId);
     await loadSubmissions();
+    setActionSubmission(null);
+    setShowDeleteConfirm(false);
   };
 
   // Analytics calculations
@@ -576,23 +578,16 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                            <div className="flex items-center ml-1 flex-shrink-0">
                               <button
                                 onClick={() => {
-                                  setEditingSubmission(sub);
-                                  setFormCount(sub.count.toString());
+                                  setActionSubmission(sub);
+                                  setShowDeleteConfirm(false);
                                 }}
-                                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-lg transition-colors"
-                                aria-label="Edit submission"
+                                className="h-11 w-11 flex items-center justify-center text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-xl transition-colors active:scale-95"
+                                aria-label="More options"
                               >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(sub.id)}
-                                className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                aria-label="Delete submission"
-                              >
-                                <Trash2 size={14} />
+                                <MoreVertical size={20} />
                               </button>
                             </div>
                           </div>
@@ -655,6 +650,84 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Actions Drawer */}
+      <Drawer
+        isOpen={!!actionSubmission}
+        onClose={() => {
+          setActionSubmission(null);
+          setShowDeleteConfirm(false);
+        }}
+        title={showDeleteConfirm ? "Delete Submission?" : "Submission Options"}
+        className="z-[60]" // Ensure it sits above the main drawer
+      >
+        <div className="space-y-3 pb-6">
+          {!showDeleteConfirm ? (
+            <>
+              <button
+                onClick={() => {
+                  if (actionSubmission) {
+                    setEditingSubmission(actionSubmission);
+                    setFormCount(actionSubmission.count.toString());
+                    setActionSubmission(null);
+                  }
+                }}
+                className="w-full p-4 bg-white border border-slate-200 rounded-xl flex items-center gap-3 active:bg-slate-50 transition-colors shadow-sm"
+              >
+                <div className="p-2 bg-brand-100 text-brand-600 rounded-full">
+                  <Edit2 size={20} />
+                </div>
+                <div className="text-left">
+                  <span className="block font-bold text-slate-700">Edit Submission</span>
+                  <span className="block text-xs text-slate-500">Change the count for this entry</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full p-4 bg-white border border-rose-100 rounded-xl flex items-center gap-3 active:bg-rose-50 transition-colors shadow-sm"
+              >
+                <div className="p-2 bg-rose-100 text-rose-600 rounded-full">
+                  <Trash2 size={20} />
+                </div>
+                <div className="text-left">
+                  <span className="block font-bold text-slate-700">Delete Submission</span>
+                  <span className="block text-xs text-slate-500">Remove this entry permanently</span>
+                </div>
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-4">
+                <p className="text-rose-800 font-medium text-sm">
+                  Are you sure you want to delete this submission? This will adjust your total points and potentially affect your streak.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    if (actionSubmission) {
+                      handleDelete(actionSubmission.id);
+                    }
+                  }}
+                  className="w-full py-4 bg-rose-600 text-white font-bold rounded-xl active:bg-rose-700 transition-colors shadow-md flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={20} />
+                  Yes, Delete Submission
+                </button>
+
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl active:bg-slate-50 transition-colors shadow-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Drawer>
     </Drawer>
   );
 };
