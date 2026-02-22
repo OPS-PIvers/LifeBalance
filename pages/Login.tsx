@@ -62,31 +62,33 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white/80 backdrop-blur-xl ring-1 ring-black/5 shadow-glass rounded-2xl p-8 space-y-8 transition-all duration-500 hover:shadow-2xl">
           {/* Logo/Brand */}
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-2xl shadow-sm ring-1 ring-black/5 p-2">
               <img
                 src="/lifebalance_icon.png"
                 alt="LifeBalance"
-                className="w-full h-full object-contain rounded-2xl"
+                className="w-full h-full object-contain rounded-xl"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
-              Manage your household finances, habits, and goals
-            </p>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-900 mb-2">LifeBalance</h1>
+              <p className="text-slate-500 text-sm leading-relaxed">
+                Manage your household finances, habits, and goals with elegance.
+              </p>
+            </div>
           </div>
 
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+            <div className="relative flex justify-center text-xs uppercase tracking-wider">
+              <span className="bg-white/50 backdrop-blur-sm px-3 text-slate-400 font-medium rounded-full">Sign in to continue</span>
             </div>
           </div>
 
@@ -97,10 +99,10 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-brand-800"
+            className="w-full text-slate-700 bg-white hover:bg-slate-50 border-slate-200/60 shadow-sm h-12 text-base font-medium"
             leftIcon={
               !loading && (
-                <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5 mr-1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -125,15 +127,20 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
-            By signing in, you agree to manage your household responsibly
+          <p className="text-center text-xs text-slate-400 pt-2 leading-relaxed">
+            By signing in, you agree to manage your household responsibly.
+            <br />
+            Designed for clarity and peace of mind.
           </p>
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-sm font-medium text-slate-500 tracking-tight">
             Track finances • Build habits • Earn rewards
+          </p>
+          <p className="text-xs text-slate-400">
+            © {new Date().getFullYear()} LifeBalance. All rights reserved.
           </p>
         </div>
       </div>

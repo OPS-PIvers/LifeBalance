@@ -36,3 +36,13 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Auth & Setup Polish
+**Critique:** "Developer UI" detected in `Login`, `HouseholdSetup`, and `Loading` pages. Heavy use of `brand-200` borders, default `shadow-2xl`, and generic `bg-white` cards. Typography was boxy (`font-bold`) and lacked hierarchy.
+**Polish:**
+- **Login & Setup:** Implemented full "Muse" Glassmorphism.
+  - **Surface:** `bg-white/80 backdrop-blur-xl` with `ring-1 ring-black/5` and `shadow-glass`.
+  - **Background:** Shifted to a clean `bg-slate-50` to reduce visual noise.
+  - **Typography:** Refined to `tracking-tight` headings (`text-slate-900`) and relaxed `text-slate-500` body text.
+- **Components:** Replaced raw inputs and buttons with polished `<Input>` and `<Button>` components to ensure consistency.
+- **Loading:** Added a subtle pulse animation and refined typography for a premium wait experience.
