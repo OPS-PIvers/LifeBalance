@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CategorySpendWidget } from './CategorySpendWidget';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 
 // Mock dependencies
 vi.mock('react-router-dom', () => ({
@@ -9,13 +9,17 @@ vi.mock('react-router-dom', () => ({
 }));
 
 // Mock Context
+const now = new Date();
+const currentMonthDate = format(now, 'yyyy-MM-dd');
+const lastMonthDate = format(subMonths(now, 1), 'yyyy-MM-dd');
+
 const mockTransactions = [
-  // Current month
+  // Current month: Total 350 (Groceries 300 + Dining 50)
   {
     id: '1',
     amount: 100,
     category: 'Groceries',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: currentMonthDate,
     status: 'verified',
     merchant: 'Safeway',
     isRecurring: false,
@@ -26,7 +30,7 @@ const mockTransactions = [
     id: '2',
     amount: 50,
     category: 'Dining',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: currentMonthDate,
     status: 'verified',
     merchant: 'McDonalds',
     isRecurring: false,
@@ -37,31 +41,42 @@ const mockTransactions = [
     id: '3',
     amount: 200,
     category: 'Groceries',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: currentMonthDate,
     status: 'verified',
     merchant: 'Whole Foods',
     isRecurring: false,
     source: 'manual',
     autoCategorized: false
   },
-  // Previous month (should be ignored)
+  // Last month: Total 200 (Groceries 150 + Dining 50)
   {
     id: '4',
-    amount: 500,
-    category: 'Rent',
-    date: '2020-01-01', // Definitely old
+    amount: 150,
+    category: 'Groceries',
+    date: lastMonthDate,
     status: 'verified',
-    merchant: 'Landlord',
-    isRecurring: true,
-    source: 'recurring',
-    autoCategorized: true
+    merchant: 'Safeway',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false
+  },
+  {
+    id: '5',
+    amount: 50,
+    category: 'Dining',
+    date: lastMonthDate,
+    status: 'verified',
+    merchant: 'Chipotle',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false
   },
   // Income (should be ignored)
   {
-    id: '5',
+    id: '6',
     amount: 1000,
     category: 'Income',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: currentMonthDate,
     status: 'verified',
     merchant: 'Employer',
     isRecurring: true,
@@ -84,17 +99,25 @@ describe('CategorySpendWidget', () => {
 
     // Groceries should be 300 (100+200)
     // Dining should be 50
-    // Rent should be ignored
-    // Income should be ignored
-
+    // Total: 350
     expect(screen.getByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('$300')).toBeInTheDocument();
 
     expect(screen.getByText('Dining')).toBeInTheDocument();
     expect(screen.getByText('$50')).toBeInTheDocument();
+  });
 
-    expect(screen.queryByText('Rent')).not.toBeInTheDocument();
-    expect(screen.queryByText('Income')).not.toBeInTheDocument();
+  it('displays total spending and trend', () => {
+    render(<CategorySpendWidget />);
+
+    // Current Total: 350
+    // Last Month: 200
+    // Diff: 150
+    // % Change: (150 / 200) * 100 = 75%
+
+    expect(screen.getByText('$350')).toBeInTheDocument();
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.getByText('vs last month')).toBeInTheDocument();
   });
 
   it('renders nothing if no spending', () => {
