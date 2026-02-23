@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import MealsPage from './MealsPage';
 
 // Mock child components to isolate MealsPage logic
@@ -19,7 +20,11 @@ vi.mock('lucide-react', () => ({
 
 describe('MealsPage', () => {
   it('renders both tabs: Meal Plan and Shopping List', () => {
-    render(<MealsPage />);
+    render(
+      <MemoryRouter>
+        <MealsPage />
+      </MemoryRouter>
+    );
 
     // Check for Tab Buttons
     expect(screen.getByRole('tab', { name: /meal plan/i })).toBeInTheDocument();
@@ -27,7 +32,11 @@ describe('MealsPage', () => {
   });
 
   it('switches content when tabs are clicked', () => {
-    render(<MealsPage />);
+    render(
+      <MemoryRouter>
+        <MealsPage />
+      </MemoryRouter>
+    );
 
     // Default should be Meal Plan
     expect(screen.getByTestId('meal-plan-tab')).toBeInTheDocument();

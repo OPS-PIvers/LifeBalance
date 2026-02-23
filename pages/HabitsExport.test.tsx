@@ -8,6 +8,7 @@ import { Habit } from '../types/schema';
 // Mock dependencies
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
 
 vi.mock('../utils/exportUtils', () => ({
