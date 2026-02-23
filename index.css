@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    background-image: linear-gradient(to bottom, #F8FAFC, #F1F5F9);
+    min-height: 100vh;
+  }
+}
+
 @layer utilities {
   /* Hide scrollbar for clean UI in chips */
   .no-scrollbar::-webkit-scrollbar {

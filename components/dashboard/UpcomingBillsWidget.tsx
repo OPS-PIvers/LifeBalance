@@ -34,7 +34,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
 
         if (isSameDay(date, today)) {
           dateLabel = 'Today';
-          urgencyClass = 'text-rose-600 font-bold';
+          urgencyClass = 'text-rose-500 font-bold';
         } else if (isTomorrow(date)) {
           dateLabel = 'Tomorrow';
           urgencyClass = 'text-amber-600 font-bold';
@@ -52,10 +52,10 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
   if (upcomingBills.length === 0) return null;
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
+    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <div className="p-1.5 bg-rose-100 text-rose-600 rounded-lg">
+        <h2 className="text-sm font-bold tracking-tight text-slate-800 flex items-center gap-2">
+          <div className="p-1.5 bg-rose-500/10 text-rose-500 rounded-lg">
              <CalendarClock size={14} />
           </div>
           Upcoming Bills

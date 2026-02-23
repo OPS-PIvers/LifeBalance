@@ -41,12 +41,13 @@ export default {
         },
       },
       borderRadius: {
-        card: '1rem',
+        card: '1.5rem',
         btn: '0.75rem',
       },
       boxShadow: {
-        soft: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+        soft: '0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02)',
         glass: '0 8px 30px rgba(0, 0, 0, 0.04)',
+        premium: '0 20px 40px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01)',
         nav: '0 -10px 40px -15px rgba(0, 0, 0, 0.05)',
       },
       spacing: {

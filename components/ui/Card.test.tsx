@@ -13,8 +13,8 @@ describe('Card', () => {
     const { container } = render(<Card>Content</Card>);
     const card = container.firstChild;
     expect(card).toHaveClass('backdrop-blur-xl');
-    expect(card).toHaveClass('rounded-card');
-    expect(card).toHaveClass('shadow-glass');
+    expect(card).toHaveClass('rounded-3xl');
+    expect(card).toHaveClass('shadow-premium');
     expect(card).toHaveClass('ring-1');
   });
 
@@ -24,7 +24,7 @@ describe('Card', () => {
     expect(card).toHaveClass('custom-class');
     expect(card).toHaveClass('p-8');
     // Should still have base classes
-    expect(card).toHaveClass('rounded-card');
+    expect(card).toHaveClass('rounded-3xl');
   });
 
   it('allows overriding base classes via className', () => {
