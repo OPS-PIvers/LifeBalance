@@ -1,4 +1,3 @@
-
 import React from 'react';
 import BudgetCalendar from '../components/budget/BudgetCalendar';
 import BudgetBuckets from '../components/budget/BudgetBuckets';
@@ -6,11 +5,14 @@ import BudgetAccounts from '../components/budget/BudgetAccounts';
 import TransactionMasterList from '../components/budget/TransactionMasterList';
 import BudgetHistory from '../components/budget/BudgetHistory';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 
 const Budget: React.FC = () => {
+  const [currentTab, setTab] = useTabFromUrl('calendar');
+
   return (
     <div className="min-h-screen bg-slate-50 pb-28 pt-6">
-      <Tabs defaultValue="calendar">
+      <Tabs value={currentTab} onValueChange={setTab}>
         <div className="px-4">
           {/* Sub-Navigation */}
           <TabsList className="mb-6 overflow-x-auto no-scrollbar">

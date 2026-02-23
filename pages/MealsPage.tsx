@@ -3,6 +3,7 @@ import MealPlanTab from '@/components/meals/MealPlanTab';
 import ShoppingListTab from '@/components/meals/ShoppingListTab';
 import { Calendar, ShoppingCart } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 
 const MealsPage: React.FC = () => {
   // Mobile-first tab navigation
@@ -11,9 +12,11 @@ const MealsPage: React.FC = () => {
     { id: 'shopping-list', label: 'Shopping List', shortLabel: 'Shop', icon: ShoppingCart },
   ];
 
+  const [currentTab, setTab] = useTabFromUrl('meal-plan');
+
   return (
     <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
-      <Tabs defaultValue="meal-plan">
+      <Tabs value={currentTab} onValueChange={setTab}>
         {/* Tab Navigation */}
         <TabsList className="mb-6">
           {tabs.map((tab) => {

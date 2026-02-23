@@ -1,11 +1,11 @@
-
-import React, { useState, useRef } from 'react';
-import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Star, TrendingUp, User, AlertCircle, Search } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useAuth } from '../../contexts/AuthContext';
 import RewardsModal from '../modals/RewardsModal';
 import SafeToSpendModal from '../modals/SafeToSpendModal';
 import FeedbackModal from '../modals/FeedbackModal';
+import GlobalSearchModal from '../modals/GlobalSearchModal';
 import ProfileMenu from './ProfileMenu';
 
 const TopToolbar: React.FC = () => {
@@ -15,9 +15,22 @@ const TopToolbar: React.FC = () => {
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const isPositive = safeToSpend >= 0;
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <>
@@ -42,6 +55,15 @@ const TopToolbar: React.FC = () => {
 
           {/* Right Container: Points Cluster + Profile */}
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
+              aria-label="Search"
+              title="Search (Cmd+K)"
+            >
+              <Search size={18} />
+            </button>
+
             <button
               onClick={() => setIsFeedbackOpen(true)}
               className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
@@ -112,6 +134,11 @@ const TopToolbar: React.FC = () => {
       <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
       <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
       <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <GlobalSearchModal
+        key={isSearchOpen ? 'open' : 'closed'}
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </>
   );
 };

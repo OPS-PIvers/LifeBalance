@@ -16,10 +16,13 @@ import HabitHistoryCalendar from '../components/habits/HabitHistoryCalendar';
 import { generateCsvExport } from '../utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
+import { useTabFromUrl } from '@/hooks/useTabFromUrl';
 
 const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useHousehold();
+  const [currentTab, setTab] = useTabFromUrl('track');
+
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
@@ -82,7 +85,7 @@ const Habits: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-28 pt-6">
-      <Tabs defaultValue="track">
+      <Tabs value={currentTab} onValueChange={setTab}>
         {/* Page Title & Action */}
         <div className="px-4 mb-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
