@@ -5,6 +5,7 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -398,12 +399,13 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                             {week.points} pts • {week.count} actions
                           </span>
                         </div>
-                        <div className="h-2 bg-brand-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
-                            style={{ width: `${barWidth}%` }}
-                          />
-                        </div>
+                        <ProgressBar
+                          value={barWidth}
+                          size="md"
+                          trackColorClass="bg-brand-100"
+                          colorClass="bg-gradient-to-r from-emerald-400 to-emerald-600"
+                          aria-label={`Points earned for ${week.label}`}
+                        />
                       </div>
                     );
                   })}
@@ -433,12 +435,13 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                               {count} time{count !== 1 ? 's' : ''}
                             </span>
                           </div>
-                          <div className="h-2 bg-brand-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-purple-400 to-purple-600 rounded-full transition-all duration-500"
-                              style={{ width: `${barWidth}%` }}
-                            />
-                          </div>
+                          <ProgressBar
+                            value={barWidth}
+                            size="md"
+                            trackColorClass="bg-brand-100"
+                            colorClass="bg-gradient-to-r from-purple-400 to-purple-600"
+                            aria-label={`Submissions during ${period}`}
+                          />
                         </div>
                       );
                     })}

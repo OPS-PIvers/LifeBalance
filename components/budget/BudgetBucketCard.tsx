@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, Mor
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
 import { Button } from '../ui/Button';
+import { ProgressBar } from '../ui/ProgressBar';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -199,12 +200,14 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden mb-2">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${isOverspent ? 'bg-money-neg' : bucket.color}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={percent}
+        size="lg"
+        trackColorClass="bg-slate-100"
+        colorClass={isOverspent ? 'bg-money-neg' : bucket.color}
+        className="mb-2"
+        aria-label={`Spending progress for ${bucket.name}`}
+      />
 
       {/* Expandable Transaction List */}
       {isExpanded && bucketTransactions.length > 0 && (
