@@ -15,7 +15,7 @@
 
 ## 2025-05-23 - Budget & Habit Cards Polish
 **Critique:** "Developer UI" persisted in card components. `BudgetBucketCard` and `HabitCard` relied on generic `border-brand-100` and flat `bg-white`. Typography was too heavy (`font-bold`) and lacked sophistication. Active states in habits were too harsh (`bg-emerald-50`).
-**Polish:** Implemented full "Glassmorphism" suite.
+**Polish:**
 - **Surface:** Upgraded to `bg-white/80 backdrop-blur-xl` with `ring-1 ring-black/5`.
 - **Depth:** Applied `shadow-glass` for a floated feel.
 - **Typography:** Refined to `tracking-tight` headings and `text-slate-500` metadata.
@@ -36,3 +36,11 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Household Setup & Settings Polish
+**Critique:** `HouseholdSetup` page suffered from "Developer UI" with heavy `shadow-2xl`, boxy `border-2`, and a generic brand gradient. `ApiKeyManager` and `ShortcutSetupGuide` mixed `brand`, `blue`, and `gray` palettes incoherently.
+**Polish:**
+- **Household Setup:** Reimagined with a subtle `slate` gradient. Upgraded card to `bg-white/80 backdrop-blur-xl` with `shadow-glass` and `rounded-3xl`.
+- **Palette Unification:** Standardized all settings components to the `slate` palette (`slate-50`, `slate-900`) for structure, reserving `indigo` for key actions.
+- **Typography:** Applied `tracking-tight` to all headings and refined body text to `slate-500 leading-relaxed`.
+- **Inputs:** Refined all input fields to use glassmorphism (`bg-white/80`, `border-slate-200/60`) and crisper focus rings.
