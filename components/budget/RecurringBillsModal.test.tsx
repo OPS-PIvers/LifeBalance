@@ -29,7 +29,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 vi.mock('../ui/Modal', () => ({
-  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="mock-modal">{children}</div> : null,
+  Modal: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) => isOpen ? <div data-testid="mock-modal">{children}</div> : null,
 }));
 
 describe('RecurringBillsModal', () => {
