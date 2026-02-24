@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, FileText } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { RecipeImportModal } from './RecipeImportModal';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -33,6 +34,7 @@ const MealPlanTab: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
@@ -474,6 +476,18 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
+  const handleRecipeImport = (meal: Partial<Meal>) => {
+      setCurrentMeal(prev => ({
+          ...prev,
+          name: meal.name || prev.name,
+          description: meal.description || prev.description,
+          ingredients: meal.ingredients || prev.ingredients || [],
+          instructions: meal.instructions || prev.instructions || [],
+          recipeUrl: meal.recipeUrl || prev.recipeUrl || '',
+          tags: meal.tags || prev.tags || []
+      }));
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
@@ -644,12 +658,18 @@ const MealPlanTab: React.FC = () => {
 
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">
                       {/* Top Actions */}
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-2">
                           <button
                               onClick={() => setIsPreviousMealsModalOpen(true)}
                               className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50/80 text-indigo-700 rounded-xl hover:bg-indigo-100 font-bold text-sm transition-colors border border-indigo-100/50"
                           >
                               <ChefHat className="w-4.5 h-4.5" /> Cookbook
+                          </button>
+                          <button
+                              onClick={() => setIsImportModalOpen(true)}
+                              className="flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50/80 text-emerald-700 rounded-xl hover:bg-emerald-100 font-bold text-sm transition-colors border border-emerald-100/50"
+                          >
+                              <FileText className="w-4.5 h-4.5" /> Import
                           </button>
                           <button
                               onClick={() => setIsAIModalOpen(true)}
@@ -986,6 +1006,14 @@ const MealPlanTab: React.FC = () => {
               </div>
           </div>
       )}
+
+      {/* Recipe Import Modal */}
+      <RecipeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        householdId={householdId || ''}
+        onConfirm={handleRecipeImport}
+      />
 
       {/* Ingredient Selector Modal */}
       {isIngredientSelectorOpen && ingredientSelectorData && (
