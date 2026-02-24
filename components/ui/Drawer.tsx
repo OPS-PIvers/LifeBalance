@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { Button } from './Button';
 
 interface DrawerProps {
   isOpen: boolean;
@@ -108,9 +109,16 @@ export const Drawer: React.FC<DrawerProps> = ({
              {title && (
                <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 shrink-0">
                  <h3 id={titleId} className="font-bold text-lg text-slate-800">{title}</h3>
-                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer" disabled={disableClose}>
+                 <Button
+                   onClick={onClose}
+                   variant="ghost"
+                   size="icon"
+                   className="rounded-full text-slate-400 hover:text-slate-600"
+                   aria-label="Close drawer"
+                   disabled={disableClose}
+                 >
                    <X size={20} />
-                 </button>
+                 </Button>
                </div>
              )}
 

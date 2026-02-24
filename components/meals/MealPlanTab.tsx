@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { Button } from '../ui/Button';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -633,13 +634,15 @@ const MealPlanTab: React.FC = () => {
                       <h3 id="modal-title" className="text-lg font-bold text-slate-900 tracking-tight">
                           {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
                       </h3>
-                      <button
+                      <Button
                           onClick={handleCancel}
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                          variant="ghost"
+                          size="icon"
+                          className="rounded-full text-slate-400 hover:text-slate-600"
                           aria-label="Close modal"
                       >
                           <X className="w-5 h-5" />
-                      </button>
+                      </Button>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-6 space-y-6">

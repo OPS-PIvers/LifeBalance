@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-03-09 - Standardized Close Buttons in Drawers and Modals
+**Drift:** `Drawer`, `RecurringBillsModal`, and `MealPlanTab` implemented close buttons as raw `<button>` elements with hardcoded styles (`p-2`, `rounded-full`, `hover:bg-gray-100`), duplicating logic and inconsistent with the `Button` component.
+**Fix:** Refactored these components to use the standardized `<Button />` component with `variant="ghost"`, `size="icon"`, and `rounded-full` class.

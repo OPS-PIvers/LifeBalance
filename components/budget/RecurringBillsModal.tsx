@@ -117,13 +117,15 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             <p className="text-xs text-slate-500">Manage your subscriptions and bills</p>
           </div>
         </div>
-        <button
+        <Button
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+          variant="ghost"
+          size="icon"
+          className="rounded-full text-slate-400 hover:text-slate-600"
           aria-label="Close drawer"
         >
           <X size={20} />
-        </button>
+        </Button>
       </div>
 
       {/* Summary Cards */}
