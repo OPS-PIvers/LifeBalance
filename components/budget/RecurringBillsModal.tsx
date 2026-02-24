@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '../ui/Drawer';
+import { Modal } from '../ui/Modal';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 
@@ -17,6 +18,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   const { calendarItems, updateCalendarItem, deleteCalendarItem } = useHousehold();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<CalendarItem | null>(null);
 
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
@@ -93,14 +95,20 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this recurring item? Future instances will stop appearing.')) {
-      try {
-        await deleteCalendarItem(id);
-        toast.success('Deleted recurring item');
-      } catch (_error) {
-        toast.error('Failed to delete');
-      }
+  const handleDelete = (item: CalendarItem) => {
+    setItemToDelete(item);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      await deleteCalendarItem(itemToDelete.id);
+      toast.success('Deleted recurring item');
+    } catch (_error) {
+      toast.error('Failed to delete');
+    } finally {
+      setItemToDelete(null);
     }
   };
 
@@ -193,7 +201,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                       <Button size="icon-sm" variant="success" onClick={() => saveEditing(item)}>
                         <Check size={16} />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" onClick={cancelEditing}>
+                      <Button size="icon-sm" variant="ghost" onClick={cancelEditing} aria-label={`Cancel edit ${item.title}`}>
                         <X size={16} />
                       </Button>
                     </div>
@@ -222,10 +230,10 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         </div>
 
                         <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                           <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)}>
+                           <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
                              <Edit2 size={14} className="text-slate-400 hover:text-slate-600" />
                            </Button>
-                           <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)}>
+                           <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item)} aria-label={`Delete ${item.title}`}>
                              <Trash2 size={14} />
                            </Button>
                         </div>
@@ -281,7 +289,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                 className="w-full justify-start text-lg py-4"
                 leftIcon={<Trash2 />}
                 onClick={() => {
-                  handleDelete(actionItem.id);
+                  handleDelete(actionItem);
                   setActionItem(null);
                 }}
               >
@@ -291,6 +299,42 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
           )}
         </div>
       </Drawer>
+
+      {/* Delete Confirmation Modal */}
+      {itemToDelete && (
+        <Modal
+          isOpen={!!itemToDelete}
+          onClose={() => setItemToDelete(null)}
+          className="max-w-sm"
+        >
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-rose-100 text-rose-600 rounded-full">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Delete Item?</h3>
+                <p className="text-sm text-slate-500">This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl mb-6 border border-slate-100">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Deleting</p>
+              <p className="font-bold text-slate-900 text-lg">{itemToDelete.title}</p>
+              <p className="text-sm text-slate-500 font-mono">${itemToDelete.amount.toLocaleString()}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1 h-12" onClick={() => setItemToDelete(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" className="flex-1 h-12" onClick={confirmDelete}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Drawer>
   );
 };

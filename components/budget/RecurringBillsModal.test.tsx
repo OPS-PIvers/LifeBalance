@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import RecurringBillsModal from './RecurringBillsModal';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -25,6 +26,10 @@ vi.mock('lucide-react', () => ({
   TrendingDown: () => <div data-testid="trending-down-icon" />,
   ChevronDown: () => <div data-testid="chevron-down" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+}));
+
+vi.mock('../ui/Modal', () => ({
+  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="mock-modal">{children}</div> : null,
 }));
 
 describe('RecurringBillsModal', () => {
@@ -190,13 +195,26 @@ describe('RecurringBillsModal', () => {
   });
 
   it('deletes an item', async () => {
-    // Mock confirm
-    window.confirm = vi.fn().mockReturnValue(true);
-
+    const user = userEvent.setup();
     render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
 
-    const deleteButtons = screen.getAllByTestId('trash-icon');
-    fireEvent.click(deleteButtons[0].parentElement!);
+    // Click Delete on the row (first item: Netflix)
+    // The button has aria-label="Delete Netflix" and is hidden on mobile view (sm:flex).
+    const deleteButton = screen.getByLabelText('Delete Netflix');
+    // We need to bypass the visibility check or ensure it's clickable.
+    // Since it's hidden by CSS class which jsdom might respect if styles are processed,
+    // let's try to force click.
+    fireEvent.click(deleteButton);
+
+    // Expect Confirmation Modal to appear
+    // Use findByText which includes waitFor logic
+    expect(await screen.findByText('Delete Item?')).toBeInTheDocument();
+    expect(await screen.findByText('Deleting')).toBeInTheDocument();
+
+    // Find and click the confirm Delete button in the modal
+    // The modal delete button should be visible.
+    const confirmButton = screen.getByRole('button', { name: 'Delete' });
+    await user.click(confirmButton);
 
     await waitFor(() => {
       expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');
