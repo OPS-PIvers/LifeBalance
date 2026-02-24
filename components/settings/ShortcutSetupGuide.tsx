@@ -356,7 +356,7 @@ const ShortcutSetupGuide: React.FC = () => {
               Long-press Lock Screen → Customize → tap a button to swap it.
             </p>
             <p className="text-[10px] text-purple-500 mt-2 font-medium bg-white/50 px-2 py-1 rounded inline-block">
-              💡 Tip: With iOS 18+ & Siri Intelligence, just say "Add to LifeBalance" naturally.
+              💡 Tip: With iOS 18+ & Siri Intelligence, just say &quot;Add to LifeBalance&quot; naturally.
             </p>
           </div>
         </div>
