@@ -36,3 +36,12 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Onboarding Polish
+**Critique:** "Developer UI" detected in Login and Household Setup pages. Generic gradients (`brand-100` to `money-50`), boxy cards with heavy shadows (`shadow-2xl`), and thick borders (`border-2`) on inputs. Typography lacked hierarchy and buttons were flat.
+**Polish:**
+- **Ambience:** Replaced generic gradients with a sophisticated `indigo-50` to `cyan-50` mesh gradient with `backdrop-blur`.
+- **Glassmorphism:** Transformed containers to `bg-white/80 backdrop-blur-xl` with `ring-1 ring-white/20` and soft shadows.
+- **Typography:** Shifted to `slate-900` for headings with `tracking-tight` and `slate-500` for body text.
+- **Interactions:** Modernized inputs (`bg-slate-50/50`, `focus:ring-indigo-500/10`) and buttons (subtle shadows, hover states).
+- **Details:** Softened icon backgrounds and refined dividers.

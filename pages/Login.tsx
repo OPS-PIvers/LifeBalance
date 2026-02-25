@@ -62,31 +62,42 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Sophisticated Gradient Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 opacity-80" />
+
+      {/* Decorative Blur Elements */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-100/30 rounded-full blur-3xl" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-cyan-100/30 rounded-full blur-3xl" />
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] rounded-3xl p-8 md:p-10 space-y-8">
           {/* Logo/Brand */}
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+          <div className="text-center flex flex-col items-center">
+            <div className="w-24 h-24 mb-6 rounded-2xl shadow-xl shadow-indigo-500/10 overflow-hidden ring-1 ring-black/5">
               <img
                 src="/lifebalance_icon.png"
                 alt="LifeBalance"
-                className="w-full h-full object-contain rounded-2xl"
+                className="w-full h-full object-cover"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
-              Manage your household finances, habits, and goals
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-3">
+              LifeBalance
+            </h1>
+            <p className="text-slate-500 text-base leading-relaxed max-w-xs mx-auto">
+              Manage your household finances, habits, and goals with ease.
             </p>
           </div>
 
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+            <div className="relative flex justify-center text-xs uppercase tracking-wide">
+              <span className="bg-white/50 backdrop-blur-sm px-4 text-slate-400 font-medium">
+                Sign in to continue
+              </span>
             </div>
           </div>
 
@@ -97,10 +108,10 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-brand-800"
+            className="w-full justify-center bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/60 shadow-sm transition-all duration-200 h-12 text-base font-medium"
             leftIcon={
               !loading && (
-                <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <svg className="w-5 h-5 mr-1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                     fill="#4285F4"
@@ -125,15 +136,18 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
-            By signing in, you agree to manage your household responsibly
+          <p className="text-center text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+            By signing in, you agree to manage your household responsibly and securely.
           </p>
         </div>
 
         {/* Additional Info */}
-        <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
-            Track finances • Build habits • Earn rewards
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-sm font-medium text-slate-500 tracking-wide">
+            Track Finances • Build Habits • Earn Rewards
+          </p>
+          <p className="text-xs text-slate-400">
+            Secure, private, and designed for your peace of mind.
           </p>
         </div>
       </div>
