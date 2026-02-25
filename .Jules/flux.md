@@ -14,3 +14,5 @@
 ## 2026-02-22 - [Habit Actions Trap] **Squeeze:** On mobile, the Edit/Delete buttons in `HabitCard` menu were inside a small dropdown with small touch targets, making them hard to tap without misclicking. **Reflow:** Replaced the dropdown on mobile with a Bottom Drawer containing large, full-width action buttons (48px+) for better accessibility.
 
 ## 2026-02-23 - [Budget Accounts Actions Trap] **Squeeze:** On mobile (375px), the "Set Goal" and "Delete" buttons in `BudgetAccounts` cards were tiny (`icon-sm`, 24px) and placed right next to the clickable balance, creating a "Fat Finger" trap and accidental deletions. **Reflow:** Replaced individual buttons with a single "More" button (`MoreVertical`) that opens a touch-friendly Bottom Drawer with large, full-width actions for Edit, Goal, and Delete.
+
+## 2026-02-25 - [Cookbook Modal Touch Targets] **Squeeze:** The Sort buttons and Tag chips in Cookbook Modal were too small (~28px) on mobile, causing a "Fat Finger" trap. **Reflow:** Increased padding to p-3 and icon size to 20px for sort buttons, and increased padding for tag chips, ensuring minimum 44px touch targets.

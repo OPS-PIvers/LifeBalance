@@ -124,37 +124,37 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
              {/* Sort Dropdown (Simplified as buttons for mobile friendliness) */}
-             <div className="flex bg-white rounded-lg p-1 border border-slate-200 shadow-sm shrink-0">
+             <div className="flex bg-white rounded-xl p-1 border border-slate-200 shadow-sm shrink-0">
                 <button
                     type="button"
                     onClick={() => setSortBy('name')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'name' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-3 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${sortBy === 'name' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Name"
                     aria-label="Sort by Name"
                 >
-                    <ArrowUpAZ size={16} />
+                    <ArrowUpAZ size={20} />
                 </button>
                 <button
                     type="button"
                     onClick={() => setSortBy('lastCooked')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'lastCooked' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-3 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${sortBy === 'lastCooked' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Recently Cooked"
                     aria-label="Sort by Recently Cooked"
                 >
-                    <Calendar size={16} />
+                    <Calendar size={20} />
                 </button>
                 <button
                     type="button"
                     onClick={() => setSortBy('rating')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'rating' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-3 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${sortBy === 'rating' ? 'bg-brand-50 text-brand-600' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Sort by Rating"
                     aria-label="Sort by Rating"
                 >
-                    <Star size={16} />
+                    <Star size={20} />
                 </button>
              </div>
 
-             <div className="h-6 w-px bg-slate-200 mx-1 shrink-0" />
+             <div className="h-8 w-px bg-slate-200 mx-2 shrink-0" />
 
              {/* Tag Filters */}
              {allTags.map(tag => (
@@ -163,7 +163,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                     type="button"
                     onClick={() => toggleTag(tag)}
                     aria-pressed={selectedTags.includes(tag)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap ${
+                    className={`px-4 py-2.5 rounded-full text-sm font-bold border transition-colors whitespace-nowrap min-h-[44px] flex items-center ${
                         selectedTags.includes(tag)
                         ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300'
