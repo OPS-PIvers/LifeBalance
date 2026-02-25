@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -29,6 +29,7 @@ import {
   getMultiplier
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
+import { showPointsToast } from '@/utils/toastHelpers';
 import { format, parseISO, startOfWeek } from 'date-fns';
 
 export const useHabitActions = (
@@ -180,22 +181,7 @@ export const useHabitActions = (
       });
 
       // Toast feedback
-      const sign = result.pointsChange > 0 ? '+' : '';
-      toast(
-        <div className="flex items-center gap-2">
-          <span className="font-bold">{sign}{result.pointsChange} pts</span>
-          <span className="text-sm opacity-80">({result.multiplier}x)</span>
-        </div>,
-        {
-          duration: 1500,
-          icon: result.pointsChange > 0 ? '🌟' : '📉',
-          style: {
-            background: result.pointsChange > 0 ? '#ECFDF5' : '#FFF1F2',
-            color: result.pointsChange > 0 ? '#065F46' : '#9F1239',
-            border: result.pointsChange > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
-          },
-        }
-      );
+      showPointsToast(result.pointsChange, { multiplier: result.multiplier });
     }
   }, [householdId, currentUser, householdSettings, habits]);
 

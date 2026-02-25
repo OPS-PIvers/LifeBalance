@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'muted' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted';
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
@@ -20,6 +20,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       outline: 'bg-transparent border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
       dashed: 'bg-transparent border border-dashed border-slate-300 text-slate-500 font-semibold hover:bg-slate-50 hover:border-slate-400 hover:text-slate-600 shadow-none',
       subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 border border-transparent hover:border-brand-200/50',
+      muted: 'bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-slate-600',
       'ghost-danger': 'bg-transparent text-rose-500 hover:text-rose-600 hover:bg-rose-50',
       'ghost-destructive': 'bg-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50',
       success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_1px_2px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',

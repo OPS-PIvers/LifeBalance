@@ -66,6 +66,7 @@ import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/ca
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
+import { showPointsToast } from '@/utils/toastHelpers';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
 
 export interface HouseholdContextType {
@@ -1726,22 +1727,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
 
         // Toast feedback for habits
-        const sign = totalPointsChange > 0 ? '+' : '';
-        toast(
-          <div className="flex items-center gap-2">
-            <span className="font-bold">{sign}{totalPointsChange} pts</span>
-            <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
-          </div>,
-          {
-            duration: 2000,
-            icon: '🌟',
-            style: {
-              background: '#ECFDF5',
-              color: '#065F46',
-              border: '1px solid #A7F3D0',
-            },
-          }
-        );
+        showPointsToast(totalPointsChange, { habitCount: successfulHabitsCount });
       }
     }
 

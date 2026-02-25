@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-02-25 - Standardizing Points Breakdown Modal and Toasts
+**Drift:** `PointsBreakdownModal.tsx` used raw `<button>` elements with hardcoded `gray-*` classes, deviating from the design system's preference for `slate-*` and shared `Button` components. Additionally, habit points toast notifications were hardcoded in multiple places.
+**Fix:** Added `muted` variant to `Button` component, refactored `PointsBreakdownModal.tsx` to use `Button` and `slate` colors, and centralized points toast logic into `showPointsToast` helper in `utils/toastHelpers.tsx`.
