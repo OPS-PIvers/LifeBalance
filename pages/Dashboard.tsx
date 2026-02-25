@@ -13,6 +13,7 @@ import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
 import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import RecentActivityWidget from '../components/dashboard/RecentActivityWidget';
 import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
@@ -135,6 +136,9 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Widget: Recent Activity */}
+        <RecentActivityWidget />
 
         {/* Widget: Daily Habits */}
         <DailyHabitsWidget />

@@ -113,6 +113,8 @@ export interface Transaction {
   store?: string;
   accountId?: string;
   notes?: string;
+  createdAt?: string | object; // Firestore Timestamp or ISO string
+  createdBy?: string;
 }
 
 export interface CalendarItem {
@@ -277,6 +279,7 @@ export interface MealPlanItem {
   mealName: string; // For one-off meals or snapshot
   type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
   isCooked: boolean;
+  createdAt?: string | object; // Firestore Timestamp or ISO string
 }
 
 export interface ShoppingItem {
@@ -289,6 +292,7 @@ export interface ShoppingItem {
   notes?: string;
   addedFromMealId?: string; // Traceability
   order?: number;
+  createdAt?: string | object; // Firestore Timestamp or ISO string
 }
 
 export interface Store {
