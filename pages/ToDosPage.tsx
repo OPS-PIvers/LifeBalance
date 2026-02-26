@@ -11,6 +11,8 @@ import { Drawer } from '../components/ui/Drawer';
 import { Button } from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
+import { ToDoTemplatesDrawer } from '../components/todos/ToDoTemplatesDrawer';
+import { FileText } from 'lucide-react';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -27,6 +29,7 @@ const ToDosPage: React.FC = () => {
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
+  const [isTemplatesDrawerOpen, setIsTemplatesDrawerOpen] = useState(false);
 
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -468,6 +471,14 @@ const ToDosPage: React.FC = () => {
                     <span className="hidden sm:inline">Export</span>
                   </button>
                   <button
+                    onClick={() => setIsTemplatesDrawerOpen(true)}
+                    className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
+                    aria-label="Manage Templates"
+                  >
+                    <FileText size={16} />
+                    <span className="hidden sm:inline">Templates</span>
+                  </button>
+                  <button
                     onClick={openAddModal}
                     className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
                     aria-label="Add new task"
@@ -686,6 +697,12 @@ const ToDosPage: React.FC = () => {
         onClose={() => setIsBatchRescheduleOpen(false)}
         onConfirm={handleBatchReschedule}
         count={selectedIds.size}
+      />
+
+      {/* Templates Drawer */}
+      <ToDoTemplatesDrawer
+        isOpen={isTemplatesDrawerOpen}
+        onClose={() => setIsTemplatesDrawerOpen(false)}
       />
 
       {/* Add/Edit Modal */}

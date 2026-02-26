@@ -47,7 +47,8 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
-  HouseholdApiKey
+  HouseholdApiKey,
+  ToDoTemplate
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -105,6 +106,9 @@ export interface HouseholdContextType {
   stores: Store[];
   groceryCategories: string[];
   quickStockLists: QuickStockList[];
+
+  // To-Do Templates
+  todoTemplates: ToDoTemplate[];
 
   // iOS Shortcuts API Keys
   apiKeys: HouseholdApiKey[];
@@ -203,6 +207,11 @@ export interface HouseholdContextType {
   updateQuickStockList: (list: QuickStockList) => Promise<void>;
   deleteQuickStockList: (id: string) => Promise<void>;
 
+  // To-Do Template Actions
+  addToDoTemplate: (template: Omit<ToDoTemplate, 'id'>) => Promise<void>;
+  updateToDoTemplate: (template: ToDoTemplate) => Promise<void>;
+  deleteToDoTemplate: (id: string) => Promise<void>;
+
   // Grocery Catalog Actions
   addGroceryCatalogItem: (item: Omit<GroceryCatalogItem, 'id'>) => Promise<string>;
   updateGroceryCatalogItem: (id: string, updates: Partial<GroceryCatalogItem>) => Promise<void>;
@@ -296,6 +305,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
+  const todoTemplates = useMemo(() => householdSettings?.todoTemplates || [], [householdSettings?.todoTemplates]);
 
   // Real-time listeners
   useEffect(() => {
@@ -2575,6 +2585,54 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, householdSettings]);
 
+  // --- ACTIONS: TO-DO TEMPLATES ---
+
+  const addToDoTemplate = useCallback(async (template: Omit<ToDoTemplate, 'id'>) => {
+    if (!householdId) return;
+    try {
+      const newTemplate = { ...template, id: crypto.randomUUID() };
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoTemplates: arrayUnion(newTemplate)
+      });
+      toast.success('Template created');
+    } catch (error) {
+      console.error('[addToDoTemplate] Failed:', error);
+      toast.error('Failed to create template');
+    }
+  }, [householdId]);
+
+  const updateToDoTemplate = useCallback(async (updatedTemplate: ToDoTemplate) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentTemplates = householdSettings.todoTemplates || [];
+      const newTemplates = currentTemplates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoTemplates: newTemplates
+      });
+      toast.success('Template updated');
+    } catch (error) {
+      console.error('[updateToDoTemplate] Failed:', error);
+      toast.error('Failed to update template');
+    }
+  }, [householdId, householdSettings]);
+
+  const deleteToDoTemplate = useCallback(async (id: string) => {
+    if (!householdId || !householdSettings) return;
+    try {
+      const currentTemplates = householdSettings.todoTemplates || [];
+      const newTemplates = currentTemplates.filter(t => t.id !== id);
+
+      await updateDoc(doc(db, `households/${householdId}`), {
+        todoTemplates: newTemplates
+      });
+      toast.success('Template deleted');
+    } catch (error) {
+      console.error('[deleteToDoTemplate] Failed:', error);
+      toast.error('Failed to delete template');
+    }
+  }, [householdId, householdSettings]);
+
   // --- ACTIONS: GROCERY CATALOG ---
 
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
@@ -2855,6 +2913,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     stores,
     groceryCategories,
     quickStockLists,
+    todoTemplates,
     apiKeys,
     addAccount,
     updateAccountBalance,
@@ -2908,6 +2967,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addQuickStockList,
     updateQuickStockList,
     deleteQuickStockList,
+    addToDoTemplate,
+    updateToDoTemplate,
+    deleteToDoTemplate,
     addGroceryCatalogItem,
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem,
@@ -2923,7 +2985,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
     currentPeriodId, bucketSpentMap, householdSettings, meals, shoppingList, mealPlan, todos,
-    groceryCatalog, bucketHistory, pendingItemsCount, stores, groceryCategories, quickStockLists, apiKeys,
+    groceryCatalog, bucketHistory, pendingItemsCount, stores, groceryCategories, quickStockLists, todoTemplates, apiKeys,
     addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
@@ -2937,6 +2999,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, deleteQuickStockList,
+    addToDoTemplate, updateToDoTemplate, deleteToDoTemplate,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
     addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
     addToDo, updateToDo, deleteToDo, completeToDo

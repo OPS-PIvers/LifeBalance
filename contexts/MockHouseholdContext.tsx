@@ -18,6 +18,7 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
+  ToDoTemplate,
   YearlyGoal,
   BucketPeriodSnapshot,
   Household
@@ -105,6 +106,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
+  const [todoTemplates, setToDoTemplates] = useState<ToDoTemplate[]>([]);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -355,6 +357,23 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Template deleted');
   }, []);
 
+  // To-Do Templates
+  const addToDoTemplate = useCallback(async (template: Omit<ToDoTemplate, 'id'>) => {
+    const newTemplate = { ...template, id: generateId() } as ToDoTemplate;
+    setToDoTemplates(prev => [...prev, newTemplate]);
+    toast.success('Mock: To-Do Template created');
+  }, []);
+
+  const updateToDoTemplate = useCallback(async (template: ToDoTemplate) => {
+    setToDoTemplates(prev => prev.map(t => t.id === template.id ? template : t));
+    toast.success('Mock: To-Do Template updated');
+  }, []);
+
+  const deleteToDoTemplate = useCallback(async (id: string) => {
+    setToDoTemplates(prev => prev.filter(t => t.id !== id));
+    toast.success('Mock: To-Do Template deleted');
+  }, []);
+
   const addGroceryCatalogItem = useCallback(async (item: Omit<GroceryCatalogItem, 'id'>): Promise<string> => {
     const id = generateId();
     const newItem = { ...item, id } as GroceryCatalogItem;
@@ -446,6 +465,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores,
     groceryCategories,
     quickStockLists,
+    todoTemplates,
     apiKeys: [], // iOS Shortcuts - empty in test mode
     pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
@@ -508,6 +528,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addQuickStockList,
     updateQuickStockList,
     deleteQuickStockList,
+    addToDoTemplate,
+    updateToDoTemplate,
+    deleteToDoTemplate,
     addGroceryCatalogItem,
     updateGroceryCatalogItem: noOp,
     deleteGroceryCatalogItem: noOp,

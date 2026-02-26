@@ -306,6 +306,21 @@ export interface QuickStockList {
   color?: string;
 }
 
+export interface ToDoTemplateItem {
+  text: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
+export interface ToDoTemplate {
+  id: string;
+  name: string;
+  items: ToDoTemplateItem[];
+  icon?: string;
+  color?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface GroceryCatalogItem {
   id: string;
   name: string;
@@ -323,6 +338,7 @@ export interface Household {
   groceryCategories?: string[]; // Custom categories
   stores?: Store[]; // User-defined stores
   quickStockLists?: QuickStockList[]; // User-defined shopping templates
+  todoTemplates?: ToDoTemplate[]; // User-defined to-do templates
   members: HouseholdMember[];
   points?: { daily: number; weekly: number; total: number }; // Shared household points
   lastDailyPointsReset?: string; // YYYY-MM-DD format
@@ -391,7 +407,7 @@ export interface ToDo {
   // New fields for natural language support
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
-  source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
+  source?: 'manual' | 'voice' | 'shortcut' | 'template'; // How the todo was created
 }
 
 export interface UpdateBucketPayload {
