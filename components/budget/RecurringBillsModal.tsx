@@ -127,7 +127,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
       </div>
 
       {/* Summary Cards */}
-      <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-slate-50/50">
+      <div className="p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0 bg-slate-50/50">
           <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
             <div className="flex items-center gap-2 mb-1 text-money-neg font-bold text-xs uppercase tracking-wider">
               <TrendingDown size={14} /> Monthly Expenses
