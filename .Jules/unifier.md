@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-03-08 - Standardizing Progress Bars
+**Drift:** The codebase contained multiple instances of hardcoded progress bars with inconsistent styling (height, border radius, colors) and repeated inline styles for width calculation.
+**Fix:** Created `components/ui/ProgressBar.tsx` with standardized sizes (`xs` to `xl`) and refactored `BudgetBucketCard`, `CategorySpendWidget`, `ChallengeWidget`, `BudgetAccounts`, `BudgetHistory`, and `SafeToSpendModal` to use this shared component.
