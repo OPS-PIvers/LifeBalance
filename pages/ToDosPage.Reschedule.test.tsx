@@ -41,6 +41,7 @@ vi.mock('lucide-react', () => ({
   Copy: () => <div data-testid="copy-icon" />,
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  FileText: () => <div data-testid="file-text-icon" />,
 }));
 
 describe('ToDosPage Reschedule Features', () => {
@@ -91,6 +92,10 @@ describe('ToDosPage Reschedule Features', () => {
       updateToDo: mockUpdateToDo,
       deleteToDo: mockDeleteToDo,
       completeToDo: mockCompleteToDo,
+      todoTemplates: [],
+      addToDoTemplate: vi.fn(),
+      updateToDoTemplate: vi.fn(),
+      deleteToDoTemplate: vi.fn(),
     });
     render(<ToDosPage />);
   };
