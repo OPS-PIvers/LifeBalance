@@ -62,20 +62,20 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/20 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-8 space-y-6">
           {/* Logo/Brand */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
+            <div className="inline-flex items-center justify-center w-24 h-24 mb-4 shadow-sm rounded-2xl bg-white p-2 border border-slate-100">
               <img
                 src="/lifebalance_icon.png"
                 alt="LifeBalance"
-                className="w-full h-full object-contain rounded-2xl"
+                className="w-full h-full object-contain rounded-xl"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">LifeBalance</h1>
+            <p className="text-slate-500 text-sm font-medium">
               Manage your household finances, habits, and goals
             </p>
           </div>
@@ -83,10 +83,10 @@ const Login: React.FC = () => {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-slate-200/60"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+              <span className="bg-white/50 backdrop-blur-sm px-2 text-slate-400 font-bold tracking-wider">Sign in to continue</span>
             </div>
           </div>
 
@@ -125,14 +125,14 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
+          <p className="text-center text-xs text-slate-400 pt-4 font-medium">
             By signing in, you agree to manage your household responsibly
           </p>
         </div>
 
         {/* Additional Info */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
+          <p className="text-sm text-slate-400 font-medium tracking-tight">
             Track finances • Build habits • Earn rewards
           </p>
         </div>

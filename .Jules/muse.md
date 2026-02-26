@@ -36,3 +36,11 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Onboarding Polish
+**Critique:** "Developer UI" detected in Onboarding Flow (`Login` and `HouseholdSetup`). Generic brand gradients (`from-brand-100`) and heavy borders (`border-brand-200`) created a cheap "SaaS template" feel. "Create vs Join" selection relied on basic buttons lacking visual affordance.
+**Polish:**
+- **Atmosphere:** Upgraded background to a sophisticated gradient (`from-slate-50 via-slate-100 to-indigo-50/20`) for a premium, airy feel.
+- **Glassmorphism:** Applied `bg-white/80 backdrop-blur-xl`, `shadow-glass`, and `ring-1 ring-black/5` to main containers.
+- **Interactivity:** Transformed "Create/Join" choices into large interactive cards with hover states and iconography.
+- **Components:** Refactored raw HTML inputs to use the shared `Input` component for consistent focus rings and styling.

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
+import { Home, Users, Plus, LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createHousehold, joinHousehold, getHouseholdDetails } from '@/services/householdService';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import Input from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
 type ViewMode = 'choice' | 'create' | 'join' | 'success';
@@ -76,18 +78,18 @@ const HouseholdSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/20 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-8 space-y-6">
           {/* Header */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
-              <Home className="w-8 h-8 text-white" />
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-white shadow-sm border border-slate-100 rounded-2xl mb-4">
+              <Home className="w-8 h-8 text-brand-600" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 mb-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-2">
               {mode === 'success' ? 'All Set!' : 'Set Up Your Household'}
             </h1>
-            <p className="text-brand-500 text-sm">
+            <p className="text-slate-500 text-sm font-medium">
               {mode === 'success'
                 ? 'Your household is ready to use'
                 : 'Create a new household or join an existing one'}
@@ -96,144 +98,125 @@ const HouseholdSetup: React.FC = () => {
 
           {/* Choice View */}
           {mode === 'choice' && (
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
               <button
                 onClick={() => setMode('create')}
-                className="w-full bg-brand-600 text-white font-semibold py-4 px-6 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+                className="flex flex-col items-center justify-center p-6 bg-white/50 border border-slate-200/60 rounded-2xl hover:bg-white hover:border-brand-200 hover:shadow-md transition-all group ring-1 ring-black/5"
               >
-                <Plus size={20} />
-                <span>Create New Household</span>
+                <div className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                  <Plus size={24} />
+                </div>
+                <span className="text-slate-900 font-bold tracking-tight text-sm">Create New</span>
               </button>
 
               <button
                 onClick={() => setMode('join')}
-                className="w-full bg-white border-2 border-brand-200 text-brand-800 font-semibold py-4 px-6 rounded-xl hover:bg-brand-50 hover:border-brand-300 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+                className="flex flex-col items-center justify-center p-6 bg-white/50 border border-slate-200/60 rounded-2xl hover:bg-white hover:border-brand-200 hover:shadow-md transition-all group ring-1 ring-black/5"
               >
-                <LogIn size={20} />
-                <span>Join Existing Household</span>
+                <div className="bg-violet-50 text-violet-600 p-4 rounded-2xl mb-3 group-hover:scale-110 transition-transform shadow-sm">
+                  <LogIn size={24} />
+                </div>
+                <span className="text-slate-900 font-bold tracking-tight text-sm">Join Existing</span>
               </button>
             </div>
           )}
 
           {/* Create View */}
           {mode === 'create' && (
-            <form onSubmit={handleCreateHousehold} className="space-y-4">
+            <form onSubmit={handleCreateHousehold} className="space-y-6">
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
-              <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
-                  Household Name
-                </label>
-                <input
-                  type="text"
-                  value={householdName}
-                  onChange={(e) => setHouseholdName(e.target.value)}
-                  placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-                  required
-                  disabled={loading}
-                />
-              </div>
+              <Input
+                label="Household Name"
+                value={householdName}
+                onChange={(e) => setHouseholdName(e.target.value)}
+                placeholder="e.g., Smith Family"
+                required
+                disabled={loading}
+                autoFocus
+              />
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading || !householdName.trim()}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                isLoading={loading}
+                className="w-full py-6"
+                leftIcon={!loading && <Users size={20} />}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Creating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Users size={20} />
-                    <span>Create Household</span>
-                  </>
-                )}
-              </button>
+                Create Household
+              </Button>
             </form>
           )}
 
           {/* Join View */}
           {mode === 'join' && (
-            <form onSubmit={handleJoinHousehold} className="space-y-4">
+            <form onSubmit={handleJoinHousehold} className="space-y-6">
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold text-sm transition-colors"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
-              <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
-                  Invite Code
-                </label>
-                <input
-                  type="text"
+              <div className="space-y-2">
+                <Input
+                  label="Invite Code"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-lg tracking-wider text-center uppercase"
                   maxLength={6}
                   required
                   disabled={loading}
+                  className="font-mono text-lg tracking-wider text-center uppercase"
+                  autoFocus
                 />
-                <p className="text-xs text-brand-500 mt-2">
+                <p className="text-xs text-slate-500 text-center font-medium">
                   Enter the 6-character code shared by your household admin
                 </p>
               </div>
 
-              <button
+              <Button
                 type="submit"
                 disabled={loading || inviteCode.length !== 6}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                isLoading={loading}
+                className="w-full py-6"
+                leftIcon={!loading && <LogIn size={20} />}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Joining...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={20} />
-                    <span>Join Household</span>
-                  </>
-                )}
-              </button>
+                Join Household
+              </Button>
             </form>
           )}
 
           {/* Success View */}
           {mode === 'success' && createdInviteCode && (
-            <div className="space-y-4">
-              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Users className="w-6 h-6 text-white" />
+            <div className="space-y-6">
+              <div className="bg-emerald-50/50 border border-emerald-100/50 rounded-2xl p-6 text-center shadow-sm">
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                  <Users className="w-6 h-6" />
                 </div>
-                <p className="text-green-800 font-semibold">Household Created!</p>
-                <p className="text-green-600 text-sm mt-1">
+                <p className="text-emerald-900 font-bold text-lg">Household Created!</p>
+                <p className="text-emerald-600/80 text-sm mt-1 font-medium">
                   Invite family members to join
                 </p>
               </div>
 
               <HouseholdInviteCard inviteCode={createdInviteCode} />
 
-              <button
+              <Button
                 onClick={handleContinue}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200"
+                className="w-full py-6 shadow-lg shadow-brand-500/20"
               >
                 Continue to Dashboard
-              </button>
+              </Button>
             </div>
           )}
         </div>
