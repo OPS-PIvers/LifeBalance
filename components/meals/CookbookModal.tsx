@@ -3,6 +3,7 @@ import { Meal } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { Badge } from '@/components/ui/Badge';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -212,9 +213,15 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 {meal.tags && meal.tags.length > 0 && (
                                     <div className="hidden sm:flex gap-1">
                                         {meal.tags.slice(0, 2).map(t => (
-                                            <span key={t} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-medium">{t}</span>
+                                            <Badge key={t} size="sm" variant="neutral" className="font-medium text-slate-500">
+                                              {t}
+                                            </Badge>
                                         ))}
-                                        {meal.tags.length > 2 && <span className="text-[10px] text-slate-400">+{meal.tags.length - 2}</span>}
+                                        {meal.tags.length > 2 && (
+                                            <Badge size="sm" variant="neutral" className="text-slate-400">
+                                              +{meal.tags.length - 2}
+                                            </Badge>
+                                        )}
                                     </div>
                                 )}
                             </div>

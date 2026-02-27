@@ -86,7 +86,7 @@ export const QuickRestockRow: React.FC = () => {
             >
               <ListIcon size={14} />
               <span className="font-bold tracking-tight">{list.name}</span>
-              <span className="opacity-60 font-medium ml-0.5 text-[10px] bg-black/5 px-1.5 py-0.5 rounded-full">
+              <span className="opacity-60 font-medium ml-0.5 text-xxs bg-black/5 px-1.5 py-0.5 rounded-full">
                 {list.items.length}
               </span>
             </button>
