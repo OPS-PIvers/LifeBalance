@@ -139,26 +139,26 @@ const ShortcutSetupGuide: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <h4 className="font-semibold text-blue-800 mb-1">How It Works</h4>
-        <p className="text-sm text-blue-700">
+    <div className="space-y-6">
+      <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-6">
+        <h4 className="font-bold text-indigo-900 mb-2 tracking-tight">How It Works</h4>
+        <p className="text-sm text-indigo-800/80 leading-relaxed">
           iOS Shortcuts sends HTTP requests to your LifeBalance cloud functions.
           Generate an API key above, then follow these step-by-step guides.
         </p>
-        <p className="text-xs text-blue-600 mt-2">
+        <p className="text-xs text-indigo-600 font-medium mt-3 bg-indigo-100/50 inline-block px-2 py-1 rounded-md">
           Expenses added via Shortcuts are marked as pending for review in the Budget tab.
         </p>
       </div>
 
       {/* Shortcut Examples */}
-      <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-brand-700">Shortcuts &amp; Automations</h4>
+      <div className="space-y-4">
+        <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider pl-1">Shortcuts &amp; Automations</h4>
 
         {examples.map((example) => (
           <div
             key={example.id}
-            className="border border-brand-100 rounded-xl overflow-hidden"
+            className="ring-1 ring-black/5 shadow-glass rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm"
           >
             <button
               onClick={() =>
@@ -166,33 +166,37 @@ const ShortcutSetupGuide: React.FC = () => {
                   expandedExample === example.id ? null : example.id
                 )
               }
-              className="w-full flex items-center justify-between p-3 bg-white hover:bg-brand-50 transition-colors"
+              className="w-full flex items-center justify-between p-4 bg-transparent hover:bg-white/60 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="text-brand-600">{example.icon}</div>
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm">
+                   {example.icon}
+                </div>
                 <div className="text-left">
-                  <p className="font-semibold text-brand-800">{example.title}</p>
-                  <p className="text-xs text-brand-500">{example.description}</p>
+                  <p className="font-bold text-slate-800 tracking-tight">{example.title}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{example.description}</p>
                 </div>
               </div>
-              <ChevronDown
-                className={`w-5 h-5 text-gray-400 transition-transform ${
-                  expandedExample === example.id ? 'rotate-180' : ''
-                }`}
-              />
+              <div className={`p-2 rounded-full transition-all ${expandedExample === example.id ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400'}`}>
+                <ChevronDown
+                    className={`w-5 h-5 transition-transform ${
+                    expandedExample === example.id ? 'rotate-180' : ''
+                    }`}
+                />
+              </div>
             </button>
 
             {expandedExample === example.id && (
-              <div className="p-3 bg-brand-50 border-t border-brand-100 space-y-4">
+              <div className="p-6 bg-slate-50/50 border-t border-slate-100 space-y-8">
                 {/* Pre-actions for voice shortcuts */}
                 {example.preActions && (
                   <div>
-                    <p className="text-xs font-semibold text-brand-700 mb-2">
-                      1. {example.isAutomation ? 'Create the automation:' : 'First, set up voice input:'}
+                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
+                      1. {example.isAutomation ? 'Create the automation' : 'Set up voice input'}
                     </p>
-                    <ol className="text-xs text-brand-600 space-y-1 list-decimal list-inside ml-2">
+                    <ol className="text-sm text-slate-600 space-y-3 list-decimal list-inside pl-2 marker:text-slate-400 marker:font-medium">
                       {example.preActions.map((action, i) => (
-                        <li key={i}>{action}</li>
+                        <li key={i} className="pl-2 leading-relaxed">{action}</li>
                       ))}
                     </ol>
                   </div>

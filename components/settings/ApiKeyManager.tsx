@@ -162,12 +162,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           {activeKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-white border border-brand-100 rounded-xl p-3 space-y-2"
+              className="bg-white/80 backdrop-blur-sm ring-1 ring-black/5 rounded-xl p-4 space-y-3 shadow-sm"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-brand-500" />
-                  <span className="font-semibold text-brand-800">{key.name}</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center">
+                     <Key className="w-4 h-4 text-brand-600" />
+                  </div>
+                  <div>
+                     <h5 className="font-bold text-slate-800 tracking-tight">{key.name}</h5>
+                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                        <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {key.lastUsedAt
+                                ? `Used ${formatDistanceToNow(new Date(key.lastUsedAt))} ago`
+                                : 'Never used'}
+                        </span>
+                        <span>•</span>
+                        <span>{key.usageCount} calls</span>
+                     </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -181,32 +195,26 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-xs text-brand-500">
-                <code className="bg-brand-50 px-2 py-0.5 rounded">{key.keyPrefix}...</code>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {key.lastUsedAt
-                    ? `Used ${formatDistanceToNow(new Date(key.lastUsedAt))} ago`
-                    : 'Never used'}
-                </span>
-                <span>{key.usageCount} calls</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {key.permissions.habits && (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                    Habits
-                  </span>
-                )}
-                {key.permissions.expenses && (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                    Expenses
-                  </span>
-                )}
-                {key.permissions.shoppingList && (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                    Shopping
-                  </span>
-                )}
+
+              <div className="flex items-center gap-2">
+                 <code className="bg-slate-50 border border-slate-200/50 text-slate-600 px-2 py-1 rounded text-xs font-mono">{key.keyPrefix}...</code>
+                 <div className="flex flex-wrap gap-1">
+                    {key.permissions.habits && (
+                    <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md font-medium">
+                        Habits
+                    </span>
+                    )}
+                    {key.permissions.expenses && (
+                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-md font-medium">
+                        Expenses
+                    </span>
+                    )}
+                    {key.permissions.shoppingList && (
+                    <span className="text-xs bg-amber-50 text-amber-700 px-2 py-1 rounded-md font-medium">
+                        Shopping
+                    </span>
+                    )}
+                </div>
               </div>
             </div>
           ))}
@@ -321,22 +329,24 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
       {/* Revoked Keys */}
       {revokedKeys.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-500">Revoked Keys</h4>
+        <div className="space-y-2 pt-4 border-t border-slate-100">
+          <h4 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Revoked Keys</h4>
           {revokedKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 opacity-60"
+              className="bg-slate-50 border border-slate-100 rounded-xl p-3 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-gray-400" />
-                  <span className="font-semibold text-gray-600 line-through">
-                    {key.name}
-                  </span>
-                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                    Revoked
-                  </span>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
+                     <Key className="w-4 h-4 text-slate-500" />
+                  </div>
+                  <div>
+                      <span className="font-semibold text-slate-600 line-through decoration-slate-400">
+                        {key.name}
+                      </span>
+                      <div className="text-xs text-slate-400">Revoked</div>
+                  </div>
                 </div>
                 <Button
                   variant="ghost-danger"
@@ -344,6 +354,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onClick={() => handleDeleteKey(key.id, key.name)}
                   title="Delete permanently"
                   aria-label={`Delete key ${key.name}`}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>

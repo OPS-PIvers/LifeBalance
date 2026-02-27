@@ -219,23 +219,25 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   const renderEditControls = (item: typeof contributions[0]) => {
     if (view === 'daily') {
         return (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg flex items-center justify-between">
-                <span className="text-sm text-gray-600">Adjust Count:</span>
+            <div className="mt-4 p-4 bg-slate-50/50 rounded-xl border border-slate-200/60 flex items-center justify-between">
+                <span className="text-sm font-medium text-slate-600">Adjust Count:</span>
                 <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
                         size="icon-sm"
                         onClick={() => handleToggleHabit(item.id, 'down')}
                         aria-label="Decrease daily count"
+                        className="bg-white shadow-sm border-slate-200"
                     >
                         <Minus size={16} />
                     </Button>
-                    <span className="font-bold w-6 text-center">{item.count}</span>
+                    <span className="font-bold w-8 text-center text-slate-900 text-lg">{item.count}</span>
                     <Button
                         variant="secondary"
                         size="icon-sm"
                         onClick={() => handleToggleHabit(item.id, 'up')}
                         aria-label="Increase daily count"
+                        className="bg-white shadow-sm border-slate-200"
                     >
                         <Plus size={16} />
                     </Button>
@@ -337,32 +339,34 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
             contributions.map((item) => (
               <div
                 key={item.id}
-                className={`border rounded-xl p-3 transition-all ${
-                    editingHabitId === item.id ? 'ring-2 ring-brand-200 border-brand-300 bg-brand-50/30' : 'border-gray-100 hover:border-brand-200'
+                className={`rounded-xl p-4 transition-all bg-white/80 backdrop-blur-xl ${
+                    editingHabitId === item.id
+                      ? 'ring-2 ring-brand-200 bg-brand-50/50 shadow-sm'
+                      : 'ring-1 ring-black/5 hover:ring-brand-200 hover:bg-white shadow-sm'
                 }`}
               >
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center text-xl">
+                        <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center text-xl shadow-inner">
                             {/* Simple emoji placeholder if no icon system */}
                             {item.title.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <h3 className="font-semibold text-gray-800">{item.title}</h3>
-                            <p className="text-xs text-gray-500">{item.details}</p>
+                            <h3 className="font-semibold text-slate-900 tracking-tight">{item.title}</h3>
+                            <p className="text-xs text-slate-500">{item.details}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <span className="block font-bold text-brand-700">+{item.calculatedPoints}</span>
-                            <span className="text-xxs text-gray-400">points</span>
+                            <span className="block font-bold text-slate-900 text-lg tracking-tight">+{item.calculatedPoints}</span>
+                            <span className="text-xxs text-slate-400 font-medium uppercase tracking-wide">points</span>
                         </div>
                         <button
                             onClick={() => handleEdit(item.id)}
-                            className={`p-2 rounded-full transition-colors ${
+                            className={`p-2 rounded-lg transition-all shadow-sm border ${
                                 editingHabitId === item.id
-                                    ? 'bg-brand-100 text-brand-600'
-                                    : 'text-gray-400 hover:bg-gray-100'
+                                    ? 'bg-brand-100 text-brand-700 border-brand-200'
+                                    : 'bg-white border-slate-200/60 text-slate-400 hover:text-brand-600 hover:border-brand-200'
                             }`}
                             aria-label={`Edit ${item.title}`}
                         >

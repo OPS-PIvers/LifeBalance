@@ -93,11 +93,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="dev-console-title" maxWidth="max-w-4xl">
       <div className="flex flex-col h-[70vh]">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 id="dev-console-title" className="text-xl font-bold">Developer Console</h2>
+        <div className="p-4 border-b border-slate-200/60 bg-slate-50/50 flex justify-between items-center">
+            <h2 id="dev-console-title" className="text-xl font-bold text-slate-900">Developer Console</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full text-gray-500 hover:text-gray-700 transition-colors"
+              className="p-2 hover:bg-slate-200/50 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
               aria-label="Close"
             >
               <X size={20} />
@@ -105,27 +105,33 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 bg-gray-50">
+        <div className="flex border-b border-slate-200/60 bg-slate-50/30">
           <button
             onClick={() => setActiveTab('testers')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'testers' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'
+            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'testers'
+                ? 'border-brand-500 text-slate-900 bg-white/50'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
             }`}
           >
             Beta Testers
           </button>
           <button
             onClick={() => setActiveTab('ai_meter')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'ai_meter' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'
+            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'ai_meter'
+                ? 'border-brand-500 text-slate-900 bg-white/50'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
             }`}
           >
             AI Usage Meter
           </button>
           <button
             onClick={() => setActiveTab('reports')}
-            className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'reports' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'
+            className={`px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'reports'
+                ? 'border-brand-500 text-slate-900 bg-white/50'
+                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50/50'
             }`}
           >
             Feedback Reports
@@ -142,44 +148,44 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
             <>
               {activeTab === 'testers' && (
                 <div className="space-y-6">
-                  <div className="flex gap-2 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex gap-2 p-4 bg-slate-50/50 rounded-xl border border-slate-200/60">
                     <input
                       type="email"
                       placeholder="new@tester.com"
-                      className="flex-1 p-2 border rounded-lg"
+                      className="flex-1 p-2.5 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
                       value={newTesterEmail}
                       onChange={e => setNewTesterEmail(e.target.value)}
                     />
-                    <button onClick={handleAddTester} className="bg-brand-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-brand-700">
+                    <button onClick={handleAddTester} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-800 shadow-sm transition-all active:scale-95 text-sm font-medium">
                       <Plus size={16} /> Add Tester
                     </button>
                   </div>
 
-                  <div className="border rounded-xl overflow-hidden">
+                  <div className="border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-gray-100 text-gray-600 font-medium">
+                      <thead className="bg-slate-50/50 text-slate-500 font-medium">
                         <tr>
-                          <th className="p-3">Email</th>
-                          <th className="p-3">Status</th>
-                          <th className="p-3">Added</th>
-                          <th className="p-3">Actions</th>
+                          <th className="p-4">Email</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4">Added</th>
+                          <th className="p-4">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-slate-100">
                         {testers.map(t => (
-                          <tr key={t.id} className="hover:bg-gray-50">
-                            <td className="p-3 font-medium">{t.email}</td>
-                            <td className="p-3">
+                          <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="p-4 font-medium text-slate-700">{t.email}</td>
+                            <td className="p-4">
                               <Badge variant={t.status === 'active' ? 'success' : 'danger'} size="md">
                                 {t.status}
                               </Badge>
                             </td>
-                            <td className="p-3 text-gray-500">{new Date(t.addedAt).toLocaleDateString()}</td>
-                            <td className="p-3 flex gap-2">
-                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 hover:underline text-xs font-bold">
+                            <td className="p-4 text-slate-500">{new Date(t.addedAt).toLocaleDateString()}</td>
+                            <td className="p-4 flex gap-2">
+                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-brand-600 hover:underline text-xs font-bold tracking-tight">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded ml-2">
+                              <button onClick={() => deleteTester(t.id)} className="text-rose-500 hover:bg-rose-50 p-1.5 rounded-lg transition-colors ml-2">
                                 <Trash2 size={16} />
                               </button>
                             </td>

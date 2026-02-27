@@ -292,11 +292,11 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
       noPadding={true}
     >
       {/* Tabs */}
-      <div className="flex border-b border-slate-100 bg-white sticky top-0 z-10">
+      <div className="flex border-b border-slate-100/60 bg-white/80 backdrop-blur-md sticky top-0 z-10">
           <button
             onClick={() => setActiveTab('stores')}
             className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'stores' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+              activeTab === 'stores' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Stores
@@ -307,7 +307,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           <button
             onClick={() => setActiveTab('categories')}
             className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'categories' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+              activeTab === 'categories' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Categories
@@ -318,7 +318,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           <button
             onClick={() => setActiveTab('templates')}
             className={`flex-1 py-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'templates' ? 'text-slate-900 bg-slate-50/50' : 'text-slate-500 hover:bg-slate-50'
+              activeTab === 'templates' ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             Templates
@@ -333,7 +333,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           {activeTab === 'stores' && (
             <div className="space-y-6">
               {/* Add Store */}
-              <div className="bg-white p-5 rounded-2xl shadow-glass border border-slate-100">
+              <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-glass ring-1 ring-black/5">
                 <h4 className="text-xs font-bold text-slate-400 mb-3 uppercase tracking-wider">Add New Store</h4>
                 <form onSubmit={handleAddStore} className="space-y-4">
                   <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
@@ -343,7 +343,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         type="button"
                         onClick={() => setNewStoreColor(color.id)}
                         className={`w-7 h-7 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
-                          newStoreColor === color.id ? 'border-slate-600 scale-110 ring-2 ring-slate-200' : 'border-transparent hover:scale-105'
+                          newStoreColor === color.id ? 'border-slate-600 scale-110 ring-2 ring-offset-2 ring-slate-200' : 'border-transparent hover:scale-105'
                         }`}
                         title={color.label}
                         aria-label={`Select color ${color.label}`}
@@ -356,7 +356,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none"
+                      className="flex-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
                     />
                     <button
                       type="submit"
@@ -378,7 +378,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 ) : (
                   <div className="grid gap-2">
                     {stores.map(store => (
-                      <div key={store.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all">
+                      <div key={store.id} className="bg-white/80 backdrop-blur-sm p-4 rounded-xl ring-1 ring-black/5 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
                         {editingStoreId === store.id ? (
                            <div className="flex-1 space-y-2 mr-2">
                              <div className="flex gap-2 overflow-x-auto pb-1">
@@ -388,7 +388,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                     type="button"
                                     onClick={() => setEditStoreColor(color.id)}
                                     className={`w-6 h-6 rounded-full border-2 transition-all flex-shrink-0 ${color.bg} ${
-                                      editStoreColor === color.id ? 'border-brand-600 scale-110' : 'border-transparent hover:scale-105'
+                                      editStoreColor === color.id ? 'border-brand-600 scale-110 ring-2 ring-offset-2 ring-slate-200' : 'border-transparent hover:scale-105'
                                     }`}
                                     title={color.label}
                                     aria-label={`Select color ${color.label}`}
@@ -401,18 +401,18 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                   type="text"
                                   value={editStoreName}
                                   onChange={e => setEditStoreName(e.target.value)}
-                                  className="flex-1 p-1.5 border border-brand-300 rounded text-sm outline-none"
+                                  className="flex-1 p-2 border border-brand-300 rounded-lg text-sm outline-none"
                                />
-                               <button onClick={handleUpdateStore} className="text-green-600 p-1 hover:bg-green-50 rounded" aria-label="Save store name"><Save className="w-4 h-4"/></button>
-                               <button onClick={() => setEditingStoreId(null)} className="text-gray-400 p-1 hover:bg-gray-100 rounded" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
+                               <button onClick={handleUpdateStore} className="text-emerald-600 p-2 hover:bg-emerald-50 rounded-lg transition-colors" aria-label="Save store name"><Save className="w-4 h-4"/></button>
+                               <button onClick={() => setEditingStoreId(null)} className="text-slate-400 p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
                              </div>
                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR]).iconBg}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR]).iconBg}`}>
                                     <StoreIcon className="w-4 h-4" />
                                 </div>
-                                <span className="font-medium text-gray-800">{store.name}</span>
+                                <span className="font-bold text-slate-800 tracking-tight">{store.name}</span>
                             </div>
                         )}
 
