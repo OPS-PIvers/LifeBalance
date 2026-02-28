@@ -10,6 +10,7 @@ import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
+import SavedShoppingViewChips from '@/components/meals/SavedShoppingViewChips';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import toast from 'react-hot-toast';
@@ -502,6 +503,15 @@ const ShoppingListTab: React.FC = () => {
                )}
              </div>
         </div>
+
+        <SavedShoppingViewChips
+            key={householdId}
+            householdId={householdId}
+            currentFilters={{ filterStore }}
+            onApply={(filters) => {
+                setFilterStore(filters.filterStore);
+            }}
+        />
 
         {/* Clear Filter Indicator */}
         {filterStore && (
