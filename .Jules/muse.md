@@ -36,3 +36,11 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Modals and Settings Polish
+**Critique:** "Developer UI" markers found in `DeveloperConsole`, `ApiKeyManager`, `ShortcutSetupGuide`, `ShoppingSettingsModal`, and `PointsBreakdownModal`. Relied on generic `gray` borders and flat `bg-white` cards. Lacked depth (flat `shadow-md`), had cramped padding (`p-4`), and missed typographic hierarchy.
+**Polish:** Applied comprehensive "Glassmorphism" suite.
+- **Surface:** Replaced flat whites with `bg-white/80 backdrop-blur-xl`.
+- **Borders & Shadows:** Softened borders to `slate-200/60` and applied `shadow-glass`/`shadow-soft` for layered depth.
+- **Typography:** Refined headings to use `tracking-tight` and replaced default grays with sophisticated `slate` palettes (`text-slate-900`/`text-slate-500`).
+- **Whitespace:** Increased inner paddings (`p-6`) for a more breathable, premium layout.

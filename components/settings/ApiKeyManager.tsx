@@ -121,7 +121,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     <div className="space-y-4">
       {/* Newly Created Key Warning */}
       {newlyCreatedKey && (
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 space-y-3">
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6 space-y-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
@@ -132,7 +132,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 bg-white px-3 py-2 rounded-lg border border-amber-200 text-sm font-mono break-all">
+            <code className="flex-1 bg-white/80 backdrop-blur-xl px-3 py-2 rounded-lg border border-amber-200 text-sm font-mono break-all">
               {newlyCreatedKey}
             </code>
             <Button
@@ -158,16 +158,16 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {/* Active Keys */}
       {activeKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-brand-700">Active Keys</h4>
+          <h4 className="text-sm font-semibold tracking-tight text-brand-700">Active Keys</h4>
           {activeKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-white border border-brand-100 rounded-xl p-3 space-y-2"
+              className="bg-white/80 backdrop-blur-xl border border-brand-100 rounded-xl p-3 space-y-2"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Key className="w-4 h-4 text-brand-500" />
-                  <span className="font-semibold text-brand-800">{key.name}</span>
+                  <span className="font-semibold tracking-tight text-brand-800">{key.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -181,7 +181,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-xs text-brand-500">
+              <div className="flex items-center gap-6 text-xs text-brand-500">
                 <code className="bg-brand-50 px-2 py-0.5 rounded">{key.keyPrefix}...</code>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
@@ -215,8 +215,8 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
       {/* Create New Key Form */}
       {isCreating ? (
-        <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 space-y-4">
-          <h4 className="font-semibold text-brand-800">Create New API Key</h4>
+        <div className="bg-brand-50 border border-brand-200 rounded-xl p-6 space-y-4">
+          <h4 className="font-semibold tracking-tight text-brand-800">Create New API Key</h4>
 
           <div>
             <label className="block text-sm font-medium text-brand-700 mb-1">
@@ -298,9 +298,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       )}
 
       {/* Endpoint URLs */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
-        <h4 className="text-sm font-semibold text-gray-700">Endpoint URLs</h4>
-        <p className="text-xs text-gray-500">
+      <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-6 space-y-2">
+        <h4 className="text-sm font-semibold tracking-tight text-slate-700">Endpoint URLs</h4>
+        <p className="text-xs text-slate-500">
           Use these URLs in your iOS Shortcuts with your API key.
         </p>
         <div className="space-y-1">
@@ -308,12 +308,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             <button
               key={endpoint}
               onClick={() => handleCopyEndpoint(endpoint)}
-              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded border border-gray-100 hover:bg-gray-50 text-left"
+              className="w-full flex items-center justify-between px-2 py-1.5 bg-white/80 backdrop-blur-xl rounded border border-slate-100 hover:bg-slate-50 text-left"
             >
-              <span className="text-xs font-mono text-gray-600 truncate">
+              <span className="text-xs font-mono text-slate-600 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3 h-3 text-gray-400 flex-shrink-0 ml-2" />
+              <Copy className="w-3 h-3 text-slate-400 flex-shrink-0 ml-2" />
             </button>
           ))}
         </div>
@@ -322,19 +322,19 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {/* Revoked Keys */}
       {revokedKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-500">Revoked Keys</h4>
+          <h4 className="text-sm font-semibold tracking-tight text-slate-500">Revoked Keys</h4>
           {revokedKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 opacity-60"
+              className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 opacity-60"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-gray-400" />
-                  <span className="font-semibold text-gray-600 line-through">
+                  <Key className="w-4 h-4 text-slate-400" />
+                  <span className="font-semibold tracking-tight text-slate-600 line-through">
                     {key.name}
                   </span>
-                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
                     Revoked
                   </span>
                 </div>
