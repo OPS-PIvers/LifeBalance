@@ -159,7 +159,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
             {splits.length > 2 && (
               <button
                 onClick={() => handleRemoveSplit(split.id)}
-                className="absolute top-2 right-2 text-gray-300 hover:text-money-neg p-1 hover:bg-rose-50 rounded transition-colors"
+                className="absolute top-2 right-2 text-slate-300 hover:text-money-neg p-1 hover:bg-rose-50 rounded transition-colors"
                 title="Remove split"
                 aria-label={`Remove split ${index + 1}`}
               >

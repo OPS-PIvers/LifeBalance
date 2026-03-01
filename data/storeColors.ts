@@ -18,7 +18,7 @@ export const STORE_COLORS: Record<string, StoreColor> = {
   indigo: { id: 'indigo', label: 'Indigo', bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-200', iconBg: 'bg-indigo-100 text-indigo-600', hoverBg: 'hover:bg-indigo-200' },
   purple: { id: 'purple', label: 'Purple', bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-200', iconBg: 'bg-purple-100 text-purple-600', hoverBg: 'hover:bg-purple-200' },
   pink: { id: 'pink', label: 'Pink', bg: 'bg-pink-100', text: 'text-pink-800', border: 'border-pink-200', iconBg: 'bg-pink-100 text-pink-600', hoverBg: 'hover:bg-pink-200' },
-  gray: { id: 'gray', label: 'Gray', bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-200', iconBg: 'bg-gray-100 text-gray-600', hoverBg: 'hover:bg-gray-200' },
+  gray: { id: 'gray', label: 'Gray', bg: 'bg-slate-100', text: 'text-slate-800', border: 'border-slate-200', iconBg: 'bg-slate-100 text-slate-600', hoverBg: 'hover:bg-slate-200' },
 };
 
 export const DEFAULT_STORE_COLOR = 'gray';

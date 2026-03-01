@@ -119,7 +119,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
         </div>
         <button
           onClick={onClose}
-          className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+          className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100"
           aria-label="Close drawer"
         >
           <X size={20} />

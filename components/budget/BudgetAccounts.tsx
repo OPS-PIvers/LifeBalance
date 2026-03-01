@@ -488,7 +488,7 @@ const BudgetAccounts: React.FC = () => {
                 </Button>
               )}
 
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-slate-100 my-2" />
 
               {/* Delete Action */}
               <Button

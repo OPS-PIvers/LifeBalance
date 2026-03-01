@@ -18,16 +18,16 @@ export const showDeleteConfirmation = (
           <Trash2 size={18} />
         </div>
         <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-900">
+          <p className="text-sm font-semibold text-slate-900">
             Delete this {itemName}?
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-slate-500">
             This action cannot be undone.
           </p>
           <div className="mt-3 flex justify-end gap-2">
             <button
               type="button"
-              className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-md hover:bg-slate-200 transition-colors"
               onClick={() => toast.dismiss(t.id)}
             >
               Cancel

@@ -36,3 +36,7 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Grey to Slate Palette Polish
+**Critique:** Components across the application (Budgets, Habits, Settings, Modals) were relying on the default "Gray" (`gray-50`, `gray-100`, etc.) palette. This created a "Developer UI" look that felt generic, flat, and lacked the sophisticated, cooler temperature required for a premium aesthetic.
+**Polish:** Applied a comprehensive color pass shifting from generic `gray-*` to the more refined `slate-*` palette across all utility classes (`bg-`, `text-`, `border-`, `ring-`, `divide-`). This unifies the visual temperature with existing components and enhances the overall "Muse" aesthetic.

@@ -424,7 +424,7 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 disabled:opacity-50 disabled:bg-slate-300 transition-colors"
                 >
                     <Plus size={18} />
                 </button>

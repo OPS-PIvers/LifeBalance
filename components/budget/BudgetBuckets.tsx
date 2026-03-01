@@ -390,7 +390,7 @@ const BudgetBuckets: React.FC = () => {
               >
                 Edit Transaction
               </Button>
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-slate-100 my-2" />
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"

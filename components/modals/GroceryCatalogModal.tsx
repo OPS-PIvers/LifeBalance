@@ -185,7 +185,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
           <div className="space-y-4">
 
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Name</label>
+              <label className="text-xs font-bold text-slate-400 uppercase">Name</label>
               <input
                 type="text"
                 value={editingItem.name}
@@ -194,7 +194,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
+              <label className="text-xs font-bold text-slate-400 uppercase">Category</label>
               <input
                 type="text"
                 value={editingItem.category}
@@ -204,7 +204,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Qty</label>
+                 <label className="text-xs font-bold text-slate-400 uppercase">Default Qty</label>
                  <input
                   type="text"
                   value={editingItem.defaultQuantity || ''}
@@ -214,7 +214,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 />
               </div>
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Store</label>
+                 <label className="text-xs font-bold text-slate-400 uppercase">Default Store</label>
                  <input
                   type="text"
                   value={editingItem.defaultStore || ''}
@@ -226,10 +226,10 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             </div>
           </div>
 
-          <div className="sticky bottom-0 flex gap-3 mt-6 p-4 border-t border-gray-100 bg-white">
+          <div className="sticky bottom-0 flex gap-3 mt-6 p-4 border-t border-slate-100 bg-white">
             <button
               onClick={() => setEditingItem(null)}
-              className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
+              className="flex-1 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-lg"
             >
               Cancel
             </button>

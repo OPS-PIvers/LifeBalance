@@ -81,7 +81,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
   return (
     <div
       ref={menuRef}
-      className="absolute top-14 right-4 z-dropdown w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
+      className="absolute top-14 right-4 z-dropdown w-64 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
       role="menu"
       aria-label="Profile Menu"
     >
@@ -116,14 +116,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             navigate('/settings');
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-brand-700 rounded-lg transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-brand-700 rounded-lg transition-colors text-left"
           role="menuitem"
         >
           <Settings className="w-4 h-4" />
           Settings
         </button>
 
-        <hr className="my-1 border-gray-100" />
+        <hr className="my-1 border-slate-100" />
 
         <button
           onClick={handleLogout}

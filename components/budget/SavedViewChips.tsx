@@ -130,7 +130,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
           <button
             type="button"
             onClick={() => setIsSaving(false)}
-            className="p-1 text-gray-400 hover:text-gray-600"
+            className="p-1 text-slate-400 hover:text-slate-600"
             aria-label="Cancel save view"
           >
             <X size={12} />

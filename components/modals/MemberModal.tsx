@@ -86,7 +86,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 onChange={() => setRole('member')}
                 className="text-brand-600 focus:ring-brand-500"
               />
-              <span className="text-gray-700">Member</span>
+              <span className="text-slate-700">Member</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -97,7 +97,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 onChange={() => setRole('admin')}
                 className="text-brand-600 focus:ring-brand-500"
               />
-              <span className="text-gray-700">Admin</span>
+              <span className="text-slate-700">Admin</span>
             </label>
           </div>
         </div>
@@ -106,7 +106,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+            className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-100 rounded-xl transition-colors"
           >
             Cancel
           </button>

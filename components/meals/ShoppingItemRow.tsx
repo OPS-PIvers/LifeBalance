@@ -110,7 +110,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {isReorderable && (
             <div
                 onPointerDown={(e) => dragControls.start(e)}
-                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600"
+                className="touch-none cursor-grab active:cursor-grabbing p-1 text-slate-400 hover:text-slate-600"
                 aria-label="Drag to reorder"
             >
                 <GripVertical size={20} />
@@ -124,7 +124,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
                 item.isPurchased
                     ? "bg-green-500 border-green-500 text-white"
-                    : "border-gray-300 hover:border-brand-500 text-transparent"
+                    : "border-slate-300 hover:border-brand-500 text-transparent"
             )}
         >
             <Check size={14} strokeWidth={3} />

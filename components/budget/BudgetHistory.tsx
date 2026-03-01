@@ -146,7 +146,7 @@ const BudgetHistory: React.FC = () => {
               onClick={() => toggleExpand(group.periodId)}
               className="w-full text-left"
             >
-              <div className="p-4 bg-white hover:bg-gray-50 transition-colors">
+              <div className="p-4 bg-white hover:bg-slate-50 transition-colors">
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <h3 className="font-bold text-brand-800 text-lg">

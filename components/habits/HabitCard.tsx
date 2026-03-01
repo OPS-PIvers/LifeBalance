@@ -236,7 +236,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             {isPositive && habit.streakDays >= 2 && (
               <span className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold transition-colors",
-                habit.streakDays >= 3 ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"
+                habit.streakDays >= 3 ? "bg-orange-100 text-orange-600" : "bg-slate-100 text-slate-500"
               )}>
                 <Flame size={10} fill={habit.streakDays >= 3 ? "currentColor" : "none"} />
                 {habit.streakDays} Day{habit.streakDays !== 1 ? 's' : ''}
@@ -372,7 +372,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               Repair Streak ({freezeBank?.tokens})
             </Button>
           )}
-          <div className="h-px bg-gray-100 my-2" />
+          <div className="h-px bg-slate-100 my-2" />
           <Button
             variant="ghost-destructive"
             className="w-full justify-start text-lg py-4"

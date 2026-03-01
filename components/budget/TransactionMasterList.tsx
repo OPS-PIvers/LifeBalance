@@ -772,7 +772,7 @@ const TransactionMasterList: React.FC = () => {
               >
                 Split Transaction
               </Button>
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-slate-100 my-2" />
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"
@@ -798,7 +798,7 @@ const TransactionMasterList: React.FC = () => {
         <div className="space-y-4 pt-2">
           <FilterControls {...filterProps} layout="stack" />
 
-          <div className="pt-4 space-y-3 border-t border-gray-100">
+          <div className="pt-4 space-y-3 border-t border-slate-100">
             {/* Export Button */}
             <Button
                variant="primary"
