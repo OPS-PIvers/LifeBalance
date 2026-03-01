@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
@@ -22,6 +22,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
+  const [selectedItemForActions, setSelectedItemForActions] = useState<GroceryCatalogItem | null>(null);
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -154,7 +155,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 </button>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
                     className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
@@ -168,6 +169,16 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                     aria-label="Delete from history"
                   >
                     <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* Mobile Actions */}
+                <div className="flex sm:hidden">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedItemForActions(item); }}
+                    className="p-2 text-slate-300 hover:text-slate-600 active:bg-slate-50 rounded-lg transition-colors"
+                    aria-label="More options"
+                  >
+                    <MoreVertical className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -238,6 +249,42 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               className="flex-1 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700"
             >
               Save
+            </button>
+          </div>
+        </Drawer>
+      )}
+
+      {/* Mobile Actions Drawer */}
+      {selectedItemForActions && (
+        <Drawer
+          isOpen={!!selectedItemForActions}
+          onClose={() => setSelectedItemForActions(null)}
+          title="Item Options"
+        >
+          <div className="space-y-3 pb-6">
+            <button
+              onClick={() => {
+                setEditingItem(selectedItemForActions);
+                setSelectedItemForActions(null);
+              }}
+              className="w-full h-12 flex items-center gap-3 px-4 bg-slate-50 text-slate-700 font-semibold rounded-xl hover:bg-slate-100 active:scale-95 transition-all"
+            >
+              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                <Edit2 className="w-4 h-4 text-slate-500" />
+              </div>
+              Edit Item
+            </button>
+            <button
+              onClick={() => {
+                setSelectedItemForActions(null);
+                handleDeleteItem(selectedItemForActions.id);
+              }}
+              className="w-full h-12 flex items-center gap-3 px-4 bg-red-50 text-red-600 font-semibold rounded-xl hover:bg-red-100 active:scale-95 transition-all"
+            >
+              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm">
+                <Trash2 className="w-4 h-4 text-red-500" />
+              </div>
+              Delete Item
             </button>
           </div>
         </Drawer>

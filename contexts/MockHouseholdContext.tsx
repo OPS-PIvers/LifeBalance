@@ -98,7 +98,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
-  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([{
+    id: 'mock-catalog-item-1',
+    name: 'Test Apples',
+    category: 'Produce',
+    defaultQuantity: '1 bag',
+    defaultStore: 'Trader Joe\'s',
+    purchaseCount: 5,
+    lastPurchased: new Date().toISOString()
+  }]);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
