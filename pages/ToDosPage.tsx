@@ -438,13 +438,10 @@ const ToDosPage: React.FC = () => {
             {isSelectionMode ? (
               <div className="flex flex-col">
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">Select Tasks</h1>
-                <button
-                    onClick={handleSelectAll}
-                    className="text-sm text-brand-600 font-medium flex items-center gap-1 mt-1 hover:text-brand-800"
-                >
+                <Button variant="link" onClick={handleSelectAll} className="text-sm font-medium mt-1 gap-1">
                   <CheckSquare size={14} className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
                   {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect All' : 'Select All'}
-                </button>
+                </Button>
               </div>
             ) : (
               <>
@@ -457,67 +454,26 @@ const ToDosPage: React.FC = () => {
           <div className="flex gap-2">
             {!isSelectionMode && (
                 <>
-                  <button
-                    onClick={handleExport}
-                    disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
-                    className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    aria-label={`Export ${viewMode} tasks to CSV`}
-                    title={`Export ${viewMode} tasks to CSV`}
-                  >
-                    <Download size={16} />
-                    <span className="hidden sm:inline">Export</span>
-                  </button>
-                  <button
-                    onClick={openAddModal}
-                    className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
-                    aria-label="Add new task"
-                  >
-                    <Plus size={16} /> <span className="hidden xs:inline">New Task</span>
-                  </button>
+                  <Button variant="secondary" size="sm" onClick={handleExport} disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0} aria-label={`Export ${viewMode} tasks to CSV`} title={`Export ${viewMode} tasks to CSV`} leftIcon={<Download size={16} />}><span className="hidden sm:inline">Export</span></Button>
+                  <Button variant="primary" size="md" onClick={openAddModal} aria-label="Add new task" leftIcon={<Plus size={16} />}><span className="hidden xs:inline">New Task</span></Button>
                 </>
               )}
 
-              <button
-                onClick={() => setIsSelectionMode(!isSelectionMode)}
-                disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`p-2 rounded-xl transition-colors border ${
-                  isSelectionMode
-                    ? 'bg-slate-100 text-slate-900 border-slate-200'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-                } ${viewMode === 'completed' ? 'opacity-30 cursor-not-allowed' : ''}`}
-                title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
-                aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
-              >
+              <Button variant="secondary" size="icon" onClick={() => setIsSelectionMode(!isSelectionMode)} disabled={viewMode === 'completed'} className={`transition-colors ${isSelectionMode ? 'bg-slate-100 text-slate-900 border-slate-200' : ''}`} title={isSelectionMode ? "Cancel Selection" : "Select Multiple"} aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}>
                 {isSelectionMode ? <X size={20} /> : <Layers size={20} />}
-              </button>
+              </Button>
           </div>
         </div>
 
         {/* View Toggle */}
         <div className="bg-slate-100 p-1 rounded-xl flex items-center self-start">
-             <button
-                onClick={() => setViewMode('active')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                    viewMode === 'active'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
-                 Active
-             </button>
-             <button
-                onClick={() => setViewMode('completed')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
-                    viewMode === 'completed'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
+             <Button variant={viewMode === 'active' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('active')} className="py-1.5 rounded-lg shadow-none">Active</Button>
+             <Button variant={viewMode === 'completed' ? 'secondary' : 'ghost'} size="sm" onClick={() => setViewMode('completed')} className="py-1.5 rounded-lg shadow-none">
                  Completed
                  <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
                      {todos.filter(t => t.isCompleted).length}
                  </span>
-             </button>
+             </Button>
         </div>
       </div>
 
@@ -647,35 +603,20 @@ const ToDosPage: React.FC = () => {
               {selectedIds.size} selected
             </div>
 
-            <button
-              onClick={handleBatchComplete}
-              disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-              aria-label="Mark selected as completed"
-            >
+            <Button variant="ghost-inverted" size="icon" onClick={handleBatchComplete} disabled={isBatchProcessing} className="flex-col gap-0.5 px-3 py-1 h-auto w-auto" aria-label="Mark selected as completed">
               <Check size={18} />
               <span className="text-xxs font-medium">Complete</span>
-            </button>
+            </Button>
 
-            <button
-              onClick={() => setIsBatchRescheduleOpen(true)}
-              disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-              aria-label="Reschedule selected items"
-            >
+            <Button variant="ghost-inverted" size="icon" onClick={() => setIsBatchRescheduleOpen(true)} disabled={isBatchProcessing} className="flex-col gap-0.5 px-3 py-1 h-auto w-auto" aria-label="Reschedule selected items">
               <Calendar size={18} />
               <span className="text-xxs font-medium">Reschedule</span>
-            </button>
+            </Button>
 
-            <button
-              onClick={() => setShowBatchDeleteConfirm(true)}
-              disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-lg transition-colors disabled:opacity-50"
-              aria-label="Delete selected items"
-            >
+            <Button variant="ghost-inverted" size="icon" onClick={() => setShowBatchDeleteConfirm(true)} disabled={isBatchProcessing} className="flex-col gap-0.5 px-3 py-1 h-auto w-auto hover:bg-rose-500/20 text-rose-300 hover:text-rose-200" aria-label="Delete selected items">
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -698,13 +639,7 @@ const ToDosPage: React.FC = () => {
           <h2 className="text-xl font-bold text-brand-800">
             {editingId ? 'Edit Task' : 'New Task'}
           </h2>
-          <button
-            onClick={() => setIsAddModalOpen(false)}
-            className="p-2 hover:bg-brand-50 rounded-full transition-colors"
-            aria-label="Close dialog"
-          >
-            <X size={20} className="text-brand-400" />
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => setIsAddModalOpen(false)} aria-label="Close dialog"><X size={20} className="text-brand-400" /></Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -740,18 +675,7 @@ const ToDosPage: React.FC = () => {
             ) : (
               <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Assign task to member">
                 {members.map(member => (
-                  <button
-                    key={member.uid}
-                    type="button"
-                    onClick={() => setAssignedTo(member.uid)}
-                    aria-label={`Assign to ${member.displayName || 'User'}`}
-                    aria-pressed={assignedTo === member.uid}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
-                      assignedTo === member.uid
-                        ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
-                    }`}
-                  >
+                  <Button key={member.uid} type="button" variant={assignedTo === member.uid ? 'primary' : 'secondary'} size="sm" onClick={() => setAssignedTo(member.uid)} aria-label={`Assign to ${member.displayName || 'User'}`} aria-pressed={assignedTo === member.uid} className="whitespace-nowrap">
                     {member.photoURL ? (
                       <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
                     ) : (
@@ -760,23 +684,13 @@ const ToDosPage: React.FC = () => {
                       </div>
                     )}
                     <span className="text-sm font-medium">{member.displayName?.split(' ')[0] ?? 'User'}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
           </fieldset>
 
-          <button
-            type="submit"
-            disabled={members.length === 0}
-            className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-              members.length === 0
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-brand-900 active:scale-[0.98]'
-            }`}
-          >
-            {editingId ? 'Save Changes' : 'Create Task'}
-          </button>
+          <Button type="submit" variant="primary" size="lg" disabled={members.length === 0} className="w-full mt-4">{editingId ? 'Save Changes' : 'Create Task'}</Button>
         </form>
       </Modal>
 
@@ -797,21 +711,8 @@ const ToDosPage: React.FC = () => {
             </p>
 
             <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowBatchDeleteConfirm(false)}
-                disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>Delete All</span>
-              </button>
+              <Button variant="subtle" size="lg" onClick={() => setShowBatchDeleteConfirm(false)} disabled={isBatchProcessing} className="flex-1">Cancel</Button>
+              <Button variant="destructive" size="lg" onClick={handleBatchDelete} disabled={isBatchProcessing} className="flex-1" leftIcon={isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}><span>Delete All</span></Button>
             </div>
           </div>
         </Modal>
@@ -954,7 +855,9 @@ const Section: React.FC<{
                       {isSelected ? <CheckSquare size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
                    </div>
                  ) : (
-                   <button
+                   <Button
+                     variant="ghost"
+                     size="icon-sm"
                      onClick={async (e) => {
                        e.stopPropagation();
                        try {
@@ -965,15 +868,15 @@ const Section: React.FC<{
                          toast.error('Failed to complete to-do');
                        }
                      }}
-                     className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
-                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
-                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100'
+                     className={`mt-0.5 rounded-full border-2 flex-shrink-0 w-6 h-6 p-0 ${
+                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 text-rose-500' :
+                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 text-amber-500' :
+                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100 text-blue-500'
                      }`}
                      aria-label="Complete task"
                    >
                      <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
-                   </button>
+                   </Button>
                  )}
 
                  <div className="flex-1 min-w-0">
@@ -1016,30 +919,12 @@ const Section: React.FC<{
                    <>
                      {/* Desktop Actions */}
                      <div className="hidden sm:flex items-center gap-1 pl-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                          aria-label="Move to Tomorrow"
-                          title="Move to Tomorrow"
-                        >
-                          <Calendar size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                          aria-label="Duplicate task"
-                          title="Duplicate"
-                        >
-                          <Copy size={16} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                          className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                          aria-label="Edit task"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }} aria-label="Move to Tomorrow" title="Move to Tomorrow" className="text-brand-300 hover:text-brand-600"><Calendar size={16} /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onDuplicate(item); }} aria-label="Duplicate task" title="Duplicate" className="text-brand-300 hover:text-brand-600"><Copy size={16} /></Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onEdit(item); }} aria-label="Edit task" className="text-brand-300 hover:text-brand-600"><Edit2 size={16} /></Button>
+                        <Button
+                          variant="ghost-destructive"
+                          size="icon"
                           onClick={(e) => {
                             e.stopPropagation();
                             showDeleteConfirmation(async () => {
@@ -1047,21 +932,15 @@ const Section: React.FC<{
                               toast.success('Task deleted');
                             });
                           }}
-                          className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
                           aria-label="Delete task"
+                          className="text-brand-300 hover:text-rose-600"
                         >
                           <Trash2 size={16} />
-                        </button>
+                        </Button>
                      </div>
                      {/* Mobile Actions */}
                      <div className="flex sm:hidden pl-2">
-                       <button
-                         onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                         aria-label="More options"
-                       >
-                         <MoreVertical size={20} />
-                       </button>
+                       <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onMore(item); }} aria-label="More options" className="text-brand-300 hover:text-brand-600"><MoreVertical size={20} /></Button>
                      </div>
                    </>
                  )}
@@ -1109,13 +988,7 @@ const CompletedSection: React.FC<{
                             key={item.id}
                             className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-sm transition-all group"
                         >
-                            <button
-                                onClick={() => onUncomplete(item.id)}
-                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0"
-                                title="Mark as incomplete"
-                            >
-                                <RotateCcw size={14} />
-                            </button>
+                            <Button variant="subtle" size="icon-sm" onClick={() => onUncomplete(item.id)} className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 text-brand-400 hover:text-brand-600 flex-shrink-0 p-0" title="Mark as incomplete"><RotateCcw size={14} /></Button>
 
                             <div className="flex-1 min-w-0">
                                 <p className="text-slate-500 line-through decoration-slate-300">{item.text}</p>
@@ -1137,33 +1010,23 @@ const CompletedSection: React.FC<{
 
                             {/* Desktop Actions */}
                             <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={() => onDuplicate(item)}
-                                    className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                                    title="Duplicate task"
-                                >
-                                    <Copy size={14} />
-                                </button>
-                                <button
+                                <Button variant="ghost" size="icon-sm" onClick={() => onDuplicate(item)} className="text-slate-400 hover:text-brand-600" title="Duplicate task"><Copy size={14} /></Button>
+                                <Button
+                                    variant="ghost-destructive"
+                                    size="icon-sm"
                                     onClick={() => showDeleteConfirmation(async () => {
                                         await onDelete(item.id);
                                         toast.success('Task deleted');
                                     })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    className="text-slate-400 hover:text-rose-600"
                                     title="Delete forever"
                                 >
                                     <Trash2 size={14} />
-                                </button>
+                                </Button>
                             </div>
                             {/* Mobile Actions */}
                             <div className="flex sm:hidden">
-                               <button
-                                 onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                                 aria-label="More options"
-                               >
-                                 <MoreVertical size={20} />
-                               </button>
+                               <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); onMore(item); }} aria-label="More options" className="text-brand-300 hover:text-brand-600"><MoreVertical size={20} /></Button>
                             </div>
                         </div>
                     );
