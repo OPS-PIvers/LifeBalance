@@ -13,6 +13,7 @@ import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
 import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
 import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
@@ -144,6 +145,9 @@ const Dashboard: React.FC = () => {
 
         {/* Widget: Upcoming Bills */}
         <UpcomingBillsWidget onPay={setPayModalItemId} />
+
+        {/* Widget: Recent Activity */}
+        <ActivityFeedWidget />
 
         {/* Widget: Category Spend */}
         <CategorySpendWidget />
