@@ -9,3 +9,8 @@
 **Blocker:** @google/genai (pinned to v1.37.0)
 **Reason:** Updating to v1.38.0 introduces a stricter API key validation in the `GoogleGenAI` constructor that causes the application to crash on startup (and in tests) if the `VITE_GEMINI_API_KEY` is missing or empty. This requires a code change to handle lazy initialization or a more robust fallback strategy before the dependency can be safely updated.
 **Plan:** Defer update until a developer can refactor `services/geminiService.ts` to handle missing API keys gracefully without crashing the app module-level initialization.
+
+## 2026-03-02 - Transitive Dependencies Vulnerability Patch
+**Blocker:** `minimatch`, `fast-xml-parser`, `ajv`, `rollup`, `tar`, `basic-ftp`, `hono`
+**Reason:** Multiple high and moderate severity vulnerabilities (ReDoS, Path Traversal, DoS) were detected across various transitive dependencies used by ESLint, Vite, Firebase-tools, and other toolchains.
+**Plan:** Implemented targeted `pnpm.overrides` in `package.json` for specific vulnerable version ranges to apply security patches without disrupting higher-level dependency trees.
