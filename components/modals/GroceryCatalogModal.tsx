@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
@@ -22,6 +22,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
+  const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -154,7 +155,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 </button>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
                     className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
@@ -170,10 +171,56 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+
+                {/* Mobile Actions */}
+                <div className="flex sm:hidden">
+                  <button
+                    onClick={() => setActionItem(item)}
+                    className="p-3 text-slate-300 active:text-slate-600 active:bg-slate-100 rounded-full transition-colors"
+                    aria-label={`Manage ${item.name}`}
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             ))
           )}
       </div>
+
+      {/* Mobile Action Drawer */}
+      <Drawer
+        isOpen={!!actionItem}
+        onClose={() => setActionItem(null)}
+        title={actionItem ? `Manage ${actionItem.name}` : 'Manage Item'}
+      >
+        <div className="space-y-2 p-2">
+          {actionItem && (
+            <>
+              <button
+                className="w-full flex items-center gap-3 text-lg py-4 px-4 hover:bg-slate-50 text-slate-700 font-medium rounded-xl transition-colors active:scale-95"
+                onClick={() => {
+                  setEditingItem(actionItem);
+                  setActionItem(null);
+                }}
+              >
+                <Edit2 className="w-5 h-5 text-slate-500" />
+                Edit Item
+              </button>
+              <div className="h-px bg-slate-100 my-2 mx-4" />
+              <button
+                className="w-full flex items-center gap-3 text-lg py-4 px-4 hover:bg-red-50 text-red-600 font-medium rounded-xl transition-colors active:scale-95"
+                onClick={() => {
+                  handleDeleteItem(actionItem.id);
+                  setActionItem(null);
+                }}
+              >
+                <Trash2 className="w-5 h-5" />
+                Delete from history
+              </button>
+            </>
+          )}
+        </div>
+      </Drawer>
 
       {/* Nested Edit Drawer Overlay */}
       {editingItem && (
