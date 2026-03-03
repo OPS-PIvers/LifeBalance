@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface GroceryCatalogModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
+  const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -154,26 +156,71 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 </button>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setEditingItem(item)}
-                    className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                    aria-label="Edit history item"
+                    onClick={() => setActionItem(item)}
+                    className="sm:hidden p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
+                    aria-label="More options"
                   >
-                    <Edit2 className="w-4 h-4" />
+                    <MoreVertical className="w-5 h-5" />
                   </button>
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                    aria-label="Delete from history"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setEditingItem(item)}
+                      className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                      aria-label="Edit history item"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteItem(item.id)}
+                      className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                      aria-label="Delete from history"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
           )}
       </div>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionItem}
+        onClose={() => setActionItem(null)}
+        title="History Options"
+      >
+        <div className="space-y-2">
+          {actionItem && (
+            <>
+              <Button
+                variant="secondary"
+                className="w-full justify-start py-6 text-lg"
+                onClick={() => {
+                  setEditingItem(actionItem);
+                  setActionItem(null);
+                }}
+              >
+                <Edit2 className="mr-3 h-5 w-5" />
+                Edit Item
+              </Button>
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start py-6 text-lg"
+                onClick={() => {
+                  handleDeleteItem(actionItem.id);
+                  setActionItem(null);
+                }}
+              >
+                <Trash2 className="mr-3 h-5 w-5" />
+                Delete
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
 
       {/* Nested Edit Drawer Overlay */}
       {editingItem && (
