@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-03-10 - Standardizing Remaining Modals
+**Drift:** `Dashboard.tsx`, `ShoppingListTab.tsx`, and `MealPlanTab.tsx` still used hardcoded inline `<div className="fixed inset-0 z-modal...">` patterns for their modals, breaking consistency with the shared `Modal` component. They also used raw HTML `<input>`, `<select>`, and `<button>` elements inside those modals.
+**Fix:** Refactored the "Confirm Payment" modal in `Dashboard`, the "Edit Item" modal in `ShoppingListTab`, and the "Add Meal" and "Chef AI" modals in `MealPlanTab` to use the shared `Modal`, `Input`, `Select`, and `Button` components.

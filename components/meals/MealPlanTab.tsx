@@ -7,6 +7,9 @@ import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { Modal } from '@/components/ui/Modal';
+import Input from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -617,61 +620,52 @@ const MealPlanTab: React.FC = () => {
       </div>
 
       {/* Add Meal Modal */}
-      {isAddModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) handleCancel();
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-slate-200/50 flex justify-between items-center shrink-0">
-                      <h3 id="modal-title" className="text-lg font-bold text-slate-900 tracking-tight">
-                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
-                      </h3>
-                      <button
-                          onClick={handleCancel}
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                          aria-label="Close modal"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  </div>
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={handleCancel}
+        maxWidth="max-w-lg"
+        className="bg-white/95 backdrop-blur-xl border-slate-200/50 flex flex-col overflow-hidden"
+        ariaLabelledBy="modal-title"
+      >
+        <div className="px-6 py-4 border-b border-slate-200/50 flex justify-between items-center shrink-0">
+            <h3 id="modal-title" className="text-lg font-bold text-slate-900 tracking-tight">
+                {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
+            </h3>
+            <Button variant="ghost" size="icon-sm" onClick={handleCancel} aria-label="Close modal">
+                <X className="w-5 h-5" />
+            </Button>
+        </div>
 
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                      {/* Top Actions */}
-                      <div className="grid grid-cols-2 gap-4">
-                          <button
-                              onClick={() => setIsPreviousMealsModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50/80 text-indigo-700 rounded-xl hover:bg-indigo-100 font-bold text-sm transition-colors border border-indigo-100/50"
-                          >
-                              <ChefHat className="w-4.5 h-4.5" /> Cookbook
-                          </button>
-                          <button
-                              onClick={() => setIsAIModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-violet-50/80 text-violet-700 rounded-xl hover:bg-violet-100 font-bold text-sm transition-colors border border-violet-100/50"
-                          >
-                              <Sparkles className="w-4.5 h-4.5" /> AI Suggest
-                          </button>
-                      </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Top Actions */}
+            <div className="grid grid-cols-2 gap-4">
+                <button
+                    onClick={() => setIsPreviousMealsModalOpen(true)}
+                    className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50/80 text-indigo-700 rounded-xl hover:bg-indigo-100 font-bold text-sm transition-colors border border-indigo-100/50"
+                >
+                    <ChefHat className="w-4.5 h-4.5" /> Cookbook
+                </button>
+                <button
+                    onClick={() => setIsAIModalOpen(true)}
+                    className="flex items-center justify-center gap-2 py-3 px-4 bg-violet-50/80 text-violet-700 rounded-xl hover:bg-violet-100 font-bold text-sm transition-colors border border-violet-100/50"
+                >
+                    <Sparkles className="w-4.5 h-4.5" /> AI Suggest
+                </button>
+            </div>
 
-                      {/* Meal Details */}
-                      <div className="space-y-5">
-                          <div>
-                              <label htmlFor="meal-name" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Name</label>
-                              <input
-                                  id="meal-name"
-                                  type="text"
-                                  value={currentMeal.name}
-                                  onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none font-medium text-slate-900"
-                                  placeholder="e.g. Adobo Chicken & Rice"
-                              />
-                          </div>
+            {/* Meal Details */}
+            <div className="space-y-5">
+                <div>
+                    <label htmlFor="meal-name" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Name</label>
+                    <Input
+                        id="meal-name"
+                        type="text"
+                        value={currentMeal.name}
+                        onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
+                        className="w-full font-medium text-slate-900"
+                        placeholder="e.g. Adobo Chicken & Rice"
+                    />
+                </div>
 
                           <div role="radiogroup" aria-labelledby="meal-type-label">
                               <label id="meal-type-label" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Type</label>
@@ -729,12 +723,12 @@ const MealPlanTab: React.FC = () => {
 
                           <div>
                               <label htmlFor="meal-url" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Recipe URL</label>
-                              <input
+                              <Input
                                   id="meal-url"
                                   type="url"
                                   value={currentMeal.recipeUrl || ''}
                                   onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm text-blue-600"
+                                  className="w-full text-blue-600"
                                   placeholder="https://example.com/recipe"
                               />
                           </div>
@@ -782,13 +776,13 @@ const MealPlanTab: React.FC = () => {
                                   ))}
 
                                   <div className="relative flex-1 min-w-[140px]">
-                                      <input
+                                      <Input
                                           type="text"
                                           value={tagInput}
                                           onChange={e => setTagInput(e.target.value)}
                                           placeholder="Add custom tag..."
                                           aria-label="Add custom tag"
-                                          className="w-full py-1.5 pl-3 pr-8 rounded-full bg-slate-50 border border-slate-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-none"
+                                          className="w-full py-1.5 pl-3 pr-8 rounded-full text-xs"
                                           onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                                       />
                                       <button
@@ -883,23 +877,22 @@ const MealPlanTab: React.FC = () => {
                           </button>
                       )}
                       <div className="flex gap-3 w-full">
-                        <button
+                        <Button
+                            variant="secondary"
                             onClick={handleCancel}
-                            className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                            className="flex-1"
                         >
                             Cancel
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                             onClick={() => saveMeal(false)}
-                            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
+                            className="flex-1"
                         >
                             {editingMealId ? 'Update & Save' : 'Save to Plan'}
-                        </button>
+                        </Button>
                       </div>
                   </div>
-              </div>
-          </div>
-      )}
+        </Modal>
 
       {/* Previous Meals Modal (Smart Cookbook) */}
       <CookbookModal
@@ -911,81 +904,76 @@ const MealPlanTab: React.FC = () => {
       />
 
       {/* AI Modal */}
-      {isAIModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsAIModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ai-modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-sm p-6 shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-                  <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900 tracking-tight">
-                      <Sparkles className="text-violet-600 w-6 h-6" /> Chef AI
-                  </h3>
+      <Modal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        maxWidth="max-w-sm"
+        className="bg-white/95 backdrop-blur-xl border-slate-200/50 p-6"
+        ariaLabelledBy="ai-modal-title"
+      >
+        <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900 tracking-tight">
+            <Sparkles className="text-violet-600 w-6 h-6" /> Chef AI
+        </h3>
 
-                  <div className="space-y-3 mb-8">
-                      <label className="flex items-center gap-3 p-3 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-slate-50/50 transition-colors">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.cheap}
-                              onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Budget Friendly</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Low cost ingredients</div>
-                          </div>
-                      </label>
+        <div className="space-y-3 mb-8">
+            <label className="flex items-center gap-3 p-3 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-slate-50/50 transition-colors">
+                <input
+                    type="checkbox"
+                    checked={aiOptions.cheap}
+                    onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
+                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                />
+                <div>
+                    <div className="font-bold text-slate-800">Budget Friendly</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Low cost ingredients</div>
+                </div>
+            </label>
 
-                      <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.quick}
-                              onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Quick & Easy</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Under 30 minutes</div>
-                          </div>
-                      </label>
+            <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
+                <input
+                    type="checkbox"
+                    checked={aiOptions.quick}
+                    onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
+                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                />
+                <div>
+                    <div className="font-bold text-slate-800">Quick & Easy</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Under 30 minutes</div>
+                </div>
+            </label>
 
-                      <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.new}
-                              onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Try Something New</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Avoid recent meals</div>
-                          </div>
-                      </label>
-                  </div>
+            <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
+                <input
+                    type="checkbox"
+                    checked={aiOptions.new}
+                    onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
+                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                />
+                <div>
+                    <div className="font-bold text-slate-800">Try Something New</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Avoid recent meals</div>
+                </div>
+            </label>
+        </div>
 
-                  <button
-                      onClick={handleAIRequest}
-                      disabled={isGeneratingAI}
-                      className="w-full py-3.5 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg shadow-violet-200 transition-all active:scale-95"
-                  >
-                      {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-                      {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
-                  </button>
+        <Button
+            onClick={handleAIRequest}
+            disabled={isGeneratingAI}
+            className="w-full bg-violet-600 hover:bg-violet-700 focus-visible:ring-violet-500/20"
+        >
+            {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+            {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
+        </Button>
 
-                  <button
-                      onClick={() => setIsAIModalOpen(false)}
-                      disabled={isGeneratingAI}
-                      className="mt-3 w-full py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-bold rounded-xl transition-colors"
-                  >
-                      Cancel
-                  </button>
-              </div>
-          </div>
-      )}
+        <Button
+            variant="ghost"
+            onClick={() => setIsAIModalOpen(false)}
+            disabled={isGeneratingAI}
+            className="mt-3 w-full"
+        >
+            Cancel
+        </Button>
+      </Modal>
 
       {/* Ingredient Selector Modal */}
       {isIngredientSelectorOpen && ingredientSelectorData && (

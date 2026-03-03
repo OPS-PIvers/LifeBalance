@@ -9,6 +9,10 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
+import { Modal } from '@/components/ui/Modal';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import { Button } from '@/components/ui/Button';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -598,56 +602,57 @@ const ShoppingListTab: React.FC = () => {
         />
 
         {/* Edit Modal */}
-        {editingItem && (
-            <div className="fixed inset-0 z-modal flex items-center justify-center p-4 pb-24 sm:pb-4">
-                <div
-                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                    onClick={() => setEditingItem(null)}
-                />
-                <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <Modal
+            isOpen={!!editingItem}
+            onClose={() => setEditingItem(null)}
+            maxWidth="max-w-md"
+            className="bg-white/95 backdrop-blur-xl border-slate-200/50"
+        >
+            {editingItem && (
+                <>
                     <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
                         <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => setEditingItem(null)}><X className="w-5 h-5" /></Button>
                     </div>
                     <div className="p-6 space-y-4">
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
-                            <input
+                            <Input
                                 type="text"
                                 value={editingItem.name}
                                 onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-900 font-medium"
+                                className="w-full mt-1 text-slate-900 font-medium"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                              <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
-                                <select
+                                <Select
                                     value={editingItem.category || 'Uncategorized'}
                                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                    className="w-full mt-1"
                                 >
                                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
+                                </Select>
                             </div>
                             <div>
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quantity</label>
-                                <input
+                                <Input
                                     type="text"
                                     value={editingItem.quantity || ''}
                                     onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                    className="w-full mt-1"
                                 />
                             </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store</label>
-                            <input
+                            <Input
                                 type="text"
                                 value={editingItem.store || ''}
                                 onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
                                 placeholder="Optional"
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
+                                className="w-full mt-1"
                             />
                              {/* Quick Store Chips in Edit Modal */}
                              {stores.length > 0 && (
@@ -671,17 +676,17 @@ const ShoppingListTab: React.FC = () => {
                         </div>
                     </div>
                     <div className="p-4 border-t border-slate-200/50 bg-white/50">
-                        <button
+                        <Button
                             onClick={handleSaveEdit}
                             disabled={!editingItem.name.trim()}
-                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-50 hover:bg-brand-900 transition-all"
+                            className="w-full"
                         >
                             Save Changes
-                        </button>
+                        </Button>
                     </div>
-                </div>
-            </div>
-        )}
+                </>
+            )}
+        </Modal>
     </div>
   );
 };
