@@ -9,3 +9,8 @@
 **Blocker:** @google/genai (pinned to v1.37.0)
 **Reason:** Updating to v1.38.0 introduces a stricter API key validation in the `GoogleGenAI` constructor that causes the application to crash on startup (and in tests) if the `VITE_GEMINI_API_KEY` is missing or empty. This requires a code change to handle lazy initialization or a more robust fallback strategy before the dependency can be safely updated.
 **Plan:** Defer update until a developer can refactor `services/geminiService.ts` to handle missing API keys gracefully without crashing the app module-level initialization.
+
+## 2025-03-04 - [Security Audit] Vulnerability Overrides
+**Blocker:** None
+**Reason:** Multiple high/critical vulnerabilities found in `minimatch`, `tar`, `rollup`, `basic-ftp`. The issues were patched using `pnpm.overrides` to ensure correct versions are used throughout the dependency tree.
+**Plan:** Monitor these libraries for future vulnerabilities and updates.
