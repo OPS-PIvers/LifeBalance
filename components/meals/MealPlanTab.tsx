@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { Modal } from '@/components/ui/Modal';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -617,19 +618,14 @@ const MealPlanTab: React.FC = () => {
       </div>
 
       {/* Add Meal Modal */}
-      {isAddModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) handleCancel();
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-slate-200/50 flex justify-between items-center shrink-0">
+      <Modal
+        isOpen={isAddModalOpen}
+        onClose={handleCancel}
+        maxWidth="max-w-lg"
+        ariaLabelledBy="modal-title"
+        className="flex flex-col"
+      >
+                  <div className="px-6 py-4 border-b border-slate-200/50 flex justify-between items-center shrink-0 bg-white">
                       <h3 id="modal-title" className="text-lg font-bold text-slate-900 tracking-tight">
                           {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
                       </h3>
@@ -642,7 +638,7 @@ const MealPlanTab: React.FC = () => {
                       </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white/95">
                       {/* Top Actions */}
                       <div className="grid grid-cols-2 gap-4">
                           <button
@@ -897,9 +893,7 @@ const MealPlanTab: React.FC = () => {
                         </button>
                       </div>
                   </div>
-              </div>
-          </div>
-      )}
+      </Modal>
 
       {/* Previous Meals Modal (Smart Cookbook) */}
       <CookbookModal
@@ -911,17 +905,13 @@ const MealPlanTab: React.FC = () => {
       />
 
       {/* AI Modal */}
-      {isAIModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsAIModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ai-modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-sm p-6 shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
+      <Modal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        maxWidth="max-w-sm"
+        ariaLabelledBy="ai-modal-title"
+      >
+              <div className="p-6 bg-white/95 backdrop-blur-xl">
                   <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900 tracking-tight">
                       <Sparkles className="text-violet-600 w-6 h-6" /> Chef AI
                   </h3>
@@ -984,8 +974,7 @@ const MealPlanTab: React.FC = () => {
                       Cancel
                   </button>
               </div>
-          </div>
-      )}
+      </Modal>
 
       {/* Ingredient Selector Modal */}
       {isIngredientSelectorOpen && ingredientSelectorData && (

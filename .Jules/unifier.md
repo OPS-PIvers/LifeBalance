@@ -51,3 +51,7 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+
+## 2026-03-04 - Standardizing Modals
+**Drift:** The codebase contained multiple instances of hardcoded modal structures (using `fixed inset-0`, manual backdrop handling, and inconsistent z-indexes) in `Dashboard.tsx`, `MealPlanTab.tsx`, and `ShoppingListTab.tsx`, causing visual inconsistency and duplicated markup.
+**Fix:** Refactored these components to use the shared `<Modal>` component from `@/components/ui/Modal`, ensuring unified styling, backdrop behavior, accessibility attributes, and mobile-safe padding.

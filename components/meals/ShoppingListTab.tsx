@@ -9,6 +9,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
+import { Modal } from '@/components/ui/Modal';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -599,12 +600,12 @@ const ShoppingListTab: React.FC = () => {
 
         {/* Edit Modal */}
         {editingItem && (
-            <div className="fixed inset-0 z-modal flex items-center justify-center p-4 pb-24 sm:pb-4">
-                <div
-                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                    onClick={() => setEditingItem(null)}
-                />
-                <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <Modal
+                isOpen={!!editingItem}
+                onClose={() => setEditingItem(null)}
+                maxWidth="max-w-md"
+                className="flex flex-col bg-white/95 backdrop-blur-xl"
+            >
                     <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
                         <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
                         <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
@@ -679,8 +680,7 @@ const ShoppingListTab: React.FC = () => {
                             Save Changes
                         </button>
                     </div>
-                </div>
-            </div>
+            </Modal>
         )}
     </div>
   );
