@@ -36,3 +36,7 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-26 - Budget Features Audit
+**Critique:** Components in Budget page such as `BudgetAccounts`, `BudgetBucketCard`, `BudgetHistory` and `TransactionMasterList` look like a "Developer UI". They all rely on flat `bg-white` and generic `border-brand-100` colors, and generic shadow-sm for depth. Their fonts are too bold, lacking sophistication, and metadata isn't hierarchical.
+**Polish:** Elevated the components by converting flat cards into premium cards with `bg-white/80 backdrop-blur-xl`. Increased padding significantly to `p-6` from `p-4` allowing the layouts to breathe. Implemented visual hierarchy on labels by standardizing `slate-500` for metadata and using `tracking-tight` for titles.

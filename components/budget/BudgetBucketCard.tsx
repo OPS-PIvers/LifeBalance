@@ -96,7 +96,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative group">
+    <div className="bg-white/80 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass relative group">
       {/* Header - Clickable for toggle */}
       <div
         className="flex items-center justify-between mb-3 cursor-pointer"
@@ -129,13 +129,13 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
               <span className="text-slate-300">/</span>
 
               {isEditingLimit ? (
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1 relative z-10" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="number"
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-slate-50 border border-slate-200 rounded text-right font-bold"
+                    className="w-16 p-1 bg-slate-50/50 border border-slate-200/60 focus:ring-brand-500/10 rounded text-right font-bold"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
@@ -165,7 +165,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     }
                   }}
                   aria-label={`Edit limit for ${bucket.name}, currently $${bucket.limit}`}
-                  className="text-slate-400 border-b border-dashed border-slate-200 cursor-pointer hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-sm"
+                  className="text-slate-400 border-b border-dashed border-slate-300 hover:border-slate-400 cursor-pointer hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-sm"
                 >
                   ${bucket.limit}
                 </span>

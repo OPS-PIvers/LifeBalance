@@ -183,18 +183,18 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`bg-white p-4 rounded-2xl border shadow-sm relative overflow-hidden transition-all duration-200 ${
+        className={`bg-white/80 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass relative overflow-hidden transition-all duration-200 ${
           isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-brand-500 border-2' : 'border-brand-100'}`}
+        } ${isDragOver ? 'border-slate-500 border-2' : 'border-transparent'}`}
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none">
+            <div className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-500 touch-none">
               <GripVertical size={18} />
             </div>
             <div>
-              <p className="font-bold text-brand-800">{account.name}</p>
+              <p className="font-bold text-slate-900">{account.name}</p>
               <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
                 isLiability ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
               }`}>
@@ -220,7 +220,7 @@ const BudgetAccounts: React.FC = () => {
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300 hidden sm:flex"
+              className="text-slate-400 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
@@ -232,7 +232,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => setActionAccount(account)}
-                className="text-brand-300"
+                className="text-slate-400"
                 aria-label={`Options for ${account.name}`}
               >
                 <MoreVertical size={20} />
@@ -245,7 +245,7 @@ const BudgetAccounts: React.FC = () => {
                   type="number"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-24 bg-brand-50 border border-brand-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-24 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-slate-500"
                   autoFocus
                 />
                 <Button
@@ -274,7 +274,7 @@ const BudgetAccounts: React.FC = () => {
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
                   ${account.balance.toLocaleString()}
                 </p>
-                <p className="text-xxs text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
+                <p className="text-xxs text-slate-400 group-hover:text-slate-500 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
                 </p>
               </div>
@@ -285,11 +285,11 @@ const BudgetAccounts: React.FC = () => {
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
           <div className="mt-2 ml-7">
-            <div className="flex justify-between text-xxs text-brand-400 mb-1">
+            <div className="flex justify-between text-xxs text-slate-500 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
             </div>
-            <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
               <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
             </div>
           </div>
@@ -301,18 +301,18 @@ const BudgetAccounts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Net Worth Header */}
-      <div className="bg-brand-800 rounded-2xl p-6 text-white shadow-lg text-center">
-        <p className="text-brand-300 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
+      <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-xl text-center">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
           ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
         <div className="flex justify-center gap-6 mt-3 text-sm">
           <div>
-            <span className="text-brand-400">Assets:</span>{' '}
+            <span className="text-slate-500">Assets:</span>{' '}
             <span className="text-emerald-400 font-mono">${assets.toLocaleString()}</span>
           </div>
           <div>
-            <span className="text-brand-400">Liabilities:</span>{' '}
+            <span className="text-slate-500">Liabilities:</span>{' '}
             <span className="text-rose-400 font-mono">${debts.toLocaleString()}</span>
           </div>
         </div>
@@ -322,8 +322,8 @@ const BudgetAccounts: React.FC = () => {
       {assetAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Assets</h3>
-            <div className="flex-1 h-px bg-brand-100"></div>
+            <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wide">Assets</h3>
+            <div className="flex-1 h-px bg-slate-100"></div>
             <span className="text-sm font-mono text-emerald-600">${assets.toLocaleString()}</span>
           </div>
           <div className="space-y-2">
@@ -336,8 +336,8 @@ const BudgetAccounts: React.FC = () => {
       {liabilityAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Liabilities</h3>
-            <div className="flex-1 h-px bg-brand-100"></div>
+            <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wide">Liabilities</h3>
+            <div className="flex-1 h-px bg-slate-100"></div>
             <span className="text-sm font-mono text-rose-600">${debts.toLocaleString()}</span>
           </div>
           <div className="space-y-2">
@@ -348,7 +348,7 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Empty State */}
       {accounts.length === 0 && (
-        <div className="text-center py-8 text-brand-400">
+        <div className="text-center py-8 text-slate-500">
           <p>No accounts yet. Add your first account below.</p>
         </div>
       )}
@@ -371,14 +371,14 @@ const BudgetAccounts: React.FC = () => {
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 id="add-account-title" className="font-bold text-lg text-brand-800">Add Account</h3>
+            <h3 id="add-account-title" className="font-bold text-lg text-slate-900">Add Account</h3>
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsAddModalOpen(false)}
               aria-label="Close"
             >
-              <X size={20} className="text-brand-400" />
+              <X size={20} className="text-slate-500" />
             </Button>
           </div>
 
@@ -421,17 +421,17 @@ const BudgetAccounts: React.FC = () => {
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 id="set-goal-title" className="font-bold text-lg text-brand-800">Set Savings Goal</h3>
+            <h3 id="set-goal-title" className="font-bold text-lg text-slate-900">Set Savings Goal</h3>
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsGoalModalOpen(null)}
               aria-label="Close"
             >
-              <X size={20} className="text-brand-400" />
+              <X size={20} className="text-slate-500" />
             </Button>
           </div>
-          <p className="text-sm text-brand-500 mb-4">
+          <p className="text-sm text-slate-500 mb-4">
             What is your target balance for this account?
           </p>
           <Input
@@ -464,7 +464,7 @@ const BudgetAccounts: React.FC = () => {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
-                leftIcon={<Pencil className="text-brand-500" />}
+                leftIcon={<Pencil className="text-slate-500" />}
                 onClick={() => {
                   startEditing(actionAccount.id, actionAccount.balance);
                   setActionAccount(null);
@@ -478,7 +478,7 @@ const BudgetAccounts: React.FC = () => {
                 <Button
                   variant="ghost"
                   className="w-full justify-start text-lg py-4"
-                  leftIcon={<Target className="text-brand-500" />}
+                  leftIcon={<Target className="text-slate-500" />}
                   onClick={() => {
                     setIsGoalModalOpen(actionAccount.id);
                     setActionAccount(null);
@@ -527,19 +527,19 @@ const BudgetAccounts: React.FC = () => {
         >
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 id="delete-account-title" className="font-bold text-lg text-brand-800">Delete Account?</h3>
+              <h3 id="delete-account-title" className="font-bold text-lg text-slate-900">Delete Account?</h3>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => !isDeleting && setDeletingId(null)}
-                className="text-brand-400 hover:text-brand-600"
+                className="text-slate-500 hover:text-slate-600"
                 aria-label="Close"
                 disabled={isDeleting}
               >
                 <X size={20} />
               </Button>
             </div>
-            <p id="delete-account-desc" className="text-sm text-brand-500 mb-6">
+            <p id="delete-account-desc" className="text-sm text-slate-500 mb-6">
               Are you sure you want to delete this account? This action cannot be undone.
             </p>
             <div className="flex gap-3">

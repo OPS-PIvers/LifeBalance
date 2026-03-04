@@ -293,11 +293,11 @@ const BudgetBuckets: React.FC = () => {
         ariaLabelledBy="reallocate-title"
         className="p-6"
       >
-        <h3 id="reallocate-title" className="font-bold text-lg text-brand-800 mb-4 flex items-center gap-2">
+        <h3 id="reallocate-title" className="font-bold tracking-tight text-slate-900 text-lg mb-4 flex items-center gap-2">
           <ArrowRightLeft size={20} /> Fix Overspending
         </h3>
 
-        <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
+        <div className="mb-6 text-sm text-slate-600 bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5 backdrop-blur-sm">
           Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
         </div>
 
@@ -341,9 +341,9 @@ const BudgetBuckets: React.FC = () => {
 
           {/* Dynamic Balance Preview */}
           {reallocateModal?.sourceId && (
-            <div className="text-xs flex justify-between items-center text-brand-500 px-1">
+            <div className="text-xs flex justify-between items-center text-slate-500 px-1">
                 <span>Remaining in source:</span>
-                <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800'}`}>
+                <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-slate-900'}`}>
                   ${remainingAfterTransfer.toLocaleString()}
                 </span>
             </div>
@@ -353,7 +353,7 @@ const BudgetBuckets: React.FC = () => {
             <Button
               variant="subtle"
               onClick={() => setReallocateModal(null)}
-              className="flex-1 py-3"
+              className="flex-1 py-3 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-bold rounded-xl"
             >
               Cancel
             </Button>
@@ -361,7 +361,7 @@ const BudgetBuckets: React.FC = () => {
               variant="primary"
               onClick={handleReallocateConfirm}
               disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
-              className="flex-1 py-3"
+              className="flex-1 py-3 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-bold rounded-xl"
             >
               Confirm
             </Button>
@@ -381,7 +381,7 @@ const BudgetBuckets: React.FC = () => {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit className="text-brand-500" />}
+                leftIcon={<Edit className="text-slate-500" />}
                 onClick={() => {
                   const txToEdit = actionTransaction;
                   setActionTransaction(null);
