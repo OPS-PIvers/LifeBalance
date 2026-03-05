@@ -14,6 +14,8 @@ import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
 import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
 import { CreateChallengePayload } from '@/types/schema';
+import { Modal } from '../components/ui/Modal';
+import { Button } from '../components/ui/Button';
 
 const Dashboard: React.FC = () => {
   const {
@@ -177,39 +179,41 @@ const Dashboard: React.FC = () => {
       {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
       
       {/* Pay Modal for Calendar Items */}
-      {payModalItemId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-           <div className="bg-white/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 animate-in zoom-in-95">
-             <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
-               Select which account to deduct this payment from.
-             </p>
-             
-             <div className="space-y-3 mb-6">
-               {accounts.filter(a => a.type !== 'credit').map(acc => (
-                 <button
-                   key={acc.id}
-                   onClick={() => {
-                     payCalendarItem(payModalItemId, acc.id);
-                     setPayModalItemId(null);
-                   }}
-                   className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all group"
-                 >
-                   <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
-                   <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
-                 </button>
-               ))}
-             </div>
-             
-             <button 
-               onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-slate-400 hover:text-slate-600 font-semibold transition-colors text-sm"
-             >
-               Cancel
-             </button>
-           </div>
+      <Modal
+        isOpen={!!payModalItemId}
+        onClose={() => setPayModalItemId(null)}
+        maxWidth="max-w-sm"
+        className="p-6"
+      >
+        <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
+        <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+          Select which account to deduct this payment from.
+        </p>
+
+        <div className="space-y-3 mb-6">
+          {accounts.filter(a => a.type !== 'credit').map(acc => (
+            <button
+              key={acc.id}
+              onClick={() => {
+                if (payModalItemId) payCalendarItem(payModalItemId, acc.id);
+                setPayModalItemId(null);
+              }}
+              className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all group"
+            >
+              <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
+              <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
+            </button>
+          ))}
         </div>
-      )}
+
+        <Button
+          variant="ghost"
+          onClick={() => setPayModalItemId(null)}
+          className="w-full"
+        >
+          Cancel
+        </Button>
+      </Modal>
 
     </div>
   );

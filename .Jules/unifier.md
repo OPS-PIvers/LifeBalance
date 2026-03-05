@@ -51,3 +51,6 @@
 ## 2026-02-08 - Standardized TransactionMasterList Buttons
 **Drift:** `TransactionMasterList` contained 15+ instances of raw `<button>` elements with hardcoded Tailwind classes, duplicating logic found in the `Button` component and creating maintenance overhead.
 **Fix:** Refactored `TransactionMasterList.tsx` to use the standardized `<Button />` component with `ghost`, `subtle`, `primary`, and `destructive` variants, ensuring consistent focus states and visual style.
+## 2024-05-24 - Standardize Dashboard Confirm Payment Modal
+**Drift:** The `Dashboard` page contained a hardcoded "Confirm Payment" modal using raw `div` tags (`<div className="fixed inset-0 z-50...">`) and a raw `<button>` for the cancel action. This bypassed the `Modal` and `Button` shared components, missing consistent backdrop behavior, scroll locking, and safe area padding.
+**Fix:** Replaced the hardcoded modal overlay with the shared `<Modal>` component from `components/ui/Modal` and replaced the raw cancel button with `<Button variant="ghost">`.
