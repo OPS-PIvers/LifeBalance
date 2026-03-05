@@ -43,6 +43,7 @@ vi.mock('lucide-react', () => ({
   ArrowUpAZ: () => <div data-testid="sort-icon" />,
   Calendar: () => <div data-testid="calendar-icon" />,
   Star: () => <div data-testid="star-icon" />,
+  Download: () => <div data-testid="download-icon" />,
 }));
 
 describe('MealPlanTab', () => {

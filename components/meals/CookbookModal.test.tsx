@@ -29,6 +29,7 @@ vi.mock('lucide-react', () => ({
   Calendar: () => <div data-testid="calendar-icon" />,
   Star: () => <div data-testid="star-icon" />,
   ChefHat: () => <div data-testid="chef-hat-icon" />,
+  Download: () => <div data-testid="download-icon" />
 }));
 
 // Mock date-fns

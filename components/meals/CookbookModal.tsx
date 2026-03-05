@@ -3,8 +3,10 @@ import { Meal } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
+import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat, Download } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { generateCsvExport } from '@/utils/exportUtils';
+import toast from 'react-hot-toast';
 
 interface CookbookModalProps {
   isOpen: boolean;
@@ -36,6 +38,32 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
     });
     return Array.from(tags).sort();
   }, [meals, isOpen]);
+
+  const handleExport = () => {
+    try {
+      if (filteredMeals.length === 0) {
+        toast.error('No recipes to export');
+        return;
+      }
+
+      const exportData = filteredMeals.map(meal => ({
+        'Name': meal.name,
+        'Description': meal.description || '',
+        'Tags': meal.tags?.join(', ') || '',
+        'Ingredients': meal.ingredients?.map(ing => `${ing.quantity ? ing.quantity + ' ' : ''}${ing.name}`).join('; ') || '',
+        'Instructions': meal.instructions?.join(' | ') || '',
+        'Rating': meal.rating || '',
+        'Last Cooked': meal.lastCooked ? format(parseISO(meal.lastCooked), 'yyyy-MM-dd') : '',
+        'Recipe URL': meal.recipeUrl || ''
+      }));
+
+      generateCsvExport(exportData, 'cookbook-export');
+      toast.success('Export started');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export recipes');
+    }
+  };
 
   // Filter and Sort Logic
   const filteredMeals = useMemo(() => {
@@ -78,6 +106,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           return 0;
       }
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meals, searchTerm, selectedTags, sortBy, isOpen]);
 
   const toggleTag = (tag: string) => {
@@ -102,14 +131,26 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                 <p className="text-xs text-slate-500 font-medium">{filteredMeals.length} recipes found</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filteredMeals.length === 0}
+              className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-full transition-colors disabled:opacity-50"
+              title="Export to CSV"
+              aria-label="Export to CSV"
+            >
+              <Download size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* Search & Filter Controls */}
