@@ -1030,9 +1030,14 @@ const MealPlanTab: React.FC = () => {
                 variant="ghost"
                 className="w-full justify-start text-lg py-4"
                 leftIcon={<Edit2 className="text-brand-500" />}
-                onClick={() => {
-                    if (actionItem) handleEditMealPlanItem(actionItem.planItem, actionItem.linkedMeal);
-                    setActionItem(null);
+                onClick={async () => {
+                    if (!actionItem) return;
+                    try {
+                        await handleEditMealPlanItem(actionItem.planItem, actionItem.linkedMeal);
+                        setActionItem(null);
+                    } catch (error) {
+                        console.error("Failed to edit meal plan item:", error);
+                    }
                 }}
             >
                 Edit Meal
@@ -1042,9 +1047,14 @@ const MealPlanTab: React.FC = () => {
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"
                 leftIcon={<Trash2 />}
-                onClick={() => {
-                    if (actionItem) deleteMealPlanItem(actionItem.planItem.id);
-                    setActionItem(null);
+                onClick={async () => {
+                    if (!actionItem) return;
+                    try {
+                        await deleteMealPlanItem(actionItem.planItem.id);
+                        setActionItem(null);
+                    } catch (error) {
+                        console.error("Failed to delete meal plan item:", error);
+                    }
                 }}
             >
                 Delete Meal
