@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, CheckCircle2 } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
+import { RecipeModal } from './RecipeModal';
+import clsx from 'clsx';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -35,6 +37,9 @@ const MealPlanTab: React.FC = () => {
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
+
+  // Recipe Viewer State
+  const [viewingMeal, setViewingMeal] = useState<{meal: Meal, planItem: MealPlanItem} | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -361,6 +366,32 @@ const MealPlanTab: React.FC = () => {
       setIsAddModalOpen(true);
   };
 
+  const handleMarkCooked = async () => {
+    if (!viewingMeal) return;
+
+    const { meal, planItem } = viewingMeal;
+
+    try {
+      // 1. Update Plan Item
+      await updateMealPlanItem(planItem.id, { isCooked: true });
+
+      // 2. Update Meal History (Last Cooked)
+      // Only if we have a linked meal ID and the meal exists in our library
+      if (meal.id) {
+        await updateMeal({
+            ...meal,
+            lastCooked: new Date().toISOString()
+        });
+      }
+
+      setViewingMeal(null);
+      toast.success('Bon Appétit! Marked as cooked.');
+    } catch (error) {
+      console.error('Failed to mark cooked:', error);
+      toast.error('Failed to update status');
+    }
+  };
+
   const saveMeal = async (forceNew = false) => {
       if (!currentMeal.name) return;
 
@@ -576,16 +607,36 @@ const MealPlanTab: React.FC = () => {
                             {planItems.length > 0 ? planItems.map((planItem) => {
                                 const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
                                 const mealName = planItem.mealName || linkedMeal?.name;
+                                const isCooked = planItem.isCooked;
 
                                 return (
-                                    <div key={planItem.id} className="group bg-white/60 border border-slate-200/60 rounded-xl p-4 shadow-sm hover:shadow-md hover:bg-white transition-all flex justify-between items-start gap-4">
+                                    <div
+                                        key={planItem.id}
+                                        onClick={() => {
+                                            // Only open view modal if there's enough data
+                                            if (linkedMeal) {
+                                                setViewingMeal({ meal: linkedMeal, planItem });
+                                            }
+                                        }}
+                                        className={clsx(
+                                            "group border rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-4 cursor-pointer relative overflow-hidden",
+                                            isCooked
+                                                ? "bg-green-50/50 border-green-200 hover:bg-green-50"
+                                                : "bg-white/60 border-slate-200/60 hover:bg-white"
+                                        )}
+                                    >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
                                                     {planItem.type || 'dinner'}
                                                 </span>
+                                                {isCooked && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xxs font-bold border border-green-200">
+                                                        <CheckCircle2 size={10} /> Cooked
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="font-semibold text-slate-900 truncate pr-2 tracking-tight">{mealName}</div>
+                                            <div className={clsx("font-semibold truncate pr-2 tracking-tight", isCooked ? "text-green-900" : "text-slate-900")}>{mealName}</div>
 
                                             {linkedMeal?.description && (
                                                 <div className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
@@ -608,9 +659,9 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
                                             <button
-                                                onClick={() => handleMoveToTomorrow(planItem)}
+                                                onClick={(e) => { e.stopPropagation(); handleMoveToTomorrow(planItem); }}
                                                 className="p-3 sm:p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Move ${mealName} to tomorrow`}
                                                 title="Move to tomorrow"
@@ -618,7 +669,7 @@ const MealPlanTab: React.FC = () => {
                                                 <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                             <button
-                                                onClick={() => handleDuplicatePlanItem(planItem)}
+                                                onClick={(e) => { e.stopPropagation(); handleDuplicatePlanItem(planItem); }}
                                                 className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Duplicate ${mealName}`}
                                                 title="Duplicate meal"
@@ -626,7 +677,10 @@ const MealPlanTab: React.FC = () => {
                                                 <Copy className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                             <button
-                                                onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditMealPlanItem(planItem, linkedMeal ?? undefined);
+                                                }}
                                                 className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
                                                 title="Edit meal"
@@ -634,7 +688,10 @@ const MealPlanTab: React.FC = () => {
                                                 <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                             <button
-                                                onClick={() => deleteMealPlanItem(planItem.id)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteMealPlanItem(planItem.id);
+                                                }}
                                                 className="p-3 sm:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
                                                 title="Delete meal"
@@ -952,6 +1009,17 @@ const MealPlanTab: React.FC = () => {
         onSelect={handleSelectMeal}
         onClone={handleCloneMeal}
       />
+
+      {/* Recipe Viewer Modal */}
+      {viewingMeal && (
+        <RecipeModal
+            isOpen={!!viewingMeal}
+            onClose={() => setViewingMeal(null)}
+            meal={viewingMeal.meal}
+            planItem={viewingMeal.planItem}
+            onMarkCooked={handleMarkCooked}
+        />
+      )}
 
       {/* AI Modal */}
       {isAIModalOpen && (
