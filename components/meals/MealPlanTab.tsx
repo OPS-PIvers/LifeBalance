@@ -353,13 +353,10 @@ const MealPlanTab: React.FC = () => {
       // 2. Update Meal History (Last Cooked)
       // Only if we have a linked meal ID and the meal exists in our library
       if (meal.id) {
-        const existingMeal = meals.find(m => m.id === meal.id);
-        if (existingMeal) {
-            await updateMeal({
-                ...existingMeal,
-                lastCooked: new Date().toISOString()
-            });
-        }
+        await updateMeal({
+            ...meal,
+            lastCooked: new Date().toISOString()
+        });
       }
 
       setViewingMeal(null);

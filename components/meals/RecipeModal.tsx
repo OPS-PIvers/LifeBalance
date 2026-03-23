@@ -85,11 +85,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                 {meal.ingredients.map((ing, idx) => {
                   const isChecked = checkedIngredients.has(idx);
                   return (
-                    <div
-                      key={idx}
+                    <button
+                      key={ing.name}
                       onClick={() => toggleIngredient(idx)}
                       className={clsx(
-                        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all",
+                        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all w-full text-left",
                         isChecked
                           ? "bg-slate-50 border-slate-200 opacity-60"
                           : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm"
@@ -105,7 +105,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                         <span className="font-bold text-slate-700">{ing.name}</span>
                         {ing.quantity && <span className="text-slate-500 ml-1">({ing.quantity})</span>}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -122,11 +122,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                 {meal.instructions.map((step, idx) => {
                   const isChecked = checkedInstructions.has(idx);
                   return (
-                    <div
-                      key={idx}
+                    <button
+                      key={step}
                       onClick={() => toggleInstruction(idx)}
                       className={clsx(
-                        "flex gap-4 p-4 rounded-xl border cursor-pointer transition-all",
+                        "flex gap-4 p-4 rounded-xl border cursor-pointer transition-all w-full text-left",
                         isChecked
                           ? "bg-slate-50 border-slate-200 opacity-60"
                           : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm"
@@ -143,7 +143,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                       <p className={clsx("text-sm leading-relaxed", isChecked ? "line-through text-slate-400" : "text-slate-700")}>
                         {step}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

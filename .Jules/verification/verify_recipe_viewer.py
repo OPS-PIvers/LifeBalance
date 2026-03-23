@@ -42,10 +42,10 @@ async def verify_recipe_viewer():
             # Try to fill the first text input which should be the name
             # Or find by label "MEAL NAME" if possible, but structure might vary.
             # Using the placeholder seen in screenshot
-            await page.fill('input[placeholder*="Adobo"]', "Test Recipe Viewer Meal")
+            await page.fill('input#meal-name', "Test Recipe Viewer Meal")
 
             # Add some instructions to test the checklist
-            await page.fill('textarea[placeholder*="Step 1"]', "Step 1: Prep ingredients\nStep 2: Cook meal")
+            await page.fill('textarea#meal-instructions', "Step 1: Prep ingredients\nStep 2: Cook meal")
 
             await page.click('button:has-text("Save to Plan")')
 
@@ -81,12 +81,8 @@ async def verify_recipe_viewer():
             mark_cooked_btn = page.locator('button:has-text("Mark as Cooked")')
             await mark_cooked_btn.click()
 
-            # Wait a moment for state update
-            await page.wait_for_timeout(1000)
-
-            # Close modal if still open
-            if await page.is_visible('button[aria-label="Close"]'):
-                 await page.click('button[aria-label="Close"]')
+            # Wait for modal to close instead of timeout
+            await page.get_by_role('dialog').wait_for(state="hidden")
 
             print("   - Verifying 'Cooked' status on list item...")
 
@@ -98,13 +94,12 @@ async def verify_recipe_viewer():
             await page.screenshot(path=".Jules/verification/success_cooked.png")
             print("   📸 Screenshot saved to .Jules/verification/success_cooked.png")
 
-            # Check for class presence
-            if await meal_card.locator('.text-emerald-600').count() > 0:
-                 print("   ✅ Verified: Meal has 'Cooked' indicator (text-emerald-600 found)")
-            elif await meal_card.locator('.bg-emerald-50').count() > 0:
-                 print("   ✅ Verified: Meal has 'Cooked' background (bg-emerald-50 found)")
+            # Check for the "Cooked" badge's text
+            cooked_badge = meal_card.locator('text=Cooked')
+            if await cooked_badge.count() > 0:
+                 print("   ✅ Verified: Meal has 'Cooked' indicator (found 'Cooked' text)")
             else:
-                 print("   ⚠️ Warning: 'Cooked' indicator not explicitly found via class check, please check screenshot.")
+                 print("   ⚠️ Warning: 'Cooked' indicator not found via text check. Please check screenshot.")
 
             print("\n✅ VERIFICATION SUCCESSFUL: Recipe Viewer feature is working!")
 
