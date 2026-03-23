@@ -299,9 +299,11 @@ export const quickAddExpense = onRequest(
     if (typeof rawAmount === "string") {
       // Detect accounting notation: "(50.00)" means negative
       const isAccounting = /^\s*\([\d.,]+\)\s*$/.test(rawAmount);
-      // Strip everything that isn't a digit, decimal point, or leading minus
-      const cleaned = rawAmount.replace(/[^\d.\-]/g, "");
-      amount = isAccounting ? -Math.abs(parseFloat(cleaned)) : parseFloat(cleaned);
+      // Strip everything that isn't a digit or decimal point, then restore a leading minus if present
+      const isNegative = rawAmount.trimStart().startsWith("-");
+      const cleaned = rawAmount.replace(/[^\d.]/g, "");
+      const numeric = parseFloat(cleaned);
+      amount = isAccounting ? -Math.abs(numeric) : (isNegative ? -numeric : numeric);
     } else {
       amount = rawAmount;
     }
@@ -403,7 +405,7 @@ export const quickAddExpense = onRequest(
           merchant,
           category,
           date: transactionDate,
-          status: "pending",
+          status: "pending_review",
         },
       });
     } catch (error) {
