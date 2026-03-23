@@ -292,18 +292,32 @@ export const quickAddExpense = onRequest(
     const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
     // Convert amount to number.
-    // iOS Shortcuts may send amounts as numeric or as formatted currency strings
-    // (e.g. "$50.00", "-$50.00", "USD 50.00", or accounting notation "(50.00)" = -50).
+    // iOS Shortcuts may send amounts as a plain number or as a formatted currency string
+    // (e.g. "$50.00", "-$50.00", "USD 50.00", "50,00", "1.234,56",
+    //  or accounting notation "(50.00)" / "(€50,00)" = -50).
     // We normalise all of these so the automation succeeds regardless of iOS version or locale.
     let amount: number;
     if (typeof rawAmount === "string") {
-      // Detect accounting notation: "(50.00)" means negative
-      const isAccounting = /^\s*\([\d.,]+\)\s*$/.test(rawAmount);
-      // Strip everything that isn't a digit or decimal point, then restore a leading minus if present
-      const isNegative = rawAmount.trimStart().startsWith("-");
-      const cleaned = rawAmount.replace(/[^\d.]/g, "");
-      const numeric = parseFloat(cleaned);
-      amount = isAccounting ? -Math.abs(numeric) : (isNegative ? -numeric : numeric);
+      const raw = rawAmount.trim();
+      // Negative if wrapped in parentheses (accounting notation) or contains a '-' anywhere
+      const isNegative = /^\(.*\)$/.test(raw) || raw.includes("-");
+      // Remove parens, minus signs, and non-numeric characters except digit separators
+      const digitsOnly = raw.replace(/[()]/g, "").replace(/-/g, "").replace(/[^\d.,]/g, "");
+      let numeric = NaN;
+      if (digitsOnly.length > 0) {
+        const lastDot   = digitsOnly.lastIndexOf(".");
+        const lastComma = digitsOnly.lastIndexOf(",");
+        const decPos    = Math.max(lastDot, lastComma);
+        if (decPos >= 0) {
+          // Everything before the last separator is the integer part (strip grouping); after is fractional
+          const intPart  = digitsOnly.slice(0, decPos).replace(/[.,]/g, "");
+          const fracPart = digitsOnly.slice(decPos + 1);
+          numeric = parseFloat(fracPart ? `${intPart}.${fracPart}` : intPart);
+        } else {
+          numeric = parseFloat(digitsOnly);
+        }
+      }
+      amount = isNegative ? -Math.abs(numeric) : numeric;
     } else {
       amount = rawAmount;
     }
