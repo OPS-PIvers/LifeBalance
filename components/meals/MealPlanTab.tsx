@@ -311,11 +311,9 @@ const MealPlanTab: React.FC = () => {
 
   const handleDuplicatePlanItem = async (planItem: MealPlanItem) => {
       try {
+          const { id: _id, isCooked: _isCooked, ...itemToDuplicate } = planItem;
           await addMealPlanItem({
-              date: planItem.date,
-              mealName: planItem.mealName,
-              mealId: planItem.mealId,
-              type: planItem.type,
+              ...itemToDuplicate,
               isCooked: false
           });
           toast.success('Meal duplicated');
