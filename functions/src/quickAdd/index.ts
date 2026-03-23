@@ -291,8 +291,36 @@ export const quickAddExpense = onRequest(
     // 4. Parse and validate request body
     const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
-    // Convert amount to number (iOS Shortcuts often sends numbers as strings)
-    let amount = typeof rawAmount === "string" ? parseFloat(rawAmount) : rawAmount;
+    // Convert amount to number.
+    // iOS Shortcuts may send amounts as a plain number or as a formatted currency string
+    // (e.g. "$50.00", "-$50.00", "USD 50.00", "50,00", "1.234,56",
+    //  or accounting notation "(50.00)" / "(€50,00)" = -50).
+    // We normalise all of these so the automation succeeds regardless of iOS version or locale.
+    let amount: number;
+    if (typeof rawAmount === "string") {
+      const raw = rawAmount.trim();
+      // Negative if wrapped in parentheses (accounting notation) or contains a '-' anywhere
+      const isNegative = /^\(.*\)$/.test(raw) || raw.includes("-");
+      // Remove parens, minus signs, and non-numeric characters except digit separators
+      const digitsOnly = raw.replace(/[()]/g, "").replace(/-/g, "").replace(/[^\d.,]/g, "");
+      let numeric = NaN;
+      if (digitsOnly.length > 0) {
+        const lastDot   = digitsOnly.lastIndexOf(".");
+        const lastComma = digitsOnly.lastIndexOf(",");
+        const decPos    = Math.max(lastDot, lastComma);
+        if (decPos >= 0) {
+          // Everything before the last separator is the integer part (strip grouping); after is fractional
+          const intPart  = digitsOnly.slice(0, decPos).replace(/[.,]/g, "");
+          const fracPart = digitsOnly.slice(decPos + 1);
+          numeric = parseFloat(fracPart ? `${intPart}.${fracPart}` : intPart);
+        } else {
+          numeric = parseFloat(digitsOnly);
+        }
+      }
+      amount = isNegative ? -Math.abs(numeric) : numeric;
+    } else {
+      amount = rawAmount;
+    }
 
     // Round to 2 decimal places to avoid floating-point precision issues
     if (typeof amount === "number" && !isNaN(amount)) {
@@ -304,14 +332,15 @@ export const quickAddExpense = onRequest(
       errorResponse(
         res,
         400,
-        `amount must be a non-zero number (received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)})`,
+        `amount must be a non-zero number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
+          `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted.`,
         "BAD_REQUEST"
       );
       return;
     }
 
-    // Note: Apple Pay automations send debits as negative numbers (-50.00),
-    // so we accept negative amounts and convert to positive for storage
+    // Accept both positive and negative amounts — iOS automation sign varies by version.
+    // Expenses are always stored as positive numbers; the sign carries no meaning here.
     amount = Math.abs(amount);
 
     // Security: Input validation & sanitization
@@ -362,7 +391,7 @@ export const quickAddExpense = onRequest(
         merchant: merchant.trim(),
         category,
         date: transactionDate,
-        status: "pending",  // Pending for review, like receipt scanner
+        status: "pending_review",  // Matches Transaction type; surfaces in the Budget tab for review
         isRecurring: false,
         source: "shortcut" as const,
         autoCategorized: false,
@@ -390,7 +419,7 @@ export const quickAddExpense = onRequest(
           merchant,
           category,
           date: transactionDate,
-          status: "pending",
+          status: "pending_review",
         },
       });
     } catch (error) {
