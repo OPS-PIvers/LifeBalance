@@ -576,7 +576,7 @@ const MealPlanTab: React.FC = () => {
       </div>
 
       {/* Days Grid */}
-      <div className="space-y-4">
+      <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-4 pb-4 px-1 md:flex-col md:overflow-visible md:pb-0 md:px-0 md:space-y-4 no-scrollbar">
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const planItems = mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === dateStr) : [];
@@ -585,7 +585,7 @@ const MealPlanTab: React.FC = () => {
             return (
                 <div
                     key={dateStr}
-                    className={`bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass p-6 ring-1 transition-all ${isToday ? 'ring-brand-200 bg-brand-50/30' : 'ring-black/5'}`}
+                    className={`min-w-[85vw] snap-center md:min-w-0 md:snap-align-none bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass p-6 ring-1 transition-all ${isToday ? 'ring-brand-200 bg-brand-50/30' : 'ring-black/5'}`}
                 >
                     <div className="flex flex-col sm:flex-row gap-6">
                         {/* Date Column */}
@@ -1109,6 +1109,7 @@ const MealPlanTab: React.FC = () => {
               onConfirm={handleConfirmIngredients}
           />
       )}
+
     </div>
   );
 };
