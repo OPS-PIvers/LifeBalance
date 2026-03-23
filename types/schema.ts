@@ -113,6 +113,7 @@ export interface Transaction {
   store?: string;
   accountId?: string;
   notes?: string;
+  createdAt?: string; // ISO timestamp
 }
 
 export interface CalendarItem {

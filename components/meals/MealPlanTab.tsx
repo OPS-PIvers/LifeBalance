@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, MoreVertical } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy, CheckCircle2 } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
 import { CookbookModal } from './CookbookModal';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
+import { RecipeModal } from './RecipeModal';
+import clsx from 'clsx';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -38,6 +38,9 @@ const MealPlanTab: React.FC = () => {
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
+  // Recipe Viewer State
+  const [viewingMeal, setViewingMeal] = useState<{meal: Meal, planItem: MealPlanItem} | null>(null);
+
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
     name: '',
@@ -58,9 +61,6 @@ const MealPlanTab: React.FC = () => {
   // Ingredient management
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
-
-  // Mobile Action Drawer State
-  const [actionItem, setActionItem] = useState<{ planItem: MealPlanItem, linkedMeal: Meal | undefined } | null>(null);
 
   const handleAddTag = () => {
     const trimmedInput = tagInput.trim();
@@ -314,6 +314,31 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
+  const handleDuplicatePlanItem = async (planItem: MealPlanItem) => {
+      try {
+          const { id: _id, isCooked: _isCooked, ...itemToDuplicate } = planItem;
+          await addMealPlanItem({
+              ...itemToDuplicate,
+              isCooked: false
+          });
+          toast.success('Meal duplicated');
+      } catch (error) {
+          console.error('Duplicate plan item failed:', error);
+          toast.error('Failed to duplicate meal');
+      }
+  };
+
+  const handleMoveToTomorrow = async (planItem: MealPlanItem) => {
+      try {
+          const tomorrowStr = format(addDays(parseISO(planItem.date), 1), 'yyyy-MM-dd');
+          await updateMealPlanItem(planItem.id, { date: tomorrowStr });
+          toast.success('Moved to tomorrow');
+      } catch (error) {
+          console.error('Move plan item failed:', error);
+          toast.error('Failed to move meal');
+      }
+  };
+
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
@@ -339,6 +364,32 @@ const MealPlanTab: React.FC = () => {
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
+  };
+
+  const handleMarkCooked = async () => {
+    if (!viewingMeal) return;
+
+    const { meal, planItem } = viewingMeal;
+
+    try {
+      // 1. Update Plan Item
+      await updateMealPlanItem(planItem.id, { isCooked: true });
+
+      // 2. Update Meal History (Last Cooked)
+      // Only if we have a linked meal ID and the meal exists in our library
+      if (meal.id) {
+        await updateMeal({
+            ...meal,
+            lastCooked: new Date().toISOString()
+        });
+      }
+
+      setViewingMeal(null);
+      toast.success('Bon Appétit! Marked as cooked.');
+    } catch (error) {
+      console.error('Failed to mark cooked:', error);
+      toast.error('Failed to update status');
+    }
   };
 
   const saveMeal = async (forceNew = false) => {
@@ -556,16 +607,36 @@ const MealPlanTab: React.FC = () => {
                             {planItems.length > 0 ? planItems.map((planItem) => {
                                 const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
                                 const mealName = planItem.mealName || linkedMeal?.name;
+                                const isCooked = planItem.isCooked;
 
                                 return (
-                                    <div key={planItem.id} className="group bg-white/60 border border-slate-200/60 rounded-xl p-4 shadow-sm hover:shadow-md hover:bg-white transition-all flex justify-between items-start gap-4">
+                                    <div
+                                        key={planItem.id}
+                                        onClick={() => {
+                                            // Only open view modal if there's enough data
+                                            if (linkedMeal) {
+                                                setViewingMeal({ meal: linkedMeal, planItem });
+                                            }
+                                        }}
+                                        className={clsx(
+                                            "group border rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-4 cursor-pointer relative overflow-hidden",
+                                            isCooked
+                                                ? "bg-green-50/50 border-green-200 hover:bg-green-50"
+                                                : "bg-white/60 border-slate-200/60 hover:bg-white"
+                                        )}
+                                    >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
                                                     {planItem.type || 'dinner'}
                                                 </span>
+                                                {isCooked && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xxs font-bold border border-green-200">
+                                                        <CheckCircle2 size={10} /> Cooked
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="font-semibold text-slate-900 truncate pr-2 tracking-tight">{mealName}</div>
+                                            <div className={clsx("font-semibold truncate pr-2 tracking-tight", isCooked ? "text-green-900" : "text-slate-900")}>{mealName}</div>
 
                                             {linkedMeal?.description && (
                                                 <div className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
@@ -588,36 +659,45 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-col items-end gap-1">
-                                            {/* Mobile: More Button */}
+                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleMoveToTomorrow(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Move ${mealName} to tomorrow`}
+                                                title="Move to tomorrow"
+                                            >
+                                                <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDuplicatePlanItem(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Duplicate ${mealName}`}
+                                                title="Duplicate meal"
+                                            >
+                                                <Copy className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setActionItem({ planItem, linkedMeal: linkedMeal ?? undefined });
+                                                    handleEditMealPlanItem(planItem, linkedMeal ?? undefined);
                                                 }}
-                                                className="sm:hidden p-2 text-gray-400 hover:text-brand-600 rounded-lg active:bg-brand-50"
-                                                aria-label="Options"
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Edit ${mealName}`}
+                                                title="Edit meal"
                                             >
-                                                <MoreVertical className="w-5 h-5" />
+                                                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
-
-                                            {/* Desktop: Inline Actions */}
-                                            <div className="hidden sm:flex flex-col gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                    className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
-                                                    aria-label={`Edit ${mealName}`}
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteMealPlanItem(planItem.id)}
-                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
-                                                    aria-label={`Delete ${mealName}`}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteMealPlanItem(planItem.id);
+                                                }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Delete ${mealName}`}
+                                                title="Delete meal"
+                                            >
+                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
                                         </div>
                                     </div>
                                 );
@@ -930,6 +1010,17 @@ const MealPlanTab: React.FC = () => {
         onClone={handleCloneMeal}
       />
 
+      {/* Recipe Viewer Modal */}
+      {viewingMeal && (
+        <RecipeModal
+            isOpen={!!viewingMeal}
+            onClose={() => setViewingMeal(null)}
+            meal={viewingMeal.meal}
+            planItem={viewingMeal.planItem}
+            onMarkCooked={handleMarkCooked}
+        />
+      )}
+
       {/* AI Modal */}
       {isAIModalOpen && (
           <div
@@ -1019,48 +1110,6 @@ const MealPlanTab: React.FC = () => {
           />
       )}
 
-      {/* Mobile Actions Drawer */}
-      <Drawer
-        isOpen={!!actionItem}
-        onClose={() => setActionItem(null)}
-        title={actionItem?.linkedMeal?.name || actionItem?.planItem.mealName || 'Meal Options'}
-      >
-        <div className="space-y-2">
-            <Button
-                variant="ghost"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Edit2 className="text-brand-500" />}
-                onClick={async () => {
-                    if (!actionItem) return;
-                    try {
-                        await handleEditMealPlanItem(actionItem.planItem, actionItem.linkedMeal);
-                        setActionItem(null);
-                    } catch (error) {
-                        console.error("Failed to edit meal plan item:", error);
-                    }
-                }}
-            >
-                Edit Meal
-            </Button>
-            <div className="h-px bg-gray-100 my-2" />
-            <Button
-                variant="ghost-destructive"
-                className="w-full justify-start text-lg py-4"
-                leftIcon={<Trash2 />}
-                onClick={async () => {
-                    if (!actionItem) return;
-                    try {
-                        await deleteMealPlanItem(actionItem.planItem.id);
-                        setActionItem(null);
-                    } catch (error) {
-                        console.error("Failed to delete meal plan item:", error);
-                    }
-                }}
-            >
-                Delete Meal
-            </Button>
-        </div>
-      </Drawer>
     </div>
   );
 };

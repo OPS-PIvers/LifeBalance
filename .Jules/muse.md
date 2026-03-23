@@ -36,3 +36,11 @@
 - **Modals:** Upgraded all modals (`GroceryCatalog`, `ShoppingSettings`, `AddMeal`) to use glassmorphism (`bg-white/95 backdrop-blur-xl`) and softer inputs (`bg-slate-50/50`).
 - **Shopping List:** Softened swipe actions to pastel red/emerald. Converted chips to pill-shaped glass elements.
 - **Buttons:** Replaced flat brand buttons with glassmorphism variants (`shadow-sm`, `ring-1 ring-black/5`).
+
+## 2025-05-25 - Budget Core Polish
+**Critique:** "Developer UI" persisted in `components/budget/` core components (History, Accounts, Calendar, Transactions, Recurring Bills). Generic `shadow-sm`, `shadow-soft`, and flat `bg-white` colors were used. Typography lacked proper spacing, and harsh contrasts degraded the premium feel.
+**Polish:** Replaced flat boxes with Glassmorphism standards across Budget components.
+- **Surface:** Applied `bg-white/80 backdrop-blur-xl` (or `backdrop-blur-md` for sub-cards) paired with crisp `ring-1 ring-black/5`.
+- **Depth:** Upgraded generic shadows to `shadow-glass` and `shadow-[0_2px_10px_rgba(0,0,0,0.02)]` for a lifted, premium appearance.
+- **Visual Rhythm:** Softened metadata to `slate-500` or `slate-400`, upgraded important headlines to `text-2xl font-semibold tracking-tight text-slate-900`, and generously expanded internal padding (`p-4` to `p-5` or `p-6`).
+- **Gradients:** Redesigned the "Total Net Worth" header with `bg-gradient-to-br from-slate-900 to-slate-800` for deep focus.
