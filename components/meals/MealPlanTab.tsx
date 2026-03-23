@@ -314,6 +314,31 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
+  const handleDuplicatePlanItem = async (planItem: MealPlanItem) => {
+      try {
+          const { id: _id, isCooked: _isCooked, ...itemToDuplicate } = planItem;
+          await addMealPlanItem({
+              ...itemToDuplicate,
+              isCooked: false
+          });
+          toast.success('Meal duplicated');
+      } catch (error) {
+          console.error('Duplicate plan item failed:', error);
+          toast.error('Failed to duplicate meal');
+      }
+  };
+
+  const handleMoveToTomorrow = async (planItem: MealPlanItem) => {
+      try {
+          const tomorrowStr = format(addDays(parseISO(planItem.date), 1), 'yyyy-MM-dd');
+          await updateMealPlanItem(planItem.id, { date: tomorrowStr });
+          toast.success('Moved to tomorrow');
+      } catch (error) {
+          console.error('Move plan item failed:', error);
+          toast.error('Failed to move meal');
+      }
+  };
+
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
@@ -636,12 +661,29 @@ const MealPlanTab: React.FC = () => {
 
                                         <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
                                             <button
+                                                onClick={(e) => { e.stopPropagation(); handleMoveToTomorrow(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Move ${mealName} to tomorrow`}
+                                                title="Move to tomorrow"
+                                            >
+                                                <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDuplicatePlanItem(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Duplicate ${mealName}`}
+                                                title="Duplicate meal"
+                                            >
+                                                <Copy className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
+                                            <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleEditMealPlanItem(planItem, linkedMeal ?? undefined);
                                                 }}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
+                                                title="Edit meal"
                                             >
                                                 <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
@@ -650,8 +692,9 @@ const MealPlanTab: React.FC = () => {
                                                     e.stopPropagation();
                                                     deleteMealPlanItem(planItem.id);
                                                 }}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
+                                                title="Delete meal"
                                             >
                                                 <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>

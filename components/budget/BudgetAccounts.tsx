@@ -183,9 +183,9 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`bg-white p-4 rounded-2xl border shadow-sm relative overflow-hidden transition-all duration-200 ${
+        className={`bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative overflow-hidden transition-all duration-200 ${
           isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-brand-500 border-2' : 'border-brand-100'}`}
+        } ${isDragOver ? 'border-brand-500 border-2' : 'border-transparent'}`}
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -301,18 +301,18 @@ const BudgetAccounts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Net Worth Header */}
-      <div className="bg-brand-800 rounded-2xl p-6 text-white shadow-lg text-center">
-        <p className="text-brand-300 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-glass-deep ring-1 ring-white/10 text-center">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
           ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
         <div className="flex justify-center gap-6 mt-3 text-sm">
           <div>
-            <span className="text-brand-400">Assets:</span>{' '}
+            <span className="text-slate-400">Assets:</span>{' '}
             <span className="text-emerald-400 font-mono">${assets.toLocaleString()}</span>
           </div>
           <div>
-            <span className="text-brand-400">Liabilities:</span>{' '}
+            <span className="text-slate-400">Liabilities:</span>{' '}
             <span className="text-rose-400 font-mono">${debts.toLocaleString()}</span>
           </div>
         </div>
