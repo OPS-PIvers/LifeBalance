@@ -1429,7 +1429,7 @@ export const parseRecipe = async (
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<Partial<Meal>> => {
   try {
-    const sanitizedText = sanitizeForPrompt(text);
+    const sanitizedText = text.replace(/"/g, "'").slice(0, 10000);
 
     const prompt = `
       Parse this recipe text into a structured JSON object.
@@ -1463,7 +1463,7 @@ export const parseRecipe = async (
                 name: { type: Type.STRING },
                 quantity: { type: Type.STRING }
               },
-              required: ["name", "quantity"]
+              required: ["name"]
             }
           },
           instructions: { type: Type.ARRAY, items: { type: Type.STRING } },

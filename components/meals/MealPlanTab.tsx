@@ -479,12 +479,12 @@ const MealPlanTab: React.FC = () => {
   const handleRecipeImport = (meal: Partial<Meal>) => {
       setCurrentMeal(prev => ({
           ...prev,
-          name: meal.name || prev.name,
-          description: meal.description || prev.description,
-          ingredients: meal.ingredients || prev.ingredients || [],
-          instructions: meal.instructions || prev.instructions || [],
-          recipeUrl: meal.recipeUrl || prev.recipeUrl || '',
-          tags: meal.tags || prev.tags || []
+          name: meal.name ?? prev.name,
+          description: meal.description ?? prev.description,
+          ingredients: meal.ingredients ?? prev.ingredients ?? [],
+          instructions: meal.instructions ?? prev.instructions ?? [],
+          recipeUrl: meal.recipeUrl ?? prev.recipeUrl ?? '',
+          tags: meal.tags ?? prev.tags ?? []
       }));
   };
 

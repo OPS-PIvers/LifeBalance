@@ -31,14 +31,10 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
     setIsParsing(true);
     try {
       const result = await parseRecipe(householdId, text);
-      if (result) {
-          onConfirm(result);
-          onClose();
-          setText(''); // Reset
-          toast.success('Recipe parsed successfully!');
-      } else {
-          toast.error('Failed to parse recipe');
-      }
+      onConfirm(result);
+      onClose();
+      setText(''); // Reset
+      toast.success('Recipe parsed successfully!');
     } catch (error) {
       console.error('Recipe parsing failed:', error);
       toast.error('Failed to parse recipe. Please try again.');
