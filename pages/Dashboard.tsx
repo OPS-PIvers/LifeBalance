@@ -16,6 +16,7 @@ import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget
 import { CreateChallengePayload } from '@/types/schema';
 import { Modal } from '../components/ui/Modal';
 import { Button } from '../components/ui/Button';
+import { AccountSelectItem } from '../components/ui/AccountSelectItem';
 
 const Dashboard: React.FC = () => {
   const {
@@ -192,17 +193,15 @@ const Dashboard: React.FC = () => {
 
         <div className="space-y-3 mb-6">
           {accounts.filter(a => a.type !== 'credit').map(acc => (
-            <button
+            <AccountSelectItem
               key={acc.id}
+              name={acc.name}
+              balance={acc.balance}
               onClick={() => {
                 if (payModalItemId) payCalendarItem(payModalItemId, acc.id);
                 setPayModalItemId(null);
               }}
-              className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all group"
-            >
-              <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
-              <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
-            </button>
+            />
           ))}
         </div>
 
