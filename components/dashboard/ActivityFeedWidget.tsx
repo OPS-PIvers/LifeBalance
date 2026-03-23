@@ -16,37 +16,28 @@ export const ActivityFeedWidget: React.FC = () => {
   const { transactions, todos } = useHousehold();
 
   const recentActivity = useMemo(() => {
-    const activities: ActivityItem[] = [];
+    const transactionActivities: ActivityItem[] = transactions
+      .filter(tx => tx.status === 'verified' && tx.category !== 'Income')
+      .map(tx => ({
+        id: tx.id,
+        type: 'transaction',
+        title: tx.merchant,
+        subtitle: tx.category,
+        timestamp: parseISO(tx.createdAt || tx.date), // Use createdAt if available, fallback to date
+        amount: tx.amount,
+      }));
 
-    // Add recent verified transactions
-    transactions.forEach(tx => {
-      if (tx.status === 'verified' && tx.category !== 'Income') {
-        activities.push({
-          id: tx.id,
-          type: 'transaction',
-          title: tx.merchant,
-          subtitle: tx.category,
-          timestamp: parseISO(tx.date), // Note: this is just a date, so time resolution is low
-          amount: tx.amount,
-        });
-      }
-    });
+    const todoActivities: ActivityItem[] = todos
+      .filter(todo => todo.isCompleted && todo.completedAt)
+      .map(todo => ({
+        id: todo.id,
+        type: 'todo',
+        title: todo.text,
+        subtitle: 'Task Completed',
+        timestamp: parseISO(todo.completedAt!),
+      }));
 
-    // Add completed todos
-    todos.forEach(todo => {
-      if (todo.isCompleted && todo.completedAt) {
-        activities.push({
-          id: todo.id,
-          type: 'todo',
-          title: todo.text,
-          subtitle: 'Task Completed',
-          timestamp: parseISO(todo.completedAt),
-        });
-      }
-    });
-
-    // Sort by timestamp descending
-    return activities
+    return [...transactionActivities, ...todoActivities]
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 5); // Take top 5
   }, [transactions, todos]);
