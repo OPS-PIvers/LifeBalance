@@ -135,7 +135,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-slate-50/50 border border-slate-200/60 focus:ring-brand-500/10 rounded text-right font-bold"
+                    className="w-16 p-1 bg-slate-50/50 border border-slate-200/60 focus:ring-slate-500/10 rounded text-right font-bold"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />

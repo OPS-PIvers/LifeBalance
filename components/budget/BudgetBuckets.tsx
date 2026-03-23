@@ -361,7 +361,7 @@ const BudgetBuckets: React.FC = () => {
               variant="primary"
               onClick={handleReallocateConfirm}
               disabled={!reallocateModal?.sourceId || remainingAfterTransfer < 0}
-              className="flex-1 py-3 bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors font-bold rounded-xl"
+              className="flex-1 py-3"
             >
               Confirm
             </Button>

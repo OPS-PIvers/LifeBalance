@@ -38,8 +38,8 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? "px-3 py-2 bg-slate-50/50 border border-slate-200/60 rounded-lg text-sm text-slate-700 outline-none focus:ring-2 focus:ring-brand-500/10 min-w-[120px]"
-    : "w-full px-4 py-3 bg-slate-50/50 border border-slate-200/60 rounded-xl text-base text-slate-700 outline-none focus:ring-2 focus:ring-brand-500/10";
+    ? "px-3 py-2 bg-slate-50/50 border border-slate-200/60 rounded-lg text-sm text-slate-700 outline-none focus:ring-2 focus:ring-slate-500/10 min-w-[120px]"
+    : "w-full px-4 py-3 bg-slate-50/50 border border-slate-200/60 rounded-xl text-base text-slate-700 outline-none focus:ring-2 focus:ring-slate-500/10";
 
   return (
     <>
@@ -409,7 +409,7 @@ const TransactionMasterList: React.FC = () => {
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200/60 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/10 transition-colors"
+            className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200/60 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/10 transition-colors"
           />
           {searchTerm && (
             <Button
@@ -541,7 +541,7 @@ const TransactionMasterList: React.FC = () => {
             onClick={handleSelectAll}
             className="flex items-center gap-2 font-bold hover:no-underline"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-slate-600' : 'text-brand-300'} />
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-slate-600' : 'text-slate-400'} />
             Select All ({filteredTransactions.length})
           </Button>
           <span className="text-xs">{selectedIds.size} selected</span>
@@ -638,7 +638,7 @@ const TransactionMasterList: React.FC = () => {
           disableBackdropClose={isBatchProcessing}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
+            <h3 className="text-lg font-bold text-slate-900">Batch Delete</h3>
             <p className="text-slate-600">
               Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
             </p>
@@ -697,7 +697,7 @@ const TransactionMasterList: React.FC = () => {
           disableBackdropClose={isDeleting}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800">Confirm Delete</h3>
+            <h3 className="text-lg font-bold text-slate-900">Confirm Delete</h3>
             <p className="text-slate-600">
               Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>${transactionToDelete.amount.toFixed(2)}</strong>?
             </p>
