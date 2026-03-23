@@ -291,8 +291,20 @@ export const quickAddExpense = onRequest(
     // 4. Parse and validate request body
     const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
-    // Convert amount to number (iOS Shortcuts often sends numbers as strings)
-    let amount = typeof rawAmount === "string" ? parseFloat(rawAmount) : rawAmount;
+    // Convert amount to number.
+    // iOS Shortcuts may send amounts as numeric or as formatted currency strings
+    // (e.g. "$50.00", "-$50.00", "USD 50.00", or accounting notation "(50.00)" = -50).
+    // We normalise all of these so the automation succeeds regardless of iOS version or locale.
+    let amount: number;
+    if (typeof rawAmount === "string") {
+      // Detect accounting notation: "(50.00)" means negative
+      const isAccounting = /^\s*\([\d.,]+\)\s*$/.test(rawAmount);
+      // Strip everything that isn't a digit, decimal point, or leading minus
+      const cleaned = rawAmount.replace(/[^\d.\-]/g, "");
+      amount = isAccounting ? -Math.abs(parseFloat(cleaned)) : parseFloat(cleaned);
+    } else {
+      amount = rawAmount;
+    }
 
     // Round to 2 decimal places to avoid floating-point precision issues
     if (typeof amount === "number" && !isNaN(amount)) {
@@ -304,14 +316,15 @@ export const quickAddExpense = onRequest(
       errorResponse(
         res,
         400,
-        `amount must be a non-zero number (received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)})`,
+        `amount must be a non-zero number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
+          `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted.`,
         "BAD_REQUEST"
       );
       return;
     }
 
-    // Note: Apple Pay automations send debits as negative numbers (-50.00),
-    // so we accept negative amounts and convert to positive for storage
+    // Accept both positive and negative amounts — iOS automation sign varies by version.
+    // Expenses are always stored as positive numbers; the sign carries no meaning here.
     amount = Math.abs(amount);
 
     // Security: Input validation & sanitization
@@ -362,7 +375,7 @@ export const quickAddExpense = onRequest(
         merchant: merchant.trim(),
         category,
         date: transactionDate,
-        status: "pending",  // Pending for review, like receipt scanner
+        status: "pending_review",  // Matches Transaction type; surfaces in the Budget tab for review
         isRecurring: false,
         source: "shortcut" as const,
         autoCategorized: false,
