@@ -469,7 +469,7 @@ const ShoppingListTab: React.FC = () => {
                  <>
                    <div className="fixed inset-0 z-10" onClick={() => setIsFilterOpen(false)} />
                    <div className="absolute top-full right-0 mt-2 w-48 bg-white/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200">
-                     <div className="max-h-60 overflow-y-auto overscroll-contain">
+                     <div className="max-h-60 scroll-contain-y">
                         <button
                           onClick={() => {
                             setFilterStore(null);

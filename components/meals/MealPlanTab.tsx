@@ -742,7 +742,7 @@ const MealPlanTab: React.FC = () => {
                       </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-6">
+                  <div className="flex-1 scroll-contain-y p-6 space-y-6">
                       {/* Top Actions */}
                       <div className="grid grid-cols-2 gap-4">
                           <button

@@ -213,7 +213,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto overscroll-contain bg-slate-50/50 p-4 sm:p-6 space-y-6">
+        <div className="flex-1 scroll-contain-y bg-slate-50/50 p-4 sm:p-6 space-y-6">
 
           {/* ================= PULSE TAB ================= */}
           {activeTab === 'pulse' && (

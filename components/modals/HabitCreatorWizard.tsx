@@ -299,7 +299,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="flex-1 scroll-contain-y">
 
           {/* Main View */}
           {view === 'main' && (

@@ -122,7 +122,7 @@ export const Drawer: React.FC<DrawerProps> = ({
              )}
 
              {/* Content */}
-             <div className={twMerge("overflow-y-auto overscroll-contain flex-1 pb-safe", !noPadding && "p-4")}>
+             <div className={twMerge("scroll-contain-y flex-1 pb-safe", !noPadding && "p-4")}>
                {children}
              </div>
           </motion.div>
