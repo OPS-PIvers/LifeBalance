@@ -90,7 +90,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-2">
             {ingredients.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />

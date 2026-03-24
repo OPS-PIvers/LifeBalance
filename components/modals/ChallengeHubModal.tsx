@@ -190,7 +190,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
               {/* Challenge Tab */}
               <TabsContent value="challenge" className="space-y-4">
                 {/* Title */}
@@ -295,7 +295,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 {/* Habit Selector */}
                 <div className="bg-brand-50 p-4 rounded-xl border border-brand-100">
                   <h3 className="text-sm font-bold text-brand-700 mb-3">Linked Habits</h3>
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                  <div className="space-y-2 max-h-60 overflow-y-auto overscroll-contain">
                     {/* Suggested New Habit */}
                     {suggestedHabit && (
                         <div
@@ -552,7 +552,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         <label className="text-xs font-bold text-brand-400 uppercase mb-2 block">
                           Select Habit to Patch
                         </label>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                        <div className="space-y-2 max-h-48 overflow-y-auto overscroll-contain">
                           {habits
                             .filter((h) => h.type === 'positive')
                             .map((habit) => {

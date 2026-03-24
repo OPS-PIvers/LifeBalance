@@ -233,7 +233,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       </div>
 
       {/* Content */}
-      <div className="overflow-y-auto">
+      <div className="overflow-y-auto overscroll-contain">
         {isLoading ? (
           <div className="text-center py-12 text-brand-400">
             <div className="animate-spin w-8 h-8 border-4 border-brand-200 border-t-brand-600 rounded-full mx-auto mb-3"></div>

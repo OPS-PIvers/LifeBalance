@@ -73,7 +73,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-slate-50/30">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-8 bg-slate-50/30">
 
           {/* Ingredients */}
           {meal.ingredients && meal.ingredients.length > 0 && (

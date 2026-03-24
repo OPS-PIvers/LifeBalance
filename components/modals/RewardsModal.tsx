@@ -34,7 +34,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       </div>
 
       {/* Grid */}
-      <div className="p-6 overflow-y-auto grid grid-cols-2 gap-4">
+      <div className="p-6 overflow-y-auto overscroll-contain grid grid-cols-2 gap-4">
           {rewardsInventory.map(reward => {
             const canAfford = totalPoints >= reward.cost;
 

@@ -44,7 +44,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
         </button>
       </div>
 
-      <div className="space-y-3 max-h-[35vh] min-h-[120px] overflow-y-auto">
+      <div className="space-y-3 max-h-[35vh] min-h-[120px] overflow-y-auto overscroll-contain">
         {parsedTransactions.map(tx => (
           <div
             key={tx.id}

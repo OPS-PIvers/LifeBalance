@@ -176,7 +176,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-2">
           {filteredMeals.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
                 <p>No matching recipes found.</p>

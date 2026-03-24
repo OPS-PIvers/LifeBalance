@@ -115,7 +115,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       </div>
 
       {/* Content */}
-      <div className="p-6 overflow-y-auto max-h-[70vh]">
+      <div className="p-6 overflow-y-auto overscroll-contain max-h-[70vh]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Loader size={32} className="text-indigo-600 animate-spin mb-4" />
