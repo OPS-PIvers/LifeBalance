@@ -66,28 +66,36 @@ export const showPointsToast = (
   options?: { multiplier?: number; habitCount?: number }
 ) => {
   const sign = pointsChange > 0 ? '+' : '';
+  const isPositive = pointsChange > 0;
 
-  toast(
-    <div className="flex items-center gap-2">
-      <span className="font-bold">
-        {sign}
-        {pointsChange} pts
-      </span>
-      {options?.multiplier !== undefined && (
-        <span className="text-sm opacity-80">({options.multiplier}x)</span>
-      )}
-      {options?.habitCount !== undefined && (
-        <span className="text-sm opacity-80">from {options.habitCount} habit(s)</span>
-      )}
-    </div>,
+  toast.custom(
+    (_t) => (
+      <div
+        className={`flex items-center gap-2 rounded-lg border p-3 shadow-lg ${
+          isPositive
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            : 'border-rose-200 bg-rose-50 text-rose-800'
+        }`}
+      >
+        <span className="text-xl">{isPositive ? '🌟' : '📉'}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-bold">
+            {sign}
+            {pointsChange} pts
+          </span>
+          {options?.multiplier !== undefined && (
+            <span className="text-sm opacity-80">({options.multiplier}x)</span>
+          )}
+          {options?.habitCount !== undefined && (
+            <span className="text-sm opacity-80">
+              from {options.habitCount} habit(s)
+            </span>
+          )}
+        </div>
+      </div>
+    ),
     {
       duration: options?.habitCount ? 2000 : 1500,
-      icon: pointsChange > 0 ? '🌟' : '📉',
-      style: {
-        background: pointsChange > 0 ? '#ECFDF5' : '#FFF1F2',
-        color: pointsChange > 0 ? '#065F46' : '#9F1239',
-        border: pointsChange > 0 ? '1px solid #A7F3D0' : '1px solid #FECDD3',
-      },
     }
   );
 };
