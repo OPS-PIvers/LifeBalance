@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Meal } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
-import { X, ChefHat, Sparkles, Plus } from 'lucide-react';
+import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import toast from 'react-hot-toast';
@@ -21,6 +21,7 @@ interface AddMealModalProps {
   setMealType: (type: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void;
   onOpenCookbook: () => void;
   onOpenAI: () => void;
+  onOpenImport?: () => void;
   onSave: (forceNew: boolean) => void;
 }
 
@@ -36,6 +37,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   setMealType,
   onOpenCookbook,
   onOpenAI,
+  onOpenImport,
   onSave
 }) => {
   const isMobile = useMediaQuery('(max-width: 639px)');
@@ -114,13 +116,21 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
         <div className="flex-1 scroll-contain-y p-6 space-y-6 overflow-y-auto overscroll-contain">
             {/* Top Actions */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-2 ${onOpenImport ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <button
                     onClick={onOpenCookbook}
                     className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50/80 text-indigo-700 rounded-xl hover:bg-indigo-100 font-bold text-sm transition-colors border border-indigo-100/50"
                 >
                     <ChefHat className="w-4.5 h-4.5" /> Cookbook
                 </button>
+                {onOpenImport && (
+                    <button
+                        onClick={onOpenImport}
+                        className="flex items-center justify-center gap-2 py-3 px-4 bg-emerald-50/80 text-emerald-700 rounded-xl hover:bg-emerald-100 font-bold text-sm transition-colors border border-emerald-100/50"
+                    >
+                        <FileText className="w-4.5 h-4.5" /> Import
+                    </button>
+                )}
                 <button
                     onClick={onOpenAI}
                     className="flex items-center justify-center gap-2 py-3 px-4 bg-violet-50/80 text-violet-700 rounded-xl hover:bg-violet-100 font-bold text-sm transition-colors border border-violet-100/50"

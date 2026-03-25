@@ -1416,3 +1416,68 @@ export const reorganizeHabits = async (
     throw new Error("Failed to reorganize habits.");
   }
 };
+
+/**
+ * Parses a raw recipe text into a structured meal object.
+ * @param householdId - The household ID for quota tracking
+ * @param text - The raw recipe text (title, ingredients, instructions)
+ * @param _aiClient - Optional injected AI client for testing purposes.
+ */
+export const parseRecipe = async (
+  householdId: string,
+  text: string,
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<Partial<Meal>> => {
+  try {
+    const sanitizedText = text.replace(/"/g, "'").slice(0, 10000);
+
+    const prompt = `
+      Parse this recipe text into a structured JSON object.
+      Extract:
+      - name: Recipe title
+      - description: Brief description (max 100 chars)
+      - ingredients: Array of objects { name, quantity }. Normalize names and quantities.
+      - instructions: Array of strings (step-by-step).
+      - tags: Array of strings (e.g., "Vegetarian", "Quick", "Dinner"). Infer 2-3 tags if not explicit.
+      - recipeUrl: If a URL is present in the text, extract it. Otherwise, leave empty.
+
+      Input Text:
+      "${sanitizedText}"
+
+      Return JSON.
+    `;
+
+    return await generateJsonContent<Partial<Meal>>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          ingredients: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                quantity: { type: Type.STRING }
+              },
+              required: ["name"]
+            }
+          },
+          instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+          tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+          recipeUrl: { type: Type.STRING }
+        },
+        required: ["name", "ingredients", "instructions", "tags"]
+      },
+      _aiClient,
+      'gemini-3-flash-preview'
+    );
+  } catch (error) {
+    console.error("Gemini Recipe Parse Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
+    throw new Error("Failed to parse recipe.");
+  }
+};

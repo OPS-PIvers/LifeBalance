@@ -10,6 +10,7 @@ import { CookbookModal } from './CookbookModal';
 import { RecipeModal } from './RecipeModal';
 import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
+import { RecipeImportModal } from './RecipeImportModal';
 import clsx from 'clsx';
 
 const MealPlanTab: React.FC = () => {
@@ -35,6 +36,7 @@ const MealPlanTab: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
 
@@ -482,6 +484,18 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
+  const handleRecipeImport = (meal: Partial<Meal>) => {
+      setCurrentMeal(prev => ({
+          ...prev,
+          name: meal.name ?? prev.name,
+          description: meal.description ?? prev.description,
+          ingredients: meal.ingredients ?? prev.ingredients ?? [],
+          instructions: meal.instructions ?? prev.instructions ?? [],
+          recipeUrl: meal.recipeUrl ?? prev.recipeUrl ?? '',
+          tags: meal.tags ?? prev.tags ?? []
+      }));
+  };
+
   return (
     <div className="space-y-6 pb-20">
       {/* Calendar Header */}
@@ -681,6 +695,7 @@ const MealPlanTab: React.FC = () => {
         setMealType={setMealType}
         onOpenCookbook={() => setIsPreviousMealsModalOpen(true)}
         onOpenAI={() => setIsAIModalOpen(true)}
+        onOpenImport={() => setIsImportModalOpen(true)}
         onSave={saveMeal}
       />
 
@@ -703,6 +718,14 @@ const MealPlanTab: React.FC = () => {
             onMarkCooked={handleMarkCooked}
         />
       )}
+
+      {/* Recipe Import Modal */}
+      <RecipeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        householdId={householdId || ''}
+        onConfirm={handleRecipeImport}
+      />
 
       {/* AI Modal */}
       <AISuggestModal
