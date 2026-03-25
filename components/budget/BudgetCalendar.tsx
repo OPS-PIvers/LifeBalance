@@ -463,7 +463,7 @@ const BudgetCalendar: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         maxWidth="max-w-sm"
       >
-        <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
+        <div className="p-6 scroll-contain-y max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-lg text-slate-900">
               {editingItem ? 'Edit Event' : 'Add Calendar Item'}

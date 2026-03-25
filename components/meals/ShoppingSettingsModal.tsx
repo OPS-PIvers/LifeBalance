@@ -328,7 +328,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+        <div className="flex-1 scroll-contain-y p-4 sm:p-6 bg-slate-50/50">
 
           {activeTab === 'stores' && (
             <div className="space-y-6">
