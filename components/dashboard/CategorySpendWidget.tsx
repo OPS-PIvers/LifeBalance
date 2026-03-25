@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, subMonths } from 'date-fns';
+import { startOfMonth, isWithinInterval, parseISO, subMonths } from 'date-fns';
 import { PieChart, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
