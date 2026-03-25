@@ -146,6 +146,7 @@ const BudgetHistory: React.FC = () => {
               onClick={() => toggleExpand(group.periodId)}
               className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
               aria-expanded={isExpanded}
+              aria-controls={`period-content-${group.periodId}`}
             >
               <div className="p-6 bg-transparent hover:bg-white/50 transition-colors">
                 <div className="flex justify-between items-center mb-2">
@@ -193,7 +194,7 @@ const BudgetHistory: React.FC = () => {
 
             {/* Expanded Content */}
             {isExpanded && (
-              <div className="bg-slate-50/50 p-6 border-t border-slate-100/60 space-y-3">
+              <div id={`period-content-${group.periodId}`} className="bg-slate-50/50 p-6 border-t border-slate-100/60 space-y-3">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                   Bucket Breakdown
                 </h4>
