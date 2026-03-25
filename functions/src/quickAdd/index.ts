@@ -327,12 +327,12 @@ export const quickAddExpense = onRequest(
       amount = Math.round(amount * 100) / 100;
     }
 
-    if (typeof amount !== "number" || isNaN(amount) || amount === 0) {
+    if (typeof amount !== "number" || !Number.isFinite(amount)) {
       logger.warn(`Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount })}`);
       errorResponse(
         res,
         400,
-        `amount must be a non-zero number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
+        `amount must be a valid number. Received: ${typeof rawAmount === 'undefined' ? 'undefined' : JSON.stringify(rawAmount)}. ` +
           `Send a plain number (50 or -50) or a currency string ("$50.00"). Both positive and negative values are accepted.`,
         "BAD_REQUEST"
       );
