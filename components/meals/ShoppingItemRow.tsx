@@ -142,13 +142,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             {/* Metadata Chips */}
             <div className="flex flex-wrap items-center gap-2 mt-1">
                  {item.quantity && (
-                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
+                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1.5 rounded-full font-medium">
                         {item.quantity}
                     </span>
                  )}
                  <div className="relative group">
                     <span className={clsx(
-                        "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
+                        "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                         // Focus ring logic for accessibility (when hidden select is focused)
                         "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                         item.store && stores
@@ -186,7 +186,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                  {quickStockLists && onQuickListChange && (
                    <div className="relative group">
                       <span className={clsx(
-                          "flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
+                          "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                           "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                           activeQuickList
                               ? (() => {
@@ -221,7 +221,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Edit Action */}
         <button
             onClick={() => onEdit(item)}
-            className="p-2 text-slate-300 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            className="p-3.5 text-slate-300 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
             aria-label="Edit item"
         >
             <Edit2 size={18} />

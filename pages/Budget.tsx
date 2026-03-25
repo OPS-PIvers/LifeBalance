@@ -13,20 +13,20 @@ const Budget: React.FC = () => {
       <Tabs defaultValue="calendar">
         <div className="px-4">
           {/* Sub-Navigation */}
-          <TabsList className="mb-6 overflow-x-auto no-scrollbar">
-            <TabsTrigger value="calendar" className="min-w-[80px]">
+          <TabsList className="mb-6">
+            <TabsTrigger value="calendar">
               Calendar
             </TabsTrigger>
-            <TabsTrigger value="buckets" className="min-w-[80px]">
+            <TabsTrigger value="buckets">
               Buckets
             </TabsTrigger>
-            <TabsTrigger value="accounts" className="min-w-[80px]">
+            <TabsTrigger value="accounts">
               Accounts
             </TabsTrigger>
-            <TabsTrigger value="transactions" className="min-w-[80px]">
+            <TabsTrigger value="transactions">
               Transactions
             </TabsTrigger>
-            <TabsTrigger value="history" className="min-w-[80px]">
+            <TabsTrigger value="history">
               History
             </TabsTrigger>
           </TabsList>

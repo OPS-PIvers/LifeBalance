@@ -110,7 +110,7 @@ const BudgetHistory: React.FC = () => {
     <div className="space-y-4 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <div className="flex justify-between items-center px-1">
-        <h2 className="text-xl font-bold text-slate-900">History</h2>
+        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">History</h2>
         <Button
           onClick={handleExport}
           disabled={bucketHistory.length === 0}
@@ -141,12 +141,12 @@ const BudgetHistory: React.FC = () => {
           : 100;
 
         return (
-          <Card key={group.periodId} className="overflow-hidden border border-brand-100 shadow-sm">
+          <Card key={group.periodId} className="overflow-hidden ring-1 ring-black/5 shadow-glass bg-white/80 backdrop-blur-xl">
             <button
               onClick={() => toggleExpand(group.periodId)}
               className="w-full text-left"
             >
-              <div className="p-4 bg-white hover:bg-gray-50 transition-colors">
+              <div className="p-6 bg-transparent hover:bg-white/50 transition-colors">
                 <div className="flex justify-between items-center mb-2">
                   <div>
                     <h3 className="font-bold text-brand-800 text-lg">
@@ -181,19 +181,19 @@ const BudgetHistory: React.FC = () => {
                 </div>
               </div>
 
-              <div className="px-4 py-2 bg-brand-50 border-t border-brand-100 flex justify-center">
+              <div className="px-6 py-2 bg-slate-50/50 border-t border-slate-100/60 flex justify-center">
                 {isExpanded ? (
-                  <ChevronUp size={16} className="text-brand-400" />
+                  <ChevronUp size={16} className="text-slate-400" />
                 ) : (
-                  <ChevronDown size={16} className="text-brand-400" />
+                  <ChevronDown size={16} className="text-slate-400" />
                 )}
               </div>
             </button>
 
             {/* Expanded Content */}
             {isExpanded && (
-              <div className="bg-brand-50/50 p-4 border-t border-brand-100 space-y-3">
-                <h4 className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-2">
+              <div className="bg-slate-50/50 p-6 border-t border-slate-100/60 space-y-3">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                   Bucket Breakdown
                 </h4>
                 {group.snapshots.sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent)).map(bucket => {
@@ -203,7 +203,7 @@ const BudgetHistory: React.FC = () => {
                     : 100;
 
                   return (
-                    <div key={bucket.id} className="bg-white p-3 rounded-xl border border-brand-100 shadow-sm">
+                    <div key={bucket.id} className="bg-white/60 backdrop-blur-md p-3 rounded-xl ring-1 ring-black/5 shadow-sm">
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-bold text-brand-700">{bucket.bucketName}</span>
                         <span className={`text-sm font-bold ${bucketSavings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>

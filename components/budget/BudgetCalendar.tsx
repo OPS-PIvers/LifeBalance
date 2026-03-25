@@ -187,7 +187,7 @@ const BudgetCalendar: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Calendar Card */}
-      <div className="bg-white/50 backdrop-blur-xl rounded-3xl shadow-soft border border-white/20 p-6">
+      <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-glass ring-1 ring-black/5 p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-bold text-xl text-slate-900 tracking-tight">
@@ -301,7 +301,7 @@ const BudgetCalendar: React.FC = () => {
           <div className="space-y-3">
             {/* ToDos Section */}
             {selectedTodos.map(todo => (
-              <div key={todo.id} className="bg-white p-4 rounded-xl border border-blue-100 shadow-soft flex items-center justify-between group">
+              <div key={todo.id} className="bg-white/80 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex items-center justify-between group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg bg-blue-50 text-blue-600">
                     <CheckSquare size={20} />
@@ -337,7 +337,7 @@ const BudgetCalendar: React.FC = () => {
 
             {/* Financial Items Section */}
             {selectedItems.map(item => (
-              <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft flex items-center justify-between group">
+              <div key={item.id} className="bg-white/80 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex items-center justify-between group">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg ${
                     item.type === 'income' ? 'bg-money-bgPos text-money-pos' : 'bg-money-bgNeg text-money-neg'
@@ -463,7 +463,7 @@ const BudgetCalendar: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         maxWidth="max-w-sm"
       >
-        <div className="p-6 overflow-y-auto max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
+        <div className="p-6 scroll-contain-y max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-lg text-slate-900">
               {editingItem ? 'Edit Event' : 'Add Calendar Item'}

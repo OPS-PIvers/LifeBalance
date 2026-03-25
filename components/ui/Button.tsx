@@ -14,8 +14,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', layout = 'horizontal', isLoading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
     const variants = {
-      primary: 'bg-brand-800 text-white hover:bg-brand-900 shadow-[0_1px_2px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      secondary: 'bg-white text-slate-700 border border-slate-200/60 hover:bg-slate-50 hover:text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+      primary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-btn-primary hover:shadow-btn-primary-hover',
+      secondary: 'bg-white text-slate-700 border border-slate-200/60 hover:bg-slate-50 hover:text-slate-900 shadow-btn-secondary',
       ghost: 'bg-transparent text-slate-600 hover:bg-slate-100/50 hover:text-slate-900',
       danger: 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 shadow-sm',
       outline: 'bg-transparent border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900',
@@ -24,9 +24,9 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       'ghost-danger': 'bg-transparent text-rose-500 hover:text-rose-600 hover:bg-rose-50',
       'ghost-destructive': 'bg-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50',
       'ghost-brand': 'bg-transparent text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50',
-      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_1px_2px_rgba(16,185,129,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-[0_1px_2px_rgba(245,158,11,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
-      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-[0_1px_2px_rgba(244,63,94,0.2),inset_0_1px_0_rgba(255,255,255,0.1)]',
+      success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-btn-success',
+      warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-btn-warning',
+      destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-btn-destructive',
       link: 'bg-transparent text-brand-600 hover:text-brand-800 hover:underline px-0 shadow-none h-auto',
       'ghost-inverted': 'bg-transparent text-white/80 hover:text-white hover:bg-white/10',
     };
@@ -43,7 +43,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'relative inline-flex items-center justify-center gap-2 rounded-xl font-semibold tracking-tight transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-offset-2',
+          'relative inline-flex items-center justify-center gap-2 rounded-2xl font-semibold tracking-tight transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-offset-2',
           layout === 'vertical' && 'flex-col gap-0.5',
           variants[variant],
           sizes[size],

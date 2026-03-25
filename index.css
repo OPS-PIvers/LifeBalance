@@ -11,4 +11,9 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Unified scroll container preventing touch-through overscroll */
+  .scroll-contain-y {
+    @apply overflow-y-auto overscroll-contain;
+  }
 }

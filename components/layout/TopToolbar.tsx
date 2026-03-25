@@ -22,7 +22,7 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative">
-        <header className="z-sticky w-full bg-brand-800 shadow-md px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800/95 backdrop-blur-md shadow-sm border-b border-white/5 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
@@ -31,7 +31,7 @@ const TopToolbar: React.FC = () => {
             onClick={() => setIsSafeSpendOpen(true)}
           >
             <span
-              className={`text-2xl font-mono font-bold tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
+              className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
             >
               ${Math.abs(safeToSpend).toFixed(2)}
             </span>
