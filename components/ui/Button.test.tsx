@@ -55,6 +55,13 @@ describe('Button', () => {
     expect(button).toHaveClass('text-brand-700');
   });
 
+  it('applies muted variant classes', () => {
+    render(<Button variant="muted">Muted</Button>);
+    const button = screen.getByRole('button', { name: /muted/i });
+    expect(button).toHaveClass('bg-slate-100');
+    expect(button).toHaveClass('text-slate-400');
+  });
+
   it('applies ghost-danger variant classes', () => {
     render(<Button variant="ghost-danger">Ghost Danger</Button>);
     const button = screen.getByRole('button', { name: /ghost danger/i });

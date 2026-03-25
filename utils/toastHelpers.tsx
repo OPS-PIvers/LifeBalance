@@ -95,7 +95,7 @@ export const showPointsToast = (
       </div>
     ),
     {
-      duration: options?.habitCount ? 2000 : 1500,
+      duration: options?.habitCount !== undefined ? 2000 : 1500,
     }
   );
 };
