@@ -7,8 +7,16 @@ import BudgetHistory from '../components/budget/BudgetHistory';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import Select from '@/components/ui/Select';
 
+const TABS = [
+  { value: 'calendar', label: 'Calendar' },
+  { value: 'buckets', label: 'Buckets' },
+  { value: 'accounts', label: 'Accounts' },
+  { value: 'transactions', label: 'Transactions' },
+  { value: 'history', label: 'History' },
+];
+
 const Budget: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('calendar');
+  const [activeTab, setActiveTab] = useState(TABS[0].value);
 
   return (
     <div className="min-h-screen bg-slate-50 pb-28 pt-6">
@@ -21,31 +29,21 @@ const Budget: React.FC = () => {
               onChange={(e) => setActiveTab(e.target.value)}
               aria-label="Select view"
             >
-              <option value="calendar">Calendar</option>
-              <option value="buckets">Buckets</option>
-              <option value="accounts">Accounts</option>
-              <option value="transactions">Transactions</option>
-              <option value="history">History</option>
+              {TABS.map((tab) => (
+                <option key={tab.value} value={tab.value}>
+                  {tab.label}
+                </option>
+              ))}
             </Select>
           </div>
 
           {/* Desktop Navigation */}
           <TabsList className="hidden md:flex mb-6 overflow-x-auto no-scrollbar">
-            <TabsTrigger value="calendar" className="min-w-[80px]">
-              Calendar
-            </TabsTrigger>
-            <TabsTrigger value="buckets" className="min-w-[80px]">
-              Buckets
-            </TabsTrigger>
-            <TabsTrigger value="accounts" className="min-w-[80px]">
-              Accounts
-            </TabsTrigger>
-            <TabsTrigger value="transactions" className="min-w-[80px]">
-              Transactions
-            </TabsTrigger>
-            <TabsTrigger value="history" className="min-w-[80px]">
-              History
-            </TabsTrigger>
+            {TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className="min-w-[80px]">
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           {/* View Container */}
