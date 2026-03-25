@@ -27,7 +27,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
   isGeneratingAI,
   onSuggest
 }) => {
-  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   const content = (
     <div className="p-6">
@@ -101,6 +101,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
         isOpen={isOpen}
         onClose={onClose}
         noPadding
+        title="Chef AI"
       >
         {content}
       </Drawer>

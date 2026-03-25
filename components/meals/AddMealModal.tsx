@@ -5,6 +5,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { X, ChefHat, Sparkles, Plus } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import toast from 'react-hot-toast';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
 
@@ -37,7 +38,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   onOpenAI,
   onSave
 }) => {
-  const isMobile = useMediaQuery('(max-width: 640px)');
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   // Tag management
   const [tagInput, setTagInput] = useState('');
@@ -45,6 +46,14 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   // Ingredient management
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
+
+  React.useEffect(() => {
+    if (!isOpen) {
+      setTagInput('');
+      setIngredientName('');
+      setIngredientQty('');
+    }
+  }, [isOpen]);
 
   const handleAddTag = () => {
     const trimmedInput = tagInput.trim();
@@ -70,7 +79,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
         // Check for duplicates case-insensitive
         const exists = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === nameTrimmed.toLowerCase());
         if (exists) {
-            // we could toast here but it requires passing toast or importing it.
+            toast.error('Ingredient already added');
             return;
         }
 
@@ -271,15 +280,15 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                   {/* Current Ingredients List */}
                   {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
                       <div className="mb-4 flex flex-wrap gap-2">
-                          {currentMeal.ingredients.map((ing) => (
-                              <div key={ing.name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                          {currentMeal.ingredients.map((ing, idx) => (
+                              <div key={`${ing.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
                                   <span className="font-semibold text-slate-700">{ing.name}</span>
                                   <span className="text-slate-400 text-xs bg-slate-50 px-1.5 py-0.5 rounded">{ing.quantity}</span>
                                   <button
                                       onClick={() => {
                                           setCurrentMeal(prev => ({
                                               ...prev,
-                                              ingredients: prev.ingredients?.filter((item) => item.name !== ing.name)
+                                              ingredients: prev.ingredients?.filter((_, i) => i !== idx)
                                           }));
                                       }}
                                       className="text-slate-300 hover:text-red-500 ml-1"
