@@ -147,7 +147,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              </div>
 
              {bucketBreakdown.length > 0 ? (
-               <div className="pl-6 space-y-3 max-h-64 overflow-y-auto pr-2">
+               <div className="pl-6 space-y-3 max-h-64 scroll-contain-y pr-2">
                  {bucketBreakdown.map(b => {
                    const spent = b.spent.verified + b.spent.pending;
                    const percent = b.limit > 0 ? Math.min(100, (spent / b.limit) * 100) : 0;

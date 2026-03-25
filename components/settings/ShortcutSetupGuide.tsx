@@ -134,7 +134,7 @@ const ShortcutSetupGuide: React.FC = () => {
         'Expenses auto-log as pending - review them in the Budget tab',
       ],
       isAutomation: true,
-      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. The API will convert negative transaction amounts to positive expenses automatically. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
+      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. The API accepts positive or negative amounts and handles common formats automatically: 50, -50, "$50.00", "-$50.00", "50,00", "1.234,56", and accounting notation "(50.00)". Both signs work correctly regardless of your iOS version or locale. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
     },
   ];
 

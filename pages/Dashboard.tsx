@@ -10,8 +10,10 @@ import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
 import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidget';
 import { InsightWidget } from '../components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
+import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
 import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
+import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
 
 const Dashboard: React.FC = () => {
@@ -91,15 +93,19 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Widget A: Action Queue */}
-        {actionQueue.length > 0 && (
-          <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              {actionQueue.length > 0 ? (
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm"></span>
-                Action Queue ({actionQueue.length})
-              </h2>
-            </div>
-            
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span>
+              )}
+              Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
+            </h2>
+          </div>
+
+          {actionQueue.length > 0 ? (
             <div className="space-y-4">
               {actionQueue.map(item => (
                 <ActionQueueItemCard
@@ -123,14 +129,25 @@ const Dashboard: React.FC = () => {
                 />
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-sm font-medium text-slate-400">✨ All caught up!</p>
+              <p className="text-xs text-slate-400 mt-1">Nothing needs your attention right now.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Widget: Daily Habits */}
+        <DailyHabitsWidget />
 
         {/* Widget: Money Pulse */}
         <MoneyPulseWidget />
 
         {/* Widget: Upcoming Bills */}
         <UpcomingBillsWidget onPay={setPayModalItemId} />
+
+        {/* Widget: Recent Activity */}
+        <ActivityFeedWidget />
 
         {/* Widget: Category Spend */}
         <CategorySpendWidget />

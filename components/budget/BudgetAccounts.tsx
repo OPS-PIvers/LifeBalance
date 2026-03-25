@@ -1,10 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2 } from 'lucide-react';
+import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical } from 'lucide-react';
 import { Account } from '../../types/schema';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { Drawer } from '../ui/Drawer';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
 
@@ -26,6 +27,9 @@ const BudgetAccounts: React.FC = () => {
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Mobile Actions
+  const [actionAccount, setActionAccount] = useState<Account | null>(null);
 
   // Drag state
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -179,9 +183,9 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`bg-white p-4 rounded-2xl border shadow-sm relative overflow-hidden transition-all duration-200 ${
+        className={`bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative overflow-hidden transition-all duration-200 ${
           isDragging ? 'opacity-50 scale-95' : ''
-        } ${isDragOver ? 'border-brand-500 border-2' : 'border-brand-100'}`}
+        } ${isDragOver ? 'border-brand-500 border-2' : 'border-transparent'}`}
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -202,7 +206,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="subtle"
                 size="icon-sm"
                 onClick={() => setIsGoalModalOpen(account.id)}
-                className="hover:text-habit-gold hover:bg-yellow-50"
+                className="hover:text-habit-gold hover:bg-yellow-50 hidden sm:flex"
                 aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
@@ -211,16 +215,29 @@ const BudgetAccounts: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Delete button */}
+            {/* Delete button (Desktop) */}
             <Button
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300"
+              className="text-brand-300 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
             </Button>
+
+            {/* Mobile Actions (replacing small buttons) */}
+            <div className="sm:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setActionAccount(account)}
+                className="text-brand-300"
+                aria-label={`Options for ${account.name}`}
+              >
+                <MoreVertical size={20} />
+              </Button>
+            </div>
 
             {isEditing ? (
               <div className="flex items-center gap-2">
@@ -284,18 +301,18 @@ const BudgetAccounts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Net Worth Header */}
-      <div className="bg-brand-800 rounded-2xl p-6 text-white shadow-lg text-center">
-        <p className="text-brand-300 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-glass-deep ring-1 ring-white/10 text-center">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
           ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </p>
         <div className="flex justify-center gap-6 mt-3 text-sm">
           <div>
-            <span className="text-brand-400">Assets:</span>{' '}
+            <span className="text-slate-400">Assets:</span>{' '}
             <span className="text-emerald-400 font-mono">${assets.toLocaleString()}</span>
           </div>
           <div>
-            <span className="text-brand-400">Liabilities:</span>{' '}
+            <span className="text-slate-400">Liabilities:</span>{' '}
             <span className="text-rose-400 font-mono">${debts.toLocaleString()}</span>
           </div>
         </div>
@@ -433,6 +450,71 @@ const BudgetAccounts: React.FC = () => {
           </Button>
         </div>
       </Modal>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionAccount}
+        onClose={() => setActionAccount(null)}
+        title={actionAccount?.name || 'Account Options'}
+      >
+        <div className="space-y-3 pb-6">
+          {actionAccount && (
+            <>
+              {/* Edit Balance Action */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Pencil className="text-brand-500" />}
+                onClick={() => {
+                  startEditing(actionAccount.id, actionAccount.balance);
+                  setActionAccount(null);
+                }}
+              >
+                Edit Balance
+              </Button>
+
+              {/* Set Savings Goal (if applicable) */}
+              {actionAccount.type === 'savings' && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-lg py-4"
+                  leftIcon={<Target className="text-brand-500" />}
+                  onClick={() => {
+                    setIsGoalModalOpen(actionAccount.id);
+                    setActionAccount(null);
+                  }}
+                >
+                  Set Savings Goal
+                </Button>
+              )}
+
+              <div className="h-px bg-gray-100 my-2" />
+
+              {/* Delete Action */}
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                  setDeletingId(actionAccount.id);
+                  setActionAccount(null);
+                }}
+              >
+                Delete Account
+              </Button>
+
+              {/* Cancel */}
+              <Button
+                variant="ghost"
+                className="w-full justify-center py-4"
+                onClick={() => setActionAccount(null)}
+              >
+                Cancel
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
 
       {/* Delete Confirmation Modal */}
       {deletingId && (
