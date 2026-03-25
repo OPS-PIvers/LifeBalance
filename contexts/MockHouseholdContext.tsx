@@ -292,6 +292,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Meal plan added');
   }, []);
 
+  const updateMealPlan = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
+    setMealPlan(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    toast.success('Mock: Meal updated');
+  }, []);
+
   const deleteMealPlan = useCallback(async (id: string) => {
     setMealPlan(prev => prev.filter(p => p.id !== id));
     toast.success('Mock: Meal plan deleted');
@@ -498,7 +503,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toggleShoppingItemPurchased: noOp,
     clearPurchasedShoppingItems: noOp,
     addMealPlanItem: addMealPlan,
-    updateMealPlanItem: noOp,
+    updateMealPlanItem: updateMealPlan,
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     updateToDo,

@@ -1,13 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
+import { Drawer } from '../components/ui/Drawer';
+import { Button } from '../components/ui/Button';
+import { SegmentedControl } from '../components/ui/SegmentedControl';
 import Input from '../components/ui/Input';
+import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
 
 const ToDosPage: React.FC = () => {
   const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
@@ -22,11 +26,15 @@ const ToDosPage: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Mobile Action Drawer State
+  const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
+
   // Batch Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [isBatchRescheduleOpen, setIsBatchRescheduleOpen] = useState(false);
 
   // Clear selection when mode is toggled off
   useEffect(() => {
@@ -147,6 +155,21 @@ const ToDosPage: React.FC = () => {
     };
   }, [todos, currentDate]);
 
+  const viewModeOptions = useMemo(() => [
+    { value: 'active', label: 'Active' },
+    {
+        value: 'completed',
+        label: (
+            <span className="flex items-center gap-1.5">
+                Completed
+                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
+                    {todos.filter(t => t.isCompleted).length}
+                </span>
+            </span>
+        )
+    }
+  ], [todos]);
+
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
@@ -203,6 +226,19 @@ const ToDosPage: React.FC = () => {
       } catch (error) {
           console.error('Failed to restore task:', error);
           toast.error('Failed to restore task');
+      }
+  };
+
+  const handleMoveToTomorrow = async (todo: ToDo) => {
+      try {
+          const tomorrow = addDays(startOfToday(), 1);
+          await updateToDo(todo.id, {
+              completeByDate: format(tomorrow, 'yyyy-MM-dd')
+          });
+          toast.success('Task moved to tomorrow');
+      } catch (error) {
+          console.error('Failed to move task:', error);
+          toast.error('Failed to move task');
       }
   };
 
@@ -383,6 +419,32 @@ const ToDosPage: React.FC = () => {
     }
   };
 
+  const handleBatchReschedule = async (date: string) => {
+    if (selectedIds.size === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const promises = Array.from(selectedIds).map(id =>
+        updateToDo(id, { completeByDate: date })
+      );
+      const results = await Promise.allSettled(promises);
+      const failed = results.filter(r => r.status === 'rejected');
+
+      if (failed.length > 0) {
+        toast.error(`Rescheduled ${selectedIds.size - failed.length}, failed ${failed.length}`);
+      } else {
+        toast.success(`Rescheduled ${selectedIds.size} tasks`);
+      }
+
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    } catch (error) {
+      console.error('Batch reschedule failed:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
   return (
     <div className="pb-32 pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
@@ -411,67 +473,48 @@ const ToDosPage: React.FC = () => {
           <div className="flex gap-2">
             {!isSelectionMode && (
                 <>
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={handleExport}
                     disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
-                    className="bg-white text-brand-600 border border-brand-200 px-3 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label={`Export ${viewMode} tasks to CSV`}
                     title={`Export ${viewMode} tasks to CSV`}
+                    leftIcon={<Download size={16} />}
                   >
-                    <Download size={16} />
                     <span className="hidden sm:inline">Export</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     onClick={openAddModal}
-                    className="bg-brand-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-sm active:scale-95 transition-transform flex items-center gap-2"
                     aria-label="Add new task"
+                    leftIcon={<Plus size={16} />}
                   >
-                    <Plus size={16} /> <span className="hidden xs:inline">New Task</span>
-                  </button>
+                     <span className="hidden sm:inline">New Task</span>
+                  </Button>
                 </>
               )}
 
-              <button
+              <Button
+                variant="secondary"
+                size="icon"
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
                 disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`p-2 rounded-xl transition-colors border ${
-                  isSelectionMode
-                    ? 'bg-slate-100 text-slate-900 border-slate-200'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-                } ${viewMode === 'completed' ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`${isSelectionMode ? 'bg-slate-100 border-slate-200' : ''}`}
                 title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
                 aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
               >
                 {isSelectionMode ? <X size={20} /> : <Layers size={20} />}
-              </button>
+              </Button>
           </div>
         </div>
 
         {/* View Toggle */}
-        <div className="bg-slate-100 p-1 rounded-xl flex items-center self-start">
-             <button
-                onClick={() => setViewMode('active')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all ${
-                    viewMode === 'active'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
-                 Active
-             </button>
-             <button
-                onClick={() => setViewMode('completed')}
-                className={`px-4 py-1.5 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${
-                    viewMode === 'completed'
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-             >
-                 Completed
-                 <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
-                     {todos.filter(t => t.isCompleted).length}
-                 </span>
-             </button>
+        <div className="self-start">
+             <SegmentedControl
+                value={viewMode}
+                onChange={(val) => setViewMode(val as 'active' | 'completed')}
+                options={viewModeOptions}
+             />
         </div>
       </div>
 
@@ -487,6 +530,8 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
+                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -503,6 +548,8 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
+                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -519,6 +566,8 @@ const ToDosPage: React.FC = () => {
                 onEdit={openEditModal}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMoveToTomorrow={handleMoveToTomorrow}
+                onMore={setActionTodo}
                 members={members}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
@@ -544,6 +593,7 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -552,6 +602,7 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -560,6 +611,7 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMore={setActionTodo}
                 members={members}
             />
             <CompletedSection
@@ -568,6 +620,7 @@ const ToDosPage: React.FC = () => {
                 onUncomplete={handleUncomplete}
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
+                onMore={setActionTodo}
                 members={members}
             />
 
@@ -591,28 +644,52 @@ const ToDosPage: React.FC = () => {
               {selectedIds.size} selected
             </div>
 
-            <button
+            <Button
+              variant="ghost-inverted"
+              layout="vertical"
               onClick={handleBatchComplete}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
+              className="h-auto py-1 px-3 font-normal"
               aria-label="Mark selected as completed"
             >
               <Check size={18} />
               <span className="text-xxs font-medium">Complete</span>
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant="ghost-inverted"
+              layout="vertical"
+              onClick={() => setIsBatchRescheduleOpen(true)}
+              disabled={isBatchProcessing}
+              className="h-auto py-1 px-3 font-normal"
+              aria-label="Reschedule selected items"
+            >
+              <Calendar size={18} />
+              <span className="text-xxs font-medium">Reschedule</span>
+            </Button>
+
+            <Button
+              variant="ghost-inverted"
+              layout="vertical"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex flex-col items-center gap-0.5 px-3 py-1 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 rounded-lg transition-colors disabled:opacity-50"
+              className="h-auto py-1 px-3 font-normal text-rose-300 hover:text-rose-200 hover:bg-rose-500/20"
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
+
+      {/* Batch Reschedule Modal */}
+      <BatchRescheduleModal
+        isOpen={isBatchRescheduleOpen}
+        onClose={() => setIsBatchRescheduleOpen(false)}
+        onConfirm={handleBatchReschedule}
+        count={selectedIds.size}
+      />
 
       {/* Add/Edit Modal */}
       <Modal
@@ -624,13 +701,15 @@ const ToDosPage: React.FC = () => {
           <h2 className="text-xl font-bold text-brand-800">
             {editingId ? 'Edit Task' : 'New Task'}
           </h2>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setIsAddModalOpen(false)}
-            className="p-2 hover:bg-brand-50 rounded-full transition-colors"
+            className="rounded-full hover:bg-brand-50"
             aria-label="Close dialog"
           >
             <X size={20} className="text-brand-400" />
-          </button>
+          </Button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -692,17 +771,14 @@ const ToDosPage: React.FC = () => {
             )}
           </fieldset>
 
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={members.length === 0}
-            className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-              members.length === 0
-                ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-brand-900 active:scale-[0.98]'
-            }`}
+            className="w-full mt-4 py-3.5 shadow-lg"
           >
             {editingId ? 'Save Changes' : 'Create Task'}
-          </button>
+          </Button>
         </form>
       </Modal>
 
@@ -743,6 +819,68 @@ const ToDosPage: React.FC = () => {
         </Modal>
       )}
 
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionTodo}
+        onClose={() => setActionTodo(null)}
+        title="Task Options"
+      >
+        <div className="space-y-2">
+          {actionTodo && (
+            <>
+              {/* Primary Action (Edit or Uncomplete) */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={actionTodo.isCompleted ? <RotateCcw className="text-brand-500" /> : <Edit2 className="text-brand-500" />}
+                onClick={() => {
+                  if (actionTodo.isCompleted) {
+                    handleUncomplete(actionTodo.id);
+                  } else {
+                    openEditModal(actionTodo);
+                  }
+                  setActionTodo(null);
+                }}
+              >
+                {actionTodo.isCompleted ? 'Mark as Active' : 'Edit Task'}
+              </Button>
+
+              {/* Common Actions */}
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Copy className="text-brand-500" />}
+                onClick={() => {
+                  handleDuplicate(actionTodo);
+                  setActionTodo(null);
+                }}
+              >
+                Duplicate
+              </Button>
+
+              <div className="h-px bg-gray-100 my-2" />
+
+              <Button
+                variant="ghost-destructive"
+                className="w-full justify-start text-lg py-4"
+                leftIcon={<Trash2 />}
+                onClick={() => {
+                   // Close drawer immediately before confirmation to prevent visual clutter
+                   // and potential interaction issues with the toast/modal overlay
+                   setActionTodo(null);
+                   showDeleteConfirmation(async () => {
+                     await deleteToDo(actionTodo.id);
+                     toast.success('Task deleted');
+                   });
+                }}
+              >
+                {actionTodo.isCompleted ? 'Delete Forever' : 'Delete'}
+              </Button>
+            </>
+          )}
+        </div>
+      </Drawer>
+
     </div>
   );
 };
@@ -757,11 +895,13 @@ const Section: React.FC<{
   onEdit: (todo: ToDo) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
+  onMoveToTomorrow: (todo: ToDo) => void;
+  onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
   isSelectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, members, isSelectionMode, selectedIds, onToggleSelection }) => {
+}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }) => {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -875,36 +1015,63 @@ const Section: React.FC<{
 
                  {/* Actions */}
                  {!isSelectionMode && (
-                   <div className="flex items-center gap-1 pl-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                        aria-label="Duplicate task"
-                        title="Duplicate"
-                      >
-                        <Copy size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                        className="p-2 text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 rounded-lg transition-colors"
-                        aria-label="Edit task"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showDeleteConfirmation(async () => {
-                            await onDelete(item.id);
-                            toast.success('Task deleted');
-                          });
-                        }}
-                        className="p-2 text-brand-300 hover:text-rose-600 active:text-rose-700 active:bg-rose-50 rounded-lg transition-colors"
-                        aria-label="Delete task"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                   </div>
+                   <>
+                     {/* Desktop Actions */}
+                     <div className="hidden sm:flex items-center gap-1 pl-2">
+                        <Button
+                          variant="ghost-brand"
+                          size="icon"
+                          onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
+                          aria-label="Move to Tomorrow"
+                          title="Move to Tomorrow"
+                        >
+                          <Calendar size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost-brand"
+                          size="icon"
+                          onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
+                          aria-label="Duplicate task"
+                          title="Duplicate"
+                        >
+                          <Copy size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost-brand"
+                          size="icon"
+                          onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                          aria-label="Edit task"
+                        >
+                          <Edit2 size={16} />
+                        </Button>
+                        <Button
+                          variant="ghost-brand"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            showDeleteConfirmation(async () => {
+                              await onDelete(item.id);
+                              toast.success('Task deleted');
+                            });
+                          }}
+                          className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50"
+                          aria-label="Delete task"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                     </div>
+                     {/* Mobile Actions */}
+                     <div className="flex sm:hidden pl-2">
+                       <Button
+                         variant="ghost-brand"
+                         size="icon"
+                         onClick={(e) => { e.stopPropagation(); onMore(item); }}
+                         aria-label="More options"
+                       >
+                         <MoreVertical size={20} />
+                       </Button>
+                     </div>
+                   </>
                  )}
                </div>
              </div>
@@ -922,8 +1089,9 @@ const CompletedSection: React.FC<{
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
+  onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
-}> = ({ title, items, onUncomplete, onDelete, onDuplicate, members }) => {
+}> = ({ title, items, onUncomplete, onDelete, onDuplicate, onMore, members }) => {
     const memberMap = useMemo(() => {
         const map = new Map<string, HouseholdMember>();
         members.forEach(member => map.set(member.uid, member));
@@ -975,24 +1143,40 @@ const CompletedSection: React.FC<{
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
+                            {/* Desktop Actions */}
+                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
                                     onClick={() => onDuplicate(item)}
-                                    className="p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                    className="text-slate-400 hover:text-brand-600 hover:bg-brand-50"
                                     title="Duplicate task"
                                 >
                                     <Copy size={14} />
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="ghost-destructive"
+                                    size="icon-sm"
                                     onClick={() => showDeleteConfirmation(async () => {
                                         await onDelete(item.id);
                                         toast.success('Task deleted');
                                     })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                                     title="Delete forever"
                                 >
                                     <Trash2 size={14} />
-                                </button>
+                                </Button>
+                            </div>
+                            {/* Mobile Actions */}
+                            <div className="flex sm:hidden">
+                               <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 onClick={(e) => { e.stopPropagation(); onMore(item); }}
+                                 className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
+                                 aria-label="More options"
+                               >
+                                 <MoreVertical size={20} />
+                               </Button>
                             </div>
                         </div>
                     );

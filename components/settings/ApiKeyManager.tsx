@@ -298,9 +298,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       )}
 
       {/* Endpoint URLs */}
-      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
-        <h4 className="text-sm font-semibold text-gray-700">Endpoint URLs</h4>
-        <p className="text-xs text-gray-500">
+      <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 space-y-2">
+        <h4 className="text-sm font-semibold text-slate-700">Endpoint URLs</h4>
+        <p className="text-xs text-slate-500">
           Use these URLs in your iOS Shortcuts with your API key.
         </p>
         <div className="space-y-1">
@@ -308,12 +308,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             <button
               key={endpoint}
               onClick={() => handleCopyEndpoint(endpoint)}
-              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded border border-gray-100 hover:bg-gray-50 text-left"
+              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded border border-slate-100/50 hover:bg-slate-50/50 text-left"
             >
-              <span className="text-xs font-mono text-gray-600 truncate">
+              <span className="text-xs font-mono text-slate-600 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3 h-3 text-gray-400 flex-shrink-0 ml-2" />
+              <Copy className="w-3 h-3 text-slate-400 flex-shrink-0 ml-2" />
             </button>
           ))}
         </div>
@@ -322,19 +322,19 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {/* Revoked Keys */}
       {revokedKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-gray-500">Revoked Keys</h4>
+          <h4 className="text-sm font-semibold text-slate-500">Revoked Keys</h4>
           {revokedKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-gray-50 border border-gray-200 rounded-xl p-3 opacity-60"
+              className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-3 opacity-60"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-gray-400" />
-                  <span className="font-semibold text-gray-600 line-through">
+                  <Key className="w-4 h-4 text-slate-400" />
+                  <span className="font-semibold text-slate-600 line-through">
                     {key.name}
                   </span>
-                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-slate-200/50 text-slate-600 px-2 py-0.5 rounded-full">
                     Revoked
                   </span>
                 </div>

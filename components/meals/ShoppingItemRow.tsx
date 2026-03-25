@@ -6,6 +6,10 @@ import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import clsx from 'clsx';
 
+const SWIPE_DELETE_COLOR = '#fef2f2'; // red-50
+const SWIPE_DEFAULT_BG = '#ffffff'; // white
+const SWIPE_COMPLETE_COLOR = '#ecfdf5'; // emerald-50
+
 interface ShoppingItemRowProps {
   item: ShoppingItem;
   stores?: StoreType[];
@@ -29,7 +33,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   const bgColor = useTransform(
     x,
     [-100, -50, 0, 50, 100],
-    ['#fee2e2', '#fee2e2', '#ffffff', '#d1fae5', '#d1fae5']
+    [
+      SWIPE_DELETE_COLOR,
+      SWIPE_DELETE_COLOR,
+      SWIPE_DEFAULT_BG,
+      SWIPE_COMPLETE_COLOR,
+      SWIPE_COMPLETE_COLOR
+    ]
   );
 
   // Icon opacity/scale based on drag position
@@ -92,8 +102,8 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onDragEnd={handleDragEnd}
         style={{ x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm ring-1 ring-black/5 border-transparent",
-          item.isPurchased && "opacity-60 bg-slate-50"
+          "relative z-10 flex items-center gap-4 p-4 bg-white rounded-xl shadow-glass ring-1 ring-black/5 border-transparent transition-all",
+          item.isPurchased && "opacity-60 bg-slate-50 shadow-none"
         )}
       >
         {/* Drag Handle - Only render if reorderable */}
@@ -132,13 +142,13 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             {/* Metadata Chips */}
             <div className="flex flex-wrap items-center gap-2 mt-1">
                  {item.quantity && (
-                    <span className="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1.5 rounded-full font-medium">
                         {item.quantity}
                     </span>
                  )}
                  <div className="relative group">
                     <span className={clsx(
-                        "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                        "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                         // Focus ring logic for accessibility (when hidden select is focused)
                         "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                         item.store && stores
@@ -148,7 +158,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                                 const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                 return `${color.bg} ${color.text} ${color.border}`;
                             })()
-                            : "bg-gray-100 text-gray-500 border-gray-200"
+                            : "bg-slate-100 text-slate-500 border-slate-200"
                     )}>
                         <Store size={10} />
                         {item.store || "No store selected"}
@@ -176,7 +186,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                  {quickStockLists && onQuickListChange && (
                    <div className="relative group">
                       <span className={clsx(
-                          "flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border whitespace-nowrap transition-colors relative z-0",
+                          "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
                           "group-focus-within:ring-2 group-focus-within:ring-brand-500 group-focus-within:ring-offset-1",
                           activeQuickList
                               ? (() => {
@@ -184,7 +194,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                                   const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
                                   return `${color.bg} ${color.text} ${color.border}`;
                               })()
-                              : "bg-gray-50 text-gray-400 border-gray-200 border-dashed"
+                              : "bg-slate-50 text-slate-400 border-slate-200 border-dashed hover:bg-slate-100 hover:border-slate-300"
                       )}>
                           <ActiveIcon size={10} />
                           {activeQuickList ? activeQuickList.name : "Add to Quick List"}
@@ -211,7 +221,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Edit Action */}
         <button
             onClick={() => onEdit(item)}
-            className="p-2 text-gray-400 hover:text-brand-600 rounded-full hover:bg-brand-50 transition-colors"
+            className="p-3.5 text-slate-300 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
             aria-label="Edit item"
         >
             <Edit2 size={18} />

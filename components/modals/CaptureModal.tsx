@@ -12,6 +12,7 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import { SegmentedControl, SegmentedControlOption } from '../ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -457,6 +458,36 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
+  const tabOptions: SegmentedControlOption<ModalTab>[] = [
+    {
+      value: 'transaction',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <Wallet size={16} />
+          <span>Expense</span>
+        </div>
+      )
+    },
+    {
+      value: 'todo',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <CheckSquare size={16} />
+          <span>To-Do</span>
+        </div>
+      )
+    },
+    {
+      value: 'shopping',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <ShoppingBag size={16} />
+          <span>Shop</span>
+        </div>
+      )
+    }
+  ];
+
   const headerContent = (
     <div className="flex flex-col border-b border-brand-100 bg-white">
       <div className="flex items-center justify-between px-6 py-4">
@@ -485,41 +516,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Tab Switcher - Only show if not in deep transaction flow */}
       {view === 'menu' && (
         <div className="px-6 pb-4">
-          <div className="flex p-1 bg-slate-100/50 rounded-xl border border-slate-200/50">
-            <button
-              onClick={() => setActiveTab('transaction')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'transaction'
-                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <Wallet size={16} />
-              <span>Expense</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('todo')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'todo'
-                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <CheckSquare size={16} />
-              <span>To-Do</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('shopping')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === 'shopping'
-                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <ShoppingBag size={16} />
-              <span>Shop</span>
-            </button>
-          </div>
+          <SegmentedControl<ModalTab>
+            options={tabOptions}
+            value={activeTab}
+            onChange={setActiveTab}
+          />
         </div>
       )}
     </div>
