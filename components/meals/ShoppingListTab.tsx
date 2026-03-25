@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Store, Share2, Save } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import { OptimizableItem } from '@/services/geminiService';
@@ -10,6 +10,10 @@ import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';
 import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
+import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
+import { Drawer } from '@/components/ui/Drawer';
+import { Modal } from '@/components/ui/Modal';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import toast from 'react-hot-toast';
@@ -31,6 +35,8 @@ const ShoppingListTab: React.FC = () => {
     updateQuickStockList,
     householdId
   } = useHousehold();
+
+  const isDesktop = useMediaQuery('(min-width: 640px)');
 
   // Combine default and custom categories
   const categories = useMemo(() => {
@@ -424,9 +430,9 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-brand-800 text-white rounded-lg hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-brand-800 text-white rounded-xl hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
                 >
-                    <Plus size={18} />
+                    <Plus size={20} />
                 </button>
              </form>
         </div>
@@ -597,91 +603,37 @@ const ShoppingListTab: React.FC = () => {
             initialTemplateData={settingsInitialTemplate}
         />
 
-        {/* Edit Modal */}
-        {editingItem && (
-            <div className="fixed inset-0 z-modal flex items-center justify-center p-4 pb-24 sm:pb-4">
-                <div
-                    className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                    onClick={() => setEditingItem(null)}
-                />
-                <div className="relative w-full max-w-md bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
-                        <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
-                            <input
-                                type="text"
-                                value={editingItem.name}
-                                onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-900 font-medium"
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                             <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
-                                <select
-                                    value={editingItem.category || 'Uncategorized'}
-                                    onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
-                                >
-                                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quantity</label>
-                                <input
-                                    type="text"
-                                    value={editingItem.quantity || ''}
-                                    onChange={(e) => setEditingItem({...editingItem, quantity: e.target.value})}
-                                    className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store</label>
-                            <input
-                                type="text"
-                                value={editingItem.store || ''}
-                                onChange={(e) => setEditingItem({...editingItem, store: e.target.value})}
-                                placeholder="Optional"
-                                className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
-                            />
-                             {/* Quick Store Chips in Edit Modal */}
-                             {stores.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                    {stores.map(store => (
-                                        <button
-                                            key={store.id}
-                                            type="button"
-                                            onClick={() => setEditingItem({...editingItem, store: store.name})}
-                                            className={`px-2 py-1 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 ${
-                                                editingItem.store === store.name
-                                                ? 'bg-brand-100 text-brand-800 border-brand-200'
-                                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                                            }`}
-                                        >
-                                            <Store size={10} /> {store.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="p-4 border-t border-slate-200/50 bg-white/50">
-                        <button
-                            onClick={handleSaveEdit}
-                            disabled={!editingItem.name.trim()}
-                            className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 disabled:opacity-50 hover:bg-brand-900 transition-all"
-                        >
-                            Save Changes
-                        </button>
-                    </div>
+        {/* Edit Modal / Drawer */}
+        {editingItem && (() => {
+          const itemForm = (
+            <ShoppingItemForm
+              item={editingItem}
+              onChange={setEditingItem}
+              onSave={handleSaveEdit}
+              stores={stores}
+              categories={categories}
+            />
+          );
+
+          const WrapperComponent = isDesktop ? Modal : Drawer;
+          const wrapperProps = {
+            isOpen: !!editingItem,
+            onClose: () => setEditingItem(null),
+            ...(isDesktop ? { className: "overflow-visible" } : { title: "Edit Item" })
+          };
+
+          return (
+            <WrapperComponent {...wrapperProps}>
+              {isDesktop && (
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
+                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
                 </div>
-            </div>
-        )}
+              )}
+              {itemForm}
+            </WrapperComponent>
+          );
+        })()}
     </div>
   );
 };
