@@ -3,15 +3,16 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed' | 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted' | 'ghost-brand';
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
+  layout?: 'horizontal' | 'vertical';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'primary', size = 'md', isLoading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
+  ({ className, variant = 'primary', size = 'md', layout = 'horizontal', isLoading, leftIcon, rightIcon, children, disabled, ...props }, ref) => {
     const variants = {
       primary: 'bg-slate-900 text-white hover:bg-slate-800 shadow-btn-primary hover:shadow-btn-primary-hover',
       secondary: 'bg-white text-slate-700 border border-slate-200/60 hover:bg-slate-50 hover:text-slate-900 shadow-btn-secondary',
@@ -22,6 +23,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 border border-transparent hover:border-brand-200/50',
       'ghost-danger': 'bg-transparent text-rose-500 hover:text-rose-600 hover:bg-rose-50',
       'ghost-destructive': 'bg-transparent text-slate-400 hover:text-rose-600 hover:bg-rose-50',
+      'ghost-brand': 'bg-transparent text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50',
       success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-btn-success',
       warning: 'bg-amber-500 text-white hover:bg-amber-600 shadow-btn-warning',
       destructive: 'bg-rose-500 text-white hover:bg-rose-600 shadow-btn-destructive',
@@ -42,6 +44,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={cn(
           'relative inline-flex items-center justify-center gap-2 rounded-2xl font-semibold tracking-tight transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/20 focus-visible:ring-offset-2',
+          layout === 'vertical' && 'flex-col gap-0.5',
           variants[variant],
           sizes[size],
           className
