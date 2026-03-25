@@ -96,6 +96,8 @@ service cloud.firestore {
       allow update: if isMemberOf(householdId) &&
                         // 🛡️ SENTINEL FIX: Validate household name if being updated
                         isValidOptionalString(request.resource.data.get('name', null), 50) &&
+                        // Validate lastPaycheckDate if being updated
+                        isValidOptionalString(request.resource.data.get('lastPaycheckDate', null), 10) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
                         // 🛡️ SENTINEL FIX: Protect AI Usage Quota
@@ -129,7 +131,10 @@ service cloud.firestore {
       // Members subcollection
       match /members/{memberId} {
         // Allow users to read their own member doc (to check if already joined) or if they're a member
-        allow read: if isMemberOf(householdId) || request.auth.uid == memberId;
+        // Also allow reading if user is in household's memberUids (for legacy migration auto-fix)
+        allow read: if isMemberOf(householdId) ||
+                       request.auth.uid == memberId ||
+                       (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []));
 
         // Secure creation: Must be creator OR provide valid invite code
         // - Household creator can create their member doc with any role.
@@ -320,24 +325,49 @@ service cloud.firestore {
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Buckets
       match /buckets/{bucketId} {
         allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
-                              // Allow only expected fields to prevent storage abuse
-                              request.resource.data.keys().hasOnly([
-                                'name', 'limit', 'color', 'isVariable', 'isCore',
-                                'currentPeriodId', 'lastResetDate', 'subBuckets',
-                                'createdBy'
-                              ]) &&
-                              isValidString(request.resource.data.name, 50) &&
-                              isValidNumber(request.resource.data.limit) &&
-                              isValidString(request.resource.data.color, 20) &&
-                              isValidBoolean(request.resource.data.isVariable) &&
-                              isValidBoolean(request.resource.data.isCore) &&
-                              // Optional fields
-                              isValidOptionalString(request.resource.data.get('currentPeriodId', null), 10) &&
-                              isValidOptionalString(request.resource.data.get('lastResetDate', null), 10) &&
-                              (request.resource.data.get('subBuckets', null) == null || request.resource.data.subBuckets is list) &&
-                              // Metadata
-                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string);
+
+        // Helper to validate bucket fields for CREATE operations
+        function isValidBucketCreate() {
+          let data = request.resource.data;
+          return (!data.keys().has('name') || isValidString(data.name, 50)) &&
+                 (!data.keys().has('limit') || isValidNumber(data.limit)) &&
+                 (!data.keys().has('color') || isValidString(data.color, 20)) &&
+                 (!data.keys().has('isVariable') || isValidBoolean(data.isVariable)) &&
+                 (!data.keys().has('isCore') || isValidBoolean(data.isCore)) &&
+                 (!data.keys().has('currentPeriodId') || isValidOptionalString(data.currentPeriodId, 10)) &&
+                 (!data.keys().has('lastResetDate') || isValidOptionalString(data.lastResetDate, 10)) &&
+                 (!data.keys().has('subBuckets') || data.subBuckets is list) &&
+                 (!data.keys().has('createdBy') || data.createdBy is string);
+        }
+
+        // Helper to validate ONLY changed fields during UPDATE operations
+        // This prevents legacy data from blocking updates
+        function isValidBucketUpdate() {
+          let changed = request.resource.data.diff(resource.data).affectedKeys();
+          return (!changed.hasAny(['name']) || isValidString(request.resource.data.name, 50)) &&
+                 (!changed.hasAny(['limit']) || isValidNumber(request.resource.data.limit)) &&
+                 (!changed.hasAny(['color']) || isValidString(request.resource.data.color, 20)) &&
+                 (!changed.hasAny(['isVariable']) || isValidBoolean(request.resource.data.isVariable)) &&
+                 (!changed.hasAny(['isCore']) || isValidBoolean(request.resource.data.isCore)) &&
+                 (!changed.hasAny(['currentPeriodId']) || isValidOptionalString(request.resource.data.currentPeriodId, 30)) &&
+                 (!changed.hasAny(['lastResetDate']) || isValidOptionalString(request.resource.data.lastResetDate, 30)) &&
+                 (!changed.hasAny(['subBuckets']) || request.resource.data.subBuckets is list) &&
+                 // Prevent modifying immutable fields
+                 !changed.hasAny(['createdBy', 'id']);
+        }
+
+        allow create: if isMemberOf(householdId) &&
+                      // Strict validation for create - all required fields must be present
+                      request.resource.data.keys().hasAll(['name', 'limit', 'color', 'isVariable', 'isCore']) &&
+                      // Allow only expected fields to prevent storage abuse (including legacy fields for compatibility)
+                      request.resource.data.keys().hasOnly(['name', 'limit', 'color', 'isVariable', 'isCore', 'currentPeriodId', 'lastResetDate', 'subBuckets', 'createdBy', 'id', 'spent']) &&
+                      isValidBucketCreate() &&
+                      // Ensure createdBy matches authenticated user
+                      request.resource.data.createdBy == request.auth.uid;
+
+        allow update: if isMemberOf(householdId) &&
+                      isValidBucketUpdate();
+
         allow delete: if isMemberOf(householdId);
       }
 

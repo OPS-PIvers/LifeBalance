@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, Sparkles, ChefHat, ChevronRight, ChevronLeft, ShoppingCart, Loader2, X, Copy } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2 } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { IngredientSelectorModal } from './IngredientSelectorModal';
-
-const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
+import { CookbookModal } from './CookbookModal';
+import { RecipeModal } from './RecipeModal';
+import { AddMealModal } from './AddMealModal';
+import { AISuggestModal } from './AISuggestModal';
+import { RecipeImportModal } from './RecipeImportModal';
+import clsx from 'clsx';
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -32,8 +36,12 @@ const MealPlanTab: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPreviousMealsModalOpen, setIsPreviousMealsModalOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isIngredientSelectorOpen, setIsIngredientSelectorOpen] = useState(false);
   const [ingredientSelectorData, setIngredientSelectorData] = useState<{mealId?: string, name: string, ingredients: MealIngredient[]} | null>(null);
+
+  // Recipe Viewer State
+  const [viewingMeal, setViewingMeal] = useState<{meal: Meal, planItem: MealPlanItem} | null>(null);
 
   // Edit/Add Form State
   const [currentMeal, setCurrentMeal] = useState<Partial<Meal>>({
@@ -48,24 +56,6 @@ const MealPlanTab: React.FC = () => {
   const [editingPlanItemId, setEditingPlanItemId] = useState<string | null>(null);
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
   const [targetDate, setTargetDate] = useState<string | null>(null);
-
-  // Tag management
-  const [tagInput, setTagInput] = useState('');
-
-  // Ingredient management
-  const [ingredientName, setIngredientName] = useState('');
-  const [ingredientQty, setIngredientQty] = useState('');
-
-  const handleAddTag = () => {
-    const trimmedInput = tagInput.trim();
-    if (trimmedInput && !currentMeal.tags?.some(t => t.toLowerCase() === trimmedInput.toLowerCase())) {
-      setCurrentMeal(prev => ({
-        ...prev,
-        tags: [...(prev.tags || []), trimmedInput]
-      }));
-      setTagInput('');
-    }
-  };
 
   const handleOpenIngredientSelector = (name: string, ingredients: MealIngredient[], mealId?: string) => {
       setIngredientSelectorData({ name, ingredients, mealId });
@@ -118,33 +108,6 @@ const MealPlanTab: React.FC = () => {
       } finally {
         setIngredientSelectorData(null);
       }
-  };
-
-  const handleAddIngredient = () => {
-    const nameTrimmed = ingredientName.trim();
-    if (nameTrimmed) {
-        // Check for duplicates case-insensitive
-        const exists = currentMeal.ingredients?.some(ing => ing.name.toLowerCase() === nameTrimmed.toLowerCase());
-        if (exists) {
-            toast.error('Ingredient already added');
-            return;
-        }
-
-        const newIng = { name: nameTrimmed, quantity: ingredientQty.trim() || '1' };
-        setCurrentMeal(prev => ({
-            ...prev,
-            ingredients: [...(prev.ingredients || []), newIng]
-        }));
-        setIngredientName('');
-        setIngredientQty('');
-    }
-  };
-
-  const handleRemoveTag = (tag: string) => {
-    setCurrentMeal(prev => ({
-      ...prev,
-      tags: prev.tags?.filter(t => t !== tag)
-    }));
   };
 
   // AI Options
@@ -308,6 +271,31 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
+  const handleDuplicatePlanItem = async (planItem: MealPlanItem) => {
+      try {
+          const { id: _id, isCooked: _isCooked, ...itemToDuplicate } = planItem;
+          await addMealPlanItem({
+              ...itemToDuplicate,
+              isCooked: false
+          });
+          toast.success('Meal duplicated');
+      } catch (error) {
+          console.error('Duplicate plan item failed:', error);
+          toast.error('Failed to duplicate meal');
+      }
+  };
+
+  const handleMoveToTomorrow = async (planItem: MealPlanItem) => {
+      try {
+          const tomorrowStr = format(addDays(parseISO(planItem.date), 1), 'yyyy-MM-dd');
+          await updateMealPlanItem(planItem.id, { date: tomorrowStr });
+          toast.success('Moved to tomorrow');
+      } catch (error) {
+          console.error('Move plan item failed:', error);
+          toast.error('Failed to move meal');
+      }
+  };
+
   const handleAddMealToDate = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
@@ -333,6 +321,32 @@ const MealPlanTab: React.FC = () => {
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
+  };
+
+  const handleMarkCooked = async () => {
+    if (!viewingMeal) return;
+
+    const { meal, planItem } = viewingMeal;
+
+    try {
+      // 1. Update Plan Item
+      await updateMealPlanItem(planItem.id, { isCooked: true });
+
+      // 2. Update Meal History (Last Cooked)
+      // Only if we have a linked meal ID and the meal exists in our library
+      if (meal.id) {
+        await updateMeal({
+            ...meal,
+            lastCooked: new Date().toISOString()
+        });
+      }
+
+      setViewingMeal(null);
+      toast.success('Bon Appétit! Marked as cooked.');
+    } catch (error) {
+      console.error('Failed to mark cooked:', error);
+      toast.error('Failed to update status');
+    }
   };
 
   const saveMeal = async (forceNew = false) => {
@@ -401,16 +415,18 @@ const MealPlanTab: React.FC = () => {
       handleCancel();
   };
 
+  const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> => ({
+      name: isClone ? `${meal.name} (Copy)` : meal.name,
+      description: meal.description || '',
+      ingredients: meal.ingredients || [],
+      instructions: meal.instructions || [],
+      recipeUrl: meal.recipeUrl || '',
+      tags: meal.tags || []
+  });
+
   const handleCloneMeal = (meal: Meal) => {
       // 1. Populate form with meal data (copy)
-      setCurrentMeal({
-          name: `${meal.name} (Copy)`,
-          description: meal.description,
-          ingredients: meal.ingredients || [],
-          instructions: meal.instructions || [],
-          recipeUrl: meal.recipeUrl || '',
-          tags: meal.tags || []
-      });
+      setCurrentMeal(mealToFormState(meal, true));
 
       // 2. Ensure it's treated as a NEW meal
       setEditingMealId(null);
@@ -421,6 +437,12 @@ const MealPlanTab: React.FC = () => {
       toast.success('Cloned! You are editing a new copy.');
   };
 
+  const handleSelectMeal = (meal: Meal) => {
+      setCurrentMeal(mealToFormState(meal));
+      setEditingMealId(meal.id);
+      setIsPreviousMealsModalOpen(false);
+  };
+
   const handleCancel = () => {
       setIsAddModalOpen(false);
       setTargetDate(null);
@@ -428,9 +450,6 @@ const MealPlanTab: React.FC = () => {
       setEditingPlanItemId(null);
       setMealType('dinner');
       setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
-      setIngredientName('');
-      setIngredientQty('');
-      setTagInput('');
   };
 
   const handleAIRequest = async () => {
@@ -463,6 +482,18 @@ const MealPlanTab: React.FC = () => {
     } finally {
         setIsGeneratingAI(false);
     }
+  };
+
+  const handleRecipeImport = (meal: Partial<Meal>) => {
+      setCurrentMeal(prev => ({
+          ...prev,
+          name: meal.name ?? prev.name,
+          description: meal.description ?? prev.description,
+          ingredients: meal.ingredients ?? prev.ingredients ?? [],
+          instructions: meal.instructions ?? prev.instructions ?? [],
+          recipeUrl: meal.recipeUrl ?? prev.recipeUrl ?? '',
+          tags: meal.tags ?? prev.tags ?? []
+      }));
   };
 
   return (
@@ -511,7 +542,7 @@ const MealPlanTab: React.FC = () => {
       </div>
 
       {/* Days Grid */}
-      <div className="space-y-4">
+      <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-4 pb-4 px-1 md:flex-col md:overflow-visible md:pb-0 md:px-0 md:space-y-4 no-scrollbar">
         {weekDays.map(day => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const planItems = mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === dateStr) : [];
@@ -520,7 +551,7 @@ const MealPlanTab: React.FC = () => {
             return (
                 <div
                     key={dateStr}
-                    className={`bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass p-6 ring-1 transition-all ${isToday ? 'ring-brand-200 bg-brand-50/30' : 'ring-black/5'}`}
+                    className={`min-w-[85vw] snap-center md:min-w-0 md:snap-align-none bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass p-6 ring-1 transition-all ${isToday ? 'ring-brand-200 bg-brand-50/30' : 'ring-black/5'}`}
                 >
                     <div className="flex flex-col sm:flex-row gap-6">
                         {/* Date Column */}
@@ -542,16 +573,36 @@ const MealPlanTab: React.FC = () => {
                             {planItems.length > 0 ? planItems.map((planItem) => {
                                 const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
                                 const mealName = planItem.mealName || linkedMeal?.name;
+                                const isCooked = planItem.isCooked;
 
                                 return (
-                                    <div key={planItem.id} className="group bg-white/60 border border-slate-200/60 rounded-xl p-4 shadow-sm hover:shadow-md hover:bg-white transition-all flex justify-between items-start gap-4">
+                                    <div
+                                        key={planItem.id}
+                                        onClick={() => {
+                                            // Only open view modal if there's enough data
+                                            if (linkedMeal) {
+                                                setViewingMeal({ meal: linkedMeal, planItem });
+                                            }
+                                        }}
+                                        className={clsx(
+                                            "group border rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-4 cursor-pointer relative overflow-hidden",
+                                            isCooked
+                                                ? "bg-green-50/50 border-green-200 hover:bg-green-50"
+                                                : "bg-white/60 border-slate-200/60 hover:bg-white"
+                                        )}
+                                    >
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1.5">
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
                                                     {planItem.type || 'dinner'}
                                                 </span>
+                                                {isCooked && (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xxs font-bold border border-green-200">
+                                                        <CheckCircle2 size={10} /> Cooked
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="font-semibold text-slate-900 truncate pr-2 tracking-tight">{mealName}</div>
+                                            <div className={clsx("font-semibold truncate pr-2 tracking-tight", isCooked ? "text-green-900" : "text-slate-900")}>{mealName}</div>
 
                                             {linkedMeal?.description && (
                                                 <div className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
@@ -574,18 +625,42 @@ const MealPlanTab: React.FC = () => {
                                             )}
                                         </div>
 
-                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
                                             <button
-                                                onClick={() => handleEditMealPlanItem(planItem, linkedMeal ?? undefined)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                onClick={(e) => { e.stopPropagation(); handleMoveToTomorrow(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Move ${mealName} to tomorrow`}
+                                                title="Move to tomorrow"
+                                            >
+                                                <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDuplicatePlanItem(planItem); }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
+                                                aria-label={`Duplicate ${mealName}`}
+                                                title="Duplicate meal"
+                                            >
+                                                <Copy className="w-5 h-5 sm:w-4 sm:h-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditMealPlanItem(planItem, linkedMeal ?? undefined);
+                                                }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Edit ${mealName}`}
+                                                title="Edit meal"
                                             >
                                                 <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
                                             <button
-                                                onClick={() => deleteMealPlanItem(planItem.id)}
-                                                className="p-3 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors active:scale-95"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteMealPlanItem(planItem.id);
+                                                }}
+                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-95"
                                                 aria-label={`Delete ${mealName}`}
+                                                title="Delete meal"
                                             >
                                                 <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
                                             </button>
@@ -608,414 +683,59 @@ const MealPlanTab: React.FC = () => {
       </div>
 
       {/* Add Meal Modal */}
-      {isAddModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            style={{ paddingBottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }}
-            onClick={(e) => {
-                if (e.target === e.currentTarget) handleCancel();
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-lg max-h-[calc(100dvh-10rem)] sm:max-h-[80vh] flex flex-col overflow-hidden shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-                  <div className="px-6 py-4 border-b border-slate-200/50 flex justify-between items-center shrink-0">
-                      <h3 id="modal-title" className="text-lg font-bold text-slate-900 tracking-tight">
-                          {editingPlanItemId ? 'Edit Meal Plan' : targetDate ? `Plan for ${format(parseISO(targetDate), 'MMM d')}` : 'Add Meal'}
-                      </h3>
-                      <button
-                          onClick={handleCancel}
-                          className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                          aria-label="Close modal"
-                      >
-                          <X className="w-5 h-5" />
-                      </button>
-                  </div>
+      <AddMealModal
+        isOpen={isAddModalOpen}
+        onClose={handleCancel}
+        targetDate={targetDate}
+        editingPlanItemId={editingPlanItemId}
+        editingMealId={editingMealId}
+        currentMeal={currentMeal}
+        setCurrentMeal={setCurrentMeal}
+        mealType={mealType}
+        setMealType={setMealType}
+        onOpenCookbook={() => setIsPreviousMealsModalOpen(true)}
+        onOpenAI={() => setIsAIModalOpen(true)}
+        onOpenImport={() => setIsImportModalOpen(true)}
+        onSave={saveMeal}
+      />
 
-                  <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                      {/* Top Actions */}
-                      <div className="grid grid-cols-2 gap-4">
-                          <button
-                              onClick={() => setIsPreviousMealsModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-indigo-50/80 text-indigo-700 rounded-xl hover:bg-indigo-100 font-bold text-sm transition-colors border border-indigo-100/50"
-                          >
-                              <ChefHat className="w-4.5 h-4.5" /> Cookbook
-                          </button>
-                          <button
-                              onClick={() => setIsAIModalOpen(true)}
-                              className="flex items-center justify-center gap-2 py-3 px-4 bg-violet-50/80 text-violet-700 rounded-xl hover:bg-violet-100 font-bold text-sm transition-colors border border-violet-100/50"
-                          >
-                              <Sparkles className="w-4.5 h-4.5" /> AI Suggest
-                          </button>
-                      </div>
+      {/* Previous Meals Modal (Smart Cookbook) */}
+      <CookbookModal
+        isOpen={isPreviousMealsModalOpen}
+        onClose={() => setIsPreviousMealsModalOpen(false)}
+        meals={meals}
+        onSelect={handleSelectMeal}
+        onClone={handleCloneMeal}
+      />
 
-                      {/* Meal Details */}
-                      <div className="space-y-5">
-                          <div>
-                              <label htmlFor="meal-name" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Name</label>
-                              <input
-                                  id="meal-name"
-                                  type="text"
-                                  value={currentMeal.name}
-                                  onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none font-medium text-slate-900"
-                                  placeholder="e.g. Adobo Chicken & Rice"
-                              />
-                          </div>
-
-                          <div role="radiogroup" aria-labelledby="meal-type-label">
-                              <label id="meal-type-label" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Meal Type</label>
-                              <div className="flex p-1 bg-slate-100/80 rounded-xl">
-                                  {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
-                                      <button
-                                          key={type}
-                                          role="radio"
-                                          aria-checked={mealType === type}
-                                          onClick={() => setMealType(type as 'breakfast' | 'lunch' | 'dinner' | 'snack')}
-                                          className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-all ${
-                                              mealType === type
-                                                  ? 'bg-white text-slate-900 shadow-sm'
-                                                  : 'text-slate-500 hover:text-slate-700'
-                                          }`}
-                                      >
-                                          {type}
-                                      </button>
-                                  ))}
-                              </div>
-                          </div>
-
-                          <div>
-                              <label htmlFor="meal-description" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</label>
-                              <textarea
-                                  id="meal-description"
-                                  value={currentMeal.description}
-                                  onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm text-slate-700 leading-relaxed"
-                                  rows={2}
-                                  placeholder="Add notes about preparation..."
-                              />
-                          </div>
-
-                          {/* Collapsible Sections could go here if content gets too long */}
-                          <div>
-                              <label htmlFor="meal-instructions" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Instructions</label>
-                              <textarea
-                                  id="meal-instructions"
-                                  value={currentMeal.instructions?.join('\n') || ''}
-                                  onChange={e =>
-                                      setCurrentMeal({
-                                          ...currentMeal,
-                                          instructions: e.target.value
-                                              .split('\n')
-                                              .map(line => line.trim())
-                                              .filter(line => line.length > 0),
-                                      })
-                                  }
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm font-mono text-slate-600"
-                                  rows={4}
-                                  placeholder="Step 1...&#10;Step 2..."
-                              />
-                          </div>
-
-                          <div>
-                              <label htmlFor="meal-url" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Recipe URL</label>
-                              <input
-                                  id="meal-url"
-                                  type="url"
-                                  value={currentMeal.recipeUrl || ''}
-                                  onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                                  className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm text-blue-600"
-                                  placeholder="https://example.com/recipe"
-                              />
-                          </div>
-
-                          {/* Tags Section */}
-                          <div>
-                              <label id="tags-label" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tags</label>
-
-                              {/* Common Tags */}
-                              <div className="flex flex-wrap gap-2 mb-4" role="group" aria-labelledby="tags-label">
-                                  {COMMON_TAGS.map(tag => {
-                                      const isSelected = currentMeal.tags?.some(t => t.toLowerCase() === tag.toLowerCase());
-                                      return (
-                                          <button
-                                              key={tag}
-                                              aria-pressed={isSelected}
-                                              onClick={() => {
-                                                  const newTags = isSelected
-                                                      ? currentMeal.tags?.filter(t => t.toLowerCase() !== tag.toLowerCase())
-                                                      : [...(currentMeal.tags || []), tag];
-                                                  setCurrentMeal({...currentMeal, tags: newTags});
-                                              }}
-                                              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                                                  isSelected
-                                                      ? 'bg-brand-50 text-brand-700 border-brand-200'
-                                                      : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                                              }`}
-                                          >
-                                              {isSelected ? <span className="mr-1">✓</span> : <span className="mr-1">+</span>}
-                                              {tag}
-                                          </button>
-                                      );
-                                  })}
-                              </div>
-
-                              {/* Selected Custom Tags & Input */}
-                              <div className="flex flex-wrap gap-2">
-                                  {currentMeal.tags?.filter(t => !COMMON_TAGS.some(ct => ct.toLowerCase() === t.toLowerCase())).map(tag => (
-                                      <span key={tag} className="bg-brand-50 text-brand-700 pl-3 pr-2 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 border border-brand-100">
-                                          {tag}
-                                          <button onClick={() => handleRemoveTag(tag)} className="hover:text-brand-900 p-0.5 rounded-full hover:bg-brand-100" aria-label={`Remove tag ${tag}`}>
-                                              <X className="w-3 h-3" />
-                                          </button>
-                                      </span>
-                                  ))}
-
-                                  <div className="relative flex-1 min-w-[140px]">
-                                      <input
-                                          type="text"
-                                          value={tagInput}
-                                          onChange={e => setTagInput(e.target.value)}
-                                          placeholder="Add custom tag..."
-                                          aria-label="Add custom tag"
-                                          className="w-full py-1.5 pl-3 pr-8 rounded-full bg-slate-50 border border-slate-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-none"
-                                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
-                                      />
-                                      <button
-                                          onClick={handleAddTag}
-                                          disabled={!tagInput.trim()}
-                                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm rounded-full text-brand-600 disabled:opacity-50 hover:bg-slate-50"
-                                          aria-label="Add custom tag"
-                                      >
-                                          <Plus className="w-3 h-3" />
-                                      </button>
-                                  </div>
-                              </div>
-                          </div>
-
-                      {/* Ingredients Section */}
-                      <div>
-                           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Ingredients</label>
-
-                           {/* Current Ingredients List */}
-                           {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
-                               <div className="mb-4 flex flex-wrap gap-2">
-                                   {currentMeal.ingredients.map((ing, idx) => (
-                                       <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
-                                           <span className="font-semibold text-slate-700">{ing.name}</span>
-                                           <span className="text-slate-400 text-xs bg-slate-50 px-1.5 py-0.5 rounded">{ing.quantity}</span>
-                                           <button
-                                               onClick={() => {
-                                                   setCurrentMeal(prev => ({
-                                                       ...prev,
-                                                       ingredients: prev.ingredients?.filter((_, i) => i !== idx)
-                                                   }));
-                                               }}
-                                               className="text-slate-300 hover:text-red-500 ml-1"
-                                               aria-label={`Remove ${ing.name}`}
-                                           >
-                                               <X className="w-3.5 h-3.5" />
-                                           </button>
-                                       </div>
-                                   ))}
-                               </div>
-                           )}
-
-                           <div className="space-y-4">
-                               {/* Ingredient Entry */}
-                               <div className="bg-white/60 p-4 rounded-xl border border-slate-200/60 shadow-sm">
-                                    <label htmlFor="ingredient-name" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Add Ingredient</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            id="ingredient-name"
-                                            type="text"
-                                            placeholder="Item name"
-                                            className="flex-1 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
-                                            value={ingredientName}
-                                            onChange={(e) => setIngredientName(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                                        />
-                                        <input
-                                            aria-label="Ingredient quantity"
-                                            type="text"
-                                            placeholder="Qty"
-                                            className="w-20 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5"
-                                            value={ingredientQty}
-                                            onChange={(e) => setIngredientQty(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
-                                        />
-                                        <button
-                                            onClick={handleAddIngredient}
-                                            disabled={!ingredientName.trim()}
-                                            className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors shadow-sm"
-                                            aria-label="Add ingredient"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                        </button>
-                                    </div>
-                                    <p className="text-xxs text-slate-400 mt-2 pl-1">
-                                        Ingredients will be added to the shopping list when creating a new meal plan.
-                                    </p>
-                               </div>
-                           </div>
-                      </div>
-
-                      </div>
-                  </div>
-
-                  <div className="p-4 border-t border-slate-200/50 bg-white flex flex-col gap-2 shrink-0">
-                      {editingMealId && (
-                          <button
-                              onClick={() => saveMeal(true)}
-                              className="w-full py-2 text-brand-600 font-bold text-sm hover:underline"
-                          >
-                              Save as New Meal (Copy)
-                          </button>
-                      )}
-                      <div className="flex gap-3 w-full">
-                        <button
-                            onClick={handleCancel}
-                            className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={() => saveMeal(false)}
-                            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 transition-all active:scale-95"
-                        >
-                            {editingMealId ? 'Update & Save' : 'Save to Plan'}
-                        </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
+      {/* Recipe Viewer Modal */}
+      {viewingMeal && (
+        <RecipeModal
+            isOpen={!!viewingMeal}
+            onClose={() => setViewingMeal(null)}
+            meal={viewingMeal.meal}
+            planItem={viewingMeal.planItem}
+            onMarkCooked={handleMarkCooked}
+        />
       )}
 
-      {/* Previous Meals Modal */}
-      {isPreviousMealsModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsPreviousMealsModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="previous-meals-title"
-          >
-               <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-md p-6 max-h-[80vh] flex flex-col shadow-2xl ring-1 ring-black/5">
-                   <h3 id="previous-meals-title" className="text-xl font-bold text-slate-900 mb-4 tracking-tight">Your Cookbook</h3>
-                   <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-                       {meals.sort((a,b) => a.name.localeCompare(b.name)).map(meal => (
-                           <div key={meal.id} className="flex items-stretch gap-2">
-                               <button
-                                    onClick={() => {
-                                        setCurrentMeal(meal);
-                                        setEditingMealId(meal.id);
-                                        setIsPreviousMealsModalOpen(false);
-                                    }}
-                                    className="flex-1 text-left p-4 hover:bg-slate-50/50 rounded-xl border border-slate-200/60 flex justify-between items-center group transition-colors"
-                               >
-                                   <span className="font-semibold text-slate-700 group-hover:text-brand-700">{meal.name}</span>
-                                   <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-brand-400" />
-                               </button>
-                               <button
-                                    onClick={() => handleCloneMeal(meal)}
-                                    className="px-4 text-slate-400 hover:text-brand-600 hover:bg-brand-50 border border-slate-200/60 rounded-xl transition-colors"
-                                    title="Clone Meal"
-                               >
-                                    <Copy className="w-5 h-5" />
-                               </button>
-                           </div>
-                       ))}
-                       {meals.length === 0 && <p className="text-slate-500 text-center py-8">No saved meals yet.</p>}
-                   </div>
-                   <button
-                        onClick={() => setIsPreviousMealsModalOpen(false)}
-                        className="mt-6 w-full py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                   >
-                       Close
-                   </button>
-               </div>
-          </div>
-      )}
+      {/* Recipe Import Modal */}
+      <RecipeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        householdId={householdId || ''}
+        onConfirm={handleRecipeImport}
+      />
 
       {/* AI Modal */}
-      {isAIModalOpen && (
-          <div
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-modal flex items-center justify-center p-4"
-            onClick={(e) => {
-                if (e.target === e.currentTarget) setIsAIModalOpen(false);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="ai-modal-title"
-          >
-              <div className="bg-white/95 backdrop-blur-xl rounded-2xl w-full max-w-sm p-6 shadow-2xl ring-1 ring-black/5 animate-in zoom-in-95 duration-200">
-                  <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900 tracking-tight">
-                      <Sparkles className="text-violet-600 w-6 h-6" /> Chef AI
-                  </h3>
-
-                  <div className="space-y-3 mb-8">
-                      <label className="flex items-center gap-3 p-3 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-slate-50/50 transition-colors">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.cheap}
-                              onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Budget Friendly</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Low cost ingredients</div>
-                          </div>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.quick}
-                              onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Quick & Easy</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Under 30 minutes</div>
-                          </div>
-                      </label>
-
-                      <label className="flex items-center gap-3 p-4 border border-slate-200/60 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-200/50 transition-all">
-                          <input
-                              type="checkbox"
-                              checked={aiOptions.new}
-                              onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
-                              className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
-                          />
-                          <div>
-                              <div className="font-bold text-slate-800">Try Something New</div>
-                              <div className="text-xs text-slate-500 mt-0.5">Avoid recent meals</div>
-                          </div>
-                      </label>
-                  </div>
-
-                  <button
-                      onClick={handleAIRequest}
-                      disabled={isGeneratingAI}
-                      className="w-full py-3.5 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg shadow-violet-200 transition-all active:scale-95"
-                  >
-                      {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-                      {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
-                  </button>
-
-                  <button
-                      onClick={() => setIsAIModalOpen(false)}
-                      disabled={isGeneratingAI}
-                      className="mt-3 w-full py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-700 font-bold rounded-xl transition-colors"
-                  >
-                      Cancel
-                  </button>
-              </div>
-          </div>
-      )}
+      <AISuggestModal
+        isOpen={isAIModalOpen}
+        onClose={() => setIsAIModalOpen(false)}
+        aiOptions={aiOptions}
+        setAiOptions={setAiOptions}
+        isGeneratingAI={isGeneratingAI}
+        onSuggest={handleAIRequest}
+      />
 
       {/* Ingredient Selector Modal */}
       {isIngredientSelectorOpen && ingredientSelectorData && (
@@ -1028,6 +748,7 @@ const MealPlanTab: React.FC = () => {
               onConfirm={handleConfirmIngredients}
           />
       )}
+
     </div>
   );
 };

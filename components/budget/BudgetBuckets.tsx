@@ -2,14 +2,24 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { ArrowRightLeft, Plus, Edit, Trash2 } from 'lucide-react';
-import { BudgetBucket, Transaction } from '../../types/schema';
+import { BudgetBucket, Transaction, INCOME_CATEGORY } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
+import toast from 'react-hot-toast';
 import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Select from '../ui/Select';
 import { BudgetBucketCard } from './BudgetBucketCard';
+
+const UNBUDGETED_BUCKET: BudgetBucket = {
+  id: 'unbudgeted',
+  name: 'Unbudgeted & Other',
+  limit: 0,
+  color: 'bg-slate-300',
+  isVariable: true,
+  isCore: false
+};
 
 const BudgetBuckets: React.FC = () => {
   const {
@@ -42,17 +52,23 @@ const BudgetBuckets: React.FC = () => {
     transactions.forEach(tx => {
       // Period Check
       if (currentPeriodId && tx.payPeriodId !== currentPeriodId) return;
-      if (!tx.category) return;
 
-      const bucketId = nameToIdMap.get(tx.category.toLowerCase());
-      if (bucketId) {
-        let list = map.get(bucketId);
-        if (!list) {
-          list = [];
-          map.set(bucketId, list);
-        }
-        list.push(tx);
+      // Exclude Income (handled elsewhere)
+      if (tx.category === INCOME_CATEGORY) return;
+
+      let bucketId = tx.category ? nameToIdMap.get(tx.category.toLowerCase()) : undefined;
+
+      // If no valid bucket found, assign to Unbudgeted
+      if (!bucketId) {
+        bucketId = UNBUDGETED_BUCKET.id;
       }
+
+      let list = map.get(bucketId);
+      if (!list) {
+        list = [];
+        map.set(bucketId, list);
+      }
+      list.push(tx);
     });
 
     // 3. Sort each small group independently (O(K log K))
@@ -127,6 +143,10 @@ const BudgetBuckets: React.FC = () => {
   }, []);
 
   const handleReallocate = useCallback((targetId: string) => {
+    if (targetId === UNBUDGETED_BUCKET.id) {
+      toast.error("Please categorize these transactions to fix them.");
+      return;
+    }
     setReallocateModal({ sourceId: null, targetId });
   }, []);
 
@@ -192,6 +212,30 @@ const BudgetBuckets: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Unbudgeted Bucket (if any) */}
+      {transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
+        <BudgetBucketCard
+          key={UNBUDGETED_BUCKET.id}
+          bucket={UNBUDGETED_BUCKET}
+          spent={{
+            verified: transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.reduce((sum, t) => sum + t.amount, 0),
+            pending: 0
+          }}
+          bucketTransactions={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!}
+          isExpanded={expandedBucketId === UNBUDGETED_BUCKET.id}
+          isEditingLimit={false}
+          onExpand={handleExpand}
+          onEditBucket={() => {}} // No-op
+          onStartEditingLimit={() => {}} // No-op
+          onSaveLimit={() => {}} // No-op
+          onCancelEdit={() => {}} // No-op
+          onReallocate={handleReallocate}
+          onEditTransaction={handleEditTransaction}
+          onDeleteTransaction={handleDeleteTransaction}
+          onOpenTransactionActions={setActionTransaction}
+        />
+      )}
+
       {buckets.map(bucket => {
         const spent = bucketSpentMap.get(bucket.id) || { verified: 0, pending: 0 };
         const bucketTransactions = transactionsByBucket.get(bucket.id) || [];

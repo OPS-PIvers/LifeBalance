@@ -39,10 +39,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
-      className={`p-4 rounded-2xl border flex items-center justify-between transition-all duration-300 group cursor-pointer ${
+      className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
-          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300 shadow-sm'
-          : 'bg-white/80 backdrop-blur-sm border-slate-100 hover:bg-white hover:border-slate-200 hover:shadow-glass motion-safe:hover:-translate-y-0.5'
+          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
+          : 'bg-white/80 border-transparent hover:ring-slate-200 hover:shadow-glass'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">

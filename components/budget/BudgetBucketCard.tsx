@@ -214,7 +214,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
             Transactions ({bucketTransactions.length})
           </p>
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+          <div className="space-y-1 max-h-48 scroll-contain-y">
             {bucketTransactions.map(tx => (
               <div
                 key={tx.id}

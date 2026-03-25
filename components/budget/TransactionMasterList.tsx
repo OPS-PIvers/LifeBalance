@@ -400,10 +400,10 @@ const TransactionMasterList: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm space-y-3">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass space-y-3">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
             type="text"
             placeholder="Search merchant or amount..."
@@ -504,29 +504,29 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white p-4 rounded-2xl border border-brand-100 shadow-sm">
+      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Income</p>
+          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Income</p>
             <p className="text-lg font-bold text-money-pos font-mono">
               +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Expense</p>
+          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Expense</p>
             <p className="text-lg font-bold text-money-neg font-mono">
               -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Net</p>
+          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Net</p>
             <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
               {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-brand-50 p-3 rounded-xl">
-            <p className="text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-brand-700 font-mono">
+          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-slate-700 font-mono">
               {summary.count}
             </p>
           </div>

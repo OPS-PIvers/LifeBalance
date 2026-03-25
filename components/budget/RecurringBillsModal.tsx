@@ -128,7 +128,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
 
       {/* Summary Cards */}
       <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-slate-50/50">
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
+          <div className="bg-white/80 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm">
             <div className="flex items-center gap-2 mb-1 text-money-neg font-bold text-xs uppercase tracking-wider">
               <TrendingDown size={14} /> Monthly Expenses
             </div>
@@ -137,7 +137,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             </div>
             <div className="text-xs text-slate-400 mt-1">Estimated fixed costs</div>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft">
+          <div className="bg-white/80 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm">
             <div className="flex items-center gap-2 mb-1 text-money-pos font-bold text-xs uppercase tracking-wider">
               <TrendingUp size={14} /> Monthly Income
             </div>
@@ -157,7 +157,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
             </div>
           ) : (
             recurringItems.map(item => (
-              <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-slate-300 transition-colors">
+              <div key={item.id} className="bg-white/80 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:ring-slate-300 transition-colors">
                 {editingId === item.id ? (
                   // Edit Mode
                   <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
