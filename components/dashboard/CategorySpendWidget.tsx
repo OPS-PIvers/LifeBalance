@@ -11,7 +11,7 @@ export const CategorySpendWidget: React.FC = () => {
     const now = new Date();
     // Current Month Range
     const currentMonthStart = startOfMonth(now);
-    const currentMonthEnd = endOfMonth(now);
+    const currentMonthEnd = now;
 
     // Last Month MTD Range
     const lastMonthStart = startOfMonth(subMonths(now, 1));
@@ -64,7 +64,7 @@ export const CategorySpendWidget: React.FC = () => {
     return { totalSpent, displayItems, percentChange, isHigher, hasPriorData };
   }, [transactions]);
 
-  if (categoryStats.totalSpent === 0) return null;
+  if (categoryStats.totalSpent === 0 && !categoryStats.hasPriorData) return null;
 
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
