@@ -53,7 +53,7 @@ export const Tag: React.FC<TagProps> = ({
           type="button"
           onClick={onRemove}
           className="pr-2 pl-1 py-1 text-brand-300 hover:text-red-500 hover:bg-red-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 h-full flex items-center"
-          aria-label={`Remove ${label}`}
+          aria-label={`Remove ${typeof label === 'string' ? label : 'item'}`}
         >
           <X size={size === 'sm' ? 12 : 14} />
         </button>
@@ -73,7 +73,7 @@ export const Tag: React.FC<TagProps> = ({
           type="button"
           onClick={onRemove}
           className="ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors flex items-center justify-center"
-          aria-label={`Remove ${label}`}
+          aria-label={`Remove ${typeof label === 'string' ? label : 'item'}`}
         >
           <X size={size === 'sm' ? 12 : 14} />
         </button>
