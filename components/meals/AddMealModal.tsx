@@ -271,15 +271,15 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                   {/* Current Ingredients List */}
                   {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
                       <div className="mb-4 flex flex-wrap gap-2">
-                          {currentMeal.ingredients.map((ing, idx) => (
-                              <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                          {currentMeal.ingredients.map((ing) => (
+                              <div key={ing.name} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
                                   <span className="font-semibold text-slate-700">{ing.name}</span>
                                   <span className="text-slate-400 text-xs bg-slate-50 px-1.5 py-0.5 rounded">{ing.quantity}</span>
                                   <button
                                       onClick={() => {
                                           setCurrentMeal(prev => ({
                                               ...prev,
-                                              ingredients: prev.ingredients?.filter((_, i) => i !== idx)
+                                              ingredients: prev.ingredients?.filter((item) => item.name !== ing.name)
                                           }));
                                       }}
                                       className="text-slate-300 hover:text-red-500 ml-1"

@@ -4,19 +4,17 @@ import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
+export type AIOptions = {
+  cheap: boolean;
+  quick: boolean;
+  new: boolean;
+};
+
 interface AISuggestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  aiOptions: {
-    cheap: boolean;
-    quick: boolean;
-    new: boolean;
-  };
-  setAiOptions: React.Dispatch<React.SetStateAction<{
-    cheap: boolean;
-    quick: boolean;
-    new: boolean;
-  }>>;
+  aiOptions: AIOptions;
+  setAiOptions: React.Dispatch<React.SetStateAction<AIOptions>>;
   isGeneratingAI: boolean;
   onSuggest: () => void;
 }
