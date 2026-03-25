@@ -604,41 +604,36 @@ const ShoppingListTab: React.FC = () => {
         />
 
         {/* Edit Modal / Drawer */}
-        {editingItem && (
-            isDesktop ? (
-                <Modal
-                    isOpen={!!editingItem}
-                    onClose={() => setEditingItem(null)}
-                    className="overflow-visible"
-                >
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
-                        <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                        <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
-                    </div>
-                    <ShoppingItemForm
-                        item={editingItem}
-                        onChange={setEditingItem}
-                        onSave={handleSaveEdit}
-                        stores={stores}
-                        categories={categories}
-                    />
-                </Modal>
-            ) : (
-                <Drawer
-                    isOpen={!!editingItem}
-                    onClose={() => setEditingItem(null)}
-                    title="Edit Item"
-                >
-                    <ShoppingItemForm
-                        item={editingItem}
-                        onChange={setEditingItem}
-                        onSave={handleSaveEdit}
-                        stores={stores}
-                        categories={categories}
-                    />
-                </Drawer>
-            )
-        )}
+        {editingItem && (() => {
+          const itemForm = (
+            <ShoppingItemForm
+              item={editingItem}
+              onChange={setEditingItem}
+              onSave={handleSaveEdit}
+              stores={stores}
+              categories={categories}
+            />
+          );
+
+          const WrapperComponent = isDesktop ? Modal : Drawer;
+          const wrapperProps = {
+            isOpen: !!editingItem,
+            onClose: () => setEditingItem(null),
+            ...(isDesktop ? { className: "overflow-visible" } : { title: "Edit Item" })
+          };
+
+          return (
+            <WrapperComponent {...wrapperProps}>
+              {isDesktop && (
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
+                  <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
+                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                </div>
+              )}
+              {itemForm}
+            </WrapperComponent>
+          );
+        })()}
     </div>
   );
 };

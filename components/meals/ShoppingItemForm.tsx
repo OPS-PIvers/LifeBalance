@@ -11,6 +11,13 @@ interface ShoppingItemFormProps {
 }
 
 export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChange, onSave, stores, categories }) => {
+  const handleFieldChange = React.useCallback(
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      onChange({ ...item, [e.target.name]: e.target.value });
+    },
+    [item, onChange]
+  );
+
   return (
     <div className="flex flex-col h-full">
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
@@ -18,8 +25,9 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Item Name</label>
                 <input
                     type="text"
+                    name="name"
                     value={item.name}
-                    onChange={(e) => onChange({...item, name: e.target.value})}
+                    onChange={handleFieldChange}
                     className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-900 font-medium"
                 />
             </div>
@@ -27,8 +35,9 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                  <div>
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</label>
                     <select
+                        name="category"
                         value={item.category || 'Uncategorized'}
-                        onChange={(e) => onChange({...item, category: e.target.value})}
+                        onChange={handleFieldChange}
                         className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
                     >
                         {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -38,8 +47,9 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quantity</label>
                     <input
                         type="text"
+                        name="quantity"
                         value={item.quantity || ''}
-                        onChange={(e) => onChange({...item, quantity: e.target.value})}
+                        onChange={handleFieldChange}
                         className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
                     />
                 </div>
@@ -48,8 +58,9 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Store</label>
                 <input
                     type="text"
+                    name="store"
                     value={item.store || ''}
-                    onChange={(e) => onChange({...item, store: e.target.value})}
+                    onChange={handleFieldChange}
                     placeholder="Optional"
                     className="w-full mt-1 p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 text-slate-700"
                 />
