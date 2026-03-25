@@ -26,16 +26,13 @@ describe('ProgressBar', () => {
   });
 
   it('clamps value between 0 and 100', () => {
-    render(<ProgressBar value={150} />);
+    const { rerender } = render(<ProgressBar value={150} />);
     const progressBar = screen.getByRole('progressbar');
     const innerBar = progressBar.firstElementChild;
     expect(innerBar).toHaveStyle({ width: '100%' });
 
-    render(<ProgressBar value={-20} />);
-    // Note: react testing library might complain about duplicate role if we don't clean up,
-    // but cleanup is automatic.
-    // But since we are rendering again, let's look for the new one.
-    // Actually, it's better to isolate tests or use rerender.
+    rerender(<ProgressBar value={-20} />);
+    expect(innerBar).toHaveStyle({ width: '0%' });
   });
 
   it('renders different sizes', () => {

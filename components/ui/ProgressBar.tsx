@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../../utils/cn';
 
 interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
-  value: number; // 0 to 100
+  value: number; // The current value of the progress bar.
   max?: number;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'custom';
@@ -59,7 +59,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         className={cn(
           'h-full rounded-full',
           showAnimation && 'transition-all duration-500',
-          variant === 'custom' ? colorClass : variantClasses[variant],
+          variantClasses[variant],
           barClassName
         )}
         style={{ width: `${percentage}%` }}
