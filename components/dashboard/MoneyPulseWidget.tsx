@@ -52,7 +52,7 @@ export const MoneyPulseWidget: React.FC = () => {
   if (transactions.length === 0) return null;
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
+    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
           <div className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
