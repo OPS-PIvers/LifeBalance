@@ -107,7 +107,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   return (
     <Drawer isOpen={isOpen} onClose={onClose} noPadding={true}>
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+      <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="p-2 bg-slate-100 text-slate-600 rounded-2xl">
             <Repeat size={20} />
