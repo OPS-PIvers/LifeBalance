@@ -90,7 +90,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" ariaLabelledBy="cookbook-modal-title">
-      <div className="flex flex-col">
+      <div className="flex flex-col h-full min-h-0">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
