@@ -47,6 +47,7 @@ export default {
       boxShadow: {
         soft: '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
         glass: '0 8px 30px rgba(0, 0, 0, 0.04)',
+        'glass-card': '0 8px 30px rgba(0, 0, 0, 0.04)',
         'glass-sm': '0 2px 10px rgba(0, 0, 0, 0.02)',
         'glass-deep': '0 8px 30px rgba(0, 0, 0, 0.12)',
         nav: '0 -10px 40px -15px rgba(0, 0, 0, 0.05)',
