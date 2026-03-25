@@ -45,7 +45,7 @@ export const TabsList: React.FC<{ children: React.ReactNode; className?: string 
   className,
 }) => {
   return (
-    <div className={cn('bg-slate-100/80 p-1.5 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar', className)} role="tablist">
+    <div className={cn('bg-slate-100/80 p-1.5 rounded-xl flex flex-nowrap gap-1 overflow-x-auto', className)} role="tablist">
       {children}
     </div>
   );
