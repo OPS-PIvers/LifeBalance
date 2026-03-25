@@ -144,7 +144,8 @@ const BudgetHistory: React.FC = () => {
           <Card key={group.periodId} className="overflow-hidden ring-1 ring-black/5 shadow-glass bg-white/80 backdrop-blur-xl">
             <button
               onClick={() => toggleExpand(group.periodId)}
-              className="w-full text-left"
+              className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-inset"
+              aria-expanded={isExpanded}
             >
               <div className="p-6 bg-transparent hover:bg-white/50 transition-colors">
                 <div className="flex justify-between items-center mb-2">

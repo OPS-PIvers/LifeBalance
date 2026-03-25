@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2026-03-25 - [Accessibility Regression Risk with Complex Buttons]
+**Learning:** Adding `aria-label` to a button that wraps a complex UI component (like a card header containing multiple distinct pieces of visible text) is an accessibility anti-pattern. Screen readers will read the `aria-label` and completely skip all the rich, visible child content.
+**Action:** Only use `aria-label` on icon-only buttons or when the visible text is insufficient. For complex interactive wrappers, rely on semantic HTML structure and use `aria-expanded` or `aria-controls` to indicate state without overriding the readable content.
