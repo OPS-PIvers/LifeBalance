@@ -54,7 +54,7 @@ export default {
       },
       fontSize: {
         xxs: '10px',
-        xxxs: '8px',
+        xxxs: '0.5rem',
       },
       zIndex: {
         sticky: '40',
