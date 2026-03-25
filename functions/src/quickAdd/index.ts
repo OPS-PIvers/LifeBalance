@@ -327,7 +327,7 @@ export const quickAddExpense = onRequest(
       amount = Math.round(amount * 100) / 100;
     }
 
-    if (typeof amount !== "number" || isNaN(amount)) {
+    if (typeof amount !== "number" || !Number.isFinite(amount)) {
       logger.warn(`Invalid amount received: ${JSON.stringify({ rawAmount, amount, type: typeof rawAmount })}`);
       errorResponse(
         res,
