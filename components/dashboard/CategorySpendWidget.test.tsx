@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CategorySpendWidget } from './CategorySpendWidget';
 import { format, subMonths } from 'date-fns';
@@ -8,10 +8,10 @@ vi.mock('react-router-dom', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-// Mock Context
-const now = new Date();
-const currentMonthDate = format(now, 'yyyy-MM-dd');
-const lastMonthDate = format(subMonths(now, 1), 'yyyy-MM-dd');
+// Setup fixed dates for consistent testing
+const fixedDate = new Date('2026-03-25T12:00:00Z');
+const currentMonthDate = format(fixedDate, 'yyyy-MM-dd');
+const lastMonthDate = format(subMonths(fixedDate, 1), 'yyyy-MM-dd');
 
 const mockTransactions = [
   // Current month: Total 350 (Groceries 300 + Dining 50)
@@ -94,6 +94,15 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
 }));
 
 describe('CategorySpendWidget', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedDate);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('aggregates spending by category for the current month', () => {
     render(<CategorySpendWidget />);
 
@@ -126,5 +135,63 @@ describe('CategorySpendWidget', () => {
     });
     const { container } = render(<CategorySpendWidget />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows "No prior data" when there is current spending but no prior month spending', () => {
+    mockUseHousehold.mockReturnValueOnce({
+      transactions: [
+        {
+          id: 'current-only-1',
+          amount: 100,
+          category: 'Groceries',
+          date: currentMonthDate,
+          status: 'verified',
+          merchant: 'Store',
+          isRecurring: false,
+          source: 'manual',
+          autoCategorized: false,
+        },
+      ],
+    });
+    render(<CategorySpendWidget />);
+    // Current total should be shown
+    expect(screen.getAllByText('$100')[0]).toBeInTheDocument();
+    // Trend pill should indicate there is no prior data to compare against
+    expect(screen.getByText('No prior data')).toBeInTheDocument();
+  });
+
+  it('shows a neutral 0% trend when current and last month spending are equal', () => {
+    mockUseHousehold.mockReturnValueOnce({
+      transactions: [
+        // Current month
+        {
+          id: 'equal-current-1',
+          amount: 200,
+          category: 'Groceries',
+          date: currentMonthDate,
+          status: 'verified',
+          merchant: 'Store',
+          isRecurring: false,
+          source: 'manual',
+          autoCategorized: false,
+        },
+        // Last month with same total
+        {
+          id: 'equal-last-1',
+          amount: 200,
+          category: 'Groceries',
+          date: lastMonthDate,
+          status: 'verified',
+          merchant: 'Store',
+          isRecurring: false,
+          source: 'manual',
+          autoCategorized: false,
+        },
+      ],
+    });
+    render(<CategorySpendWidget />);
+    expect(screen.getAllByText('$200')[0]).toBeInTheDocument();
+    expect(screen.getByText('0%')).toBeInTheDocument();
+    expect(screen.getByText('vs last month')).toBeInTheDocument();
   });
 });

@@ -43,7 +43,7 @@ export const CategorySpendWidget: React.FC = () => {
     // Trend Calculation
     const diff = totalSpent - lastMonthTotalSpent;
     const percentChange = lastMonthTotalSpent > 0 ? (diff / lastMonthTotalSpent) * 100 : 0;
-    const isHigher = diff > 0;
+    const isHigher = diff >= 0;
     const hasPriorData = lastMonthTotalSpent > 0;
 
     // Convert to array and sort (Existing logic)
