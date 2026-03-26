@@ -83,6 +83,12 @@ const SEED_STORES: Store[] = [
   { id: 's2', name: 'Costco', icon: 'Store' },
 ];
 
+const SEED_GROCERY_CATALOG: GroceryCatalogItem[] = [
+  { id: 'gc1', name: 'Milk', category: 'Dairy', defaultQuantity: '1', defaultStore: 'Safeway', purchaseCount: 10, lastPurchased: new Date().toISOString() },
+  { id: 'gc2', name: 'Eggs', category: 'Dairy', defaultQuantity: '12', defaultStore: 'Costco', purchaseCount: 5, lastPurchased: new Date().toISOString() },
+  { id: 'gc3', name: 'Bread', category: 'Bakery', defaultQuantity: '1', defaultStore: 'Safeway', purchaseCount: 8, lastPurchased: new Date().toISOString() },
+];
+
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -98,7 +104,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
   const [todos, setTodos] = useState<ToDo[]>([]);
-  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
+  const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
   const [insight] = useState("🧪 Test Mode: This is mock data for AI testing");
@@ -284,6 +290,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     const newPlan = { ...plan, id: generateId() } as MealPlanItem;
     setMealPlan(prev => [...prev, newPlan]);
     toast.success('Mock: Meal plan added');
+  }, []);
+
+  const updateMealPlan = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
+    setMealPlan(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    toast.success('Mock: Meal updated');
   }, []);
 
   const deleteMealPlan = useCallback(async (id: string) => {
@@ -492,7 +503,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toggleShoppingItemPurchased: noOp,
     clearPurchasedShoppingItems: noOp,
     addMealPlanItem: addMealPlan,
-    updateMealPlanItem: noOp,
+    updateMealPlanItem: updateMealPlan,
     deleteMealPlanItem: deleteMealPlan,
     addToDo,
     updateToDo,

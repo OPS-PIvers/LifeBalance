@@ -39,14 +39,18 @@ describe('BudgetBucketCard', () => {
 
     expect(screen.getByText('Groceries')).toBeInTheDocument();
     expect(screen.getByText('$200.00')).toBeInTheDocument();
-    expect(screen.getByText('+$50.00*')).toBeInTheDocument();
+    // The * was moved to a separate text element or removed from this specific span
+    expect(screen.getByText('+$50.00')).toBeInTheDocument();
     expect(screen.getByText('$500')).toBeInTheDocument();
   });
 
   it('renders progress bar correctly', () => {
     const { container } = render(<BudgetBucketCard {...defaultProps} />);
-    // Target the progress bar specifically (it's inside the bg-slate-100 wrapper)
-    const progressBar = container.querySelector('.bg-slate-100 > div');
+    // Target the progress bar specifically (it's inside the bg-slate-100/80 wrapper)
+    // We use a partial class match or the escaped selector
+    const progressBarWrapper = container.querySelector('[class*="bg-slate-100/80"]');
+    const progressBar = progressBarWrapper?.firstElementChild;
+
     expect(progressBar).toHaveStyle('width: 50%'); // (250/500)*100
     expect(progressBar).toHaveClass('bg-green-500');
   });

@@ -344,7 +344,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const txQuery = query(collection(db, `households/${householdId}/transactions`));
     unsubscribers.push(
       onSnapshot(txQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Transaction));
+        const data = snapshot.docs.map(doc => {
+          const d = doc.data();
+          return {
+            ...d,
+            id: doc.id,
+            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
+          } as Transaction;
+        });
         setTransactions(data);
       })
     );

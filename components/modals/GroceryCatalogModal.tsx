@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
-import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock } from 'lucide-react';
+import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
@@ -22,6 +22,40 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
+  const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
+
+  // Wrapper for onClose to reset state
+  const handleClose = () => {
+    setEditingItem(null);
+    setActionItem(null);
+    setSearchQuery('');
+    onClose();
+  };
+
+  // Reset state when isOpen changes to false
+  // Note: We use a different pattern to avoid set-state-in-effect warning
+  // However, since isOpen is controlled by parent, we might still receive isOpen=false props
+  // without calling handleClose (e.g. parent force close).
+  // The lint error `Calling setState synchronously within an effect` happens because
+  // setting state might trigger re-render which might re-trigger effect if dependencies change.
+  // Here dependency is [isOpen].
+  // To fix, we can ensure we only reset if it WAS open.
+  // Actually, standard pattern for modals is to reset on open or use `key` to remount.
+  // But given the constraints, let's just use the onClose wrapper and assume parent calls it.
+  // If parent closes it externally, state might persist until next open, which is acceptable or
+  // we can use a ref to track previous open state.
+
+  // Alternative: Use a ref to track previous isOpen and only set state if it changed.
+  // But useEffect does that.
+  // The issue is *synchronous* set state.
+  // We can wrap in requestAnimationFrame or setTimeout, but that causes flash.
+  // The best way is to not use useEffect for this reset if possible, or ignore the rule if safe.
+  // But we want to pass lint.
+
+  // Let's remove the useEffect and rely on handleClose.
+  // If the modal is closed by clicking backdrop (Drawer), it calls onClose -> handleClose.
+  // If closed by external prop change? The state persists.
+  // This is a trade-off. But for this component, usually it's closed via user interaction.
 
   // Filter and sort catalog items
   const filteredCatalog = useMemo(() => {
@@ -79,13 +113,17 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   const handleDeleteItem = async (id: string) => {
     if (window.confirm('Remove from history? This won\'t affect your current list.')) {
       await deleteGroceryCatalogItem(id);
+      // Close action drawer if open for this item
+      if (actionItem?.id === id) {
+        setActionItem(null);
+      }
     }
   };
 
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleClose}
       noPadding={true}
     >
       {/* Header */}
@@ -153,8 +191,17 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   </div>
                 </button>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                {/* Mobile Actions */}
+                <button
+                    onClick={() => setActionItem(item)}
+                    className="sm:hidden w-10 h-10 flex items-center justify-center text-gray-400 active:text-brand-600 active:bg-gray-100 rounded-full"
+                    aria-label="More options"
+                >
+                    <MoreVertical className="w-5 h-5" />
+                </button>
+
+                {/* Desktop Actions */}
+                <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
                     className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
@@ -174,6 +221,43 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             ))
           )}
       </div>
+
+      {/* Mobile Actions Drawer */}
+      <Drawer
+        isOpen={!!actionItem}
+        onClose={() => setActionItem(null)}
+        title="Item Options"
+      >
+          <div className="space-y-3">
+             <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                <p className="font-bold text-lg">{actionItem?.name}</p>
+                <p className="text-gray-500">{actionItem?.category}</p>
+             </div>
+
+             <button
+               onClick={() => {
+                 setEditingItem(actionItem);
+                 setActionItem(null);
+               }}
+               className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl font-bold text-slate-700 active:bg-slate-50"
+             >
+                <Edit2 className="w-5 h-5" />
+                Edit Details
+             </button>
+
+             <button
+               onClick={() => {
+                 if (actionItem) {
+                     handleDeleteItem(actionItem.id);
+                 }
+               }}
+               className="w-full flex items-center gap-3 p-4 bg-white border border-red-100 text-red-600 rounded-xl font-bold active:bg-red-50"
+             >
+                <Trash2 className="w-5 h-5" />
+                Remove from History
+             </button>
+          </div>
+      </Drawer>
 
       {/* Nested Edit Drawer Overlay */}
       {editingItem && (
