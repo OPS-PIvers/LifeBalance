@@ -113,11 +113,11 @@ export const Drawer: React.FC<DrawerProps> = ({
                    variant="ghost"
                    size="icon"
                    onClick={onClose}
-                   className="rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                   className="rounded-full"
                    aria-label="Close drawer"
                    disabled={disableClose}
                  >
-                   <X size={20} />
+                   <X size={20} className="text-slate-400" />
                  </Button>
                </div>
              )}
