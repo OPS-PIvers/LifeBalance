@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trash2, Loader2, Copy } from 'lucide-react';
+import { Trash2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import { Button } from '../../components/ui/Button';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -284,48 +285,45 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       {/* Actions */}
       <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
         <div className="flex gap-2">
-          <button
+          <Button
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="subtle"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSave}
             disabled={isSaving}
-            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            isLoading={isSaving}
+            className="flex-1"
           >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              'Save Changes'
-            )}
-          </button>
+            Save Changes
+          </Button>
         </div>
 
         {/* Secondary Actions Row */}
         {!showDeleteConfirm && (
           <div className="flex gap-2">
-            <button
+            <Button
               onClick={handleDuplicate}
               disabled={isSaving}
-              className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="secondary"
+              leftIcon={<Copy size={16} />}
+              className="flex-1"
             >
-              <Copy size={16} />
               Duplicate
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setShowDeleteConfirm(true)}
               disabled={isSaving}
-              className="flex-1 py-3 bg-money-bgNeg text-money-neg font-bold rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="danger"
+              leftIcon={<Trash2 size={16} />}
+              className="flex-1"
             >
-              <Trash2 size={16} />
               Delete
-            </button>
+            </Button>
           </div>
         )}
 
@@ -336,20 +334,23 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
               Are you sure? This cannot be undone.
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isSaving}
-                className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="outline"
+                className="flex-1 py-2"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleDelete}
                 disabled={isSaving}
-                className="flex-1 py-2 bg-money-neg text-white font-bold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                isLoading={isSaving}
+                variant="destructive"
+                className="flex-1 py-2"
               >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
-              </button>
+                Confirm Delete
+              </Button>
             </div>
           </div>
         )}
