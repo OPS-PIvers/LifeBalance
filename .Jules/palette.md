@@ -17,3 +17,7 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+
+## 2025-05-18 - Missing Focus Rings on Non-Standard Buttons
+**Learning:** Components acting as interactive buttons (like `CollapsibleCard` headers) or small select inputs (like `CompactSelect`) often miss visual focus rings because they don't use standard button class sets. This creates silent failures for keyboard users where they lose track of their place.
+**Action:** When creating any custom interactive component that uses raw `<button>` or `<select>`, always explicitly include `focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500` to guarantee keyboard accessibility matching the global design system.

@@ -62,6 +62,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         aria-controls={contentId}
         className={cn(
           "w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all duration-300 group text-left",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500",
           headerClassName
         )}
       >
