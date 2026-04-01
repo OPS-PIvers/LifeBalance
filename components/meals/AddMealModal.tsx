@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Meal } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
+import Textarea from '@/components/ui/Textarea';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -175,12 +176,12 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 </div>
 
                 <div>
-                    <label htmlFor="meal-description" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</label>
-                    <textarea
+                    <Textarea
                         id="meal-description"
+                        label="Description"
                         value={currentMeal.description || ''}
                         onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm text-slate-700 leading-relaxed"
+                        className="bg-slate-50/50 text-sm leading-relaxed"
                         rows={2}
                         placeholder="Add notes about preparation..."
                     />
@@ -188,9 +189,9 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
                 {/* Collapsible Sections could go here if content gets too long */}
                 <div>
-                    <label htmlFor="meal-instructions" className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Instructions</label>
-                    <textarea
+                    <Textarea
                         id="meal-instructions"
+                        label="Instructions"
                         value={currentMeal.instructions?.join('\n') || ''}
                         onChange={e =>
                             setCurrentMeal({
@@ -201,7 +202,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                     .filter(line => line.length > 0),
                             })
                         }
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm font-mono text-slate-600"
+                        className="bg-slate-50/50 text-sm leading-relaxed"
                         rows={4}
                         placeholder="Step 1...&#10;Step 2..."
                     />

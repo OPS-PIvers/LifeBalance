@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import Textarea from '@/components/ui/Textarea';
 import { FileText, Loader2, X, Sparkles } from 'lucide-react';
 import { parseRecipe } from '@/services/geminiService';
 import { Meal } from '@/types/schema';
@@ -84,11 +85,12 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
              </div>
 
              <div>
-                 <textarea
+                 <Textarea
+                     aria-label="Recipe content"
                      value={text}
                      onChange={(e) => setText(e.target.value)}
                      placeholder="Paste recipe here...&#10;&#10;Example:&#10;Spaghetti Carbonara&#10;Ingredients:&#10;- 400g spaghetti&#10;- 150g pancetta&#10;..."
-                     className="w-full h-64 p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm font-mono text-slate-700 resize-none leading-relaxed"
+                     className="h-64 font-mono text-sm"
                  />
              </div>
         </div>

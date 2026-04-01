@@ -4,6 +4,7 @@ import { Check, Plus } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import Textarea from '@/components/ui/Textarea';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
@@ -209,14 +210,12 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                 {/* Description */}
                 <div>
-                  <label className="text-xs font-bold text-brand-400 uppercase">
-                    Description (Optional)
-                  </label>
-                  <textarea
+                  <Textarea
+                    label="Description (Optional)"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Add details about this challenge..."
-                    className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl resize-none h-20 focus:border-brand-400 outline-none"
+                    className="bg-brand-50 border-brand-200 focus:border-brand-400 h-20 shadow-none focus:ring-0 rounded-xl text-base"
                   />
                 </div>
 

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { YearlyGoal } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
+import Textarea from '../ui/Textarea';
 
 interface YearlyGoalFormModalProps {
   isOpen: boolean;
@@ -95,16 +96,14 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
         </div>
 
         {/* Description */}
-        <div>
-          <label htmlFor="goal-description" className="text-xs font-bold text-brand-400 uppercase">
-            Description (Optional)
-          </label>
-          <textarea
+        <div className="mt-2">
+          <Textarea
             id="goal-description"
+            label="Description (Optional)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add details about this goal..."
-            className="w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-xl resize-none h-20 focus:border-brand-400 outline-none transition-colors"
+            className="bg-brand-50 border-brand-200 focus:border-brand-400 h-20 shadow-none focus:ring-0 rounded-xl text-base"
           />
         </div>
 

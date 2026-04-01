@@ -17,3 +17,7 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+
+## 2026-04-01 - Standardizing Textarea Accessibility
+**Learning:** Raw `<textarea>` elements often had missing or disconnected `label` and `aria-describedby` error associations, just like `<input>`. By introducing a shared `<Textarea>` component that mirrors the exact accessible ID generation and error handling of `<Input>`, we instantly upgraded accessibility across 5 distinct forms.
+**Action:** Replace all usage of raw `<textarea>` with `components/ui/Textarea.tsx` and ensure labels are passed directly as props.

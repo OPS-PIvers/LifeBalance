@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
+import Textarea from '@/components/ui/Textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { db } from '@/firebase.config';
@@ -55,14 +56,12 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
     <Drawer isOpen={isOpen} onClose={onClose} title="Send Feedback">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700">
-            Describe the issue or suggestion
-          </label>
-          <textarea
+          <Textarea
             id="feedback-message"
+            label="Describe the issue or suggestion"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full h-32 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+            className="h-32"
             placeholder="I found a bug when..."
             required
           />
