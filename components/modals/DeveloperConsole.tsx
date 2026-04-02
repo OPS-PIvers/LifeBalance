@@ -179,7 +179,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                               <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded ml-2">
+                              <button onClick={() => deleteTester(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded ml-2" aria-label="Delete tester">
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -241,7 +241,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                     <span className="text-xs font-mono bg-slate-100/50 px-2 py-1 rounded text-slate-600 font-bold">{report.version}</span>
                                     <span className="ml-2 text-xs text-slate-400">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
-                                <button onClick={() => copyReport(report)} className="text-brand-600 hover:bg-brand-50 p-1.5 rounded-lg" title="Copy JSON">
+                                <button onClick={() => copyReport(report)} className="text-brand-600 hover:bg-brand-50 p-1.5 rounded-lg" title="Copy JSON" aria-label="Copy JSON">
                                     <Copy size={16} />
                                 </button>
                             </div>

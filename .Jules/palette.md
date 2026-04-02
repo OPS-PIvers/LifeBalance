@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2026-04-02 - [Added aria-labels to icon-only buttons]
+**Learning:** When using Lucide React icons inside buttons without explicit text, screen readers won't know the button's purpose.
+**Action:** Add descriptive `aria-label` attributes to all icon-only `<button>` and `<Button>` components to ensure accessibility.
