@@ -1121,6 +1121,7 @@ const CompletedSection: React.FC<{
                                 onClick={() => onUncomplete(item.id)}
                                 className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0"
                                 title="Mark as incomplete"
+                                aria-label="Mark as incomplete"
                             >
                                 <RotateCcw size={14} />
                             </button>
@@ -1151,6 +1152,7 @@ const CompletedSection: React.FC<{
                                     onClick={() => onDuplicate(item)}
                                     className="text-slate-400 hover:text-brand-600 hover:bg-brand-50"
                                     title="Duplicate task"
+                                    aria-label="Duplicate task"
                                 >
                                     <Copy size={14} />
                                 </Button>
@@ -1162,6 +1164,7 @@ const CompletedSection: React.FC<{
                                         toast.success('Task deleted');
                                     })}
                                     title="Delete forever"
+                                    aria-label="Delete forever"
                                 >
                                     <Trash2 size={14} />
                                 </Button>
