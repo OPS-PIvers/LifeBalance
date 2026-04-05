@@ -1151,6 +1151,7 @@ const CompletedSection: React.FC<{
                                     onClick={() => onDuplicate(item)}
                                     className="text-slate-400 hover:text-brand-600 hover:bg-brand-50"
                                     title="Duplicate task"
+                                    aria-label={`Duplicate completed task: ${item.text}`}
                                 >
                                     <Copy size={14} />
                                 </Button>
@@ -1162,6 +1163,7 @@ const CompletedSection: React.FC<{
                                         toast.success('Task deleted');
                                     })}
                                     title="Delete forever"
+                                    aria-label={`Delete completed task: ${item.text}`}
                                 >
                                     <Trash2 size={14} />
                                 </Button>
