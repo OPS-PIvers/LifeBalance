@@ -17,3 +17,4 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2026-04-06 - Modal Accessibility Patterns\n**Learning:** Ad-hoc modal implementations frequently miss `aria-label` on icon-only close buttons, rendering them invisible to screen readers. Relying on the `X` icon visual is insufficient.\n**Action:** Enforce `aria-label="Close modal"` reviews for any icon-only button implementation.

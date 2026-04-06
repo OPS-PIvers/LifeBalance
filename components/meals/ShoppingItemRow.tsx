@@ -126,6 +126,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                     ? "bg-green-500 border-green-500 text-white"
                     : "border-gray-300 hover:border-brand-500 text-transparent"
             )}
+            aria-label={item.isPurchased ? "Mark as unpurchased" : "Mark as purchased"}
         >
             <Check size={14} strokeWidth={3} />
         </button>
