@@ -17,3 +17,7 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+
+## 2024-05-14 - [Icon-Only Button Accessibility in Complex Components]
+**Learning:** Icon-only buttons embedded deep within complex, dynamic components (like the action queue or setup guides) frequently lack `aria-label`s. This is a common pattern because developers often focus on the surrounding text and layout but overlook the accessibility of smaller, utility buttons.
+**Action:** When reviewing complex, interactive components (especially modals, queues, and setup guides), explicitly check all utility buttons (close, copy, remove) for appropriate ARIA labels, even if they seem visually self-explanatory in context.
