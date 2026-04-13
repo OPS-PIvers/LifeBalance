@@ -17,3 +17,7 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+
+## 2026-06-21 - Clickable Div Accessibility
+**Learning:** When non-interactive elements like `div` or `span` are used for clickable interfaces (e.g., widget cards), they completely exclude keyboard and screen reader users if implemented only with an `onClick` handler.
+**Action:** Always ensure that converting non-interactive elements to buttons includes `role="button"`, `tabIndex={0}`, a descriptive `aria-label`, and an `onKeyDown` handler that listens for 'Enter' or ' ' (Space), ensuring `e.preventDefault()` is called on Space to prevent page scrolling. Apply `focus-visible` ring utilities to indicate focus.
