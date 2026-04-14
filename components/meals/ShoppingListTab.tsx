@@ -627,7 +627,7 @@ const ShoppingListTab: React.FC = () => {
               {isDesktop && (
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
                   <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                  <button onClick={() => setEditingItem(null)} aria-label="Close edit item"><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
                 </div>
               )}
               {itemForm}

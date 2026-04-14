@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2024-04-14 - [Aria labels for Icon-Only Close Buttons]
+**Learning:** Found an accessibility issue where icon-only `<button>` elements utilizing `lucide-react` `<X />` icons were lacking proper `aria-label`s (found in `components/dashboard/ActionQueueItem.tsx` and `components/meals/ShoppingListTab.tsx`). This completely hides the button's action from screen readers.
+**Action:** Always provide descriptive `aria-label` attributes to `<button>`s containing only icons to ensure intent is properly parsed by assistive tools. Do not just use `aria-label="X"`. Use descriptive actions like `aria-label="Close"` or `aria-label="Close edit item"`.
