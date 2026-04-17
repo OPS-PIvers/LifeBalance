@@ -7,3 +7,6 @@
 ## 2024-05-25 - Standardizing Modals for Accessibility
 **Learning:** Custom implementations of modals (using fixed divs with overlays) often miss critical accessibility features like `role="dialog"`, focus trapping, and Escape key handling.
 **Action:** Replace custom modal implementations with the shared `<Modal>` component which handles these a11y requirements centrally, ensuring a consistent and accessible experience for all dialogs.
+## $(date +%Y-%m-%d) - Added Missing ARIA Labels to Close Buttons
+**Learning:** Icon-only close buttons (like `<X />`) embedded deep within dynamic UI states (like expanded queues or edit modes) are frequently missed during initial development, severely hindering screen reader accessibility for critical cancellation/collapse actions.
+**Action:** Proactively search for icon-only `<button>` implementations specifically within conditional UI rendering logic and ensure they include descriptive `aria-label`s.
