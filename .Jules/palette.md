@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## $(date +%Y-%m-%d) - [Added ARIA label to ActionQueueItem Close Button]
+**Learning:** Found an icon-only button (X icon) in the action queue without an ARIA label. When non-interactive elements or generic components are made clickable, they are unreadable by screen readers unless specifically annotated.
+**Action:** Always ensure that icon-only `button` elements have an explicit `aria-label` attribute describing their action (e.g. "Close details").
