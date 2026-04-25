@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2024-04-25 - Icon-Only Button Accessibility Pattern
+**Learning:** Found several localized occurrences of raw `<button>` elements wrapping SVG icons (like `<X />` for close actions) without descriptive `aria-label` attributes. This breaks functionality for screen readers as they receive no context for the button's action.
+**Action:** Enforce strict checks when adding raw or custom buttons wrapping icons to ensure they include comprehensive `aria-label`s. Whenever possible, rely on standard components instead.
