@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## $(date +%Y-%m-%d) - Adding ARIA labels to icon-only buttons
+**Learning:** Raw `<button>` elements used as icon-only close buttons lacked `aria-label`s, making them invisible to screen readers. They also lacked standard focus states.
+**Action:** Replace raw icon-only `<button>` elements with the shared `<Button variant="ghost" size="icon">` component. This automatically resolves missing focus states and provides standard hover styles, while we manually add the necessary `aria-label`.

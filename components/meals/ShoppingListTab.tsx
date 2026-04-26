@@ -13,6 +13,7 @@ import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -627,7 +628,15 @@ const ShoppingListTab: React.FC = () => {
               {isDesktop && (
                 <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50">
                   <h3 className="text-lg font-bold text-slate-900 tracking-tight">Edit Item</h3>
-                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600" /></button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingItem(null)}
+                    aria-label="Close edit"
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
               )}
               {itemForm}
