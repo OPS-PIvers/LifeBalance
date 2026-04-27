@@ -21,7 +21,16 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
   return (
     <div
       onClick={onOpenModal}
-      className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenModal();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Edit challenge"
+      className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2"
     >
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>

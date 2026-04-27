@@ -17,3 +17,6 @@
 ## 2025-05-15 - Inline Edit Accessibility
 **Learning:** Clickable text elements (like "Edit Limit") are often implemented as spans for styling, but this excludes keyboard users. Adding `role="button"` is not enough; explicit key handlers and focus management are mandatory.
 **Action:** When creating inline-editable text, always pair `onClick` with `onKeyDown` (Enter/Space) and ensure the element is focusable via `tabIndex={0}`.
+## 2024-06-05 - Actionable Cards Accessibility
+**Learning:** Cards acting as buttons (e.g., Dashboard Widgets with `onClick` at the root div) are often overlooked for accessibility. Screen reader users cannot interact with them and keyboard users cannot focus them.
+**Action:** When a `div` is intended to be clickable, always apply `role="button"`, `tabIndex={0}`, an `aria-label`, an `onKeyDown` handler (Space/Enter), and visual focus styles (`focus-visible`).

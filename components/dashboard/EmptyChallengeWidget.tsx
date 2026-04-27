@@ -12,7 +12,16 @@ export const EmptyChallengeWidget: React.FC<EmptyChallengeWidgetProps> = ({ onOp
   return (
     <div
       onClick={onOpenModal}
-      className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 cursor-pointer active:scale-[0.98] transition-all hover:bg-white group"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpenModal();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Set Monthly Challenge"
+      className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 cursor-pointer active:scale-[0.98] transition-all hover:bg-white group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
     >
       <div className="flex items-center justify-between mb-2">
         <h2 className="font-bold text-lg text-slate-900">Set Monthly Challenge</h2>
