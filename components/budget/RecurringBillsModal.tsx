@@ -190,10 +190,10 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                       </Select>
                     </div>
                     <div className="sm:col-span-2 flex justify-end gap-1">
-                      <Button size="icon-sm" variant="success" onClick={() => saveEditing(item)}>
+                      <Button size="icon-sm" variant="success" aria-label="Save changes" onClick={() => saveEditing(item)}>
                         <Check size={16} />
                       </Button>
-                      <Button size="icon-sm" variant="ghost" onClick={cancelEditing}>
+                      <Button size="icon-sm" variant="ghost" aria-label="Cancel editing" onClick={cancelEditing}>
                         <X size={16} />
                       </Button>
                     </div>
@@ -222,10 +222,10 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         </div>
 
                         <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                           <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)}>
+                           <Button variant="ghost" size="icon-sm" aria-label="Edit recurring item" onClick={() => startEditing(item)}>
                              <Edit2 size={14} className="text-slate-400 hover:text-slate-600" />
                            </Button>
-                           <Button variant="ghost-destructive" size="icon-sm" onClick={() => handleDelete(item.id)}>
+                           <Button variant="ghost-destructive" size="icon-sm" aria-label="Delete recurring item" onClick={() => handleDelete(item.id)}>
                              <Trash2 size={14} />
                            </Button>
                         </div>
