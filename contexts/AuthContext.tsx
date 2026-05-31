@@ -44,6 +44,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           console.error('Error fetching household:', error);
         }
 
+        // Bail out if the session changed while we awaited (e.g. sign-out or
+        // account switch). A newer onAuthStateChanged invocation owns the
+        // current state, so applying ours would clobber it with stale data.
+        if (auth.currentUser?.uid !== firebaseUser.uid) return;
+
         // --- Private Alpha Guard ---
         const adminUid = import.meta.env.VITE_ADMIN_UID;
         // Only enforce check if admin UID is set (production/staging)
@@ -55,6 +60,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const testersRef = collection(db, 'beta_testers');
             const q = query(testersRef, where('email', '==', firebaseUser.email));
             const snapshot = await getDocs(q);
+
+            // Re-verify the session after the async beta lookup.
+            if (auth.currentUser?.uid !== firebaseUser.uid) return;
 
             let isAuthorized = false;
             if (!snapshot.empty) {
