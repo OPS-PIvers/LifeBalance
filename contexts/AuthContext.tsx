@@ -29,11 +29,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUser(firebaseUser);
 
       if (firebaseUser) {
+        // Resolve the user's household first. Membership is also used as an
+        // authorization signal by the Private Alpha guard below: existing
+        // household members must never be locked out by the beta allowlist.
+        let hid: string | null = null;
+        try {
+          hid = await getUserHousehold(firebaseUser.uid);
+        } catch (error) {
+          console.error('Error fetching household:', error);
+        }
+
         // --- Private Alpha Guard ---
         const adminUid = import.meta.env.VITE_ADMIN_UID;
         // Only enforce check if admin UID is set (production/staging)
         // If VITE_ADMIN_UID is not set (dev), we skip this check to avoid locking out developers
-        if (adminUid && firebaseUser.uid !== adminUid) {
+        // Members of an existing household are always allowed (e.g. a household
+        // owner invited them), so the beta allowlist only gates brand-new users.
+        if (adminUid && firebaseUser.uid !== adminUid && !hid) {
           try {
             const testersRef = collection(db, 'beta_testers');
             const q = query(testersRef, where('email', '==', firebaseUser.email));
@@ -69,14 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         // ---------------------------
 
-        // Check if user has a household
-        try {
-          const hid = await getUserHousehold(firebaseUser.uid);
-          setHouseholdIdState(hid);
-        } catch (error) {
-          console.error('Error fetching household:', error);
-          setHouseholdIdState(null);
-        }
+        setHouseholdIdState(hid);
       } else {
         setHouseholdIdState(null);
       }
