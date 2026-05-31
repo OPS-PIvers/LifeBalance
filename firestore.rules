@@ -374,37 +374,67 @@ service cloud.firestore {
       // 🛡️ SENTINEL SECURITY FIX: Explicit rules for Calendar Items
       match /calendarItems/{itemId} {
         allow read: if isMemberOf(householdId);
-        allow create, update: if isMemberOf(householdId) &&
-                              // Allow only expected fields to prevent storage abuse
-                              // Include legacy fields (notes, createdAt, updatedAt) for backward compatibility
-                              request.resource.data.keys().hasOnly([
-                                'title', 'amount', 'date', 'type', 'isPaid',
-                                'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
-                              ]) &&
-                              isValidString(request.resource.data.title, 100) &&
-                              isValidNumber(request.resource.data.amount) &&
-                              isValidString(request.resource.data.date, 10) && // YYYY-MM-DD
-                              (request.resource.data.type == 'income' || request.resource.data.type == 'expense') &&
-                              isValidBoolean(request.resource.data.isPaid) &&
-                              // Optional fields
-                              (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
-                              isValidOptionalString(request.resource.data.get('frequency', null), 20) &&
-                              isValidOptionalString(request.resource.data.get('parentRecurringId', null), 50) &&
-                              (request.resource.data.get('isDeleted', null) == null || isValidBoolean(request.resource.data.isDeleted)) &&
-                              // Metadata
-                              (request.resource.data.get('createdBy', null) == null || request.resource.data.createdBy is string) &&
-                              // Account linking (optional)
-                              isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
-                              // Legacy fields (optional, for backward compatibility)
-                              isValidOptionalString(request.resource.data.get('notes', null), 500) &&
-                              // createdAt/updatedAt can be either strings or timestamps
-                              (request.resource.data.get('createdAt', null) == null ||
-                               request.resource.data.createdAt is string ||
-                               request.resource.data.createdAt is timestamp) &&
-                              (request.resource.data.get('updatedAt', null) == null ||
-                               request.resource.data.updatedAt is string ||
-                               request.resource.data.updatedAt is timestamp);
+
+        // Helper to validate the full schema on CREATE (all required fields present)
+        function isValidCalendarItemCreate() {
+          let data = request.resource.data;
+          return (
+              // Allow only expected fields to prevent storage abuse
+              // Include legacy fields (notes, createdAt, updatedAt) for backward compatibility
+              data.keys().hasOnly([
+                'title', 'amount', 'date', 'type', 'isPaid',
+                'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
+                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
+              ]) &&
+              isValidString(data.title, 100) &&
+              isValidNumber(data.amount) &&
+              isValidString(data.date, 10) && // YYYY-MM-DD
+              (data.type == 'income' || data.type == 'expense') &&
+              isValidBoolean(data.isPaid) &&
+              // Optional fields
+              (data.get('isRecurring', null) == null || isValidBoolean(data.isRecurring)) &&
+              isValidOptionalString(data.get('frequency', null), 20) &&
+              isValidOptionalString(data.get('parentRecurringId', null), 50) &&
+              (data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
+              // Metadata
+              (data.get('createdBy', null) == null || data.createdBy is string) &&
+              // Account linking (optional)
+              isValidOptionalString(data.get('accountId', null), 50) &&
+              // Legacy fields (optional, for backward compatibility)
+              isValidOptionalString(data.get('notes', null), 500) &&
+              // createdAt/updatedAt can be either strings or timestamps
+              (data.get('createdAt', null) == null || data.createdAt is string || data.createdAt is timestamp) &&
+              (data.get('updatedAt', null) == null || data.updatedAt is string || data.updatedAt is timestamp)
+          );
+        }
+
+        // Helper to validate ONLY the changed fields during UPDATE operations.
+        // 🐛 BUG FIX: Older/migrated documents may contain stray fields (e.g. a
+        // persisted `id`) that are NOT in the create allow-list. Enforcing
+        // hasOnly() on the full merged document made those legacy items
+        // impossible to edit ("Failed to update event"). Validating only the
+        // keys that actually change — the same pattern used for buckets — lets
+        // users update legacy items while still validating their input.
+        function isValidCalendarItemUpdate() {
+          let changed = request.resource.data.diff(resource.data).affectedKeys();
+          let data = request.resource.data;
+          return (!changed.hasAny(['title']) || isValidString(data.title, 100)) &&
+                 (!changed.hasAny(['amount']) || isValidNumber(data.amount)) &&
+                 (!changed.hasAny(['date']) || isValidString(data.date, 10)) && // YYYY-MM-DD
+                 (!changed.hasAny(['type']) || data.type == 'income' || data.type == 'expense') &&
+                 (!changed.hasAny(['isPaid']) || isValidBoolean(data.isPaid)) &&
+                 (!changed.hasAny(['isRecurring']) || isValidBoolean(data.isRecurring)) &&
+                 (!changed.hasAny(['frequency']) || isValidOptionalString(data.get('frequency', null), 20)) &&
+                 (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
+                 (!changed.hasAny(['isDeleted']) || isValidBoolean(data.isDeleted)) &&
+                 (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
+                 (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&
+                 // Prevent tampering with ownership metadata
+                 !changed.hasAny(['createdBy']);
+        }
+
+        allow create: if isMemberOf(householdId) && isValidCalendarItemCreate();
+        allow update: if isMemberOf(householdId) && isValidCalendarItemUpdate();
         allow delete: if isMemberOf(householdId);
       }
 
