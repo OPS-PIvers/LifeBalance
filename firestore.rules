@@ -424,9 +424,12 @@ service cloud.firestore {
             'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
           ].toSet();
           return (
-                 // Block injecting brand-new arbitrary fields (storage abuse) while
-                 // still preserving pre-existing legacy fields that are already on the doc.
-                 data.keys().toSet().difference(allowedKeys).difference(resource.data.keys().toSet()).size() == 0 &&
+                 // Block writes to any non-allowlisted field (storage abuse): a key
+                 // outside the schema may only be left untouched or removed, never
+                 // added or modified. Untouched legacy fields aren't in `changed`, so
+                 // they're preserved; removed legacy keys aren't in `data.keys()`, so
+                 // they're permitted.
+                 changed.difference(allowedKeys).intersection(data.keys().toSet()).size() == 0 &&
                  (!changed.hasAny(['title']) || isValidString(data.title, 100)) &&
                  (!changed.hasAny(['amount']) || isValidNumber(data.amount)) &&
                  (!changed.hasAny(['date']) || isValidString(data.date, 10)) && // YYYY-MM-DD
