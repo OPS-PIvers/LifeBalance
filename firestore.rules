@@ -418,19 +418,30 @@ service cloud.firestore {
         function isValidCalendarItemUpdate() {
           let changed = request.resource.data.diff(resource.data).affectedKeys();
           let data = request.resource.data;
-          return (!changed.hasAny(['title']) || isValidString(data.title, 100)) &&
+          let allowedKeys = [
+            'title', 'amount', 'date', 'type', 'isPaid',
+            'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
+            'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
+          ].toSet();
+          return (
+                 // Block injecting brand-new arbitrary fields (storage abuse) while
+                 // still preserving pre-existing legacy fields that are already on the doc.
+                 data.keys().toSet().difference(allowedKeys).difference(resource.data.keys().toSet()).size() == 0 &&
+                 (!changed.hasAny(['title']) || isValidString(data.title, 100)) &&
                  (!changed.hasAny(['amount']) || isValidNumber(data.amount)) &&
                  (!changed.hasAny(['date']) || isValidString(data.date, 10)) && // YYYY-MM-DD
                  (!changed.hasAny(['type']) || data.type == 'income' || data.type == 'expense') &&
                  (!changed.hasAny(['isPaid']) || isValidBoolean(data.isPaid)) &&
-                 (!changed.hasAny(['isRecurring']) || isValidBoolean(data.isRecurring)) &&
+                 (!changed.hasAny(['isRecurring']) || data.get('isRecurring', null) == null || isValidBoolean(data.isRecurring)) &&
                  (!changed.hasAny(['frequency']) || isValidOptionalString(data.get('frequency', null), 20)) &&
                  (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
-                 (!changed.hasAny(['isDeleted']) || isValidBoolean(data.isDeleted)) &&
+                 (!changed.hasAny(['isDeleted']) || data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&
-                 // Prevent tampering with ownership metadata
-                 !changed.hasAny(['createdBy']);
+                 (!changed.hasAny(['updatedAt']) || data.get('updatedAt', null) == null || data.updatedAt is string || data.updatedAt is timestamp) &&
+                 // Prevent tampering with ownership metadata and creation timestamps
+                 !changed.hasAny(['createdBy', 'createdAt'])
+          );
         }
 
         allow create: if isMemberOf(householdId) && isValidCalendarItemCreate();
