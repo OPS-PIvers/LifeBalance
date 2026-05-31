@@ -78,7 +78,9 @@ export const MockAuthProvider: React.FC<{ children: ReactNode }> = ({ children }
       loading,
       signOut,
       logout: signOut,
-      setHouseholdId
+      setHouseholdId,
+      accessDeniedEmail: null,
+      clearAccessError: () => {}
     }}>
       {children}
     </AuthContext.Provider>

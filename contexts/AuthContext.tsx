@@ -14,6 +14,10 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   logout: () => Promise<void>; // Alias for signOut
   setHouseholdId: (id: string) => void;
+  // Email of the account that was just denied by the Private Alpha guard,
+  // so the login screen can prompt the user to try a different account.
+  accessDeniedEmail: string | null;
+  clearAccessError: () => void;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -23,6 +27,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [householdId, setHouseholdIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [accessDeniedEmail, setAccessDeniedEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -64,8 +69,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               await authServiceSignOut();
               setUser(null);
               setHouseholdIdState(null);
+              setAccessDeniedEmail(firebaseUser.email);
               setLoading(false);
-              toast.error("Private Alpha: Access Restricted");
               return;
             }
           } catch (error) {
@@ -81,6 +86,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         // ---------------------------
 
+        setAccessDeniedEmail(null);
         setHouseholdIdState(hid);
       } else {
         setHouseholdIdState(null);
@@ -101,6 +107,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setHouseholdIdState(id);
   };
 
+  const clearAccessError = () => {
+    setAccessDeniedEmail(null);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -109,7 +119,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       loading,
       signOut,
       logout: signOut, // Provide alias
-      setHouseholdId
+      setHouseholdId,
+      accessDeniedEmail,
+      clearAccessError
     }}>
       {children}
     </AuthContext.Provider>

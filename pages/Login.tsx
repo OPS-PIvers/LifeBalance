@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { user, householdId, loading: authLoading } = useAuth();
+  const { user, householdId, loading: authLoading, accessDeniedEmail, clearAccessError } = useAuth();
   const location = useLocation();
 
   // Check for test mode activation via query parameter
@@ -49,6 +49,10 @@ const Login: React.FC = () => {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    // Clear any prior "access restricted" notice so a fresh attempt starts clean.
+    // The Google provider is configured with prompt: 'select_account', so the
+    // account chooser always appears and the user can pick a different account.
+    clearAccessError();
     try {
       await signInWithGoogle();
       toast.success('Successfully signed in!');
@@ -80,13 +84,29 @@ const Login: React.FC = () => {
             </p>
           </div>
 
+          {/* Access restricted notice */}
+          {accessDeniedEmail && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            >
+              <p className="font-semibold">Access restricted for this account</p>
+              <p className="mt-1">
+                <span className="font-medium break-all">{accessDeniedEmail}</span> doesn&apos;t
+                have access to LifeBalance. If you have another account, choose it below.
+              </p>
+            </div>
+          )}
+
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-brand-200"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">Sign in to continue</span>
+              <span className="bg-white px-2 text-brand-400 font-medium">
+                {accessDeniedEmail ? 'Try a different account' : 'Sign in to continue'}
+              </span>
             </div>
           </div>
 
@@ -121,7 +141,11 @@ const Login: React.FC = () => {
               )
             }
           >
-            {loading ? 'Signing in...' : 'Continue with Google'}
+            {loading
+              ? 'Signing in...'
+              : accessDeniedEmail
+                ? 'Use a different account'
+                : 'Continue with Google'}
           </Button>
 
           {/* Footer */}
