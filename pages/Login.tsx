@@ -55,12 +55,17 @@ const Login: React.FC = () => {
     clearAccessError();
     try {
       await signInWithGoogle();
-      toast.success('Successfully signed in!');
-      // Redirect will happen automatically via useEffect above
+      // No success toast here: signInWithGoogle resolves as soon as Firebase
+      // authenticates, but the Private Alpha guard in AuthContext runs
+      // asynchronously afterwards and may still deny access. The real outcome
+      // is reflected by navigation (success) or the access-denied banner.
     } catch (error: unknown) {
       console.error('Sign-in error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
       toast.error(errorMessage);
+    } finally {
+      // Always re-enable the button. On success we navigate away; on denial
+      // the user stays on /login and must be able to try another account.
       setLoading(false);
     }
   };

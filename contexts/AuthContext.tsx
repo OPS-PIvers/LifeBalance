@@ -38,16 +38,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // authorization signal by the Private Alpha guard below: existing
         // household members must never be locked out by the beta allowlist.
         let hid: string | null = null;
+        let householdLookupFailed = false;
         try {
           hid = await getUserHousehold(firebaseUser.uid);
         } catch (error) {
           console.error('Error fetching household:', error);
+          householdLookupFailed = true;
         }
 
         // Bail out if the session changed while we awaited (e.g. sign-out or
         // account switch). A newer onAuthStateChanged invocation owns the
         // current state, so applying ours would clobber it with stale data.
         if (auth.currentUser?.uid !== firebaseUser.uid) return;
+
+        // If household resolution errored (e.g. transient Firestore failure) we
+        // genuinely don't know whether this user is a member. Don't fall through
+        // to the beta allowlist — that would misclassify an existing member as a
+        // brand-new user and could lock them out (or, in dev, drop them on the
+        // setup page where they might create a duplicate household). Fail the
+        // attempt and let them retry.
+        if (householdLookupFailed) {
+          await authServiceSignOut();
+          setUser(null);
+          setHouseholdIdState(null);
+          setLoading(false);
+          toast.error("Couldn't verify your account. Please try again.");
+          return;
+        }
 
         // --- Private Alpha Guard ---
         const adminUid = import.meta.env.VITE_ADMIN_UID;
