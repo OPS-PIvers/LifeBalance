@@ -90,6 +90,8 @@ describe('App Routing', () => {
     signOut: vi.fn(),
     logout: vi.fn(),
     setHouseholdId: vi.fn(),
+    accessDeniedEmail: null,
+    clearAccessError: vi.fn(),
   };
 
   it('renders Dashboard at root path /', async () => {
