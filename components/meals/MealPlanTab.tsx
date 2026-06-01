@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
-import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import toast from 'react-hot-toast';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
@@ -11,6 +11,7 @@ import { RecipeModal } from './RecipeModal';
 import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
+import { Drawer } from '@/components/ui/Drawer';
 import clsx from 'clsx';
 
 const MealPlanTab: React.FC = () => {
@@ -29,8 +30,11 @@ const MealPlanTab: React.FC = () => {
     householdId
   } = useHousehold();
 
-  // Calendar State
+  // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Per-meal action sheet (replaces the cluttered inline icon buttons)
+  const [actionSheetItem, setActionSheetItem] = useState<MealPlanItem | null>(null);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -496,191 +500,295 @@ const MealPlanTab: React.FC = () => {
       }));
   };
 
+  // --- Derived view data ---------------------------------------------------
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
+  const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+  // Count meals per day this week (for the day-strip indicators)
+  const countByDate = new Map<string, number>();
+  let weekMealCount = 0;
+  for (const item of mealPlan || []) {
+    if (item.date >= weekStartStr && item.date <= weekEndStr) {
+      countByDate.set(item.date, (countByDate.get(item.date) || 0) + 1);
+      weekMealCount++;
+    }
+  }
+
+  const MEAL_TYPE_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
+  const MEAL_TYPE_META: Record<string, { dot: string; badge: string }> = {
+    breakfast: { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-100' },
+    lunch: { dot: 'bg-sky-400', badge: 'bg-sky-50 text-sky-700 border-sky-100' },
+    dinner: { dot: 'bg-brand-500', badge: 'bg-brand-50 text-brand-700 border-brand-100' },
+    snack: { dot: 'bg-violet-400', badge: 'bg-violet-50 text-violet-700 border-violet-100' },
+  };
+
+  const dayMeals = (mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === selectedDateStr) : [])
+    .slice()
+    .sort((a, b) => (MEAL_TYPE_ORDER[a.type] ?? 99) - (MEAL_TYPE_ORDER[b.type] ?? 99));
+
+  // Action-sheet wrappers: run the existing handler, then close the sheet.
+  const sheetView = (planItem: MealPlanItem) => {
+    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
+    if (linkedMeal) setViewingMeal({ meal: linkedMeal, planItem });
+    setActionSheetItem(null);
+  };
+  const sheetMoveTomorrow = (planItem: MealPlanItem) => { handleMoveToTomorrow(planItem); setActionSheetItem(null); };
+  const sheetDuplicate = (planItem: MealPlanItem) => { handleDuplicatePlanItem(planItem); setActionSheetItem(null); };
+  const sheetEdit = (planItem: MealPlanItem) => {
+    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : undefined;
+    handleEditMealPlanItem(planItem, linkedMeal);
+    setActionSheetItem(null);
+  };
+  const sheetDelete = (planItem: MealPlanItem) => { deleteMealPlanItem(planItem.id); setActionSheetItem(null); };
+
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-5 pb-20">
       {/* Calendar Header */}
-      <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass ring-1 ring-black/5 p-6 flex flex-col items-center gap-6">
-        <div className="flex items-center justify-between w-full">
+      <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass ring-1 ring-black/5 p-4 sm:p-5 space-y-4">
+        {/* Week navigation */}
+        <div className="flex items-center justify-between gap-2">
             <button
                 onClick={() => setSelectedDate(d => addDays(d, -7))}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors active:scale-95"
                 aria-label="Previous week"
             >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-5 h-5" />
             </button>
             <div className="text-center">
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight leading-none">
                     {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
                 </h2>
-                <div className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Weekly Plan</div>
+                <div className="text-xxs text-slate-400 font-bold uppercase tracking-wider mt-1.5">
+                    {weekMealCount > 0 ? `${weekMealCount} meal${weekMealCount === 1 ? '' : 's'} planned` : 'Weekly plan'}
+                </div>
             </div>
             <button
                 onClick={() => setSelectedDate(d => addDays(d, 7))}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors active:scale-95"
                 aria-label="Next week"
             >
-                <ChevronRight className="w-6 h-6" />
+                <ChevronRight className="w-5 h-5" />
             </button>
         </div>
 
-        <div className="flex gap-3 w-full sm:w-auto">
+        {/* Day strip — whole week at a glance */}
+        <div className="flex gap-1 sm:gap-1.5">
+            {weekDays.map(day => {
+                const dateStr = format(day, 'yyyy-MM-dd');
+                const count = countByDate.get(dateStr) || 0;
+                const isSelected = dateStr === selectedDateStr;
+                const isToday = dateStr === todayStr;
+
+                return (
+                    <button
+                        key={dateStr}
+                        onClick={() => setSelectedDate(day)}
+                        aria-label={`${format(day, 'EEEE, MMMM d')}${count > 0 ? `, ${count} meals planned` : ''}`}
+                        aria-pressed={isSelected}
+                        className={clsx(
+                            "flex-1 flex flex-col items-center gap-1 py-2 rounded-xl transition-all active:scale-95",
+                            isSelected
+                                ? "bg-brand-600 shadow-md shadow-brand-200"
+                                : "hover:bg-slate-100"
+                        )}
+                    >
+                        <span className={clsx(
+                            "text-xxs font-bold uppercase tracking-wide",
+                            isSelected ? "text-white/80" : "text-slate-400"
+                        )}>
+                            {format(day, 'EEEEE')}
+                        </span>
+                        <span className={clsx(
+                            "w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold tabular-nums transition-colors",
+                            isSelected
+                                ? "text-white"
+                                : isToday
+                                    ? "bg-brand-100 text-brand-700 ring-1 ring-brand-300"
+                                    : "text-slate-700"
+                        )}>
+                            {format(day, 'd')}
+                        </span>
+                        <span className="flex items-center justify-center gap-0.5 h-1.5">
+                            {Array.from({ length: Math.min(count, 3) }).map((_, i) => (
+                                <span
+                                    key={i}
+                                    className={clsx(
+                                        "w-1 h-1 rounded-full",
+                                        isSelected ? "bg-white/80" : "bg-brand-400"
+                                    )}
+                                />
+                            ))}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+
+        {/* Week actions */}
+        <div className="flex gap-2">
+            {!isCurrentWeek && (
+                <button
+                    onClick={() => setSelectedDate(new Date())}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200/60 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all active:scale-95"
+                >
+                    <CalendarDays className="w-3.5 h-3.5" /> Today
+                </button>
+            )}
             <button
                 onClick={handleCopyLastWeek}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-white/50 border border-slate-200/60 text-slate-600 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-white hover:border-slate-300 hover:text-slate-900 transition-all shadow-sm"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200/60 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 hover:text-slate-900 transition-all active:scale-95"
             >
-                <Copy className="w-3.5 h-3.5" />
-                Copy Last Week
+                <Copy className="w-3.5 h-3.5" /> Copy Last Week
             </button>
             <button
                 onClick={handleShopForWeek}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-brand-50/50 text-brand-700 border border-brand-200/60 rounded-full text-xs font-bold uppercase tracking-wide hover:bg-brand-50 hover:border-brand-200 transition-all shadow-sm"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-50 text-brand-700 border border-brand-200/60 rounded-xl text-xs font-bold hover:bg-brand-100 transition-all active:scale-95"
             >
-                <ShoppingCart className="w-3.5 h-3.5" />
-                Shop This Week
+                <ShoppingCart className="w-3.5 h-3.5" /> Shop Week
             </button>
         </div>
       </div>
 
-      {/* Days Grid */}
-      <div className="flex flex-row overflow-x-auto snap-x snap-mandatory gap-4 pb-4 px-1 md:flex-col md:overflow-visible md:pb-0 md:px-0 md:space-y-4 no-scrollbar">
-        {weekDays.map(day => {
-            const dateStr = format(day, 'yyyy-MM-dd');
-            const planItems = mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === dateStr) : [];
-            const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
+      {/* Selected day agenda */}
+      <div className="space-y-3">
+        <div className="flex items-end justify-between px-1">
+            <div>
+                <h3 className="text-xl font-bold text-slate-900 tracking-tight leading-none">
+                    {format(selectedDate, 'EEEE')}
+                </h3>
+                <p className="text-sm text-slate-500 font-medium mt-1">
+                    {format(selectedDate, 'MMMM d')}
+                    {selectedDateStr === todayStr && <span className="text-brand-600 font-bold"> · Today</span>}
+                </p>
+            </div>
+            <button
+                onClick={() => handleAddMealToDate(selectedDate)}
+                className="flex items-center gap-1.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-full transition-colors shadow-sm shadow-brand-200 active:scale-95"
+            >
+                <Plus className="w-4 h-4" /> Add Meal
+            </button>
+        </div>
 
-            return (
-                <div
-                    key={dateStr}
-                    className={`min-w-[85vw] snap-center md:min-w-0 md:snap-align-none bg-white/80 backdrop-blur-xl rounded-2xl shadow-glass p-6 ring-1 transition-all ${isToday ? 'ring-brand-200 bg-brand-50/30' : 'ring-black/5'}`}
-                >
-                    <div className="flex flex-col sm:flex-row gap-6">
-                        {/* Date Column */}
-                        <div className="min-w-[80px] shrink-0 flex sm:flex-col items-center sm:items-start justify-between sm:justify-start">
-                            <div>
-                                <div className="text-3xl font-bold text-slate-900 leading-none tracking-tight">{format(day, 'd')}</div>
-                                <div className="text-sm font-medium text-slate-500 uppercase tracking-wide mt-1">{format(day, 'EEEE')}</div>
+        {dayMeals.length > 0 ? (
+            <div className="space-y-2.5">
+                {dayMeals.map((planItem) => {
+                    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
+                    const mealName = planItem.mealName || linkedMeal?.name || 'Untitled meal';
+                    const isCooked = planItem.isCooked;
+                    const typeMeta = MEAL_TYPE_META[planItem.type] || MEAL_TYPE_META.dinner;
+
+                    return (
+                        <div
+                            key={planItem.id}
+                            onClick={() => { if (linkedMeal) setViewingMeal({ meal: linkedMeal, planItem }); }}
+                            className={clsx(
+                                "group flex items-stretch gap-3 rounded-2xl border p-3.5 shadow-sm transition-all relative",
+                                linkedMeal && "cursor-pointer hover:shadow-md hover:border-slate-300",
+                                isCooked
+                                    ? "bg-green-50/40 border-green-200"
+                                    : "bg-white border-slate-200/70"
+                            )}
+                        >
+                            {/* Meal-type accent bar */}
+                            <span className={clsx("w-1 rounded-full shrink-0", isCooked ? "bg-green-400" : typeMeta.dot)} aria-hidden="true" />
+
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <span className={clsx(
+                                        "inline-flex items-center px-2 py-0.5 rounded-md text-xxs font-bold uppercase tracking-wider border capitalize",
+                                        typeMeta.badge
+                                    )}>
+                                        {planItem.type || 'dinner'}
+                                    </span>
+                                    {isCooked && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xxs font-bold border border-green-200">
+                                            <CheckCircle2 size={10} /> Cooked
+                                        </span>
+                                    )}
+                                </div>
+                                <div className={clsx("font-semibold tracking-tight leading-snug line-clamp-2", isCooked ? "text-green-900" : "text-slate-900")}>
+                                    {mealName}
+                                </div>
+
+                                {linkedMeal?.description && (
+                                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
+                                )}
+
+                                {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenIngredientSelector(mealName, linkedMeal.ingredients, linkedMeal.id);
+                                        }}
+                                        className="mt-2 text-xxs font-bold text-brand-600 inline-flex items-center gap-1 hover:text-brand-800 transition-colors"
+                                    >
+                                        <ShoppingCart className="w-3 h-3" /> Shop ingredients
+                                    </button>
+                                )}
                             </div>
+
+                            {/* Single overflow action button (replaces 4 inline buttons) */}
                             <button
-                                onClick={() => handleAddMealToDate(day)}
-                                className="sm:mt-4 flex items-center gap-1.5 text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-full transition-colors border border-brand-100/50"
+                                onClick={(e) => { e.stopPropagation(); setActionSheetItem(planItem); }}
+                                className="self-start -mr-1 -mt-0.5 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors active:scale-95 shrink-0"
+                                aria-label={`Actions for ${mealName}`}
                             >
-                                <Plus className="w-3.5 h-3.5" /> Add Meal
+                                <MoreVertical className="w-5 h-5" />
                             </button>
                         </div>
-
-                        {/* Meals Column */}
-                        <div className="flex-1 space-y-3 pt-2 sm:pt-0">
-                            {planItems.length > 0 ? planItems.map((planItem) => {
-                                const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
-                                const mealName = planItem.mealName || linkedMeal?.name;
-                                const isCooked = planItem.isCooked;
-
-                                return (
-                                    <div
-                                        key={planItem.id}
-                                        onClick={() => {
-                                            // Only open view modal if there's enough data
-                                            if (linkedMeal) {
-                                                setViewingMeal({ meal: linkedMeal, planItem });
-                                            }
-                                        }}
-                                        className={clsx(
-                                            "group border rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex justify-between items-start gap-4 cursor-pointer relative overflow-hidden",
-                                            isCooked
-                                                ? "bg-green-50/50 border-green-200 hover:bg-green-50"
-                                                : "bg-white/60 border-slate-200/60 hover:bg-white"
-                                        )}
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold uppercase tracking-wider bg-brand-50 text-brand-600 border border-brand-100">
-                                                    {planItem.type || 'dinner'}
-                                                </span>
-                                                {isCooked && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xxs font-bold border border-green-200">
-                                                        <CheckCircle2 size={10} /> Cooked
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className={clsx("font-semibold truncate pr-2 tracking-tight", isCooked ? "text-green-900" : "text-slate-900")}>{mealName}</div>
-
-                                            {linkedMeal?.description && (
-                                                <div className="text-xs text-slate-500 mt-1 line-clamp-1 leading-relaxed">{linkedMeal.description}</div>
-                                            )}
-
-                                            {linkedMeal?.ingredients && linkedMeal.ingredients.length > 0 && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleOpenIngredientSelector(
-                                                            mealName || 'Meal',
-                                                            linkedMeal.ingredients,
-                                                            linkedMeal.id
-                                                        );
-                                                    }}
-                                                    className="mt-2 text-xxs font-medium text-brand-600 flex items-center gap-1 hover:text-brand-800 transition-colors"
-                                                >
-                                                    <ShoppingCart className="w-3 h-3" /> Shop Ingredients
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="flex flex-row sm:flex-col gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleMoveToTomorrow(planItem); }}
-                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors active:scale-95"
-                                                aria-label={`Move ${mealName} to tomorrow`}
-                                                title="Move to tomorrow"
-                                            >
-                                                <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handleDuplicatePlanItem(planItem); }}
-                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
-                                                aria-label={`Duplicate ${mealName}`}
-                                                title="Duplicate meal"
-                                            >
-                                                <Copy className="w-5 h-5 sm:w-4 sm:h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleEditMealPlanItem(planItem, linkedMeal ?? undefined);
-                                                }}
-                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors active:scale-95"
-                                                aria-label={`Edit ${mealName}`}
-                                                title="Edit meal"
-                                            >
-                                                <Edit2 className="w-5 h-5 sm:w-4 sm:h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    deleteMealPlanItem(planItem.id);
-                                                }}
-                                                className="p-3 sm:p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors active:scale-95"
-                                                aria-label={`Delete ${mealName}`}
-                                                title="Delete meal"
-                                            >
-                                                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            }) : (
-                                <div
-                                    onClick={() => handleAddMealToDate(day)}
-                                    className="border-2 border-dashed border-gray-100 rounded-xl p-4 text-center cursor-pointer hover:border-brand-200 hover:bg-brand-50/50 transition-all group"
-                                >
-                                    <p className="text-sm text-gray-400 group-hover:text-brand-500 font-medium">No meals planned</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        })}
+                    );
+                })}
+            </div>
+        ) : (
+            <button
+                onClick={() => handleAddMealToDate(selectedDate)}
+                className="w-full border-2 border-dashed border-slate-200 rounded-2xl py-10 px-4 flex flex-col items-center gap-2 text-center hover:border-brand-300 hover:bg-brand-50/40 transition-all group"
+            >
+                <span className="w-12 h-12 rounded-full bg-slate-100 group-hover:bg-brand-100 flex items-center justify-center transition-colors">
+                    <Utensils className="w-5 h-5 text-slate-400 group-hover:text-brand-500 transition-colors" />
+                </span>
+                <span className="text-sm font-semibold text-slate-500 group-hover:text-brand-600">No meals planned</span>
+                <span className="text-xs text-slate-400">Tap to add a meal for this day</span>
+            </button>
+        )}
       </div>
+
+      {/* Per-meal action sheet */}
+      {actionSheetItem && (() => {
+        const item = actionSheetItem;
+        const hasRecipe = !!(item.mealId && meals.find(m => m.id === item.mealId));
+        const actionClass = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left font-semibold transition-colors";
+        return (
+          <Drawer
+            isOpen={!!actionSheetItem}
+            onClose={() => setActionSheetItem(null)}
+            title={item.mealName || 'Meal'}
+          >
+            <div className="space-y-1 pb-2">
+              {hasRecipe && (
+                <button onClick={() => sheetView(item)} className={clsx(actionClass, "text-slate-700 hover:bg-slate-100")}>
+                  <Eye className="w-5 h-5 text-slate-400" /> View recipe
+                </button>
+              )}
+              <button onClick={() => sheetMoveTomorrow(item)} className={clsx(actionClass, "text-slate-700 hover:bg-slate-100")}>
+                <ChevronRight className="w-5 h-5 text-slate-400" /> Move to tomorrow
+              </button>
+              <button onClick={() => sheetDuplicate(item)} className={clsx(actionClass, "text-slate-700 hover:bg-slate-100")}>
+                <Copy className="w-5 h-5 text-slate-400" /> Duplicate
+              </button>
+              <button onClick={() => sheetEdit(item)} className={clsx(actionClass, "text-slate-700 hover:bg-slate-100")}>
+                <Edit2 className="w-5 h-5 text-slate-400" /> Edit
+              </button>
+              <button onClick={() => sheetDelete(item)} className={clsx(actionClass, "text-rose-600 hover:bg-rose-50")}>
+                <Trash2 className="w-5 h-5" /> Delete
+              </button>
+            </div>
+          </Drawer>
+        );
+      })()}
 
       {/* Add Meal Modal */}
       <AddMealModal
