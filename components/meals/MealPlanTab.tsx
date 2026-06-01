@@ -11,7 +11,9 @@ import { RecipeModal } from './RecipeModal';
 import { AddMealModal } from './AddMealModal';
 import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
+import { WeeklyPlanModal } from './WeeklyPlanModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 
 const MealPlanTab: React.FC = () => {
@@ -35,6 +37,9 @@ const MealPlanTab: React.FC = () => {
 
   // Per-meal action sheet (replaces the cluttered inline icon buttons)
   const [actionSheetItem, setActionSheetItem] = useState<MealPlanItem | null>(null);
+
+  // "Plan my week" (AI generate / import weekly-meals plan)
+  const [isWeeklyPlanOpen, setIsWeeklyPlanOpen] = useState(false);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -627,6 +632,14 @@ const MealPlanTab: React.FC = () => {
             })}
         </div>
 
+        {/* Plan my week (AI generate / import) */}
+        <button
+            onClick={() => setIsWeeklyPlanOpen(true)}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-violet-600 to-brand-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-violet-200 hover:from-violet-700 hover:to-brand-700 transition-all active:scale-95"
+        >
+            <Sparkles className="w-4 h-4" /> Plan My Week
+        </button>
+
         {/* Week actions */}
         <div className="flex gap-2">
             {!isCurrentWeek && (
@@ -789,6 +802,13 @@ const MealPlanTab: React.FC = () => {
           </Drawer>
         );
       })()}
+
+      {/* Weekly Plan Modal (AI generate / import weekly-meals) */}
+      <WeeklyPlanModal
+        isOpen={isWeeklyPlanOpen}
+        onClose={() => setIsWeeklyPlanOpen(false)}
+        weekStart={weekStartStr}
+      />
 
       {/* Add Meal Modal */}
       <AddMealModal

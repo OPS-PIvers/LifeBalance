@@ -49,6 +49,16 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
   Eye: () => <div data-testid="eye-icon" />,
   Utensils: () => <div data-testid="utensils-icon" />,
+  // Weekly Plan modal + Meal Guide icons
+  FileJson: () => <div data-testid="file-json-icon" />,
+  CalendarPlus: () => <div data-testid="calendar-plus-icon" />,
+  ArrowLeft: () => <div data-testid="arrow-left-icon" />,
+  ArrowRight: () => <div data-testid="arrow-right-icon" />,
+  Box: () => <div data-testid="box-icon" />,
+  Timer: () => <div data-testid="timer-icon" />,
+  Hourglass: () => <div data-testid="hourglass-icon" />,
+  Baby: () => <div data-testid="baby-icon" />,
+  Clock: () => <div data-testid="clock-icon" />,
 }));
 
 describe('MealPlanTab', () => {
