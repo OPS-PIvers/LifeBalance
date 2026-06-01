@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
+import { WeeklyPlan, WeeklyPlanConstraints } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
 import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -1479,5 +1480,197 @@ export const parseRecipe = async (
     console.error("Gemini Recipe Parse Error:", error);
     if (error instanceof Error && error.message.includes("quota")) throw error;
     throw new Error("Failed to parse recipe.");
+  }
+};
+
+/** Reusable schema for a single prep/cook step in a weekly plan. */
+const WEEKLY_PLAN_STEP_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    t: { type: Type.STRING },
+    min: { type: Type.NUMBER },
+    det: { type: Type.ARRAY, items: { type: Type.STRING } },
+    kid: { type: Type.BOOLEAN },
+    off: { type: Type.BOOLEAN },
+    timer: { type: Type.NUMBER },
+  },
+  required: ["t", "min"],
+};
+
+/**
+ * Shape Gemini returns. Stores come back as an array (response schemas can't
+ * express a dynamically-keyed map) and are normalized into the WeeklyPlan
+ * `stores` record afterwards.
+ */
+interface GeneratedWeeklyPlan {
+  weekLabel?: string;
+  subtitle?: string;
+  stores?: { key: string; name: string; why?: string }[];
+  meals: WeeklyPlan["meals"];
+  items: WeeklyPlan["items"];
+}
+
+/**
+ * Generates a full week of dinners + a consolidated, store-aware shopping list
+ * using Gemini, in the `weekly-meals` `week.json` (schemaVersion 2) interchange
+ * format. Mirrors that project's planning rules (effort balance, intra-week
+ * distinctness, use-it-up, no recent repeats, allergy/OUT honoring) so the
+ * output renders in the Meal Guide and maps into the meal plan + shopping list.
+ *
+ * @param householdId - Household ID for quota tracking.
+ * @param weekOf - Monday of the target week, "YYYY-MM-DD".
+ * @param constraints - Household constraints / steer for the plan.
+ * @param _aiClient - Optional injected AI client for testing.
+ */
+export const generateWeeklyPlan = async (
+  householdId: string,
+  weekOf: string,
+  constraints: WeeklyPlanConstraints = {},
+  _aiClient?: Pick<typeof ai, 'models'>
+): Promise<WeeklyPlan> => {
+  try {
+    const dinners = constraints.dinners && constraints.dinners > 0 ? Math.min(constraints.dinners, 7) : 3;
+    const servings = constraints.servings && constraints.servings > 0 ? constraints.servings : 4;
+
+    const list = (arr?: string[]) =>
+      (arr ?? []).map(sanitizeForPrompt).filter(Boolean).join(', ');
+
+    const allergies = list(constraints.allergies);
+    const outList = list(constraints.outList);
+    const inList = list(constraints.inList);
+    const stores = list(constraints.stores);
+    const recent = list(constraints.recentMeals);
+    const note = constraints.note ? sanitizeForPrompt(constraints.note) : '';
+
+    const prompt = [
+      `You are a calm, practical family meal planner. Plan ${dinners} dinners for the week of ${weekOf}, sized for ${servings} people with intentional next-day leftovers.`,
+      ``,
+      `HARD RULES:`,
+      `- Effort balance: at most ONE high-effort meal; at least ONE low-effort meal; the rest flexible. Use effort values exactly "Low", "Med", or "High".`,
+      `- Intra-week distinctness: the meals must differ in protein, cooking method, AND flavor profile. Not variations on one theme.`,
+      `- Plan the meals to be cooked IN ORDER so fresh/perishable ingredients carry from one night to the next; capture these hand-offs in each meal's "uses" (carried in) and "saves" (saved for later).`,
+      `- Use-it-up: plan around full consumption of perishables and intentional leftovers.`,
+      allergies ? `- ALLERGY (obey silently, in every form including sauces/marinades): ${allergies}.` : '',
+      outList ? `- NEVER propose these foods/cuisines: ${outList}.` : '',
+      recent ? `- Avoid repeating these recently-cooked meals or their core proteins/methods: ${recent}.` : '',
+      inList ? `- Reliable favorites you may draw from: ${inList}.` : '',
+      note ? `- The cook says: "${note}". Honor this.` : '',
+      ``,
+      `EACH MEAL must include:`,
+      `- name, cuisine, effort (Low/Med/High), activeMin (hands-on minutes), defaultServe ("HH:MM" 24h, default "18:00"), servesNote, blurb (one appetizing line).`,
+      `- ingredients: array of display strings like "2 lb chicken thighs".`,
+      `- prep[] and cook[] steps. Each step: { t (title), min (WALL-CLOCK minutes, REQUIRED, used to schedule cook times), det (detail bullets), kid (true if a kid can help), off (true if hands-off like simmering/smoking), timer (minutes if it starts a timer) }. Front-load prep (wash/cut/measure).`,
+      `- uses[] ({item, from}) and saves[] ({item, to}) for cross-night hand-offs; leftovers[] notes.`,
+      ``,
+      `SHOPPING LIST (items[]): combine ingredients across all meals into a deduped grocery list. Each item: { n (name), q (quantity), sec (one of: meat, produce, dairy, frozen, pantry), store (a store key from the stores you define), p (estimated price in dollars), staple (true for oil/butter/spices the household likely already owns), warn (true if a substitution check is needed) }.`,
+      stores ? `Split groceries across these stores, assigning a short lowercase "key" to each: ${stores}.` : `Use a single store with key "store" named "Grocery".`,
+      ``,
+      `Return a JSON object: { weekLabel, subtitle, stores: [{key,name,why}], meals: [...], items: [...] }.`,
+    ].filter(Boolean).join('\n');
+
+    const generated = await generateJsonContent<GeneratedWeeklyPlan>(
+      householdId,
+      prompt,
+      {
+        type: Type.OBJECT,
+        properties: {
+          weekLabel: { type: Type.STRING },
+          subtitle: { type: Type.STRING },
+          stores: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                key: { type: Type.STRING },
+                name: { type: Type.STRING },
+                why: { type: Type.STRING },
+              },
+              required: ["key", "name"],
+            },
+          },
+          meals: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                cuisine: { type: Type.STRING },
+                name: { type: Type.STRING },
+                effort: { type: Type.STRING },
+                activeMin: { type: Type.NUMBER },
+                defaultServe: { type: Type.STRING },
+                servesNote: { type: Type.STRING },
+                blurb: { type: Type.STRING },
+                ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
+                uses: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: { item: { type: Type.STRING }, from: { type: Type.STRING } },
+                    required: ["item"],
+                  },
+                },
+                saves: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: { item: { type: Type.STRING }, to: { type: Type.STRING } },
+                    required: ["item"],
+                  },
+                },
+                prep: { type: Type.ARRAY, items: WEEKLY_PLAN_STEP_SCHEMA },
+                cook: { type: Type.ARRAY, items: WEEKLY_PLAN_STEP_SCHEMA },
+                leftovers: { type: Type.ARRAY, items: { type: Type.STRING } },
+              },
+              required: ["name", "ingredients"],
+            },
+          },
+          items: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                n: { type: Type.STRING },
+                q: { type: Type.STRING },
+                sec: { type: Type.STRING },
+                store: { type: Type.STRING },
+                p: { type: Type.NUMBER },
+                note: { type: Type.STRING },
+                warn: { type: Type.BOOLEAN },
+                staple: { type: Type.BOOLEAN },
+              },
+              required: ["n"],
+            },
+          },
+        },
+        required: ["meals", "items"],
+      },
+      _aiClient,
+      'gemini-3-flash-preview'
+    );
+
+    // Normalize the AI's store array into the WeeklyPlan record + order.
+    const storeArr = generated.stores ?? [];
+    const storesRecord: WeeklyPlan["stores"] = {};
+    const storeOrder: string[] = [];
+    storeArr.forEach(s => {
+      if (!s.key) return;
+      storesRecord![s.key] = { name: s.name, why: s.why };
+      storeOrder.push(s.key);
+    });
+
+    return {
+      weekOf,
+      weekLabel: generated.weekLabel,
+      subtitle: generated.subtitle,
+      schemaVersion: 2,
+      stores: storesRecord,
+      storeOrder,
+      meals: generated.meals ?? [],
+      items: generated.items ?? [],
+    };
+  } catch (error) {
+    console.error("Gemini Weekly Plan Error:", error);
+    if (error instanceof Error && error.message.includes("quota")) throw error;
+    throw new Error("Failed to generate weekly plan.");
   }
 };
