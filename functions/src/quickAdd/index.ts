@@ -343,6 +343,28 @@ export const quickAddExpense = onRequest(
     // Expenses are always stored as positive numbers; the sign carries no meaning here.
     amount = Math.abs(amount);
 
+    // Skip zero-dollar holds. Apple Pay's "Transaction" automation trigger fires on the
+    // authorization event, which for many cards/merchants (gas, hotels, tipped purchases)
+    // comes through as a $0 pre-authorization hold. The real amount settles later on the
+    // bank side and does NOT re-fire the on-device trigger, so a $0 here is never the final
+    // amount — it would just clutter the review queue. We drop it without creating a
+    // transaction, but still log the event (Cloud Logging + api_calls) so it's possible to
+    // see how often these holds occur. Returns 200 so the iOS shortcut doesn't show an error.
+    if (amount === 0) {
+      const merchantLabel =
+        typeof merchant === "string" && merchant.trim() ? merchant.trim() : "unknown merchant";
+      logger.info(
+        `Skipped zero-dollar Apple Pay hold for household ${householdId} at ${merchantLabel}`
+      );
+      await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
+      jsonResponse(res, 200, {
+        success: true,
+        skipped: true,
+        message: "Skipped zero-dollar hold (Apple Pay pre-authorization, not a real charge)",
+      });
+      return;
+    }
+
     // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
       errorResponse(res, 400, "merchant is required", "BAD_REQUEST");
