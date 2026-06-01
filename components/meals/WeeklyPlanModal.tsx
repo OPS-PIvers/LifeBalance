@@ -3,6 +3,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { WeeklyPlan, WeeklyPlanConstraints } from '@/types/weeklyPlan';
 import { mapWeeklyPlan } from '@/utils/weeklyPlanMapper';
+import { normalizeToKey } from '@/utils/stringNormalizer';
 import { MealGuide } from './MealGuide';
 import { Sparkles, FileJson, Loader2, CalendarPlus, ChefHat } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,7 +23,7 @@ interface WeeklyPlanModalProps {
  * writing the meals, dinners and shopping list into the household.
  */
 export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClose, weekStart }) => {
-  const { householdId, meals, addMeal, addMealPlanItem, addShoppingItems } = useHousehold();
+  const { householdId, meals, shoppingList, addMeal, addMealPlanItem, addShoppingItems } = useHousehold();
 
   const [mode, setMode] = useState<Mode>('choose');
   const [busy, setBusy] = useState(false);
@@ -81,8 +82,9 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
     try {
       const mapped = mapWeeklyPlan(plan, { startDate: weekStart });
 
-      // Create meals, then schedule each as a dinner using its new id.
-      const ids = await Promise.all(mapped.meals.map(m => addMeal(m)));
+      // Create meals (one combined toast below, not one per meal), then
+      // schedule each as a dinner using its new id.
+      const ids = await Promise.all(mapped.meals.map(m => addMeal(m, { suppressToast: true })));
       await Promise.all(
         mapped.planItems.map(pi =>
           addMealPlanItem(
@@ -98,11 +100,21 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
         ),
       );
 
-      if (mapped.shoppingItems.length > 0) {
-        await addShoppingItems(mapped.shoppingItems);
+      // Skip grocery items already on the unpurchased list, and continue the
+      // existing order sequence — same dedupe the manual "shop ingredients"
+      // flow uses, so applying a plan never doubles up the list.
+      const existing = new Set(
+        shoppingList.filter(s => !s.isPurchased).map(s => normalizeToKey(s.name)),
+      );
+      const itemsToAdd = mapped.shoppingItems
+        .filter(it => !existing.has(normalizeToKey(it.name)))
+        .map((it, i) => ({ ...it, order: shoppingList.length + i }));
+
+      if (itemsToAdd.length > 0) {
+        await addShoppingItems(itemsToAdd);
       }
 
-      toast.success(`Added ${mapped.meals.length} meals & ${mapped.shoppingItems.length} items`);
+      toast.success(`Added ${mapped.meals.length} meals & ${itemsToAdd.length} items`);
       handleClose();
     } catch (e) {
       console.error('Apply weekly plan failed:', e);

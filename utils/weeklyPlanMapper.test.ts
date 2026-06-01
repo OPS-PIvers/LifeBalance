@@ -33,6 +33,16 @@ describe('parseIngredientString', () => {
   it('keeps the whole string as the name when there is no quantity', () => {
     expect(parseIngredientString('Kosher salt')).toEqual({ name: 'Kosher salt', quantity: '' });
   });
+
+  it('does not swallow a non-unit word into the quantity', () => {
+    expect(parseIngredientString('5 spice powder')).toEqual({ name: 'spice powder', quantity: '5' });
+    expect(parseIngredientString('3 cheese blend')).toEqual({ name: 'cheese blend', quantity: '3' });
+  });
+
+  it('handles mixed numbers and ranges with units', () => {
+    expect(parseIngredientString('1 1/2 cups flour')).toEqual({ name: 'flour', quantity: '1 1/2 cups' });
+    expect(parseIngredientString('2-3 cloves garlic')).toEqual({ name: 'garlic', quantity: '2-3 cloves' });
+  });
 });
 
 describe('weeklyPlanMealToMeal', () => {

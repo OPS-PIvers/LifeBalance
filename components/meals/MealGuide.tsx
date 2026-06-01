@@ -8,6 +8,7 @@ import {
   buildSchedule,
   fmtClock,
   fmtDur,
+  parseHM,
   EFFORT_LABEL,
   ScheduledStep,
 } from '@/utils/weeklyPlanSchedule';
@@ -88,12 +89,18 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
   // --- Recipe view ---------------------------------------------------------
   if (selectedMeal && recipeIndex !== null && schedule) {
     const key = mealKey(selectedMeal, recipeIndex);
+    // Show the same serve time the schedule was actually computed from, so the
+    // <input type="time"> never goes blank on a malformed defaultServe.
+    const serveValue =
+      (parseHM(serveOverrides[key]) !== null && serveOverrides[key]) ||
+      (parseHM(selectedMeal.defaultServe) !== null && selectedMeal.defaultServe) ||
+      '18:00';
     return (
       <div className="pb-24">
         <RecipeView
           meal={selectedMeal}
           schedule={schedule}
-          serveValue={serveOverrides[key] ?? selectedMeal.defaultServe ?? '18:00'}
+          serveValue={serveValue}
           onServeChange={(v) => setServeOverrides(prev => ({ ...prev, [key]: v }))}
           onBack={closeRecipe}
           onStartCook={() => setCookMode(true)}
@@ -352,7 +359,9 @@ interface ShoppingViewProps {
   onToggle: (id: string) => void;
 }
 
-const itemId = (it: WeeklyPlanGroceryItem, i: number): string => it.id || `i${i}`;
+// Positional id: stable across renders and guaranteed unique even when an
+// imported/AI plan reuses the same explicit `id` across items.
+const itemId = (_it: WeeklyPlanGroceryItem, i: number): string => `i${i}`;
 
 const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggle }) => {
   const groups = groupItemsByStore(plan);

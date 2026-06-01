@@ -34,19 +34,52 @@ export const mapSectionToCategory = (sec?: string): string => {
   return SECTION_TO_CATEGORY[sec.trim().toLowerCase()] ?? 'Uncategorized';
 };
 
+/** Recognized measurement units that belong to the quantity, not the name. */
+const INGREDIENT_UNITS = new Set([
+  'lb', 'lbs', 'oz', 'g', 'kg', 'mg', 'ml', 'l',
+  'cup', 'cups', 'tbsp', 'tbsps', 'tsp', 'tsps', 'tablespoon', 'tablespoons',
+  'teaspoon', 'teaspoons', 'clove', 'cloves', 'can', 'cans', 'ct', 'count',
+  'pkg', 'package', 'packages', 'bunch', 'bunches', 'head', 'heads',
+  'stick', 'sticks', 'pint', 'pints', 'quart', 'quarts', 'gallon', 'gallons',
+  'slice', 'slices', 'bag', 'bags', 'box', 'boxes', 'jar', 'jars',
+  'bottle', 'bottles', 'dozen', 'pinch', 'dash', 'sprig', 'sprigs',
+]);
+
+/** A token that is (part of) a numeric quantity: digits, fractions, ranges. */
+const isNumericToken = (t: string): boolean =>
+  /^[\d./¼½¾⅓⅔⅛-]+$/.test(t) && /[\d¼½¾⅓⅔⅛]/.test(t);
+
 /**
  * Splits a display-form ingredient string ("2 lb chicken thighs") into a
- * {name, quantity} pair. Falls back to the whole string as the name when no
- * leading quantity is detected ("Kosher salt").
+ * {name, quantity} pair. Consumes leading numeric tokens (including mixed
+ * numbers like "1 1/2") plus an optional recognized unit; a trailing word is
+ * only treated as a unit, never swallowed into the quantity otherwise. Falls
+ * back to the whole string as the name when no leading quantity is detected
+ * ("Kosher salt", "5 spice powder").
  */
 export const parseIngredientString = (raw: string): MealIngredient => {
   const value = raw.trim();
-  // Leading number / fraction / unicode fraction, with an optional unit word.
-  const match = /^([\d./¼½¾⅓⅔⅛]+\s*[a-zA-Z]*\.?)\s+(.+)$/.exec(value);
-  if (match) {
-    return { name: match[2].trim(), quantity: match[1].trim() };
+  const tokens = value.split(/\s+/);
+
+  let i = 0;
+  const qtyParts: string[] = [];
+  while (i < tokens.length && isNumericToken(tokens[i])) {
+    qtyParts.push(tokens[i]);
+    i++;
   }
-  return { name: value, quantity: '' };
+  if (qtyParts.length === 0) return { name: value, quantity: '' };
+
+  // Optionally fold one recognized unit word into the quantity.
+  if (i < tokens.length && INGREDIENT_UNITS.has(tokens[i].toLowerCase().replace(/\.$/, ''))) {
+    qtyParts.push(tokens[i]);
+    i++;
+  }
+
+  const name = tokens.slice(i).join(' ').trim();
+  // Quantity-only strings (e.g. "12") keep the whole value as the name.
+  if (!name) return { name: value, quantity: '' };
+
+  return { name, quantity: qtyParts.join(' ') };
 };
 
 /** Renders a prep/cook step as a single instruction line. */

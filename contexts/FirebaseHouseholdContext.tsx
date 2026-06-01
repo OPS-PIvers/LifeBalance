@@ -181,7 +181,7 @@ export interface HouseholdContextType {
   removeMember: (memberId: string) => Promise<void>;
 
   // Meal Actions
-  addMeal: (meal: Omit<Meal, 'id'>) => Promise<string>;
+  addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
   deleteMeal: (id: string) => Promise<void>;
 
@@ -2242,7 +2242,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: MEALS ---
 
-  const addMeal = useCallback(async (meal: Omit<Meal, 'id'>): Promise<string> => {
+  const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
     if (!householdId || !user) throw new Error("Not authenticated");
     try {
       const sanitizedMeal = sanitizeFirestoreData(meal);
@@ -2251,7 +2251,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       });
-      toast.success('Meal added');
+      if (!options?.suppressToast) toast.success('Meal added');
       return docRef.id;
     } catch (error) {
       console.error('[addMeal] Failed:', error);
