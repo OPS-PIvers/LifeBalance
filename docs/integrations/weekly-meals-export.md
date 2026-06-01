@@ -7,8 +7,15 @@ export that drops straight in.
 
 Good news: LifeBalance's importer mirrors your existing `app/data/week.json`
 (`schemaVersion: 2`) **verbatim** — `stores` as a keyed object, `meals[]`,
-`items[]`, and all. So "the export" is essentially "let the user download /
-copy `week.json`," plus a few invariants below that keep the import lossless.
+`items[]`, and all. So "the export" is essentially "let the user **copy**
+`week.json` to the clipboard," plus a few invariants below that keep the import
+lossless.
+
+> **This is a mobile, copy/paste workflow.** The whole loop happens on a phone:
+> tap **Copy for LifeBalance** here → open LifeBalance → **Paste from clipboard**.
+> Optimize for clipboard copy, not file download. LifeBalance's paste import is
+> lenient — a wrapping ` ```json ` fence or surrounding text is tolerated — but a
+> clean copy is best.
 
 Ground truth in LifeBalance:
 - Type: [`types/weeklyPlan.ts`](../../types/weeklyPlan.ts) (`WeeklyPlan`)
@@ -141,9 +148,10 @@ We have a companion app, LifeBalance, that imports this project's weekly plan as
 JSON. I want to add an EXPORT affordance to this web app (app/index.html) so I
 can hand a plan to LifeBalance losslessly.
 
-Goal: add a small "Export for LifeBalance" action to the app that lets me both
-(a) download the current week as `week-export.json` and (b) copy it to the
-clipboard. The exported JSON must match the contract below EXACTLY — it is
+This is a MOBILE, copy/paste workflow — everything happens on my phone. The
+primary action is a "Copy for LifeBalance" button that copies the current week's
+JSON to the CLIPBOARD (a file download is optional/secondary; I won't usually use
+it on mobile). The copied JSON must match the contract below EXACTLY — it is
 essentially our existing app/data/week.json (schemaVersion 2), so prefer
 emitting that structure directly rather than inventing a new shape.
 
@@ -178,6 +186,9 @@ Invariants to verify before writing the file/clipboard:
 Implementation notes:
 - No build step / vanilla JS is fine; reuse the in-memory DATA/STATE the app
   already loads from week.json.
+- PRIMARY action is clipboard copy via navigator.clipboard.writeText(JSON), with
+  a clear "Copied!" confirmation and a textarea-select fallback for browsers that
+  block the Clipboard API. A file download can be a secondary option.
 - Add the button to the masthead or shopping summary; keep it mobile-first and
   consistent with DESIGN.md tokens.
 - Add a short README note documenting the export and linking to this contract.

@@ -52,6 +52,7 @@ vi.mock('lucide-react', () => ({
   Utensils: () => <div data-testid="utensils-icon" />,
   // Weekly Plan modal + Meal Guide icons
   FileJson: () => <div data-testid="file-json-icon" />,
+  ClipboardPaste: () => <div data-testid="clipboard-paste-icon" />,
   CalendarPlus: () => <div data-testid="calendar-plus-icon" />,
   ArrowLeft: () => <div data-testid="arrow-left-icon" />,
   ArrowRight: () => <div data-testid="arrow-right-icon" />,

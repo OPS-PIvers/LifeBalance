@@ -5,7 +5,7 @@ import { WeeklyPlan, WeeklyPlanConstraints } from '@/types/weeklyPlan';
 import { mapWeeklyPlan } from '@/utils/weeklyPlanMapper';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { MealGuide } from './MealGuide';
-import { Sparkles, FileJson, Loader2, CalendarPlus, ChefHat } from 'lucide-react';
+import { Sparkles, FileJson, Loader2, CalendarPlus, ChefHat, ClipboardPaste } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Mode = 'choose' | 'generate' | 'import' | 'preview';
@@ -63,16 +63,56 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleImport = () => {
+  // Pull JSON out of a mobile copy/paste: tolerate a wrapping ```json fence or
+  // surrounding chat text by falling back to the outermost { … }.
+  const extractJson = (raw: string): string => {
+    let s = raw.trim();
+    const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/m.exec(s);
+    if (fence) s = fence[1].trim();
+    if (!s.startsWith('{')) {
+      const first = s.indexOf('{');
+      const last = s.lastIndexOf('}');
+      if (first !== -1 && last > first) s = s.slice(first, last + 1);
+    }
+    return s;
+  };
+
+  const importPlan = (raw: string) => {
+    const text = extractJson(raw);
+    if (!text) { toast.error('Paste your week.json first'); return; }
+
+    let parsed: WeeklyPlan;
     try {
-      const parsed = JSON.parse(importText) as WeeklyPlan;
-      if (!Array.isArray(parsed.meals)) throw new Error('Missing meals');
-      // Ensure a weekOf so dinners can be scheduled.
-      if (!parsed.weekOf) parsed.weekOf = weekStart;
-      setPlan(parsed);
-      setMode('preview');
-    } catch (_e) {
-      toast.error('That doesn\'t look like a valid week.json');
+      parsed = JSON.parse(text) as WeeklyPlan;
+    } catch {
+      toast.error("That isn't valid JSON — copy the whole week.json and try again");
+      return;
+    }
+    if (!parsed || !Array.isArray(parsed.meals) || parsed.meals.length === 0) {
+      toast.error('No meals found in that plan');
+      return;
+    }
+    // Ensure a weekOf so dinners can be scheduled.
+    if (!parsed.weekOf) parsed.weekOf = weekStart;
+
+    setImportText(text);
+    setPlan(parsed);
+    setMode('preview');
+  };
+
+  const handleImport = () => importPlan(importText);
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      if (!navigator.clipboard?.readText) {
+        toast('Long-press the box below to paste', { icon: '📋' });
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) { toast.error('Clipboard is empty'); return; }
+      importPlan(text);
+    } catch {
+      toast.error("Couldn't read clipboard — paste into the box instead");
     }
   };
 
@@ -193,11 +233,22 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
 
       {/* Import */}
       {mode === 'import' && (
-        <div className="space-y-4 pb-2">
+        <div className="space-y-3 pb-2">
+          <p className="text-sm text-slate-500 leading-relaxed">
+            Copy the week.json from your weekly-meals app, then tap paste — a code fence or
+            extra text around it is fine.
+          </p>
+          <button
+            onClick={handlePasteFromClipboard}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 transition-all active:scale-95"
+          >
+            <ClipboardPaste className="w-5 h-5" /> Paste from clipboard
+          </button>
+          <div className="text-center text-xxs font-bold uppercase tracking-wider text-slate-300">or paste manually</div>
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            rows={8}
+            rows={6}
             placeholder='Paste week.json here…'
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none"
           />
@@ -206,7 +257,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             <button
               onClick={handleImport}
               disabled={!importText.trim()}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-lg hover:bg-emerald-700 disabled:opacity-50 transition-all active:scale-95"
+              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 disabled:opacity-50 transition-all active:scale-95"
             >
               <ChefHat className="w-5 h-5" /> Preview
             </button>
