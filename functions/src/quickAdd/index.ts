@@ -351,8 +351,12 @@ export const quickAddExpense = onRequest(
     // transaction, but still log the event (Cloud Logging + api_calls) so it's possible to
     // see how often these holds occur. Returns 200 so the iOS shortcut doesn't show an error.
     if (amount === 0) {
+      // Truncate before logging: merchant length validation runs later in this
+      // function, so guard against an oversized string bloating the log here.
       const merchantLabel =
-        typeof merchant === "string" && merchant.trim() ? merchant.trim() : "unknown merchant";
+        typeof merchant === "string" && merchant.trim()
+          ? merchant.trim().substring(0, 100)
+          : "unknown merchant";
       logger.info(
         `Skipped zero-dollar Apple Pay hold for household ${householdId} at ${merchantLabel}`
       );
