@@ -6,7 +6,8 @@ import {
   processToggleHabit,
   streakEndingOn,
   calculatePointsForDate,
-  calculatePointsForDateRange
+  calculatePointsForDateRange,
+  getHabitResetUpdate
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks } from 'date-fns';
@@ -526,6 +527,83 @@ describe('habitLogic', () => {
         completedDates: [today],
       };
       expect(calculatePointsForDate([habit], yesterday)).toBe(0);
+    });
+  });
+
+  // Regression for todo/10: the midnight auto-reset (`checkHabitResets`) used to
+  // zero a habit's `count` while leaving today in `completedDates`. Because
+  // `calculatePointsForDate` skips habits with `count === 0`, a subsequent points
+  // recalc computed daily = 0 even though `calculatePointsForDateRange` (no count
+  // guard) still counted the day — daily silently desynced from weekly/total.
+  // `getHabitResetUpdate` mirrors the manual `resetHabit`: it drops today from
+  // `completedDates` when it zeroes count, keeping the count===0 guard meaningful.
+  describe('getHabitResetUpdate — auto-reset mirrors resetHabit', () => {
+    const weekAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd');
+
+    it('drops today from completedDates when it zeroes count', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+        streakDays: 1,
+      };
+
+      const update = getHabitResetUpdate(habit, today);
+      expect(update.count).toBe(0);
+      expect(update.completedDates).not.toContain(today);
+      expect(update.streakDays).toBe(0);
+    });
+
+    it('keeps daily and weekly point recalcs consistent after an auto-reset', () => {
+      // Daily habit completed today, then the auto-reset fires.
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+        streakDays: 1,
+      };
+
+      const resetHabit: Habit = { ...habit, ...getHabitResetUpdate(habit, today) };
+
+      const daily = calculatePointsForDate([resetHabit], today);
+      const weekly = calculatePointsForDateRange([resetHabit], weekAgo, today);
+
+      // The pre-fix reset left today in completedDates, so daily (0, via the
+      // count===0 guard) diverged from weekly (10). They must now agree.
+      expect(daily).toBe(weekly);
+    });
+
+    it('preserves a prior-day completion through a new-day auto-reset', () => {
+      // Habit completed yesterday; today is a new day so the habit is reset.
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 1,
+        completedDates: [yesterday],
+        streakDays: 1,
+      };
+
+      const update = getHabitResetUpdate(habit, today);
+      // Removing "today" is a no-op here, so yesterday's completion (and its
+      // weekly/total points) survive the reset.
+      expect(update.completedDates).toEqual([yesterday]);
+      expect(update.count).toBe(0);
+      expect(update.streakDays).toBe(1);
+
+      const resetHabit: Habit = { ...habit, ...update };
+      expect(calculatePointsForDateRange([resetHabit], yesterday, today)).toBe(10);
+      expect(calculatePointsForDate([resetHabit], today)).toBe(0);
     });
   });
 });

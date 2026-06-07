@@ -57,7 +57,7 @@ import {
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, calculateStreak } from '@/utils/habitLogic';
+import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, calculateStreak, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -1347,7 +1347,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Memoize habit reset data to avoid unnecessary callback re-creation
   // Only recreate when habit IDs, periods, or lastUpdated values change
   const habitResetData = useMemo(() =>
-    habits.map(h => ({ id: h.id, period: h.period, lastUpdated: h.lastUpdated })),
+    habits.map(h => ({ id: h.id, period: h.period, lastUpdated: h.lastUpdated, completedDates: h.completedDates })),
     [habits]
   );
 
@@ -1356,12 +1356,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const checkHabitResets = useCallback(async () => {
     if (!householdId || habitResetData.length === 0) return;
 
-    const habitsToReset: string[] = [];
+    const habitsToReset: typeof habitResetData = [];
 
     habitResetData.forEach(habit => {
       try {
         if (isHabitStale(habit)) {
-          habitsToReset.push(habit.id);
+          habitsToReset.push(habit);
         }
       } catch (error) {
         console.error(`[checkHabitResets] Error checking habit ${habit.id}:`, error);
@@ -1370,16 +1370,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
     });
 
+    const today = getLocalDateString();
+
     // Batch update all habits that need reset with error handling
-    for (const habitId of habitsToReset) {
+    for (const habit of habitsToReset) {
       try {
-        // Use serverTimestamp() for consistency with the rest of the codebase
-        await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
-          count: 0,
+        // Mirror the manual resetHabit path: zero count AND drop today from
+        // completedDates so a habit completed today-but-reset can't leave the
+        // (count === 0, today ∈ completedDates) state that desyncs the daily
+        // points recalc from weekly/total. See utils/habitLogic.getHabitResetUpdate.
+        // Use serverTimestamp() for consistency with the rest of the codebase.
+        await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+          ...getHabitResetUpdate(habit, today),
           lastUpdated: serverTimestamp(),
         });
       } catch (error) {
-        console.error(`[checkHabitResets] Failed to reset habit ${habitId}:`, error);
+        console.error(`[checkHabitResets] Failed to reset habit ${habit.id}:`, error);
       }
     }
   }, [householdId, habitResetData]);
