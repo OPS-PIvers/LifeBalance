@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect } from 'react';
 import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
@@ -210,13 +209,13 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                 }`}>
                   {isReady ? (
                     <>
-                      Background notifications are enabled. You'll receive alerts even when
+                      Background notifications are enabled. You&apos;ll receive alerts even when
                       the app is closed.
                     </>
                   ) : isPwa ? (
                     <>
                       Notifications will appear when the app is open.
-                      For background notifications, ensure you're on iOS 16.4 or later.
+                      For background notifications, ensure you&apos;re on iOS 16.4 or later.
                     </>
                   ) : (
                     <>
@@ -245,6 +244,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
             </div>
             <Switch
+              id="notif-habit-reminders"
+              aria-label="Daily habit check-in reminders"
               checked={preferences.habitReminders.enabled}
               onCheckedChange={() => handleToggle('habitReminders')}
             />
@@ -276,10 +277,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
               <div className="flex-1">
                 <h4 className="font-semibold text-brand-800">Morning To-Do List</h4>
-                <p className="text-sm text-brand-500 mt-1">Get a summary of today's tasks</p>
+                <p className="text-sm text-brand-500 mt-1">Get a summary of today&apos;s tasks</p>
               </div>
             </div>
             <Switch
+              id="notif-action-queue-reminders"
+              aria-label="Morning to-do list reminders"
               checked={preferences.actionQueueReminders.enabled}
               onCheckedChange={() => handleToggle('actionQueueReminders')}
             />
@@ -315,6 +318,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
             </div>
             <Switch
+              id="notif-budget-alerts"
+              aria-label="Low balance alerts"
               checked={preferences.budgetAlerts.enabled}
               onCheckedChange={() => handleToggle('budgetAlerts')}
             />
@@ -350,6 +355,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
             </div>
             <Switch
+              id="notif-streak-warnings"
+              aria-label="Streak protection reminders"
               checked={preferences.streakWarnings.enabled}
               onCheckedChange={() => handleToggle('streakWarnings')}
             />
@@ -385,6 +392,8 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
             </div>
             <Switch
+              id="notif-bill-reminders"
+              aria-label="Bill payment reminders"
               checked={preferences.billReminders.enabled}
               onCheckedChange={() => handleToggle('billReminders')}
             />

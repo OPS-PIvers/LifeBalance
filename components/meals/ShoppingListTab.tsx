@@ -14,6 +14,7 @@ import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -176,6 +177,7 @@ const ShoppingListTab: React.FC = () => {
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTemplate, setSettingsInitialTemplate] = useState<Partial<QuickStockList> | null>(null);
+  const [isClearCheckedConfirmOpen, setIsClearCheckedConfirmOpen] = useState(false);
 
   // Optimizer Hook
   const { handleOptimize, isOptimizing } = useGroceryOptimizer({
@@ -568,11 +570,7 @@ const ShoppingListTab: React.FC = () => {
         {shoppingList.some(i => i.isPurchased) && (
             <div className="flex justify-end">
                 <button
-                    onClick={() => {
-                        if (window.confirm('Clear all checked items?')) {
-                            clearPurchasedShoppingItems();
-                        }
-                    }}
+                    onClick={() => setIsClearCheckedConfirmOpen(true)}
                     className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-800 px-3 py-1 bg-brand-50 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-300 dark:hover:text-brand-200 dark:bg-brand-700/30 dark:hover:bg-brand-700/50"
                 >
                     <RotateCcw className="w-3 h-3" />
@@ -687,6 +685,20 @@ const ShoppingListTab: React.FC = () => {
             </WrapperComponent>
           );
         })()}
+
+        {/* Clear Checked Confirmation Dialog */}
+        <ConfirmDialog
+          isOpen={isClearCheckedConfirmOpen}
+          onClose={() => setIsClearCheckedConfirmOpen(false)}
+          onConfirm={() => {
+            setIsClearCheckedConfirmOpen(false);
+            clearPurchasedShoppingItems();
+          }}
+          title="Clear Checked Items"
+          message="Clear all checked items?"
+          confirmLabel="Clear"
+          confirmVariant="destructive"
+        />
     </div>
   );
 };

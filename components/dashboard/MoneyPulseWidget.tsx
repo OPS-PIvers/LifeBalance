@@ -49,7 +49,7 @@ export const MoneyPulseWidget: React.FC = () => {
   const recentTransactions = useMemo(() => {
     return transactions
       .filter(t => t.category !== 'Income' && t.status !== 'pending_review')
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
       .slice(0, 3);
   }, [transactions]);
 

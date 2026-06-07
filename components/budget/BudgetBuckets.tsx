@@ -10,6 +10,7 @@ import EditTransactionModal from '../modals/EditTransactionModal';
 import { Modal } from '../ui/Modal';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import Select from '../ui/Select';
 import { BudgetBucketCard } from './BudgetBucketCard';
 
@@ -73,8 +74,9 @@ const BudgetBuckets: React.FC = () => {
     });
 
     // 3. Sort each small group independently (O(K log K))
+    // Lexicographic compare works correctly on yyyy-MM-dd strings and avoids Date parsing overhead.
     map.forEach((list) => {
-      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      list.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0));
     });
 
     return map;
@@ -99,6 +101,8 @@ const BudgetBuckets: React.FC = () => {
   // Mobile Action Drawer State
   const [actionTransaction, setActionTransaction] = useState<Transaction | null>(null);
 
+  const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
+
   // --- Memoized Handlers ---
 
   const handleEditBucket = useCallback((bucket: BudgetBucket) => {
@@ -116,11 +120,15 @@ const BudgetBuckets: React.FC = () => {
     setIsEditTransactionModalOpen(true);
   }, []);
 
-  const handleDeleteTransaction = useCallback(async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this transaction?')) {
-      await deleteTransaction(id);
-    }
-  }, [deleteTransaction]);
+  const handleDeleteTransaction = useCallback((id: string) => {
+    setTransactionToDelete(id);
+  }, []);
+
+  const confirmDeleteTransaction = useCallback(async () => {
+    if (!transactionToDelete) return;
+    await deleteTransaction(transactionToDelete);
+    setTransactionToDelete(null);
+  }, [deleteTransaction, transactionToDelete]);
 
   const startEditingLimit = useCallback((id: string) => {
     setEditingLimitId(id);
@@ -305,6 +313,16 @@ const BudgetBuckets: React.FC = () => {
         isOpen={isEditTransactionModalOpen}
         onClose={() => setIsEditTransactionModalOpen(false)}
         transaction={editingTransaction}
+      />
+
+      <ConfirmDialog
+        isOpen={!!transactionToDelete}
+        onClose={() => setTransactionToDelete(null)}
+        onConfirm={confirmDeleteTransaction}
+        title="Delete Transaction"
+        message="Are you sure you want to delete this transaction?"
+        confirmLabel="Delete"
+        confirmVariant="destructive"
       />
 
       {/* Reallocate Modal */}

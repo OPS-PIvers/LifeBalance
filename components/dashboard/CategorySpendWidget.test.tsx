@@ -97,6 +97,23 @@ describe('CategorySpendWidget', () => {
     expect(screen.queryByText('Income')).not.toBeInTheDocument();
   });
 
+  it('renders progressbar roles with correct aria-valuenow', () => {
+    render(<CategorySpendWidget />);
+
+    const bars = screen.getAllByRole('progressbar');
+    // Two categories rendered: Groceries (300/350 ≈ 85.7%) and Dining (50/350 ≈ 14.3%)
+    expect(bars.length).toBeGreaterThanOrEqual(1);
+
+    // Groceries bar: 300/350 ≈ 85.7% -> rounded to 86
+    const groceriesBar = bars.find(
+      bar => bar.getAttribute('aria-label')?.startsWith('Groceries:')
+    );
+    expect(groceriesBar).toBeTruthy();
+    expect(Number(groceriesBar!.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+    expect(groceriesBar!.getAttribute('aria-valuemin')).toBe('0');
+    expect(groceriesBar!.getAttribute('aria-valuemax')).toBe('100');
+  });
+
   it('renders nothing if no spending', () => {
     mockUseHousehold.mockReturnValueOnce({
       transactions: [],

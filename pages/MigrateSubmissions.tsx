@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle } from 'lucide-react';
@@ -19,7 +18,7 @@ interface MigrationStats {
   habitsSkipped: number;
 }
 
-function sanitizeValue(value: any, habitTitle: string): any {
+function sanitizeValue(value: unknown, habitTitle: string): unknown {
   // Remove undefined values at any level
   if (value === undefined) {
     return undefined;
@@ -40,9 +39,9 @@ function sanitizeValue(value: any, habitTitle: string): any {
   }
   // Recursively sanitize plain objects
   if (value && typeof value === 'object') {
-    const result: any = {};
-    Object.keys(value).forEach((key) => {
-      const sanitizedProp = sanitizeValue((value as any)[key], habitTitle);
+    const result: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([key, prop]) => {
+      const sanitizedProp = sanitizeValue(prop, habitTitle);
       // Match original behavior: delete properties that are undefined
       if (sanitizedProp !== undefined) {
         result[key] = sanitizedProp;
@@ -54,9 +53,9 @@ function sanitizeValue(value: any, habitTitle: string): any {
   return value;
 }
 
-function sanitizeSubmission(sub: any): any {
-  const habitTitle = (sub && sub.habitTitle) || 'unknown habit';
-  return sanitizeValue(sub, habitTitle);
+function sanitizeSubmission(sub: Omit<HabitSubmission, 'id'>): Record<string, unknown> {
+  const habitTitle = sub.habitTitle || 'unknown habit';
+  return sanitizeValue(sub, habitTitle) as Record<string, unknown>;
 }
 
 const MigrateSubmissions: React.FC = () => {
@@ -233,7 +232,7 @@ const MigrateSubmissions: React.FC = () => {
                 <li>Creates detailed submission records from your existing habit completion dates</li>
                 <li>Each date gets a submission timestamped at noon</li>
                 <li>Points are calculated retroactively based on historical streaks</li>
-                <li>Count is set to 1 per date (we don't have exact historical counts)</li>
+                <li>Count is set to 1 per date (we don&apos;t have exact historical counts)</li>
                 <li>Habits already migrated will be skipped</li>
               </ul>
             </div>

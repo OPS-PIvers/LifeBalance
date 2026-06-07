@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { FreezeBank } from '@/types/schema';
@@ -55,14 +54,17 @@ export async function migrateFreezeBankToEnhanced(
  * @returns true if migration is needed
  */
 export function needsFreezeBankMigration(
-  freezeBank: any
+  freezeBank: unknown
 ): freezeBank is { current: number; accrued: number; lastMonth: string } {
   // Check if it's the old format (has 'current' and 'accrued' fields)
+  if (!freezeBank || typeof freezeBank !== 'object') {
+    return false;
+  }
+  const candidate = freezeBank as Record<string, unknown>;
   return (
-    freezeBank &&
-    typeof freezeBank.current === 'number' &&
-    typeof freezeBank.accrued === 'number' &&
-    typeof freezeBank.lastMonth === 'string' &&
-    !('tokens' in freezeBank) // New format has 'tokens', not 'current'
+    typeof candidate.current === 'number' &&
+    typeof candidate.accrued === 'number' &&
+    typeof candidate.lastMonth === 'string' &&
+    !('tokens' in candidate) // New format has 'tokens', not 'current'
   );
 }

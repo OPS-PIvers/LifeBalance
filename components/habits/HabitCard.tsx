@@ -24,7 +24,7 @@ interface HabitCardProps {
   dragHandle?: React.ReactNode;
 }
 
-const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
+const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) => {
   const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -415,6 +415,14 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
       />
     </>
   );
-};
+}, (prev, next) =>
+  prev.habit.id === next.habit.id &&
+  prev.habit.count === next.habit.count &&
+  prev.habit.streakDays === next.habit.streakDays &&
+  prev.habit.lastUpdated === next.habit.lastUpdated &&
+  prev.dragHandle === next.dragHandle
+);
+
+HabitCard.displayName = 'HabitCard';
 
 export default HabitCard;

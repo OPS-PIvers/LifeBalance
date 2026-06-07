@@ -1,5 +1,4 @@
-/* eslint-disable */
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
@@ -105,7 +104,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         if (result.data.item) setShoppingName(result.data.item);
         if (result.data.quantity) setShoppingQuantity(result.data.quantity);
         if (result.data.category && (GROCERY_CATEGORIES as readonly string[]).includes(result.data.category)) {
-          setShoppingCategory(result.data.category as any);
+          setShoppingCategory(result.data.category);
         }
         if (result.data.store) setShoppingStore(result.data.store);
         toast.success("Item details found!");
@@ -119,14 +118,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen && !hasInitialized.current) {
-      // To-Do defaults
-      if (!todoDate) {
-        setTodoDate(getLocalDateString());
-      }
+      // To-Do defaults — only set if not already populated (functional
+      // updaters read the latest state without needing them as deps).
+      setTodoDate(prev => prev || getLocalDateString());
       // Default assignee to current user or first member
-      if (!todoAssignee) {
-         setTodoAssignee(currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''));
-      }
+      setTodoAssignee(prev =>
+        prev || (currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''))
+      );
 
       hasInitialized.current = true;
     }
@@ -226,7 +224,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     return undefined;
   };
 
-  const capturePhoto = useCallback(async () => {
+  const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -270,12 +268,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
-      } catch (error) {
+      } catch {
         toast.error("Failed to analyze receipt. Try manual entry.");
         setView('manual');
       }
     }
-  }, [cameraStream, dynamicCategories, addTransaction, habitTitles, habits, buckets, householdId, stopCamera, matchCategory, matchHabits, matchSubBucket, handleClose]);
+  };
 
   const handleFileSelect = async (file: File) => {
     setView('processing');
@@ -431,7 +429,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       });
       toast.success('Task added');
       handleClose();
-    } catch (error) {
+    } catch {
       toast.error('Failed to add task');
     }
   };
@@ -452,7 +450,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       });
       toast.success('Added to list');
       handleClose();
-    } catch (error) {
+    } catch {
       toast.error('Failed to add item');
     }
   };
@@ -530,6 +528,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={handleClose}
       header={headerContent}
+      ariaLabelledBy="capture-drawer-title"
       noPadding={true}
       disableClose={view === 'processing'}
     >

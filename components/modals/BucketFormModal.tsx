@@ -5,6 +5,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface BucketFormModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
   const [color, setColor] = useState(COLORS[0]);
   const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
   const [newSubBucketName, setNewSubBucketName] = useState('');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,14 +87,29 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
 
   const handleDelete = () => {
     if (editingBucket) {
-      if (window.confirm('Delete this bucket? Transactions will remain but categorization may break.')) {
-        deleteBucket(editingBucket.id);
-        onClose();
-      }
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (editingBucket) {
+      deleteBucket(editingBucket.id);
+      setIsDeleteConfirmOpen(false);
+      onClose();
     }
   };
 
   return (
+    <>
+    <ConfirmDialog
+      isOpen={isDeleteConfirmOpen}
+      onClose={() => setIsDeleteConfirmOpen(false)}
+      onConfirm={confirmDelete}
+      title="Delete Bucket"
+      message="Delete this bucket? Transactions will remain but categorization may break."
+      confirmLabel="Delete"
+      confirmVariant="destructive"
+    />
     <Drawer isOpen={isOpen} onClose={onClose} title={editingBucket ? 'Edit Bucket' : 'New Bucket'}>
       <div className="space-y-4">
         <Input
@@ -205,6 +222,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         )}
       </div>
     </Drawer>
+    </>
   );
 };
 

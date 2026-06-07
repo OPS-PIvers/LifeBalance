@@ -48,12 +48,13 @@ vi.mock('../modals/BatchCategorizeModal', () => ({
 
 // Mock generic Modal
 vi.mock('../ui/Modal', () => ({
-  Modal: ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
-    <div data-testid="generic-modal">
-      <button onClick={onClose} aria-label="Close">X</button>
-      {children}
-    </div>
-  )
+  Modal: ({ isOpen, children, onClose }: { isOpen: boolean; children: React.ReactNode, onClose: () => void }) =>
+    isOpen ? (
+      <div data-testid="generic-modal">
+        <button onClick={onClose} aria-label="Close">X</button>
+        {children}
+      </div>
+    ) : null
 }));
 
 // Mock Lucide icons
@@ -136,6 +137,15 @@ describe('TransactionMasterList', () => {
 
     // Mock window.confirm
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
+  });
+
+  describe('Accessibility', () => {
+    it('search input has aria-label', () => {
+      render(<TransactionMasterList />);
+      const searchInput = screen.getByRole('textbox', { name: /search transactions/i });
+      expect(searchInput).toBeInTheDocument();
+      expect(searchInput).toHaveAttribute('placeholder', 'Search merchant or amount...');
+    });
   });
 
   describe('Rendering & Sorting', () => {
@@ -313,6 +323,13 @@ describe('TransactionMasterList', () => {
 
       const verifyButton = screen.getByText('Verify').closest('button');
       if (verifyButton) fireEvent.click(verifyButton);
+
+      // ConfirmDialog should appear
+      expect(screen.getByText('Verify Transactions')).toBeInTheDocument();
+
+      // Confirm — scope to the dialog to avoid collision with the FAB "Verify" button
+      const dialog = screen.getByTestId('generic-modal');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Verify$/i }));
 
       await waitFor(() => {
         expect(mockUpdateTransaction).toHaveBeenCalledTimes(3);

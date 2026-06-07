@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
@@ -16,6 +16,11 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Keep the latest habits in a ref so the open-effect can read the current
+  // value at fetch time without re-running every time `habits` changes.
+  const habitsRef = useRef(habits);
+  habitsRef.current = habits;
+
   // Analyze habits when modal opens
   useEffect(() => {
     if (isOpen && householdId) {
@@ -24,7 +29,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
         setError(null);
         try {
           const { analyzeHabitPoints } = await import('@/services/geminiService');
-          const results = await analyzeHabitPoints(householdId, habits);
+          const results = await analyzeHabitPoints(householdId, habitsRef.current);
           setSuggestions(results);
         } catch (err) {
           console.error("Failed to analyze habits:", err);
@@ -43,9 +48,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       setIsLoading(false);
       setError(null);
     }
-    // Intentionally omitting habits from dependency array to avoid loop
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, householdId]);
 
   const handleAccept = async (suggestion: HabitPointAdjustmentSuggestion) => {
     const habit = habits.find(h => h.id === suggestion.habitId);

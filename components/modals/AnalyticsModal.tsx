@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -34,6 +33,14 @@ interface AnalyticsModalProps {
   onClose: () => void;
 }
 
+type AnalyticsTab = 'pulse' | 'behavior' | 'wallet';
+
+interface TabConfig {
+  id: AnalyticsTab;
+  label: string;
+  icon: React.ComponentType<{ size?: number | string }>;
+}
+
 // Common chart styling
 const CHART_STYLES = {
   xAxis: {
@@ -59,7 +66,7 @@ const CHART_STYLES = {
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const { habits, transactions, currentPeriodId, buckets } = useHousehold();
-  const [activeTab, setActiveTab] = useState<'pulse' | 'behavior' | 'wallet'>('pulse');
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>('pulse');
 
   // ==========================================
   // VIEW 1: PULSE (OVERVIEW)
@@ -78,7 +85,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     habits.forEach(habit => {
       habit.completedDates?.forEach(dateStr => {
         const date = parseISO(dateStr);
-        const habitPoints = (habit as any).type === 'negative' ? -habit.basePoints : habit.basePoints;
+        const habitPoints = habit.type === 'negative' ? -habit.basePoints : habit.basePoints;
         
         if (date >= currentWeekStart) {
           currentWeekPoints += habitPoints;
@@ -167,6 +174,11 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   // Chart F: Variable Expense Trend
   const { data: trendData, categories: trendCategories } = useMemo(() => calculateCategoryTrend(transactions), [transactions]);
 
+  const tabs: TabConfig[] = [
+    { id: 'pulse', label: 'Pulse', icon: Activity },
+    { id: 'behavior', label: 'Behavior', icon: Brain },
+    { id: 'wallet', label: 'Wallet', icon: Wallet },
+  ];
 
   return (
     <Modal
@@ -189,27 +201,31 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       </div>
 
       {/* Tabs */}
-      <div className="flex px-6 pt-4 pb-2 bg-white dark:bg-slate-800 shrink-0 gap-8 border-b border-slate-100 dark:border-slate-700">
-        {[
-          { id: 'pulse', label: 'Pulse', icon: Activity },
-          { id: 'behavior', label: 'Behavior', icon: Brain },
-          { id: 'wallet', label: 'Wallet', icon: Wallet }
-        ].map((tab) => (
-          <button
+      <div role="tablist" aria-label="Analytics views" className="flex px-6 pt-4 pb-2 bg-white dark:bg-slate-800 shrink-0 gap-8 border-b border-slate-100 dark:border-slate-700">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              role="tab"
+              id={`analytics-tab-${tab.id}`}
+              aria-selected={isActive}
+              aria-controls={`analytics-tabpanel-${tab.id}`}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => setActiveTab(tab.id)}
               className={clsx(
                 "pb-3 text-sm font-bold transition-all relative flex items-center gap-2",
-                activeTab === tab.id ? "text-brand-600 dark:text-slate-300" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                isActive ? "text-brand-600 dark:text-slate-300" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
               )}
             >
               <tab.icon size={16} />
               {tab.label}
-              {activeTab === tab.id && (
+              {isActive && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-t-full" />
               )}
             </button>
-          ))}
+          );
+        })}
         </div>
 
         {/* Content Area */}
@@ -217,7 +233,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
           {/* ================= PULSE TAB ================= */}
           {activeTab === 'pulse' && (
-            <div className="space-y-6">
+            <div role="tabpanel" id="analytics-tabpanel-pulse" aria-labelledby="analytics-tab-pulse" className="space-y-6">
 
               {/* Hero Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -363,7 +379,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
           {/* ================= BEHAVIOR TAB ================= */}
           {activeTab === 'behavior' && (
-            <div className="space-y-6">
+            <div role="tabpanel" id="analytics-tabpanel-behavior" aria-labelledby="analytics-tab-behavior" className="space-y-6">
 
               {/* Chart C: Consistency Radar */}
               <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
@@ -394,12 +410,16 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Consistency Heatmap (90 Days)</h3>
                 </div>
 
-                <div className="grid grid-flow-col grid-rows-7 gap-1 overflow-x-auto pb-2">
+                <div
+                  role="img"
+                  aria-label={`Habit completion heatmap for the last ${heatmapData.length} days. ${heatmapData.reduce((sum, day) => sum + day.count, 0)} total completions.`}
+                  className="grid grid-flow-col grid-rows-7 gap-1 overflow-x-auto pb-2"
+                >
                   {heatmapData.map((day) => (
                     <div
                       key={day.date}
-                      tabIndex={0}
-                      className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-all hover:scale-125 hover:ring-2 hover:ring-offset-1 hover:ring-brand-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      aria-hidden="true"
+                      className="w-3 h-3 sm:w-4 sm:h-4 rounded-[3px] transition-all hover:scale-125 hover:ring-2 hover:ring-offset-1 hover:ring-brand-200"
                       style={{
                         backgroundColor: HEATMAP_COLORS[day.intensity as keyof typeof HEATMAP_COLORS],
                       }}
@@ -424,7 +444,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
           {/* ================= WALLET TAB ================= */}
           {activeTab === 'wallet' && (
-            <div className="space-y-6">
+            <div role="tabpanel" id="analytics-tabpanel-wallet" aria-labelledby="analytics-tab-wallet" className="space-y-6">
 
               {/* Chart E: Burn Down */}
               <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">

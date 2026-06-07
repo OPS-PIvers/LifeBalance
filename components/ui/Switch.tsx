@@ -7,6 +7,7 @@ interface SwitchProps {
   disabled?: boolean;
   className?: string;
   id?: string;
+  'aria-label'?: string;
 }
 
 export const Switch: React.FC<SwitchProps> = ({
@@ -15,6 +16,7 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   className,
   id,
+  'aria-label': ariaLabel,
 }) => {
   return (
     <label
@@ -28,6 +30,7 @@ export const Switch: React.FC<SwitchProps> = ({
       <input
         type="checkbox"
         id={id}
+        aria-label={ariaLabel}
         checked={checked}
         onChange={(e) => !disabled && onCheckedChange(e.target.checked)}
         disabled={disabled}

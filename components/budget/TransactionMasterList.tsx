@@ -6,6 +6,7 @@ import EditTransactionModal from '../modals/EditTransactionModal';
 import SplitTransactionModal from '../modals/SplitTransactionModal';
 import BatchCategorizeModal from '../modals/BatchCategorizeModal';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
@@ -105,6 +106,7 @@ const TransactionMasterList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBatchCategorizeOpen, setIsBatchCategorizeOpen] = useState(false);
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
+  const [showBatchVerifyConfirm, setShowBatchVerifyConfirm] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -305,10 +307,9 @@ const TransactionMasterList: React.FC = () => {
     }
   };
 
-  const handleBatchVerify = async () => {
+  const executeBatchVerify = async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Mark ${selectedIds.size} transactions as Verified?`)) return;
-
+    setShowBatchVerifyConfirm(false);
     setIsBatchProcessing(true);
     try {
       const promises = Array.from(selectedIds).map(id =>
@@ -332,6 +333,11 @@ const TransactionMasterList: React.FC = () => {
     } finally {
       setIsBatchProcessing(false);
     }
+  };
+
+  const handleBatchVerify = () => {
+    if (selectedIds.size === 0) return;
+    setShowBatchVerifyConfirm(true);
   };
 
   const handleBatchDelete = async () => {
@@ -410,6 +416,7 @@ const TransactionMasterList: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
           <input
             type="text"
+            aria-label="Search transactions"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -679,6 +686,22 @@ const TransactionMasterList: React.FC = () => {
           </div>
         </Modal>
       )}
+
+      {/* Batch Verify Confirmation */}
+      <ConfirmDialog
+        isOpen={showBatchVerifyConfirm}
+        onClose={() => setShowBatchVerifyConfirm(false)}
+        onConfirm={executeBatchVerify}
+        title="Verify Transactions"
+        message={
+          <>
+            Are you sure you want to verify <strong>{selectedIds.size}</strong> transactions?
+          </>
+        }
+        confirmLabel="Verify"
+        confirmVariant="primary"
+        isConfirming={isBatchProcessing}
+      />
 
       {/* Edit Modal - Conditionally Rendered */}
       {editingTransaction && (

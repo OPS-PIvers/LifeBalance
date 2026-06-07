@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
+import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useCalendarGrid } from '../../hooks/useCalendarGrid';
@@ -10,6 +10,16 @@ import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
+}
+
+/** Pure module-level helper: stable reference, never re-created on render. */
+function getIntensityClass(count: number, maxDailyCompletions: number): string {
+  if (count === 0) return '';
+  const ratio = count / maxDailyCompletions;
+  if (ratio >= 0.75) return 'bg-emerald-500 text-white';
+  if (ratio >= 0.5) return 'bg-emerald-400 text-white';
+  if (ratio >= 0.25) return 'bg-emerald-300 text-white';
+  return 'bg-emerald-200 text-emerald-800';
 }
 
 // Optimization: Memoized calendar day to prevent re-rendering the entire grid on selection change
@@ -71,15 +81,6 @@ const HabitHistoryCalendar: React.FC = () => {
     return { dailyCompletions: map, maxDailyCompletions: max || 1 };
   }, [habits]);
 
-  const getIntensityClass = (count: number) => {
-    if (count === 0) return '';
-    const ratio = count / maxDailyCompletions;
-    if (ratio >= 0.75) return 'bg-emerald-500 text-white';
-    if (ratio >= 0.5) return 'bg-emerald-400 text-white';
-    if (ratio >= 0.25) return 'bg-emerald-300 text-white';
-    return 'bg-emerald-200 text-emerald-800';
-  };
-
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const selectedDateHabits = dailyCompletions.get(selectedDateStr) || [];
 
@@ -127,13 +128,14 @@ const HabitHistoryCalendar: React.FC = () => {
             const dateStr = format(day, 'yyyy-MM-dd');
             const habitsOnDate = dailyCompletions.get(dateStr) || [];
             const count = habitsOnDate.length;
-            const isSelected = isSameDay(day, selectedDate);
+            // String compare avoids allocating Date objects for every cell on every render.
+            const isSelected = dateStr === selectedDateStr;
             const isCurrentMonth = isSameMonth(day, monthStart);
-            const intensityClass = getIntensityClass(count);
+            const intensityClass = getIntensityClass(count, maxDailyCompletions);
 
             return (
               <CalendarDay
-                key={day.toString()}
+                key={dateStr}
                 day={day}
                 count={count}
                 isSelected={isSelected}

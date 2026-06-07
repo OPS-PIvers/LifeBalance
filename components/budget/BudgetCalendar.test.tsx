@@ -429,6 +429,30 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('Delete Event')).toBeInTheDocument();
   });
 
+  it('day cells have role=button, tabIndex, and aria-label for keyboard access', () => {
+    render(<BudgetCalendar />);
+
+    // All day cells should be keyboard-accessible buttons
+    const dayButtons = screen.getAllByRole('button').filter(el => el.getAttribute('aria-label')?.match(/\w+ \d+, \d{4}/));
+    expect(dayButtons.length).toBeGreaterThan(0);
+
+    // Each should have tabIndex 0
+    dayButtons.forEach(btn => {
+      expect(btn).toHaveAttribute('tabindex', '0');
+    });
+
+    // Pressing Enter on a day cell should activate it (select the date)
+    // Find the cell for the 15th (the mocked current date)
+    const cell15 = dayButtons.find(btn => btn.getAttribute('aria-label')?.includes('January 15'));
+    expect(cell15).toBeDefined();
+
+    // Pressing Space on the cell should call setSelectedDate
+    fireEvent.keyDown(cell15!, { key: ' ', code: 'Space' });
+
+    // After pressing Space, the selected day should show "January 15" as the detail heading
+    expect(screen.getByText('January 15')).toBeInTheDocument();
+  });
+
   it('opens recurring manager modal when repeat button is clicked', () => {
     render(<BudgetCalendar />);
 

@@ -13,9 +13,19 @@ import { AISuggestModal } from './AISuggestModal';
 import { RecipeImportModal } from './RecipeImportModal';
 import { WeeklyPlanModal } from './WeeklyPlanModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
+
+// Static lookup tables — defined at module scope so they are never re-created.
+const MEAL_TYPE_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
+const MEAL_TYPE_META: Record<string, { dot: string; badge: string }> = {
+  breakfast: { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20' },
+  lunch: { dot: 'bg-sky-400', badge: 'bg-sky-50 text-sky-700 border-sky-100 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20' },
+  dinner: { dot: 'bg-brand-500', badge: 'bg-brand-50 text-brand-700 border-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/20' },
+  snack: { dot: 'bg-violet-400', badge: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/20' },
+};
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -66,6 +76,10 @@ const MealPlanTab: React.FC = () => {
   const [editingPlanItemId, setEditingPlanItemId] = useState<string | null>(null);
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
   const [targetDate, setTargetDate] = useState<string | null>(null);
+
+  // ConfirmDialog state for the two window.confirm replacements
+  const [shopWeekConfirm, setShopWeekConfirm] = useState<{ mealCount: number; ingredients: MealIngredient[] } | null>(null);
+  const [copyWeekConfirm, setCopyWeekConfirm] = useState<{ count: number } | null>(null);
 
   // O(1) meal lookup — avoids repeated O(n) meals.find() calls during render
   const mealsById = useMemo(() => new Map(meals.map(m => [m.id, m])), [meals]);
@@ -131,9 +145,10 @@ const MealPlanTab: React.FC = () => {
   });
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
 
-  // Calendar Logic
-  const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 }); // Monday start
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  // Calendar Logic — memoized so re-renders caused by unrelated state (modals, etc.)
+  // don't recompute the week grid on every keystroke.
+  const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const ingredientsToAdd = mealIngredients.filter(ing => {
@@ -172,7 +187,7 @@ const MealPlanTab: React.FC = () => {
       }
   };
 
-  const handleShopForWeek = async () => {
+  const handleShopForWeek = () => {
     // 1. Get all meals for this week
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
     const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
@@ -214,15 +229,19 @@ const MealPlanTab: React.FC = () => {
         return;
     }
 
-    if (!window.confirm(`Add ingredients for ${mealCount} meals to shopping list?`)) {
-        return;
-    }
-
-    // 3. Add to list
-    await addIngredientsToShoppingList(uniqueIngredients);
+    // Open confirm dialog with collected data
+    setShopWeekConfirm({ mealCount, ingredients: uniqueIngredients });
   };
 
-  const handleCopyLastWeek = async () => {
+  const handleShopForWeekConfirmed = async () => {
+    if (!shopWeekConfirm) return;
+    const { ingredients } = shopWeekConfirm;
+    setShopWeekConfirm(null);
+    // 3. Add to list
+    await addIngredientsToShoppingList(ingredients);
+  };
+
+  const handleCopyLastWeek = () => {
     // 1. Identify source dates (last week)
     const lastWeekStart = addDays(weekStart, -7);
     const lastWeekEnd = addDays(lastWeekStart, 6);
@@ -239,9 +258,21 @@ const MealPlanTab: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Copy ${sourceItems.length} meals from last week to this week?`)) {
-      return;
-    }
+    setCopyWeekConfirm({ count: sourceItems.length });
+  };
+
+  const handleCopyLastWeekConfirmed = async () => {
+    if (!copyWeekConfirm) return;
+    setCopyWeekConfirm(null);
+
+    // Recompute source items (same logic as above)
+    const lastWeekStart = addDays(weekStart, -7);
+    const lastWeekEnd = addDays(lastWeekStart, 6);
+    const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
+    const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
+    const sourceItems = mealPlan.filter(item =>
+      item.date >= lastWeekStartStr && item.date <= lastWeekEndStr
+    );
 
     try {
       // 3. Map to new items
@@ -512,33 +543,40 @@ const MealPlanTab: React.FC = () => {
   };
 
   // --- Derived view data ---------------------------------------------------
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-  const weekEndStr = format(addDays(weekStart, 6), 'yyyy-MM-dd');
-  const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  // Compute "now" once so all derived strings use the same instant.
+  const { todayStr, selectedDateStr, weekStartStr, weekEndStr, isCurrentWeek } = useMemo(() => {
+    const now = new Date();
+    const wStartStr = format(weekStart, 'yyyy-MM-dd');
+    return {
+      todayStr: format(now, 'yyyy-MM-dd'),
+      selectedDateStr: format(selectedDate, 'yyyy-MM-dd'),
+      weekStartStr: wStartStr,
+      weekEndStr: format(addDays(weekStart, 6), 'yyyy-MM-dd'),
+      isCurrentWeek: wStartStr === format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    };
+  }, [selectedDate, weekStart]);
 
-  // Count meals per day this week (for the day-strip indicators)
-  const countByDate = new Map<string, number>();
-  let weekMealCount = 0;
-  for (const item of mealPlan || []) {
-    if (item.date >= weekStartStr && item.date <= weekEndStr) {
-      countByDate.set(item.date, (countByDate.get(item.date) || 0) + 1);
-      weekMealCount++;
+  // Count meals per day this week (for the day-strip indicators) — O(N) scan.
+  const { countByDate, weekMealCount } = useMemo(() => {
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const item of mealPlan || []) {
+      if (item.date >= weekStartStr && item.date <= weekEndStr) {
+        counts.set(item.date, (counts.get(item.date) || 0) + 1);
+        total++;
+      }
     }
-  }
+    return { countByDate: counts, weekMealCount: total };
+  }, [mealPlan, weekStartStr, weekEndStr]);
 
-  const MEAL_TYPE_ORDER: Record<string, number> = { breakfast: 0, lunch: 1, dinner: 2, snack: 3 };
-  const MEAL_TYPE_META: Record<string, { dot: string; badge: string }> = {
-    breakfast: { dot: 'bg-amber-400', badge: 'bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20' },
-    lunch: { dot: 'bg-sky-400', badge: 'bg-sky-50 text-sky-700 border-sky-100 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/20' },
-    dinner: { dot: 'bg-brand-500', badge: 'bg-brand-50 text-brand-700 border-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/20' },
-    snack: { dot: 'bg-violet-400', badge: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/20' },
-  };
-
-  const dayMeals = (mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === selectedDateStr) : [])
-    .slice()
-    .sort((a, b) => (MEAL_TYPE_ORDER[a.type] ?? 99) - (MEAL_TYPE_ORDER[b.type] ?? 99));
+  // Filtered + sorted meals for the selected day.
+  const dayMeals = useMemo(
+    () =>
+      (mealPlan ? mealPlan.filter((i: MealPlanItem) => i.date === selectedDateStr) : [])
+        .slice()
+        .sort((a, b) => (MEAL_TYPE_ORDER[a.type] ?? 99) - (MEAL_TYPE_ORDER[b.type] ?? 99)),
+    [mealPlan, selectedDateStr]
+  );
 
   // Action-sheet wrappers: run the existing handler, then close the sheet.
   const sheetView = (planItem: MealPlanItem) => {
@@ -882,6 +920,28 @@ const MealPlanTab: React.FC = () => {
               onConfirm={handleConfirmIngredients}
           />
       )}
+
+      {/* Shop Week Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!shopWeekConfirm}
+        onClose={() => setShopWeekConfirm(null)}
+        onConfirm={handleShopForWeekConfirmed}
+        title="Shop for the Week"
+        message={`Add ingredients for ${shopWeekConfirm?.mealCount ?? 0} meals to shopping list?`}
+        confirmLabel="Add Ingredients"
+        confirmVariant="primary"
+      />
+
+      {/* Copy Last Week Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!copyWeekConfirm}
+        onClose={() => setCopyWeekConfirm(null)}
+        onConfirm={handleCopyLastWeekConfirmed}
+        title="Copy Last Week"
+        message={`Copy ${copyWeekConfirm?.count ?? 0} meals from last week to this week?`}
+        confirmLabel="Copy Meals"
+        confirmVariant="primary"
+      />
 
     </div>
   );

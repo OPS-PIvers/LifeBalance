@@ -95,16 +95,13 @@ describe('SavedViewChips', () => {
   });
 
   it('deletes a view', () => {
-     // Seed localStorage
+    // Seed localStorage
     const view = {
       id: '1',
       name: 'Test View',
       filters: currentFilters
     };
     localStorage.setItem(`transaction_views_${householdId}`, JSON.stringify([view]));
-
-    // Mock confirm
-    vi.spyOn(window, 'confirm').mockImplementation(() => true);
 
     render(
       <SavedViewChips
@@ -116,19 +113,15 @@ describe('SavedViewChips', () => {
 
     expect(screen.getByText('Test View')).toBeInTheDocument();
 
-    // Click delete (X icon inside the chip)
-    // The chip structure has multiple X icons (one in form if open, one in chips).
-    // We want the one inside the chip.
-    // The chip structure: <button ...><span>Test View</span><div role="button"><X/></div></button>
-    // We can find by role="button" inside the chip?
-    // Or just query all X icons and pick the right one.
-    // But since "Save View" form is closed, there is only one X icon (inside the chip)?
-    // No, "Save View" button has a Plus icon.
-    // Wait, the "Save View" button is NOT open initially.
-    // So there is only the X icon in the chip.
+    // Click the delete button (X icon) on the chip
+    const deleteBtn = screen.getByLabelText('Delete view Test View');
+    fireEvent.click(deleteBtn);
 
-    const deleteBtn = screen.getByTestId('x-icon').closest('div');
-    fireEvent.click(deleteBtn!);
+    // ConfirmDialog should appear
+    expect(screen.getByText('Delete Saved View')).toBeInTheDocument();
+
+    // Confirm the deletion
+    fireEvent.click(screen.getByRole('button', { name: /^Delete$/i }));
 
     expect(screen.queryByText('Test View')).not.toBeInTheDocument();
 
