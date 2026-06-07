@@ -505,6 +505,218 @@ describe('calculateSafeToSpend', () => {
     expect(result).toBe(4650);
   });
 
+  // --- Bucket matching precision tests ---
+
+  it('should NOT exclude a bill when the bucket name is only a substring within a larger word (false-positive guard)', () => {
+    // Bug #8 regression: bucket "Gas" must NOT match "Bob's Gasoline Station"
+    // because "gas" appears inside "gasoline" — not as a standalone whole word.
+    const billDate = formatIso(addDays(today, 5));
+    const gasBucket: BudgetBucket = { id: 'gas', name: 'Gas', limit: 100, color: 'yellow', isVariable: true, isCore: false };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: "Bob's Gasoline Station",
+        amount: 60,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [gasBucket],
+      lastPaycheckDate
+    );
+
+    // "Gas" bucket must NOT exclude "Bob's Gasoline Station" — bill of 60 should be deducted.
+    expect(result).toBe(4940);
+  });
+
+  it('should NOT exclude an unrelated bill when the bucket name is too short (< 3 chars)', () => {
+    // Bucket name "Co" is shorter than the 3-char minimum, so it must be skipped entirely.
+    const billDate = formatIso(addDays(today, 5));
+    const coBucket: BudgetBucket = { id: 'co', name: 'Co', limit: 50, color: 'blue', isVariable: true, isCore: false };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Costco Bill',
+        amount: 120,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [coBucket],
+      lastPaycheckDate
+    );
+
+    // "Co" bucket is too short to match — bill should be deducted.
+    expect(result).toBe(4880);
+  });
+
+  it('should exclude a bill whose title is an exact match to the bucket name', () => {
+    // Bucket "Groceries" should cover a bill literally titled "Groceries".
+    const billDate = formatIso(addDays(today, 5));
+    const groceriesBucket: BudgetBucket = { id: 'groc', name: 'Groceries', limit: 400, color: 'green', isVariable: true, isCore: false };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Groceries',
+        amount: 200,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [groceriesBucket],
+      lastPaycheckDate
+    );
+
+    // Bill exactly named "Groceries" should be excluded.
+    expect(result).toBe(5000);
+  });
+
+  it('should exclude a bill using exact bucketId match, ignoring name', () => {
+    // When the CalendarItem carries a bucketId, the id-based match takes precedence.
+    const billDate = formatIso(addDays(today, 5));
+    const rentBucket: BudgetBucket = { id: 'rent-bucket-id', name: 'Rent', limit: 2000, color: 'red', isVariable: false, isCore: true };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Monthly Housing Payment',  // Would not match by name, but has explicit bucketId
+        amount: 1800,
+        date: billDate,
+        type: 'expense',
+        isPaid: false,
+        bucketId: 'rent-bucket-id'
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [rentBucket],
+      lastPaycheckDate
+    );
+
+    // Should be excluded via exact bucketId match.
+    expect(result).toBe(5000);
+  });
+
+  it('should NOT exclude a bill when bucketId is set but does not match any bucket', () => {
+    // If bucketId is present but points to a non-existent bucket, bill is NOT excluded.
+    const billDate = formatIso(addDays(today, 5));
+    const rentBucket: BudgetBucket = { id: 'rent-bucket-id', name: 'Rent', limit: 2000, color: 'red', isVariable: false, isCore: true };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Rent Payment',
+        amount: 1800,
+        date: billDate,
+        type: 'expense',
+        isPaid: false,
+        bucketId: 'deleted-bucket-id'  // Points to a bucket that no longer exists
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [rentBucket],
+      lastPaycheckDate
+    );
+
+    // bucketId present but doesn't match any bucket → not excluded → 5000 - 1800 = 3200
+    expect(result).toBe(3200);
+  });
+
+  it('should NOT exclude a bill when bucket name only appears inside bill title as part of a larger word (reverse direction guard)', () => {
+    // Bug #8 regression: old code had `bucketName.includes(itemTitleLower)` which
+    // would exclude e.g. a bill titled "Rent" from a bucket named "Rental Properties".
+    // New code only checks the bill→bucket direction, so this should no longer exclude.
+    const billDate = formatIso(addDays(today, 5));
+    const rentalBucket: BudgetBucket = { id: 'rental', name: 'Rental Properties', limit: 3000, color: 'purple', isVariable: false, isCore: true };
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Rent',  // Short title; old code: "rental properties".includes("rent") → true (wrong!)
+        amount: 800,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [rentalBucket],
+      lastPaycheckDate
+    );
+
+    // "Rental Properties" bucket does NOT match bill titled "Rent" under the new rules
+    // because "rental" and "properties" are not both present as whole words in "rent".
+    expect(result).toBe(4200);
+  });
+
   it('should aggregate multiple checking accounts', () => {
     const multiAccounts: Account[] = [
       { id: '1', name: 'Checking 1', type: 'checking', balance: 1000, lastUpdated: '' },

@@ -128,6 +128,11 @@ export interface CalendarItem {
   parentRecurringId?: string; // If this is a paid instance of a recurring event, points to parent
   isDeleted?: boolean; // If this is a deleted instance of a recurring event, prevents it from appearing
   accountId?: string;
+  /** Optional: ID of the BudgetBucket that covers this calendar expense item.
+   *  When present, bucket-coverage matching uses this exact ID instead of
+   *  falling back to name-based heuristics, making the check precise and
+   *  immune to false-positive substring matches. */
+  bucketId?: string;
 }
 
 export type EffortLevel = 'easy' | 'medium' | 'hard' | 'very_hard';
