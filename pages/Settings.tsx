@@ -25,6 +25,7 @@ import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
 import PointsBreakdownModal from '@/components/modals/PointsBreakdownModal';
 import NotificationSettings from '@/components/settings/NotificationSettings';
+import { ThemeToggle } from '@/components/settings/ThemeToggle';
 import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
@@ -97,7 +98,7 @@ const Settings: React.FC = () => {
 
   if (!householdSettings) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center pb-24">
+      <div className="min-h-screen bg-slate-50 dark:bg-brand-900 flex items-center justify-center pb-24">
         <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
       </div>
     );
@@ -233,7 +234,7 @@ const Settings: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 px-4 pt-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-brand-900 pb-24 px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
 
         {isGlobalAdmin && (
@@ -259,7 +260,7 @@ const Settings: React.FC = () => {
           icon={<User className="w-5 h-5" />}
           isOpen={openSection === 'profile'}
           onToggle={() => handleToggleSection('profile')}
-          className="bg-white/80 backdrop-blur-xl"
+          className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* User Profile Card */}
@@ -299,7 +300,13 @@ const Settings: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100">
+            {/* Appearance / Theme */}
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 tracking-tight">Appearance</h4>
+              <ThemeToggle />
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
               <button
                 onClick={handleEnableNotifications}
                 disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
@@ -364,7 +371,7 @@ const Settings: React.FC = () => {
           icon={<Users className="w-5 h-5" />}
           isOpen={openSection === 'household'}
           onToggle={() => handleToggleSection('household')}
-          className="bg-white/80 backdrop-blur-xl"
+          className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* Household Info */}
@@ -514,7 +521,7 @@ const Settings: React.FC = () => {
           icon={<Download className="w-5 h-5" />}
           isOpen={openSection === 'data'}
           onToggle={() => handleToggleSection('data')}
-          className="bg-white/80 backdrop-blur-xl"
+          className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           {/* Data Management */}
@@ -578,7 +585,7 @@ const Settings: React.FC = () => {
           icon={<Smartphone className="w-5 h-5" />}
           isOpen={openSection === 'shortcuts'}
           onToggle={() => handleToggleSection('shortcuts')}
-          className="bg-white/80 backdrop-blur-xl"
+          className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           <div className="space-y-8">
@@ -608,7 +615,7 @@ const Settings: React.FC = () => {
           icon={<LogOut className="w-5 h-5" />}
           isOpen={openSection === 'account'}
           onToggle={() => handleToggleSection('account')}
-          className="bg-white/80 backdrop-blur-xl"
+          className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
           contentClassName="space-y-6"
         >
           <div className="py-2">

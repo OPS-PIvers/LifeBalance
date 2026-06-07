@@ -257,9 +257,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [bucketHistory, setBucketHistory] = useState<BucketPeriodSnapshot[]>([]);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
-  // True until the household document's first snapshot resolves, so the UI can
-  // show skeletons instead of a flash of empty/zeroed state on cold load.
-  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
+  // Tracks which household's first snapshot has resolved. Deriving isLoading from
+  // this (rather than a boolean flag) means switching households automatically
+  // re-shows skeletons until the new household loads — with no setState in an
+  // effect body (which the lint rules forbid).
+  const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -468,8 +470,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const data = snapshot.data() as Household | undefined;
         // Include the document ID in householdSettings
         setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
-        // Core data has arrived — clear the initial-load skeleton state.
-        setIsInitialLoad(false);
+        // Core data has arrived — mark this household as loaded.
+        setLoadedHouseholdId(householdId);
 
         // Extract and set freezeBank
         if (data?.freezeBank) {
@@ -497,6 +499,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             setFreezeBank(data.freezeBank as FreezeBank);
           }
         }
+      }, (error) => {
+        // Without this, a permission/network error would leave isLoading stuck
+        // true forever (permanent skeleton). Clear the loading state so the UI
+        // can recover and surface whatever data is available.
+        console.error('[Household] Failed to listen to household document:', error);
+        setLoadedHouseholdId(householdId);
       })
     );
 
@@ -2833,8 +2841,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
 
   // Show skeletons only while a household is set but its first snapshot hasn't
-  // arrived yet. No household (pre-setup) is not a "loading" state.
-  const isLoading = !!householdId && isInitialLoad;
+  // arrived yet (or a different household is still loading). No household
+  // (pre-setup) is not a "loading" state.
+  const isLoading = !!householdId && loadedHouseholdId !== householdId;
 
   const contextValue = useMemo(() => ({
     isLoading,

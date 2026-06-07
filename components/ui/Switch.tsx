@@ -35,8 +35,8 @@ export const Switch: React.FC<SwitchProps> = ({
       />
       <div className={cn(
         "w-11 h-6 rounded-full peer transition-colors duration-200 ease-in-out",
-        "bg-brand-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300",
-        "peer-checked:bg-brand-600",
+        "bg-brand-200 dark:bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-500/30",
+        "peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500",
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
         "after:bg-white after:border-gray-300 after:border after:rounded-full",

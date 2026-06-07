@@ -20,7 +20,9 @@ const FOCUSABLE_SELECTOR = [
 
 const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
   Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.offsetParent !== null || el === document.activeElement
+    // getClientRects() works for fixed-position elements where offsetParent is
+    // always null; it returns no rects only when the element is display:none.
+    (el) => el.getClientRects().length > 0 || el === document.activeElement
   );
 
 interface DrawerProps {

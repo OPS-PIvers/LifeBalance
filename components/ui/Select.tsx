@@ -19,14 +19,14 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={selectId}
-            className="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5"
+            className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1.5"
           >
             {label}
           </label>
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none">
               {icon}
             </div>
           )}
@@ -36,7 +36,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-invalid={!!error}
             aria-describedby={error ? errorId : undefined}
             className={cn(
-              "w-full p-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all shadow-sm disabled:opacity-50 disabled:bg-slate-50 appearance-none text-slate-900",
+              "w-full p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all shadow-sm disabled:opacity-50 disabled:bg-slate-50 dark:disabled:bg-slate-700/50 appearance-none text-slate-900 dark:text-slate-100",
               icon ? "pl-10" : "pl-3",
               "pr-10", // Space for the chevron
               error && "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10",
@@ -46,7 +46,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
           >
             {children}
           </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 dark:text-slate-500">
             <ChevronDown size={20} />
           </div>
         </div>

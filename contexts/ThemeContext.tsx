@@ -25,8 +25,13 @@ const getSystemTheme = (): 'light' | 'dark' =>
 
 const readStoredPreference = (): ThemePreference => {
   if (typeof window === 'undefined') return 'system';
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-  return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  try {
+    // localStorage access can throw (blocked storage, private mode, older browsers).
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+  } catch {
+    return 'system';
+  }
 };
 
 const applyThemeClass = (resolved: 'light' | 'dark') => {
@@ -47,7 +52,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Sync the resolved theme to external systems (DOM class + persisted pref).
   useEffect(() => {
     applyThemeClass(resolvedTheme);
-    window.localStorage.setItem(STORAGE_KEY, theme);
+    try {
+      window.localStorage.setItem(STORAGE_KEY, theme);
+    } catch (e) {
+      console.warn('Failed to persist theme preference:', e);
+    }
   }, [resolvedTheme, theme]);
 
   // Subscribe to OS scheme changes; setState only fires from the callback.
@@ -55,8 +64,14 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = () => setSystemTheme(mq.matches ? 'dark' : 'light');
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    // addEventListener is unavailable on MediaQueryList in Safari < 14 / older
+    // iOS; fall back to the deprecated addListener for those devices.
+    if (mq.addEventListener) {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    mq.addListener(handler);
+    return () => mq.removeListener(handler);
   }, []);
 
   const setTheme = useCallback((next: ThemePreference) => setThemeState(next), []);
