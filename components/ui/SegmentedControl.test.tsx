@@ -15,13 +15,22 @@ describe('SegmentedControl', () => {
     expect(screen.getByText('Option 2')).toBeInTheDocument();
   });
 
-  it('indicates selected option with aria-pressed', () => {
+  it('indicates selected option with role="radio" + aria-checked', () => {
     render(<SegmentedControl options={options} value="opt1" onChange={() => {}} />);
-    const btn1 = screen.getByRole('button', { name: /option 1/i });
-    const btn2 = screen.getByRole('button', { name: /option 2/i });
+    const btn1 = screen.getByRole('radio', { name: /option 1/i });
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
 
-    expect(btn1).toHaveAttribute('aria-pressed', 'true');
-    expect(btn2).toHaveAttribute('aria-pressed', 'false');
+    expect(btn1).toHaveAttribute('aria-checked', 'true');
+    expect(btn2).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('uses roving tabIndex (only the active option is tabbable)', () => {
+    render(<SegmentedControl options={options} value="opt1" onChange={() => {}} />);
+    const btn1 = screen.getByRole('radio', { name: /option 1/i });
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
+
+    expect(btn1).toHaveAttribute('tabindex', '0');
+    expect(btn2).toHaveAttribute('tabindex', '-1');
   });
 
   it('calls onChange when clicked', () => {
@@ -32,16 +41,28 @@ describe('SegmentedControl', () => {
     expect(handleChange).toHaveBeenCalledWith('opt2');
   });
 
+  it('moves selection with arrow keys', () => {
+    const handleChange = vi.fn();
+    render(<SegmentedControl options={options} value="opt1" onChange={handleChange} />);
+
+    const btn1 = screen.getByRole('radio', { name: /option 1/i });
+    fireEvent.keyDown(btn1, { key: 'ArrowRight' });
+    expect(handleChange).toHaveBeenCalledWith('opt2');
+
+    fireEvent.keyDown(btn1, { key: 'ArrowLeft' });
+    expect(handleChange).toHaveBeenCalledWith('opt2'); // wraps back around
+  });
+
   it('applies activeClassName to selected option', () => {
     render(<SegmentedControl options={options} value="opt2" onChange={() => {}} />);
-    const btn2 = screen.getByRole('button', { name: /option 2/i });
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
 
     expect(btn2).toHaveClass('text-red-500');
   });
 
-  it('applies group role and name', () => {
+  it('applies radiogroup role and name', () => {
     render(<SegmentedControl options={options} value="opt1" onChange={() => {}} name="My Group" />);
-    const group = screen.getByRole('group', { name: /my group/i });
+    const group = screen.getByRole('radiogroup', { name: /my group/i });
     expect(group).toBeInTheDocument();
   });
 
@@ -49,13 +70,13 @@ describe('SegmentedControl', () => {
     const { rerender } = render(
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={true} name="Border Group" />
     );
-    let group = screen.getByRole('group', { name: /border group/i });
+    let group = screen.getByRole('radiogroup', { name: /border group/i });
     expect(group).toHaveClass('ring-1');
 
     rerender(
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={false} name="Border Group" />
     );
-    group = screen.getByRole('group', { name: /border group/i });
+    group = screen.getByRole('radiogroup', { name: /border group/i });
     expect(group).not.toHaveClass('ring-1');
   });
 });

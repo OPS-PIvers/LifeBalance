@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from '@/utils/cn';
 
 interface SwitchProps {
@@ -18,9 +18,13 @@ export const Switch: React.FC<SwitchProps> = ({
   id,
   'aria-label': ariaLabel,
 }) => {
+  // Fall back to a generated id so the <label htmlFor> always associates with
+  // the input, even when no explicit id is passed by the call site.
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
   return (
     <label
-      htmlFor={id}
+      htmlFor={inputId}
       className={cn(
         "relative inline-flex items-center flex-shrink-0",
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
@@ -29,7 +33,7 @@ export const Switch: React.FC<SwitchProps> = ({
     >
       <input
         type="checkbox"
-        id={id}
+        id={inputId}
         aria-label={ariaLabel}
         checked={checked}
         onChange={(e) => !disabled && onCheckedChange(e.target.checked)}

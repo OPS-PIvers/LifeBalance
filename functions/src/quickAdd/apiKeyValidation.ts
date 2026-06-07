@@ -96,7 +96,12 @@ export async function validateApiKey(
       return { valid: false, error: "Invalid or revoked API key" };
     }
 
+    // .limit(1) guarantees exactly one doc when not empty; guard for noUncheckedIndexedAccess
     const keyDoc = apiKeysSnapshot.docs[0];
+    if (!keyDoc) {
+      logger.error("Unexpected empty docs after non-empty check");
+      return { valid: false, error: "Internal error" };
+    }
     const keyData = keyDoc.data() as HouseholdApiKey;
 
     // Derive householdId from the document path:
@@ -143,46 +148,50 @@ export async function checkRateLimit(
   const usageRef = db.doc(`households/${householdId}/apiUsage/${endpointType}`);
 
   try {
-    const usageDoc = await usageRef.get();
-    const data = usageDoc.data();
+    // Wrap the read + conditional write in a transaction so concurrent
+    // requests can't both pass the limit check and over-increment the counter.
+    return await db.runTransaction(async (txn) => {
+      const usageDoc = await txn.get(usageRef);
+      const data = usageDoc.data();
 
-    if (!data) {
-      // First request, create tracking doc
-      await usageRef.set({
-        count: 1,
-        windowStart: now,
+      if (!data) {
+        // First request, create tracking doc
+        txn.set(usageRef, {
+          count: 1,
+          windowStart: now,
+          lastRequest: now,
+        });
+        return { allowed: true };
+      }
+
+      // Check if we need to reset the window
+      if (data.windowStart < windowStart) {
+        // Window expired, reset
+        txn.set(usageRef, {
+          count: 1,
+          windowStart: now,
+          lastRequest: now,
+        });
+        return { allowed: true };
+      }
+
+      // Check if limit exceeded
+      if (data.count >= config.limit) {
+        const retryAfterMs = data.windowStart + config.windowMs - now;
+        logger.warn(
+          `Rate limit exceeded for ${endpointType} in household ${householdId}`
+        );
+        return { allowed: false, retryAfterMs };
+      }
+
+      // Increment counter
+      txn.update(usageRef, {
+        count: admin.firestore.FieldValue.increment(1),
         lastRequest: now,
       });
+
       return { allowed: true };
-    }
-
-    // Check if we need to reset the window
-    if (data.windowStart < windowStart) {
-      // Window expired, reset
-      await usageRef.set({
-        count: 1,
-        windowStart: now,
-        lastRequest: now,
-      });
-      return { allowed: true };
-    }
-
-    // Check if limit exceeded
-    if (data.count >= config.limit) {
-      const retryAfterMs = data.windowStart + config.windowMs - now;
-      logger.warn(
-        `Rate limit exceeded for ${endpointType} in household ${householdId}`
-      );
-      return { allowed: false, retryAfterMs };
-    }
-
-    // Increment counter
-    await usageRef.update({
-      count: admin.firestore.FieldValue.increment(1),
-      lastRequest: now,
     });
-
-    return { allowed: true };
   } catch (error) {
     logger.error("Error checking rate limit:", error);
     // Fail open to not block legitimate requests on errors
@@ -244,7 +253,7 @@ export function sanitizeForLogging(obj: unknown, depth = 0): unknown {
 /**
  * Log an API call for audit purposes
  */
-export async function logApiCall(
+export function logApiCall(
   householdId: string,
   keyPrefix: string,
   endpoint: string,
@@ -252,11 +261,15 @@ export async function logApiCall(
   responseStatus: number,
   ipAddress?: string
 ): Promise<void> {
-  try {
-    // Sanitize request body (remove sensitive data like images, truncate long strings)
-    const sanitizedBody = sanitizeForLogging(requestBody);
+  // Sanitize request body (remove sensitive data like images, truncate long strings)
+  const sanitizedBody = sanitizeForLogging(requestBody);
 
-    await db.collection("logs/api_calls/requests").add({
+  // Fire-and-forget: the audit write must not add latency to the API response,
+  // and a logging failure must never fail the request. Resolve immediately and
+  // let the write complete in the background.
+  void db
+    .collection("logs/api_calls/requests")
+    .add({
       householdId,
       keyPrefix,
       endpoint,
@@ -264,11 +277,12 @@ export async function logApiCall(
       responseStatus,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       ipAddress: ipAddress || null,
+    })
+    .catch((error) => {
+      logger.error("Failed to log API call:", error);
     });
-  } catch (error) {
-    // Don't fail the request if logging fails
-    logger.error("Failed to log API call:", error);
-  }
+
+  return Promise.resolve();
 }
 
 /**

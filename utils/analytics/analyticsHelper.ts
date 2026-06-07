@@ -188,7 +188,7 @@ export const calculateNetFlowData = (transactions: Transaction[]) => {
       const bucket = buckets.get(monthKey)!;
       if (t.category === 'Income') {
         bucket.income += t.amount;
-      } else if (t.category === 'Expense') {
+      } else {
         bucket.expense += t.amount;
       }
     }

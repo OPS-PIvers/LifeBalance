@@ -31,6 +31,7 @@ import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
@@ -70,6 +71,8 @@ const Settings: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDevConsoleOpen, setIsDevConsoleOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
@@ -109,14 +112,20 @@ const Settings: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleRemoveMember = async (member: HouseholdMember) => {
-    if (!confirm(`Are you sure you want to remove ${member.displayName} from the household?`)) {
-      return;
-    }
+  const handleRemoveMember = (member: HouseholdMember) => {
+    setMemberToRemove(member);
+  };
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+    setIsRemovingMember(true);
     try {
-      await removeMember(member.uid);
+      await removeMember(memberToRemove.uid);
+      setMemberToRemove(null);
     } catch (error) {
       console.error('Error removing member:', error);
+    } finally {
+      setIsRemovingMember(false);
     }
   };
 
@@ -677,6 +686,16 @@ const Settings: React.FC = () => {
           habits={habits}
         />
       )}
+
+      <ConfirmDialog
+        isOpen={memberToRemove !== null}
+        onClose={() => setMemberToRemove(null)}
+        onConfirm={handleConfirmRemoveMember}
+        isConfirming={isRemovingMember}
+        title="Remove member"
+        confirmLabel="Remove"
+        message={`Are you sure you want to remove ${memberToRemove?.displayName ?? 'this member'} from the household?`}
+      />
     </div>
   );
 };

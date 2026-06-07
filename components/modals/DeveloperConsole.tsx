@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { db } from '@/firebase.config';
 import { collection, query, getDocs, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
@@ -23,6 +24,9 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
 
   // Tester Form
   const [newTesterEmail, setNewTesterEmail] = useState('');
+
+  // Confirm delete tester dialog
+  const [deleteTesterConfirmId, setDeleteTesterConfirmId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -79,9 +83,14 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
     loadData();
   };
 
-  const deleteTester = async (id: string) => {
-    if(!confirm("Remove tester?")) return;
-    await deleteDoc(doc(db, 'beta_testers', id));
+  const deleteTester = (id: string) => {
+    setDeleteTesterConfirmId(id);
+  };
+
+  const confirmDeleteTester = async () => {
+    if (!deleteTesterConfirmId) return;
+    await deleteDoc(doc(db, 'beta_testers', deleteTesterConfirmId));
+    setDeleteTesterConfirmId(null);
     loadData();
   };
 
@@ -179,7 +188,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                               <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 dark:text-blue-300 hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded ml-2">
+                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded ml-2" aria-label={`Delete tester ${t.email}`}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -241,7 +250,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                     <span className="text-xs font-mono bg-slate-100/50 dark:bg-slate-700/30 px-2 py-1 rounded text-slate-600 dark:text-slate-300 font-bold">{report.version}</span>
                                     <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
-                                <button onClick={() => copyReport(report)} className="text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 p-1.5 rounded-lg" title="Copy JSON">
+                                <button onClick={() => copyReport(report)} className="text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 p-1.5 rounded-lg" title="Copy JSON" aria-label="Copy report as JSON">
                                     <Copy size={16} />
                                 </button>
                             </div>
@@ -266,6 +275,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTesterConfirmId}
+        onClose={() => setDeleteTesterConfirmId(null)}
+        onConfirm={confirmDeleteTester}
+        title="Remove Tester"
+        message="Are you sure you want to remove this tester?"
+        confirmLabel="Remove"
+      />
     </Modal>
   );
 };

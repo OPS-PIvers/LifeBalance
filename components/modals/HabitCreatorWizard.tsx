@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { X, Plus, ChevronRight, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useId } from 'react';
+import { X, Plus, ChevronRight } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
@@ -12,6 +12,7 @@ import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/Custom
 import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
 import { Modal } from '../ui/Modal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 // UUID generator with fallback for non-secure contexts
 const generateId = (): string => {
@@ -68,6 +69,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
   const { habits, addHabit, updateHabit, deleteHabit } = useHousehold();
+  const titleId = useId();
 
   // View state
   const [view, setView] = useState<WizardView>('main');
@@ -250,28 +252,12 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
     onClose();
   }, [onClose, resetForm]);
 
-  // Handle Escape key to close modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (deleteConfirmHabit) {
-          cancelDelete();
-        }
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown);
-      return () => document.removeEventListener('keydown', handleKeyDown);
-    }
-  }, [isOpen, deleteConfirmHabit]);
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
       maxWidth="max-w-lg"
-      disableBackdropClose={!!deleteConfirmHabit}
+      ariaLabelledBy={titleId}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 dark:border-slate-700 flex-shrink-0">
@@ -285,7 +271,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
                 <ChevronRight size={20} className="rotate-180" />
               </button>
             )}
-            <h2 className="text-lg font-bold text-brand-800 dark:text-slate-100">
+            <h2 id={titleId} className="text-lg font-bold text-brand-800 dark:text-slate-100">
               {VIEW_TITLES[view]}
             </h2>
           </div>
@@ -370,40 +356,15 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           )}
         </div>
 
-      {/* Delete Confirmation Dialog */}
-      {deleteConfirmHabit && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40" onClick={cancelDelete} />
-          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-rose-100 dark:bg-rose-500/15 rounded-full flex items-center justify-center text-money-neg">
-                <AlertTriangle size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-brand-800 dark:text-slate-100">Delete Habit?</h3>
-                <p className="text-sm text-brand-400 dark:text-slate-400">This action cannot be undone.</p>
-              </div>
-            </div>
-            <p className="text-sm text-brand-600 dark:text-slate-300 mb-6">
-              Are you sure you want to delete <span className="font-semibold">&quot;{deleteConfirmHabit.title}&quot;</span>?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={cancelDelete}
-                className="flex-1 py-2.5 bg-brand-100 dark:bg-slate-700/50 text-brand-700 dark:text-slate-200 font-semibold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteConfirmed}
-                className="flex-1 py-2.5 bg-money-neg text-white font-semibold rounded-xl hover:bg-red-600 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={!!deleteConfirmHabit}
+        onClose={cancelDelete}
+        onConfirm={handleDeleteConfirmed}
+        title="Delete Habit?"
+        message={deleteConfirmHabit ? `Are you sure you want to delete "${deleteConfirmHabit.title}"? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+      />
     </Modal>
   );
 };

@@ -127,16 +127,11 @@ describe('analyticsHelper', () => {
   });
 
   describe('calculateNetFlowData', () => {
-    it('aggregates income and expense per month', () => {
+    it('aggregates income and all non-income categories as expense per month', () => {
       const transactions = [
         { id: '1', amount: 1000, category: 'Income', date: '2023-10-01' },
         { id: '2', amount: 500, category: 'Expense', date: '2023-10-05' },
-        { id: '3', amount: 200, category: 'Food', date: '2023-10-06' } // Should count as expense if we treat non-income as expense in net flow?
-        // Note: The logic in helper filters for t.category === 'Expense' explicitly for expenses.
-        // Let's verify the logic:
-        // if (t.category === 'Expense') { bucket.expense += t.amount; }
-        // This implies 'Food' category won't be counted as Expense in Net Flow chart.
-        // Wait, checking previous implementation... yes, it filters: else if (t.category === 'Expense')
+        { id: '3', amount: 200, category: 'Food', date: '2023-10-06' }, // bucket-name category -- must count as expense
       ] as Transaction[];
 
       const data = calculateNetFlowData(transactions);
@@ -146,8 +141,24 @@ describe('analyticsHelper', () => {
 
       expect(currentMonth.month).toBe('Oct');
       expect(currentMonth.Income).toBe(1000);
-      expect(currentMonth.Expense).toBe(500); // Only 'Expense' category
-      expect(currentMonth.Net).toBe(500);
+      // Both 'Expense' and 'Food' categories are non-income, so both are counted
+      expect(currentMonth.Expense).toBe(700);
+      expect(currentMonth.Net).toBe(300);
+    });
+
+    it('counts all non-income category transactions as expenses', () => {
+      const transactions = [
+        { id: '1', amount: 100, category: 'Groceries', date: '2023-10-01' },
+        { id: '2', amount: 50, category: 'Gas', date: '2023-10-02' },
+        { id: '3', amount: 200, category: 'Income', date: '2023-10-03' },
+      ] as Transaction[];
+
+      const data = calculateNetFlowData(transactions);
+      const currentMonth = data[data.length - 1]!;
+
+      expect(currentMonth.Income).toBe(200);
+      expect(currentMonth.Expense).toBe(150); // Groceries + Gas
+      expect(currentMonth.Net).toBe(50);
     });
   });
 

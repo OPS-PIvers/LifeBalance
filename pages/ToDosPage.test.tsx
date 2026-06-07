@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
-import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../utils/exportUtils';
-import { format, subDays } from 'date-fns';
+import { format, subDays, startOfToday } from 'date-fns';
 import toast from 'react-hot-toast';
 
 // Mock dependencies
@@ -13,11 +12,11 @@ vi.mock('../contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: vi.fn(),
 }));
 
-// ToDosPage now reads the `useTodos` and `useHouseholdCore` slices. Both mocks
-// receive the same composed value object so existing per-test data still works.
-const setHouseholdMock = (value: any) => {
-  (useTodos as any).mockReturnValue(value);
-  (useHouseholdCore as any).mockReturnValue(value);
+// ToDosPage reads `useTodos` and `useHouseholdCore` slices. Both mocks receive the
+// same composed value object so existing per-test data still works.
+const setHouseholdMock = (value: Partial<TodosContextValue & HouseholdCoreContextValue>) => {
+  vi.mocked(useTodos).mockReturnValue(value as TodosContextValue);
+  vi.mocked(useHouseholdCore).mockReturnValue(value as HouseholdCoreContextValue);
 };
 
 vi.mock('../utils/exportUtils', () => ({
@@ -55,7 +54,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 describe('ToDosPage', () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = format(startOfToday(), 'yyyy-MM-dd');
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
   const mockMembers = [
@@ -63,13 +62,13 @@ describe('ToDosPage', () => {
       uid: 'user1',
       displayName: 'Alice Smith',
       photoURL: 'http://example.com/alice.jpg',
-      role: 'member',
+      role: 'member' as const,
       points: { daily: 0, weekly: 0, total: 0 }
     },
     {
       uid: 'user2',
       displayName: 'Bob Jones',
-      role: 'member',
+      role: 'member' as const,
       points: { daily: 0, weekly: 0, total: 0 }
     }
   ];
@@ -114,7 +113,7 @@ describe('ToDosPage', () => {
     setHouseholdMock({
       todos,
       members: members,
-      currentUser: members[0] || null,
+      currentUser: members[0] ?? null,
       addToDo: mockAddToDo,
       updateToDo: mockUpdateToDo,
       deleteToDo: mockDeleteToDo,
@@ -141,22 +140,22 @@ describe('ToDosPage', () => {
 
       expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
-      const [exportedData, filenamePrefix] = (generateCsvExport as any).mock.calls[0];
+      const [exportedData, filenamePrefix] = vi.mocked(generateCsvExport).mock.calls[0]!;
       expect(filenamePrefix).toBe('todo-list-active');
       expect(exportedData).toHaveLength(2);
 
-      const overdueTask = exportedData.find((d: any) => d.Task === 'Overdue Task');
+      const overdueTask = exportedData.find((d) => d['Task'] === 'Overdue Task');
       expect(overdueTask).toBeDefined();
-      expect(overdueTask['Due Date']).toBe(yesterday);
-      expect(overdueTask['Status']).toBe('Overdue');
+      expect(overdueTask!['Due Date']).toBe(yesterday);
+      expect(overdueTask!['Status']).toBe('Overdue');
     });
 
     it('excludes completed tasks from active export', () => {
       setup();
       const exportBtn = screen.getByLabelText('Export active tasks to CSV');
       fireEvent.click(exportBtn);
-      const [exportedData] = (generateCsvExport as any).mock.calls[0];
-      const completedTask = exportedData.find((d: any) => d.Task === 'Completed Task');
+      const [exportedData] = vi.mocked(generateCsvExport).mock.calls[0]!;
+      const completedTask = exportedData.find((d) => d['Task'] === 'Completed Task');
       expect(completedTask).toBeUndefined();
     });
   });

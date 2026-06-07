@@ -71,7 +71,7 @@ export const useActionQueue = () => {
     const date = parseISO(t.completeByDate);
     // Validate the parsed date before using it
     if (!isValid(date)) {
-      if (process.env.NODE_ENV !== 'production') {
+      if (import.meta.env.DEV) {
         console.warn('Invalid todo date detected; skipping todo item from action queue.');
       }
       return false;

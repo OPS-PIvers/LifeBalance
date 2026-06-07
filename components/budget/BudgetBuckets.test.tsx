@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetBuckets from './BudgetBuckets';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useHousehold, type HouseholdContextType } from '../../contexts/FirebaseHouseholdContext';
 
 // Mock the Household Context
 // BudgetBuckets reads useFinance. Back every hook with one shared mock fn so the
@@ -91,7 +90,7 @@ describe('BudgetBuckets', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as any).mockReturnValue({
+    vi.mocked(useHousehold).mockReturnValue({
       buckets: mockBuckets,
       accounts: [],
       safeToSpend: 1000,
@@ -102,7 +101,7 @@ describe('BudgetBuckets', () => {
       transactions: mockTransactions,
       currentPeriodId: 'p1',
       deleteTransaction: mockDeleteTransaction,
-    });
+    } as unknown as HouseholdContextType);
   });
 
   it('renders buckets correctly', () => {

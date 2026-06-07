@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FileText, Loader2, X, Sparkles } from 'lucide-react';
@@ -21,6 +21,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
 }) => {
   const [text, setText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
+  const titleId = useId();
 
   const handleParse = async () => {
     if (!text.trim()) {
@@ -44,7 +45,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" ariaLabelledBy={titleId}>
       <div className="flex flex-col h-full">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 z-10 shrink-0">
@@ -53,7 +54,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
                 <FileText size={20} />
             </div>
             <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">Import Recipe</h3>
+                <h3 id={titleId} className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">Import Recipe</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Paste text from any website</p>
             </div>
           </div>

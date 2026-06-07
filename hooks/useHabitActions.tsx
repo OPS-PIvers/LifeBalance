@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   collection,
   doc,
@@ -37,6 +37,14 @@ export const useHabitActions = (
   habits: Habit[],
   householdSettings: Household | null
 ) => {
+  // Keep mutable refs so callbacks can read the latest habits/settings without
+  // including them in dep arrays.  This prevents every habit write from
+  // recreating all callbacks and cascading re-renders to all consumers.
+  const habitsRef = useRef<Habit[]>(habits);
+  useEffect(() => { habitsRef.current = habits; }, [habits]);
+
+  const householdSettingsRef = useRef<Household | null>(householdSettings);
+  useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   const addHabit = useCallback(async (habit: Habit): Promise<string> => {
     if (!householdId || !currentUser) throw new Error("Not authenticated");
@@ -128,9 +136,9 @@ export const useHabitActions = (
   }, [householdId]);
 
   const toggleHabit = useCallback(async (id: string, direction: 'up' | 'down') => {
-    if (!householdId || !currentUser || !householdSettings) return;
+    if (!householdId || !currentUser || !householdSettingsRef.current) return;
 
-    const habit = habits.find(h => h.id === id);
+    const habit = habitsRef.current.find(h => h.id === id);
     if (!habit) return;
 
     // LAZY RESET CHECK
@@ -204,12 +212,12 @@ export const useHabitActions = (
         }
       );
     }
-  }, [householdId, currentUser, householdSettings, habits]);
+  }, [householdId, currentUser]);
 
   const resetHabit = useCallback(async (id: string) => {
-    if (!householdId || !householdSettings) return;
+    if (!householdId || !householdSettingsRef.current) return;
 
-    const habit = habits.find(h => h.id === id);
+    const habit = habitsRef.current.find(h => h.id === id);
     if (!habit) return;
 
     // Check if habit is stale (from yesterday)
@@ -256,12 +264,12 @@ export const useHabitActions = (
     await resetBatch.commit();
 
     toast('Reset', { icon: '↺' });
-  }, [householdId, householdSettings, habits]);
+  }, [householdId]);
 
   const addHabitSubmission = useCallback(async (habitId: string, count: number, timestamp?: string) => {
     if (!householdId || !currentUser) return;
 
-    const habit = habits.find(h => h.id === habitId);
+    const habit = habitsRef.current.find(h => h.id === habitId);
     if (!habit) {
       toast.error('Habit not found');
       return;
@@ -340,7 +348,7 @@ export const useHabitActions = (
       console.error('[addHabitSubmission] Failed:', error);
       toast.error('Failed to add submission');
     }
-  }, [householdId, currentUser, habits]);
+  }, [householdId, currentUser]);
 
   const getHabitSubmissions = useCallback(async (
     habitId: string,
@@ -364,9 +372,9 @@ export const useHabitActions = (
       }
 
       const snapshot = await getDocs(submissionsQuery);
-      return snapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id,
+      return snapshot.docs.map(d => ({
+        ...d.data(),
+        id: d.id,
       } as HabitSubmission));
     } catch (error) {
       console.error('[getHabitSubmissions] Failed:', error);
@@ -388,7 +396,7 @@ export const useHabitActions = (
       }
 
       const submission = submissionSnap.data() as HabitSubmission;
-      const habit = habits.find(h => h.id === habitId);
+      const habit = habitsRef.current.find(h => h.id === habitId);
       if (!habit) return;
 
       // Step 2: Check if this is the last submission for this date
@@ -454,7 +462,7 @@ export const useHabitActions = (
       console.error('[deleteHabitSubmission] Failed:', error);
       toast.error('Failed to delete submission');
     }
-  }, [householdId, habits]);
+  }, [householdId]);
 
   const updateHabitSubmission = useCallback(async (
     habitId: string,
@@ -474,7 +482,7 @@ export const useHabitActions = (
       }
 
       const originalSubmission = submissionSnap.data() as HabitSubmission;
-      const habit = habits.find(h => h.id === habitId);
+      const habit = habitsRef.current.find(h => h.id === habitId);
       if (!habit) return;
 
       // Step 2: Calculate new points if count changed
@@ -542,7 +550,7 @@ export const useHabitActions = (
       console.error('[updateHabitSubmission] Failed:', error);
       toast.error('Failed to update submission');
     }
-  }, [householdId, habits]);
+  }, [householdId]);
 
   return useMemo(() => ({
     addHabit,

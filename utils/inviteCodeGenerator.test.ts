@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateInviteCode } from './inviteCodeGenerator';
-import { getDoc } from 'firebase/firestore';
+import { getDoc, type DocumentSnapshot, type DocumentData } from 'firebase/firestore';
 
 // Mock Firebase dependencies
 vi.mock('firebase/firestore', () => ({
@@ -17,7 +16,7 @@ describe('generateInviteCode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default to no collision
-    vi.mocked(getDoc).mockResolvedValue({ exists: () => false } as any);
+    vi.mocked(getDoc).mockResolvedValue({ exists: () => false } as unknown as DocumentSnapshot<DocumentData>);
   });
 
   it('should generate a code of length 6', async () => {
@@ -43,8 +42,8 @@ describe('generateInviteCode', () => {
   it('should retry on collision', async () => {
     // First call returns exists=true (collision), second returns false (success)
     vi.mocked(getDoc)
-      .mockResolvedValueOnce({ exists: () => true } as any)
-      .mockResolvedValueOnce({ exists: () => false } as any);
+      .mockResolvedValueOnce({ exists: () => true } as unknown as DocumentSnapshot<DocumentData>)
+      .mockResolvedValueOnce({ exists: () => false } as unknown as DocumentSnapshot<DocumentData>);
 
     const code = await generateInviteCode();
     expect(code).toHaveLength(6);
@@ -53,7 +52,7 @@ describe('generateInviteCode', () => {
 
   it('should throw error after max attempts', async () => {
     // Always return exists=true (collision)
-    vi.mocked(getDoc).mockResolvedValue({ exists: () => true } as any);
+    vi.mocked(getDoc).mockResolvedValue({ exists: () => true } as unknown as DocumentSnapshot<DocumentData>);
 
     await expect(generateInviteCode()).rejects.toThrow('Failed to generate unique invite code');
     expect(getDoc).toHaveBeenCalledTimes(10);

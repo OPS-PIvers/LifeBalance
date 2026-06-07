@@ -10,6 +10,7 @@ import {
 } from '@/services/apiKeyService';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface ApiKeyManagerProps {
   householdId: string;
@@ -34,6 +35,10 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   });
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    { type: 'revoke' | 'delete'; keyId: string; keyName: string } | null
+  >(null);
+  const [isActionPending, setIsActionPending] = useState(false);
 
   if (!isAdmin) {
     return (
@@ -86,31 +91,32 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     toast.success('Endpoint URL copied');
   };
 
-  const handleRevokeKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Revoke "${keyName}"? This will immediately stop all shortcuts using this key.`)) {
-      return;
-    }
-
-    try {
-      await revokeApiKey(householdId, keyId);
-      toast.success('API key revoked');
-    } catch (error) {
-      console.error('Failed to revoke API key:', error);
-      toast.error('Failed to revoke API key');
-    }
+  const handleRevokeKey = (keyId: string, keyName: string) => {
+    setPendingAction({ type: 'revoke', keyId, keyName });
   };
 
-  const handleDeleteKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Permanently delete "${keyName}"? This cannot be undone.`)) {
-      return;
-    }
+  const handleDeleteKey = (keyId: string, keyName: string) => {
+    setPendingAction({ type: 'delete', keyId, keyName });
+  };
 
+  const handleConfirmAction = async () => {
+    if (!pendingAction) return;
+    const { type, keyId } = pendingAction;
+    setIsActionPending(true);
     try {
-      await deleteApiKey(householdId, keyId);
-      toast.success('API key deleted');
+      if (type === 'revoke') {
+        await revokeApiKey(householdId, keyId);
+        toast.success('API key revoked');
+      } else {
+        await deleteApiKey(householdId, keyId);
+        toast.success('API key deleted');
+      }
+      setPendingAction(null);
     } catch (error) {
-      console.error('Failed to delete API key:', error);
-      toast.error('Failed to delete API key');
+      console.error(`Failed to ${type} API key:`, error);
+      toast.error(`Failed to ${type} API key`);
+    } finally {
+      setIsActionPending(false);
     }
   };
 
@@ -361,6 +367,20 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
           and revoke keys if your device is lost or compromised.
         </p>
       </div>
+
+      <ConfirmDialog
+        isOpen={pendingAction !== null}
+        onClose={() => setPendingAction(null)}
+        onConfirm={handleConfirmAction}
+        isConfirming={isActionPending}
+        title={pendingAction?.type === 'delete' ? 'Delete API key' : 'Revoke API key'}
+        confirmLabel={pendingAction?.type === 'delete' ? 'Delete' : 'Revoke'}
+        message={
+          pendingAction?.type === 'delete'
+            ? `Permanently delete "${pendingAction?.keyName}"? This cannot be undone.`
+            : `Revoke "${pendingAction?.keyName}"? This will immediately stop all shortcuts using this key.`
+        }
+      />
     </div>
   );
 };

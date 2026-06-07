@@ -200,13 +200,14 @@ describe('RecurringBillsModal', () => {
   });
 
   it('deletes an item', async () => {
-    // Mock confirm
-    window.confirm = vi.fn().mockReturnValue(true);
-
     render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
 
     const deleteButtons = screen.getAllByTestId('trash-icon');
     fireEvent.click(deleteButtons[0]!.parentElement!);
+
+    // Confirm via the accessible ConfirmDialog (replaces window.confirm)
+    const confirmButton = await screen.findByRole('button', { name: 'Delete' });
+    fireEvent.click(confirmButton);
 
     await waitFor(() => {
       expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');
