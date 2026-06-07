@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
@@ -173,38 +173,26 @@ const ToDosPage: React.FC = () => {
     }
   ], [todos]);
 
-  // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
-  if (!currentUser) {
-    return (
-      <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
-          <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
-          <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
-        </div>
-      </div>
-    );
-  }
-
   // Open modal for adding
-  const openAddModal = () => {
+  const openAddModal = useCallback(() => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0].uid : '');
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
-  };
+  }, [currentUser, members]);
 
   // Open modal for editing
-  const openEditModal = (todo: ToDo) => {
+  const openEditModal = useCallback((todo: ToDo) => {
     setText(todo.text);
     setCompleteByDate(todo.completeByDate);
     setAssignedTo(todo.assignedTo);
     setEditingId(todo.id);
     setIsAddModalOpen(true);
-  };
+  }, []);
 
-  const handleDuplicate = async (todo: ToDo) => {
+  const handleDuplicate = useCallback(async (todo: ToDo) => {
       try {
           await addToDo({
               text: todo.text,
@@ -218,9 +206,9 @@ const ToDosPage: React.FC = () => {
           console.error('Failed to duplicate task:', error);
           toast.error('Failed to duplicate task');
       }
-  };
+  }, [addToDo]);
 
-  const handleUncomplete = async (id: string) => {
+  const handleUncomplete = useCallback(async (id: string) => {
       try {
           await updateToDo(id, {
               isCompleted: false,
@@ -231,9 +219,9 @@ const ToDosPage: React.FC = () => {
           console.error('Failed to restore task:', error);
           toast.error('Failed to restore task');
       }
-  };
+  }, [updateToDo]);
 
-  const handleMoveToTomorrow = async (todo: ToDo) => {
+  const handleMoveToTomorrow = useCallback(async (todo: ToDo) => {
       try {
           const tomorrow = addDays(startOfToday(), 1);
           await updateToDo(todo.id, {
@@ -244,7 +232,19 @@ const ToDosPage: React.FC = () => {
           console.error('Failed to move task:', error);
           toast.error('Failed to move task');
       }
-  };
+  }, [updateToDo]);
+
+  // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
+  if (!currentUser) {
+    return (
+      <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
+        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
+          <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
+          <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleExport = () => {
     try {
@@ -353,7 +353,7 @@ const ToDosPage: React.FC = () => {
 
   // --- Batch Mode Handlers ---
 
-  const toggleSelection = (id: string) => {
+  const toggleSelection = useCallback((id: string) => {
     setSelectedIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(id)) {
@@ -363,7 +363,7 @@ const ToDosPage: React.FC = () => {
       }
       return newSet;
     });
-  };
+  }, []);
 
   const handleSelectAll = () => {
     if (selectedIds.size === allActiveCount && allActiveCount > 0) {
@@ -463,7 +463,7 @@ const ToDosPage: React.FC = () => {
                     onClick={handleSelectAll}
                     className="text-sm text-brand-600 dark:text-brand-400 font-medium flex items-center gap-1 mt-1 hover:text-brand-800 dark:hover:text-brand-200"
                 >
-                  <CheckSquare size={14} className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
+                  <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
                   {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect All' : 'Select All'}
                 </button>
               </div>
@@ -766,7 +766,7 @@ const ToDosPage: React.FC = () => {
                     }`}
                   >
                     {member.photoURL ? (
-                      <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                      <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
                     ) : (
                       <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-200">
                         {member.displayName?.charAt(0) ?? 'U'}
@@ -895,7 +895,7 @@ const ToDosPage: React.FC = () => {
 };
 
 // Sub-component for sections
-const Section: React.FC<{
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }: {
   title: string;
   subtitle: string;
   items: ToDo[];
@@ -910,7 +910,7 @@ const Section: React.FC<{
   isSelectionMode: boolean;
   selectedIds: Set<string>;
   onToggleSelection: (id: string) => void;
-}> = ({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }) => {
+}) {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -947,10 +947,25 @@ const Section: React.FC<{
         {items.map(item => {
            const assignee = memberMap.get(item.assignedTo);
            const isSelected = selectedIds.has(item.id);
+           // Parse the due date once per item to avoid repeated parseISO calls in render
+           const dueDate = parseISO(item.completeByDate);
+           const isOverdue = isBefore(dueDate, startOfToday());
 
            const cardInner = (
              <div
                 onClick={() => isSelectionMode && onToggleSelection(item.id)}
+                {...(isSelectionMode ? {
+                  role: 'button' as const,
+                  tabIndex: 0,
+                  'aria-pressed': isSelected,
+                  'aria-label': `${isSelected ? 'Deselect' : 'Select'} task: ${item.text}`,
+                  onKeyDown: (e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onToggleSelection(item.id);
+                    }
+                  }
+                } : {})}
                 className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 dark:ring-white/5 transition-all active:scale-[0.99] ${
                   isSelectionMode
                     ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200 dark:bg-brand-700/30 dark:ring-brand-500/40' : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'}`
@@ -961,7 +976,7 @@ const Section: React.FC<{
                  {/* Complete Checkbox or Selection Box */}
                  {isSelectionMode ? (
                    <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
-                      {isSelected ? <CheckSquare size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+                      {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
                    </div>
                  ) : (
                    <button
@@ -991,17 +1006,17 @@ const Section: React.FC<{
                    <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'}`}>{item.text}</p>
 
                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                     {isBefore(parseISO(item.completeByDate), startOfToday()) ? (
+                     {isOverdue ? (
                        <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300">
                           <AlertCircle size={10} />
-                          Overdue ({format(parseISO(item.completeByDate), 'MMM d')})
+                          Overdue ({format(dueDate, 'MMM d')})
                        </div>
                      ) : (
                        <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium ${badgeStyles[color]}`}>
                           <Clock size={10} />
-                          {isToday(parseISO(item.completeByDate)) ? 'Today' :
-                           isTomorrow(parseISO(item.completeByDate)) ? 'Tomorrow' :
-                           format(parseISO(item.completeByDate), 'MMM d')}
+                          {isToday(dueDate) ? 'Today' :
+                           isTomorrow(dueDate) ? 'Tomorrow' :
+                           format(dueDate, 'MMM d')}
                        </div>
                      )}
 
@@ -1076,7 +1091,7 @@ const Section: React.FC<{
                          variant="ghost-brand"
                          size="icon"
                          onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         aria-label="More options"
+                         aria-label={`More options for: ${item.text}`}
                        >
                          <MoreVertical size={20} />
                        </Button>
@@ -1110,7 +1125,7 @@ const Section: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 // Swipe-left-to-delete wrapper for to-do rows. Falls back to a plain container
 // (relying on the row's existing delete buttons) when the user prefers reduced motion.
@@ -1158,7 +1173,7 @@ const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNo
 };
 
 // Sub-component for completed items
-const CompletedSection: React.FC<{
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, members }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
@@ -1166,7 +1181,7 @@ const CompletedSection: React.FC<{
   onDuplicate: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
-}> = ({ title, items, onUncomplete, onDelete, onDuplicate, onMore, members }) => {
+}) {
     const memberMap = useMemo(() => {
         const map = new Map<string, HouseholdMember>();
         members.forEach(member => map.set(member.uid, member));
@@ -1196,6 +1211,7 @@ const CompletedSection: React.FC<{
                                 onClick={() => { haptic('light'); onUncomplete(item.id); }}
                                 className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                                 title="Mark as incomplete"
+                                aria-label={`Mark as incomplete: ${item.text}`}
                             >
                                 <RotateCcw size={14} />
                             </button>
@@ -1226,6 +1242,7 @@ const CompletedSection: React.FC<{
                                     onClick={() => onDuplicate(item)}
                                     className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:text-slate-500 dark:hover:text-brand-300 dark:hover:bg-slate-700/50"
                                     title="Duplicate task"
+                                    aria-label={`Duplicate task: ${item.text}`}
                                 >
                                     <Copy size={14} />
                                 </Button>
@@ -1238,6 +1255,7 @@ const CompletedSection: React.FC<{
                                         toast.success('Task deleted');
                                     })}
                                     title="Delete forever"
+                                    aria-label={`Delete forever: ${item.text}`}
                                 >
                                     <Trash2 size={14} />
                                 </Button>
@@ -1249,7 +1267,7 @@ const CompletedSection: React.FC<{
                                  size="icon"
                                  onClick={(e) => { e.stopPropagation(); onMore(item); }}
                                  className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 dark:text-slate-500 dark:hover:text-slate-300 dark:active:bg-slate-700/50"
-                                 aria-label="More options"
+                                 aria-label={`More options for: ${item.text}`}
                                >
                                  <MoreVertical size={20} />
                                </Button>
@@ -1260,6 +1278,6 @@ const CompletedSection: React.FC<{
             </div>
         </div>
     );
-};
+});
 
 export default ToDosPage;
