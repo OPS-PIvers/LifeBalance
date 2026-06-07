@@ -113,43 +113,11 @@ export const calculateSafeToSpendFromExpanded = (
   allExpandedItems: CalendarItem[],
   buckets: BudgetBucket[],
   currentPeriodId: string = ''
-): number => {
-  // 1. Available Checking Balance (Assets)
-  // STRICT: Only Checking. No Savings, No Credit.
-  const checkingBalance = accounts
-    .filter(a => a.type === 'checking')
-    .reduce((sum, a) => sum + a.balance, 0);
-
-  // 2. Determine the bill date range (Paycheck A to Paycheck B)
-  // If no paycheck tracking, return full checking balance
-  if (!currentPeriodId) {
-    return checkingBalance;
-  }
-
-  const paycheckA = parseISO(currentPeriodId); // lastPaycheckDate
-
-  // Find next paycheck (Paycheck B) from the already expanded list
-  const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
-
-  let rangeEndDate: Date;
-  if (paycheckBDate) {
-    rangeEndDate = parseISO(paycheckBDate);
-  } else {
-    // Fallback: end of current month if no next paycheck found
-    rangeEndDate = endOfMonth(paycheckA);
-  }
-
-  // 3. Calculate unpaid bills in the range (AFTER paycheck A, up to and including range end)
-  const unpaidBills = calculateUnpaidBillsInRange(
-    allExpandedItems,
-    paycheckA,
-    rangeEndDate,
-    buckets
-  );
-
-  // 4. Final calculation: Checking - Bills (NO bucket liabilities)
-  return checkingBalance - unpaidBills;
-};
+): number =>
+  // Delegate to the breakdown so the number and its itemization can never
+  // diverge — there is exactly one place the formula lives.
+  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId)
+    .safeToSpend;
 
 /**
  * Itemized breakdown behind the safe-to-spend number, for display in the UI.
@@ -167,7 +135,8 @@ export interface SafeToSpendBreakdown {
 
 /**
  * Breakdown variant using pre-expanded calendar items (memo-friendly).
- * Mirrors calculateSafeToSpendFromExpanded but returns the component parts.
+ * This is the single source of truth for the safe-to-spend formula:
+ *   safeToSpend = checkingBalance - unpaidBills (this paycheck → next).
  */
 export const calculateSafeToSpendBreakdownFromExpanded = (
   accounts: Account[],
@@ -175,17 +144,24 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   buckets: BudgetBucket[],
   currentPeriodId: string = ''
 ): SafeToSpendBreakdown => {
+  // 1. Available Checking Balance (Assets)
+  // STRICT: Only Checking. No Savings, No Credit.
   const checkingBalance = accounts
     .filter(a => a.type === 'checking')
     .reduce((sum, a) => sum + a.balance, 0);
 
+  // 2. Without paycheck tracking, the full checking balance is available.
   if (!currentPeriodId) {
     return { checkingBalance, unpaidBills: 0, safeToSpend: checkingBalance, nextPaycheckDate: null };
   }
 
+  // 3. Determine the bill date range (Paycheck A to Paycheck B)
   const paycheckA = parseISO(currentPeriodId);
   const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
+  // Fallback: end of current month if no next paycheck found.
   const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
+
+  // 4. Unpaid bills in range (AFTER paycheck A, up to and including range end).
   const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate, buckets);
 
   return {

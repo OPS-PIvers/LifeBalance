@@ -1,26 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-
-/**
- * Selector matching elements that can receive keyboard focus.
- * Used by the focus trap to enumerate tabbable elements inside the dialog.
- */
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'textarea:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
-
-const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
-  Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    // getClientRects() works for fixed-position elements where offsetParent is
-    // always null; it returns no rects only when the element is display:none.
-    (el) => el.getClientRects().length > 0 || el === document.activeElement
-  );
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -91,64 +72,8 @@ export const Modal: React.FC<ModalProps> = ({
   ariaLabelledBy,
   ariaDescribedBy,
 }) => {
-  const contentRef = React.useRef<HTMLDivElement>(null);
-
-  // Focus trap + focus restoration.
-  // - Stores the element that was focused before opening.
-  // - Moves focus into the dialog on open (first focusable, else the container).
-  // - Restores focus to the previously-focused element on close/unmount.
-  // Note: setState is never called here, so react-hooks/set-state-in-effect is satisfied.
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    const container = contentRef.current;
-
-    if (container) {
-      const focusables = getFocusableElements(container);
-      (focusables[0] ?? container).focus();
-    }
-
-    return () => {
-      previouslyFocused?.focus?.();
-    };
-  }, [isOpen]);
-
-  // Trap Tab / Shift+Tab inside the dialog.
-  React.useEffect(() => {
-    if (!isOpen) return;
-
-    const handleTab = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const container = contentRef.current;
-      if (!container) return;
-
-      const focusables = getFocusableElements(container);
-      if (focusables.length === 0) {
-        // Nothing focusable inside; keep focus on the container.
-        e.preventDefault();
-        container.focus();
-        return;
-      }
-
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      const active = document.activeElement;
-
-      if (e.shiftKey) {
-        if (active === first || !container.contains(active)) {
-          e.preventDefault();
-          last.focus();
-        }
-      } else if (active === last || !container.contains(active)) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleTab);
-    return () => document.removeEventListener('keydown', handleTab);
-  }, [isOpen]);
+  // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
+  const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
 
   // Handle Escape key
   React.useEffect(() => {

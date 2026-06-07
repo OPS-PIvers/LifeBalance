@@ -15,7 +15,7 @@ const currency = (n: number) =>
  * (Checking − Unpaid bills) so the number is trustworthy, not magic.
  */
 export const SafeToSpendHero: React.FC = () => {
-  const { accounts, buckets, calendarItems, currentPeriodId, safeToSpend } = useHousehold();
+  const { accounts, buckets, calendarItems, currentPeriodId } = useHousehold();
   const [expanded, setExpanded] = useState(false);
 
   const breakdown = useMemo(
@@ -23,6 +23,9 @@ export const SafeToSpendHero: React.FC = () => {
     [accounts, calendarItems, buckets, currentPeriodId]
   );
 
+  // Headline and itemization both come from `breakdown`, so the big number can
+  // never contradict the rows beneath it.
+  const safeToSpend = breakdown.safeToSpend;
   const isPositive = safeToSpend >= 0;
 
   return (
