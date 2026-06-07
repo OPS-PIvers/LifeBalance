@@ -5,6 +5,7 @@ import {
   getTotalPendingSpending,
 } from './bucketSpentCalculator';
 import { BudgetBucket, Transaction } from '@/types/schema';
+import { getTransactionWindowStart } from './listenerWindows';
 
 const bucket = (id: string, name: string): BudgetBucket =>
   ({ id, name } as BudgetBucket);
@@ -75,6 +76,73 @@ describe('calculateBucketSpent', () => {
 
     const map = calculateBucketSpent(buckets, [inPeriod, outOfPeriod], '2026-06-01');
     expect(map.get('b1')!.verified).toBe(10);
+  });
+});
+
+// Regression coverage for the listener-windowing work: bucketSpent must stay
+// exact even though the live transactions listener only loads a recent window.
+describe('calculateBucketSpent under transaction windowing', () => {
+  const txOn = (
+    category: string,
+    amount: number,
+    date: string,
+    payPeriodId: string,
+  ): Transaction =>
+    ({ category, amount, status: 'verified', date, payPeriodId } as Transaction);
+
+  it('matches the full-history result because the window always covers the current period', () => {
+    const now = new Date('2026-06-15T12:00:00');
+    const buckets = [bucket('b1', 'Groceries'), bucket('b2', 'Gas')];
+    const currentPeriodId = '2026-06-01';
+
+    // Current-period spend (inside any sane window) ...
+    const current = [
+      txOn('Groceries', 30, '2026-06-02', currentPeriodId),
+      txOn('Groceries', 12.5, '2026-06-10', currentPeriodId),
+      txOn('Gas', 45, '2026-06-05', currentPeriodId),
+    ];
+    // ... plus lots of old spend in earlier periods, far outside the window.
+    const historical = [
+      txOn('Groceries', 100, '2026-01-15', '2026-01-01'),
+      txOn('Gas', 200, '2025-11-15', '2025-11-01'),
+      txOn('Groceries', 75, '2024-08-15', '2024-08-01'),
+    ];
+    const allTransactions = [...current, ...historical];
+
+    // Apply the same windowing the live listener would.
+    const windowStart = getTransactionWindowStart(currentPeriodId, now);
+    expect(windowStart).not.toBeNull();
+    const windowed = allTransactions.filter(t => t.date >= windowStart!);
+
+    // The window drops the old rows but keeps the entire current period.
+    expect(windowed).toHaveLength(current.length);
+
+    const fromWindow = calculateBucketSpent(buckets, windowed, currentPeriodId);
+    const fromFull = calculateBucketSpent(buckets, allTransactions, currentPeriodId);
+
+    expect(fromWindow.get('b1')).toEqual(fromFull.get('b1'));
+    expect(fromWindow.get('b2')).toEqual(fromFull.get('b2'));
+    expect(fromWindow.get('b1')!.verified).toBe(42.5);
+    expect(fromWindow.get('b2')!.verified).toBe(45);
+  });
+
+  it('covers the whole period even when the current period started more than 90 days ago', () => {
+    const now = new Date('2026-06-15T12:00:00');
+    const buckets = [bucket('b1', 'Groceries')];
+    const oldPeriodId = '2026-01-01'; // ~165 days before "now"
+
+    const periodTxns = [
+      txOn('Groceries', 20, '2026-01-05', oldPeriodId),
+      txOn('Groceries', 30, '2026-03-20', oldPeriodId),
+    ];
+
+    const windowStart = getTransactionWindowStart(oldPeriodId, now);
+    // Window reaches back to the period start, so no period rows are dropped.
+    expect(windowStart).toBe(oldPeriodId);
+    const windowed = periodTxns.filter(t => t.date >= windowStart!);
+
+    const map = calculateBucketSpent(buckets, windowed, oldPeriodId);
+    expect(map.get('b1')!.verified).toBe(50);
   });
 });
 

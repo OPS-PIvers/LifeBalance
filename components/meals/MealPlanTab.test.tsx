@@ -16,6 +16,7 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     addMealPlanItem: vi.fn(),
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
+    ensureMealPlanWeek: vi.fn(),
   }),
   useHouseholdCore: () => ({
     householdId: 'test-household',

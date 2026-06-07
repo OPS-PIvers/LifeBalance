@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { sumMoney } from '../../utils/money';
@@ -65,8 +65,16 @@ const CHART_STYLES = {
 } as const;
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { habits, transactions, currentPeriodId, buckets } = useHousehold();
+  const { habits, transactions, currentPeriodId, buckets, loadAllTransactions } = useHousehold();
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('pulse');
+
+  // The wallet charts span up to 6 months — load the full transaction history
+  // (beyond the live 90-day window) when the modal opens so trends aren't truncated.
+  useEffect(() => {
+    if (isOpen) {
+      loadAllTransactions();
+    }
+  }, [isOpen, loadAllTransactions]);
 
   // ==========================================
   // VIEW 1: PULSE (OVERVIEW)

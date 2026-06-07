@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { format, parseISO, isValid } from 'date-fns';
@@ -10,7 +10,15 @@ interface InsightsArchiveModalProps {
 }
 
 const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onClose }) => {
-  const { insightsHistory } = useHousehold();
+  const { insightsHistory, loadAllInsights } = useHousehold();
+
+  // The live listener only keeps the most recent insights; this is the archive,
+  // so pull the full history when it opens.
+  useEffect(() => {
+    if (isOpen) {
+      loadAllInsights();
+    }
+  }, [isOpen, loadAllInsights]);
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="Insights Archive">

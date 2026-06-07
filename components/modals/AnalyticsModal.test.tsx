@@ -27,7 +27,8 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
     buckets: [
       { id: 'b1', limit: 1000, name: 'Groceries' }
     ],
-    currentPeriodId: '2023-01-01'
+    currentPeriodId: '2023-01-01',
+    loadAllTransactions: vi.fn().mockResolvedValue([]),
   }),
 }));
 

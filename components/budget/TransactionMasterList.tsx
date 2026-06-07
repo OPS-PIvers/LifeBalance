@@ -98,7 +98,17 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useFinance();
+  const {
+    transactions,
+    deleteTransaction,
+    updateTransaction,
+    addTransaction,
+    hasMoreTransactions,
+    isLoadingOlderTransactions,
+    loadOlderTransactions,
+    loadAllTransactions,
+    transactionWindowStart,
+  } = useFinance();
   const { householdId } = useHouseholdCore();
   const { stores } = useMeals();
 
@@ -561,6 +571,23 @@ const TransactionMasterList: React.FC = () => {
         </div>
       )}
 
+      {/* Windowing notice: filters/search only apply to the loaded window */}
+      {transactionWindowStart && hasMoreTransactions && (searchTerm.trim() !== '' || activeFilterCount > 0) && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200/60 dark:ring-amber-500/20 text-sm text-amber-800 dark:text-amber-200">
+          <span>Showing recent transactions only — older ones aren’t searched yet.</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadAllTransactions}
+            disabled={isLoadingOlderTransactions}
+            leftIcon={isLoadingOlderTransactions ? <Loader2 size={14} className="animate-spin" /> : undefined}
+            className="shrink-0"
+          >
+            Search all history
+          </Button>
+        </div>
+      )}
+
       {/* Transaction List */}
       <div className="space-y-2 pb-24">
         {filteredTransactions.length === 0 ? (
@@ -595,6 +622,20 @@ const TransactionMasterList: React.FC = () => {
               onToggleSelection={toggleSelection}
             />
           ))
+        )}
+
+        {/* Load older (cursor pagination beyond the live 90-day window) */}
+        {hasMoreTransactions && filteredTransactions.length > 0 && (
+          <div className="pt-2 flex justify-center">
+            <Button
+              variant="secondary"
+              onClick={loadOlderTransactions}
+              disabled={isLoadingOlderTransactions}
+              leftIcon={isLoadingOlderTransactions ? <Loader2 size={16} className="animate-spin" /> : undefined}
+            >
+              {isLoadingOlderTransactions ? 'Loading…' : 'Load older transactions'}
+            </Button>
+          </div>
         )}
       </div>
 

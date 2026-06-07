@@ -20,6 +20,10 @@ import {
   setDoc,
   arrayUnion,
   arrayRemove,
+  limit,
+  startAfter,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,10 +69,55 @@ import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
+import {
+  BUCKET_HISTORY_LIMIT,
+  INSIGHTS_LIMIT,
+  TRANSACTION_PAGE_SIZE,
+  TODO_COMPLETED_PAGE_SIZE,
+  getTransactionWindowStart,
+  getMealPlanWindow,
+  getWeekRange,
+  getCompletedTodoWindowStart,
+} from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
+
+/**
+ * Merge two lists of documents by `id`, keeping `primary` entries when an id
+ * appears in both. Used to combine a live (windowed) listener result with
+ * on-demand "load older" pages without ever showing duplicates.
+ */
+function mergeById<T extends { id: string }>(primary: T[], secondary: T[]): T[] {
+  if (secondary.length === 0) return primary;
+  if (primary.length === 0) return secondary;
+  const seen = new Set(primary.map(p => p.id));
+  return [...primary, ...secondary.filter(s => !seen.has(s.id))];
+}
+
+/** Map a transaction document, normalising the `createdAt` Timestamp to an ISO string. */
+function mapTransactionDoc(d: QueryDocumentSnapshot<DocumentData>): Transaction {
+  const data = d.data();
+  return {
+    ...data,
+    id: d.id,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+  } as Transaction;
+}
+
+/** Map a to-do document, normalising `createdAt`/`completedAt` Timestamps to ISO strings. */
+function mapTodoDoc(d: QueryDocumentSnapshot<DocumentData>): ToDo {
+  const data = d.data();
+  return {
+    ...data,
+    id: d.id,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
+    completedAt: data.completedAt
+      ? (data.completedAt instanceof Timestamp ? data.completedAt.toDate().toISOString() : data.completedAt)
+      : undefined,
+  } as ToDo;
+}
 
 export interface HouseholdContextType {
   // State
@@ -107,6 +156,39 @@ export interface HouseholdContextType {
   todos: ToDo[];
   groceryCatalog: GroceryCatalogItem[];
   bucketHistory: BucketPeriodSnapshot[];
+
+  // --- Listener windowing / pagination ---
+  // The high-cardinality collections below are windowed on cold load (see
+  // utils/listenerWindows.ts) and expose "load older" helpers for history
+  // beyond the live window.
+  /** Inclusive lower bound (yyyy-MM-dd) of the live transactions window, or null when every transaction is loaded (no period tracking). */
+  transactionWindowStart: string | null;
+  /** True while older transactions are being fetched. */
+  isLoadingOlderTransactions: boolean;
+  /** True when older transactions may exist beyond the loaded set. */
+  hasMoreTransactions: boolean;
+  /** Fetch the next page of older transactions (cursor pagination). */
+  loadOlderTransactions: () => Promise<void>;
+  /** Fetch every remaining older transaction (e.g. before analytics or export). Resolves with the complete, merged transaction list. */
+  loadAllTransactions: () => Promise<Transaction[]>;
+  /** True while the full bucket history is being fetched. */
+  isLoadingOlderBucketHistory: boolean;
+  /** True when older bucket-history snapshots exist beyond the live window. */
+  hasMoreBucketHistory: boolean;
+  /** Fetch every bucket-history snapshot beyond the live window. */
+  loadAllBucketHistory: () => Promise<void>;
+  /** True when older insights exist beyond the live window. */
+  hasMoreInsights: boolean;
+  /** Fetch every insight beyond the live window. */
+  loadAllInsights: () => Promise<void>;
+  /** True while older completed to-dos are being fetched. */
+  isLoadingOlderTodos: boolean;
+  /** True when older completed to-dos exist beyond the live window. */
+  hasMoreCompletedTodos: boolean;
+  /** Fetch the next page of older completed to-dos. */
+  loadOlderCompletedTodos: () => Promise<void>;
+  /** Ensure the meal-plan entries for the week containing `date` are loaded. */
+  ensureMealPlanWeek: (date: Date) => Promise<void>;
 
   // Natural Language Processing
   pendingItemsCount: number;
@@ -241,6 +323,9 @@ export interface HouseholdContextType {
 export type FinanceContextValue = Pick<HouseholdContextType,
   | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'calendarItems' | 'transactions'
   | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
+  | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
+  | 'loadOlderTransactions' | 'loadAllTransactions'
+  | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
   | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'deleteAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
@@ -262,7 +347,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
 
 export type MealsContextValue = Pick<HouseholdContextType,
   | 'meals' | 'shoppingList' | 'mealPlan' | 'groceryCatalog'
-  | 'stores' | 'groceryCategories' | 'quickStockLists'
+  | 'stores' | 'groceryCategories' | 'quickStockLists' | 'ensureMealPlanWeek'
   | 'addMeal' | 'updateMeal' | 'deleteMeal'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
@@ -274,11 +359,13 @@ export type MealsContextValue = Pick<HouseholdContextType,
 
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
+  | 'isLoadingOlderTodos' | 'hasMoreCompletedTodos' | 'loadOlderCompletedTodos'
 >;
 
 export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'isLoading' | 'currentUser' | 'members'
   | 'insight' | 'insightsHistory' | 'isGeneratingInsight'
+  | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember'
@@ -394,7 +481,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     userRef.current = user;
   }, [user]);
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // Transactions are windowed: `recentTransactions` is the live (last-90-days)
+  // listener result; `olderTransactions` accumulates on-demand "load older"
+  // pages. The exposed `transactions` array is the de-duplicated merge.
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  // Mirror of the live window so loadAllTransactions() can return the complete
+  // merged list without depending on (and re-creating on) every transaction change.
+  const recentTransactionsRef = useRef<Transaction[]>([]);
+  useEffect(() => { recentTransactionsRef.current = recentTransactions; }, [recentTransactions]);
+  const [olderTransactions, setOlderTransactions] = useState<Transaction[]>([]);
+  const transactions = useMemo(
+    () => mergeById(recentTransactions, olderTransactions),
+    [recentTransactions, olderTransactions]
+  );
+  const [transactionWindowStart, setTransactionWindowStart] = useState<string | null>(null);
+  const [isLoadingOlderTransactions, setIsLoadingOlderTransactions] = useState(false);
+  const [hasMoreTransactions, setHasMoreTransactions] = useState(false);
+  // Cursor + window bound for the transactions "load older" pagination. Refs so
+  // the load callbacks stay stable and always read the latest values.
+  const txOlderCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const txWindowStartRef = useRef<string | null>(null);
+
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -402,22 +509,59 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
   const [insight, setInsight] = useState("Tap 'Get Insight' to analyze your habits and spending.");
-  const [insightsHistory, setInsightsHistory] = useState<Insight[]>([]);
+  // Insights: live window (most-recent N) merged with on-demand older history.
+  const [insightsWindow, setInsightsWindow] = useState<Insight[]>([]);
+  const [insightsOlder, setInsightsOlder] = useState<Insight[]>([]);
+  const insightsHistory = useMemo(
+    () => mergeById(insightsWindow, insightsOlder),
+    [insightsWindow, insightsOlder]
+  );
+  const [hasMoreInsights, setHasMoreInsights] = useState(false);
+  const insightsLoadedAllRef = useRef(false);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [yearlyGoals, setYearlyGoals] = useState<YearlyGoal[]>([]);
   const [freezeBank, setFreezeBank] = useState<FreezeBank | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
-  const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
-  const [todos, setTodos] = useState<ToDo[]>([]);
+  // Meal plan: live window (current week ± 1) merged with weeks loaded on demand
+  // as the user navigates the calendar.
+  const [mealPlanWindow, setMealPlanWindow] = useState<MealPlanItem[]>([]);
+  const [mealPlanExtra, setMealPlanExtra] = useState<MealPlanItem[]>([]);
+  const mealPlan = useMemo(
+    () => mergeById(mealPlanWindow, mealPlanExtra),
+    [mealPlanWindow, mealPlanExtra]
+  );
+  const loadedMealPlanWeeksRef = useRef<Set<string>>(new Set());
+  // To-dos: all active items are live; completed items are windowed to the last
+  // 30 days with older completions loadable on demand.
+  const [activeTodos, setActiveTodos] = useState<ToDo[]>([]);
+  const [completedTodos, setCompletedTodos] = useState<ToDo[]>([]);
+  const [olderCompletedTodos, setOlderCompletedTodos] = useState<ToDo[]>([]);
+  const todos = useMemo(
+    () => mergeById(mergeById(activeTodos, completedTodos), olderCompletedTodos),
+    [activeTodos, completedTodos, olderCompletedTodos]
+  );
+  const [isLoadingOlderTodos, setIsLoadingOlderTodos] = useState(false);
+  const [hasMoreCompletedTodos, setHasMoreCompletedTodos] = useState(false);
+  const completedTodoCursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const completedTodoWindowStartRef = useRef<Date | null>(null);
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>([]);
-  const [bucketHistory, setBucketHistory] = useState<BucketPeriodSnapshot[]>([]);
+  // Bucket history: live window (most-recent N periods) merged with older history.
+  const [bucketHistoryWindow, setBucketHistoryWindow] = useState<BucketPeriodSnapshot[]>([]);
+  const [bucketHistoryOlder, setBucketHistoryOlder] = useState<BucketPeriodSnapshot[]>([]);
+  const bucketHistory = useMemo(
+    () => mergeById(bucketHistoryWindow, bucketHistoryOlder),
+    [bucketHistoryWindow, bucketHistoryOlder]
+  );
+  const [isLoadingOlderBucketHistory, setIsLoadingOlderBucketHistory] = useState(false);
+  const [hasMoreBucketHistory, setHasMoreBucketHistory] = useState(false);
+  const bucketHistoryLoadedAllRef = useRef(false);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
-  // Tracks which household's first snapshot has resolved. Deriving isLoading from
-  // this (rather than a boolean flag) means switching households automatically
-  // re-shows skeletons until the new household loads — with no setState in an
-  // effect body (which the lint rules forbid).
+  // Tracks which household's first snapshot has resolved; isLoading is derived
+  // from it so switching households automatically re-shows skeletons until the
+  // new household loads. It is re-armed to null in the listener effect's reset
+  // block (alongside the rest of the household state) on every household change.
   const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
 
   // Pay Period Tracking State
@@ -470,6 +614,59 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Real-time listeners
   useEffect(() => {
+    // SECURITY/PRIVACY: clear every household-scoped slice up front — BEFORE the
+    // early return — so switching households or logging out can never leak a
+    // previous household's data. The provider is mounted at the app root and so
+    // stays alive across auth changes, meaning state would otherwise persist in
+    // memory (and could flash during a transition or be read by the next user
+    // who signs in without a full reload).
+    setAccounts([]);
+    setBuckets([]);
+    setRecentTransactions([]);
+    setOlderTransactions([]);
+    recentTransactionsRef.current = [];
+    setTransactionWindowStart(null);
+    setHasMoreTransactions(false);
+    setIsLoadingOlderTransactions(false);
+    txOlderCursorRef.current = null;
+    txWindowStartRef.current = null;
+    setCalendarItems([]);
+    setHabits([]);
+    setChallenges([]);
+    setRewards([]);
+    setMembers([]);
+    setCurrentUser(null);
+    setHouseholdSettings(null);
+    setFreezeBank(null);
+    setYearlyGoals([]);
+    setMeals([]);
+    setShoppingList([]);
+    setGroceryCatalog([]);
+    setMealPlanWindow([]);
+    setMealPlanExtra([]);
+    loadedMealPlanWeeksRef.current = new Set();
+    mealPlanWindowRef.current = getMealPlanWindow(new Date());
+    setActiveTodos([]);
+    setCompletedTodos([]);
+    setOlderCompletedTodos([]);
+    completedTodoCursorRef.current = null;
+    completedTodoWindowStartRef.current = null;
+    setHasMoreCompletedTodos(true);
+    setIsLoadingOlderTodos(false);
+    setBucketHistoryWindow([]);
+    setBucketHistoryOlder([]);
+    bucketHistoryLoadedAllRef.current = false;
+    setHasMoreBucketHistory(false);
+    setIsLoadingOlderBucketHistory(false);
+    setInsightsWindow([]);
+    setInsightsOlder([]);
+    insightsLoadedAllRef.current = false;
+    setHasMoreInsights(false);
+    setApiKeys([]);
+    setPendingItemsCount(0);
+    // Re-arms the isLoading skeleton until the new household's first snapshot lands.
+    setLoadedHouseholdId(null);
+
     if (!householdId) return;
 
     const unsubscribers: (() => void)[] = [];
@@ -499,33 +696,29 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Bucket History listener (Ordered by most recent period first)
-    // NOTE: This might require an index on periodStartDate desc
-    const historyQuery = query(collection(db, `households/${householdId}/bucketHistory`), orderBy('periodStartDate', 'desc'));
+    // Bucket History listener — live window of the most recent N periods.
+    // Older snapshots are fetched on demand via loadAllBucketHistory().
+    const historyQuery = query(
+      collection(db, `households/${householdId}/bucketHistory`),
+      orderBy('periodStartDate', 'desc'),
+      limit(BUCKET_HISTORY_LIMIT)
+    );
     unsubscribers.push(
       onSnapshot(historyQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot));
-        setBucketHistory(data);
+        setBucketHistoryWindow(data);
+        // A full page means there are (probably) older periods to load. Don't
+        // flip this back on once the caller has already loaded everything.
+        if (!bucketHistoryLoadedAllRef.current) {
+          setHasMoreBucketHistory(snapshot.size >= BUCKET_HISTORY_LIMIT);
+        }
       }, (error) => {
         console.error('Error listening to bucketHistory:', error);
       })
     );
 
-    // Transactions listener
-    const txQuery = query(collection(db, `households/${householdId}/transactions`));
-    unsubscribers.push(
-      onSnapshot(txQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            ...d,
-            id: doc.id,
-            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
-          } as Transaction;
-        });
-        setTransactions(data);
-      })
-    );
+    // (Transactions are handled by their own effect below so the window can
+    // track the current pay period without re-subscribing every other listener.)
 
     // Calendar listener
     const calQuery = query(collection(db, `households/${householdId}/calendarItems`));
@@ -709,31 +902,50 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Meal Plan listener
-    const mealPlanQuery = query(collection(db, `households/${householdId}/mealPlan`));
+    // Meal Plan listener — live window of the current week ± 1. Weeks the user
+    // navigates to outside this range are fetched on demand via ensureMealPlanWeek().
+    const mealPlanRange = mealPlanWindowRef.current;
+    const mealPlanQuery = query(
+      collection(db, `households/${householdId}/mealPlan`),
+      where('date', '>=', mealPlanRange.start),
+      where('date', '<=', mealPlanRange.end)
+    );
     unsubscribers.push(
       onSnapshot(mealPlanQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
-        setMealPlan(data);
+        setMealPlanWindow(data);
+      }, (error) => {
+        console.error('Error listening to mealPlan:', error);
       })
     );
 
-    // To-Do listener
-    const todosQuery = query(collection(db, `households/${householdId}/todos`));
+    // To-Do listeners — all active items are live; completed items are limited to
+    // the last 30 days (older completions load on demand via loadOlderCompletedTodos()).
+    const activeTodosQuery = query(
+      collection(db, `households/${householdId}/todos`),
+      where('isCompleted', '==', false)
+    );
     unsubscribers.push(
-      onSnapshot(todosQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            ...d,
-            id: doc.id,
-            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
-            completedAt: d.completedAt
-              ? (d.completedAt instanceof Timestamp ? d.completedAt.toDate().toISOString() : d.completedAt)
-              : undefined,
-          } as ToDo;
-        });
-        setTodos(data);
+      onSnapshot(activeTodosQuery, (snapshot) => {
+        setActiveTodos(snapshot.docs.map(mapTodoDoc));
+      }, (error) => {
+        console.error('Error listening to active todos:', error);
+      })
+    );
+
+    const completedWindowStart = getCompletedTodoWindowStart();
+    completedTodoWindowStartRef.current = completedWindowStart;
+    const completedTodosQuery = query(
+      collection(db, `households/${householdId}/todos`),
+      where('isCompleted', '==', true),
+      where('completedAt', '>=', Timestamp.fromDate(completedWindowStart)),
+      orderBy('completedAt', 'desc')
+    );
+    unsubscribers.push(
+      onSnapshot(completedTodosQuery, (snapshot) => {
+        setCompletedTodos(snapshot.docs.map(mapTodoDoc));
+      }, (error) => {
+        console.error('Error listening to completed todos:', error);
       })
     );
 
@@ -918,24 +1130,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       })
     );
 
-    // Insights listener
-    // NOTE: This query requires a Firestore composite index:
-    //   Collection: households/{householdId}/insights
-    //   Field: generatedAt (Descending)
-    // If the index is missing, Firestore will throw an error with a URL to create it.
-    // You can pre-create the index via the Firebase console or add to firestore.indexes.json:
-    // {
-    //   "collectionGroup": "insights",
-    //   "queryScope": "COLLECTION",
-    //   "fields": [{"fieldPath": "generatedAt", "order": "DESCENDING"}]
-    // }
-    const insightsQuery = query(collection(db, `households/${householdId}/insights`), orderBy('generatedAt', 'desc'));
+    // Insights listener — live window of the most recent N insights.
+    // The full archive is fetched on demand via loadAllInsights().
+    // Index (generatedAt DESC) is declared in firestore.indexes.json.
+    const insightsQuery = query(
+      collection(db, `households/${householdId}/insights`),
+      orderBy('generatedAt', 'desc'),
+      limit(INSIGHTS_LIMIT)
+    );
     unsubscribers.push(
       onSnapshot(
         insightsQuery,
         (snapshot) => {
           const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
-          setInsightsHistory(data);
+          setInsightsWindow(data);
+          if (!insightsLoadedAllRef.current) {
+            setHasMoreInsights(snapshot.size >= INSIGHTS_LIMIT);
+          }
           if (data.length > 0) {
             setInsight(data[0]!.text); // length > 0 checked above
           }
@@ -954,6 +1165,183 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // refresh — which replaces the user object reference — does not tear down and
     // re-subscribe every listener. The callbacks read fresh user fields from userRef.
   }, [householdId, user?.uid]);
+
+  // Transactions listener — kept in its own effect so the live window can track
+  // the current pay period (currentPeriodId) without re-subscribing every other
+  // listener. The window always reaches back to at least the start of the current
+  // period, so bucketSpent (which sums the current period) stays exact. When
+  // period tracking is off, all transactions are loaded (legacy behaviour).
+  //
+  // Gated on the household having loaded so we never subscribe while
+  // currentPeriodId is still transiently '' (which would briefly read the entire
+  // unbounded collection and defeat the cold-load bound).
+  useEffect(() => {
+    if (!householdId || loadedHouseholdId !== householdId) return;
+
+    const windowStart = getTransactionWindowStart(currentPeriodId);
+    txWindowStartRef.current = windowStart;
+    // Reset any previously paged-in older transactions for the new window.
+    txOlderCursorRef.current = null;
+    setOlderTransactions([]);
+    setTransactionWindowStart(windowStart);
+    setHasMoreTransactions(windowStart !== null);
+
+    const txCollection = collection(db, `households/${householdId}/transactions`);
+    const txQuery = windowStart
+      ? query(txCollection, where('date', '>=', windowStart), orderBy('date', 'desc'))
+      : query(txCollection);
+
+    const unsubscribe = onSnapshot(txQuery, (snapshot) => {
+      setRecentTransactions(snapshot.docs.map(mapTransactionDoc));
+    }, (error) => {
+      console.error('Error listening to transactions:', error);
+    });
+
+    return () => unsubscribe();
+  }, [householdId, loadedHouseholdId, currentPeriodId]);
+
+  // Holds the live meal-plan window bounds so the on-demand loaders can tell
+  // which weeks are already covered by the real-time listener.
+  const mealPlanWindowRef = useRef(getMealPlanWindow(new Date()));
+
+  // --- LISTENER WINDOWING: ON-DEMAND LOADERS ---
+
+  const loadOlderTransactions = useCallback(async () => {
+    const windowStart = txWindowStartRef.current;
+    if (!householdId || windowStart === null) return;
+    setIsLoadingOlderTransactions(true);
+    try {
+      const txCollection = collection(db, `households/${householdId}/transactions`);
+      const cursor = txOlderCursorRef.current;
+      const olderQuery = cursor
+        ? query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc'), startAfter(cursor), limit(TRANSACTION_PAGE_SIZE))
+        : query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc'), limit(TRANSACTION_PAGE_SIZE));
+      const snap = await getDocs(olderQuery);
+      if (snap.docs.length > 0) {
+        txOlderCursorRef.current = snap.docs[snap.docs.length - 1] ?? null;
+        const page = snap.docs.map(mapTransactionDoc);
+        setOlderTransactions(prev => mergeById(prev, page));
+      }
+      setHasMoreTransactions(snap.docs.length === TRANSACTION_PAGE_SIZE);
+    } catch (error) {
+      console.error('[loadOlderTransactions] Failed:', error);
+      toast.error('Failed to load older transactions');
+    } finally {
+      setIsLoadingOlderTransactions(false);
+    }
+  }, [householdId]);
+
+  const loadAllTransactions = useCallback(async (): Promise<Transaction[]> => {
+    const windowStart = txWindowStartRef.current;
+    // No window (period tracking off) → everything is already loaded.
+    if (!householdId || windowStart === null) return recentTransactionsRef.current;
+    setIsLoadingOlderTransactions(true);
+    try {
+      const txCollection = collection(db, `households/${householdId}/transactions`);
+      const snap = await getDocs(query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc')));
+      const older = snap.docs.map(mapTransactionDoc);
+      txOlderCursorRef.current = snap.docs.length ? snap.docs[snap.docs.length - 1] ?? null : null;
+      setOlderTransactions(older);
+      setHasMoreTransactions(false);
+      return mergeById(recentTransactionsRef.current, older);
+    } catch (error) {
+      console.error('[loadAllTransactions] Failed:', error);
+      toast.error('Failed to load full transaction history');
+      return recentTransactionsRef.current;
+    } finally {
+      setIsLoadingOlderTransactions(false);
+    }
+  }, [householdId]);
+
+  const loadAllBucketHistory = useCallback(async () => {
+    if (!householdId) return;
+    setIsLoadingOlderBucketHistory(true);
+    try {
+      const snap = await getDocs(query(
+        collection(db, `households/${householdId}/bucketHistory`),
+        orderBy('periodStartDate', 'desc')
+      ));
+      bucketHistoryLoadedAllRef.current = true;
+      setBucketHistoryOlder(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot)));
+      setHasMoreBucketHistory(false);
+    } catch (error) {
+      console.error('[loadAllBucketHistory] Failed:', error);
+      toast.error('Failed to load full budget history');
+    } finally {
+      setIsLoadingOlderBucketHistory(false);
+    }
+  }, [householdId]);
+
+  const loadAllInsights = useCallback(async () => {
+    if (!householdId) return;
+    try {
+      const snap = await getDocs(query(
+        collection(db, `households/${householdId}/insights`),
+        orderBy('generatedAt', 'desc')
+      ));
+      insightsLoadedAllRef.current = true;
+      setInsightsOlder(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight)));
+      setHasMoreInsights(false);
+    } catch (error) {
+      console.error('[loadAllInsights] Failed:', error);
+    }
+  }, [householdId]);
+
+  const loadOlderCompletedTodos = useCallback(async () => {
+    const windowStart = completedTodoWindowStartRef.current;
+    if (!householdId || !windowStart) return;
+    setIsLoadingOlderTodos(true);
+    try {
+      const todosCol = collection(db, `households/${householdId}/todos`);
+      const cursor = completedTodoCursorRef.current;
+      const olderQuery = cursor
+        ? query(todosCol, where('isCompleted', '==', true), orderBy('completedAt', 'desc'), startAfter(cursor), limit(TODO_COMPLETED_PAGE_SIZE))
+        : query(todosCol, where('isCompleted', '==', true), where('completedAt', '<', Timestamp.fromDate(windowStart)), orderBy('completedAt', 'desc'), limit(TODO_COMPLETED_PAGE_SIZE));
+      const snap = await getDocs(olderQuery);
+      if (snap.docs.length > 0) {
+        completedTodoCursorRef.current = snap.docs[snap.docs.length - 1] ?? null;
+        const page = snap.docs.map(mapTodoDoc);
+        setOlderCompletedTodos(prev => mergeById(prev, page));
+      }
+      setHasMoreCompletedTodos(snap.docs.length === TODO_COMPLETED_PAGE_SIZE);
+    } catch (error) {
+      console.error('[loadOlderCompletedTodos] Failed:', error);
+      toast.error('Failed to load older completed tasks');
+    } finally {
+      setIsLoadingOlderTodos(false);
+    }
+  }, [householdId]);
+
+  // Fetch a single week of meal-plan entries that falls outside the live window,
+  // replacing any previously-loaded entries for that week (so edits stay correct).
+  const refreshMealPlanWeek = useCallback(async (date: Date) => {
+    if (!householdId) return;
+    const { start, end } = getWeekRange(date);
+    const live = mealPlanWindowRef.current;
+    // Inside the live window — the real-time listener already covers it.
+    if (start >= live.start && end <= live.end) return;
+    try {
+      const snap = await getDocs(query(
+        collection(db, `households/${householdId}/mealPlan`),
+        where('date', '>=', start),
+        where('date', '<=', end)
+      ));
+      const page = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
+      loadedMealPlanWeeksRef.current.add(start);
+      setMealPlanExtra(prev => [...prev.filter(i => i.date < start || i.date > end), ...page]);
+    } catch (error) {
+      console.error('[refreshMealPlanWeek] Failed:', error);
+    }
+  }, [householdId]);
+
+  // Public helper: load a navigated-to week once (no-op if already loaded/live).
+  const ensureMealPlanWeek = useCallback(async (date: Date) => {
+    const { start, end } = getWeekRange(date);
+    const live = mealPlanWindowRef.current;
+    if (start >= live.start && end <= live.end) return;
+    if (loadedMealPlanWeeksRef.current.has(start)) return;
+    await refreshMealPlanWeek(date);
+  }, [refreshMealPlanWeek]);
 
   // Memoize habit reset data to avoid unnecessary callback re-creation
   // Only recreate when habit IDs, periods, or lastUpdated values change
@@ -2860,6 +3248,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         ...item,
         createdAt: serverTimestamp(),
       });
+      // Keep non-live weeks in sync (the live listener only covers current week ± 1).
+      await refreshMealPlanWeek(parseISO(item.date));
       if (!options?.suppressToast) {
         toast.success('Added to plan');
       }
@@ -2872,31 +3262,37 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         throw error;
       }
     }
-  }, [householdId, user]);
+  }, [householdId, user, refreshMealPlanWeek]);
 
   const updateMealPlanItem = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
     if (!householdId) return;
     try {
+      const previous = mealPlan.find(i => i.id === id);
       await updateDoc(doc(db, `households/${householdId}/mealPlan`, id), {
         ...updates,
       });
+      // Refresh both the old and new week if either lies outside the live window.
+      if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
+      if (updates.date && updates.date !== previous?.date) await refreshMealPlanWeek(parseISO(updates.date));
       toast.success('Plan updated');
     } catch (error) {
       console.error('[updateMealPlanItem] Failed:', error);
       toast.error('Failed to update plan');
     }
-  }, [householdId]);
+  }, [householdId, mealPlan, refreshMealPlanWeek]);
 
   const deleteMealPlanItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
+      const previous = mealPlan.find(i => i.id === id);
       await deleteDoc(doc(db, `households/${householdId}/mealPlan`, id));
+      if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
       toast.success('Removed from plan');
     } catch (error) {
       console.error('[deleteMealPlanItem] Failed:', error);
       toast.error('Failed to remove from plan');
     }
-  }, [householdId]);
+  }, [householdId, mealPlan, refreshMealPlanWeek]);
 
   // --- ACTIONS: TO-DOS ---
 
@@ -3077,6 +3473,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     currentPeriodId,
     bucketSpentMap,
     bucketHistory,
+    transactionWindowStart,
+    isLoadingOlderTransactions,
+    hasMoreTransactions,
+    loadOlderTransactions,
+    loadAllTransactions,
+    isLoadingOlderBucketHistory,
+    hasMoreBucketHistory,
+    loadAllBucketHistory,
     addAccount,
     updateAccountBalance,
     setAccountGoal,
@@ -3100,6 +3504,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     splitTransaction,
   }), [
     safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
+    isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
     addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
@@ -3144,6 +3550,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     stores,
     groceryCategories,
     quickStockLists,
+    ensureMealPlanWeek,
     addMeal,
     updateMeal,
     deleteMeal,
@@ -3168,7 +3575,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateMealPlanItem,
     deleteMealPlanItem,
   }), [
-    meals, shoppingList, mealPlan, groceryCatalog, stores, groceryCategories, quickStockLists,
+    meals, shoppingList, mealPlan, groceryCatalog, stores, groceryCategories, quickStockLists, ensureMealPlanWeek,
     addMeal, updateMeal, deleteMeal,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
@@ -3179,11 +3586,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const todosValue = useMemo<TodosContextValue>(() => ({
     todos,
+    isLoadingOlderTodos,
+    hasMoreCompletedTodos,
+    loadOlderCompletedTodos,
     addToDo,
     updateToDo,
     deleteToDo,
     completeToDo,
-  }), [todos, addToDo, updateToDo, deleteToDo, completeToDo]);
+  }), [
+    todos, isLoadingOlderTodos, hasMoreCompletedTodos, loadOlderCompletedTodos,
+    addToDo, updateToDo, deleteToDo, completeToDo,
+  ]);
 
   const coreValue = useMemo<HouseholdCoreContextValue>(() => ({
     isLoading,
@@ -3192,6 +3605,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     insight,
     insightsHistory,
     isGeneratingInsight,
+    hasMoreInsights,
+    loadAllInsights,
     pendingItemsCount,
     apiKeys,
     householdId,
@@ -3202,7 +3617,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateMember,
     removeMember,
   }), [
-    isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, pendingItemsCount, apiKeys,
+    isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
+    pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember,
   ]);
 
