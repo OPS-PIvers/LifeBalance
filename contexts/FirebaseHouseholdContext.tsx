@@ -488,6 +488,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             }
           } catch (error) {
             console.error('[FirebaseHouseholdContext] Failed to create member document:', error);
+            // Transient failure (offline/permission blip/doc not yet propagated):
+            // clear the guard so a later snapshot retries, instead of leaving the
+            // current user without a member document for the whole session.
+            if (memberRecoveryAttemptedForHousehold.current === householdId) {
+              memberRecoveryAttemptedForHousehold.current = null;
+            }
           }
         }
       })

@@ -61,7 +61,7 @@ const AI_DAILY_QUOTA = 100;
  * @throws Error("Household not found") when the householdId is invalid.
  * @throws Error("Daily AI quota exceeded …") when the household is at the cap.
  */
-const checkAndIncrementAiUsage = async (householdId: string, modelName: string): Promise<void> => {
+const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
   // 1. Check Global Kill Switch (read-only, outside the transaction — fail-open on error)
   try {
     const { getDoc } = await import("firebase/firestore");
@@ -115,8 +115,40 @@ const checkAndIncrementAiUsage = async (householdId: string, modelName: string):
       });
     }
   });
+};
 
-  // 3. Fire-and-forget audit log (do not block or fail the caller on log errors)
+/**
+ * Best-effort refund of one AI quota unit, used when a request was counted up
+ * front (by checkAndIncrementAiUsage) but then failed at the API layer. This
+ * keeps the net effect "only successful requests consume quota" while the
+ * up-front increment still enforces the cap atomically against concurrent
+ * callers. Never throws — a refund failure must not mask the original error.
+ */
+const refundAiUsage = async (householdId: string): Promise<void> => {
+  const householdRef = doc(db, 'households', householdId);
+  const today = getLocalDateString();
+  try {
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(householdRef);
+      if (!snap.exists()) return;
+      const usage = (snap.data() as Household).aiUsage;
+      // Only refund if the counter is still for today and above zero.
+      if (!usage || usage.lastResetDate !== today || usage.dailyCount <= 0) return;
+      txn.update(householdRef, {
+        aiUsage: { dailyCount: usage.dailyCount - 1, lastResetDate: today },
+      });
+    });
+  } catch (err) {
+    console.warn("Failed to refund AI usage after a failed request:", err);
+  }
+};
+
+/**
+ * Fire-and-forget audit log for a SUCCESSFUL AI request. Kept separate from the
+ * quota increment so the audit trail reflects successful usage only (matching
+ * the original behavior) and never blocks or fails the caller.
+ */
+const logAiUsage = (householdId: string, modelName: string): void => {
   Promise.resolve(
     addDoc(collection(db, 'logs/ai_usage/requests'), {
       householdId,
@@ -340,7 +372,7 @@ async function generateJsonContent<T>(
   validateApiKey();
 
   // 1. Atomic quota check + increment (prevents TOCTOU race)
-  await checkAndIncrementAiUsage(householdId, modelName);
+  await checkAndIncrementAiUsage(householdId);
 
   const client = _aiClient || ai;
 
@@ -364,9 +396,16 @@ async function generateJsonContent<T>(
     const text = response.text;
     if (!text) throw new Error("No data returned from Gemini");
 
-    return JSON.parse(text) as T;
+    const parsed = JSON.parse(text) as T;
+    // Only log audit usage on success (the quota was already incremented up front).
+    logAiUsage(householdId, modelName);
+    return parsed;
   } catch (error) {
     console.error("Gemini API Error:", error);
+    // The request was counted up front for atomic cap enforcement; since it
+    // failed (timeout, transient/non-transient API error, or unparseable
+    // response), refund the quota unit so failures don't lock users out.
+    await refundAiUsage(householdId);
     throw error;
   }
 }

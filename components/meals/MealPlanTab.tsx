@@ -79,7 +79,7 @@ const MealPlanTab: React.FC = () => {
 
   // ConfirmDialog state for the two window.confirm replacements
   const [shopWeekConfirm, setShopWeekConfirm] = useState<{ mealCount: number; ingredients: MealIngredient[] } | null>(null);
-  const [copyWeekConfirm, setCopyWeekConfirm] = useState<{ count: number } | null>(null);
+  const [copyWeekConfirm, setCopyWeekConfirm] = useState<{ items: MealPlanItem[] } | null>(null);
 
   // O(1) meal lookup — avoids repeated O(n) meals.find() calls during render
   const mealsById = useMemo(() => new Map(meals.map(m => [m.id, m])), [meals]);
@@ -258,21 +258,16 @@ const MealPlanTab: React.FC = () => {
       return;
     }
 
-    setCopyWeekConfirm({ count: sourceItems.length });
+    // Capture the resolved source items at open time. The dialog is non-blocking,
+    // so the viewed week can change before confirm — use the captured items rather
+    // than recomputing from the (possibly changed) current weekStart.
+    setCopyWeekConfirm({ items: sourceItems });
   };
 
   const handleCopyLastWeekConfirmed = async () => {
     if (!copyWeekConfirm) return;
+    const sourceItems = copyWeekConfirm.items;
     setCopyWeekConfirm(null);
-
-    // Recompute source items (same logic as above)
-    const lastWeekStart = addDays(weekStart, -7);
-    const lastWeekEnd = addDays(lastWeekStart, 6);
-    const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
-    const lastWeekEndStr = format(lastWeekEnd, 'yyyy-MM-dd');
-    const sourceItems = mealPlan.filter(item =>
-      item.date >= lastWeekStartStr && item.date <= lastWeekEndStr
-    );
 
     try {
       // 3. Map to new items
@@ -938,7 +933,7 @@ const MealPlanTab: React.FC = () => {
         onClose={() => setCopyWeekConfirm(null)}
         onConfirm={handleCopyLastWeekConfirmed}
         title="Copy Last Week"
-        message={`Copy ${copyWeekConfirm?.count ?? 0} meals from last week to this week?`}
+        message={`Copy ${copyWeekConfirm?.items.length ?? 0} meals from last week to this week?`}
         confirmLabel="Copy Meals"
         confirmVariant="primary"
       />
