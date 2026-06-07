@@ -4,6 +4,7 @@ import { WeeklyPlan, WeeklyPlanConstraints } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
 import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { getLocalDateString } from "@/utils/dateHelpers";
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
@@ -57,7 +58,7 @@ const checkAiAvailability = async (householdId: string) => {
   }
 
   const householdData = householdSnap.data() as Household;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
 
   const usage = householdData.aiUsage || { dailyCount: 0, lastResetDate: today };
 
@@ -74,7 +75,7 @@ const checkAiAvailability = async (householdId: string) => {
  * Increments AI usage counter and logs request
  */
 const incrementAiUsage = async (householdId: string, modelName: string) => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   const householdRef = doc(db, 'households', householdId);
 
   try {
@@ -1013,7 +1014,7 @@ export const analyzeHabitPatterns = async (
     }));
 
     const habitsJson = JSON.stringify(habitStats);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
 
     const prompt = `
       You are a wise and supportive habit coach. I will provide a list of habits with their recent completion history.

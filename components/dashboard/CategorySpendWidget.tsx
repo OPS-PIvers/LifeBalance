@@ -32,15 +32,20 @@ export const CategorySpendWidget: React.FC = () => {
     // Round the accumulated totals to the cent before deriving percentages.
     totalSpent = roundMoney(totalSpent);
 
-    // Convert to array and sort
+    // Convert to array and sort. Derive the percentage from the *rounded*
+    // amount so the bar width matches the displayed dollar figure.
     const sorted = Object.entries(breakdown)
-      .map(([name, amount]) => ({ name, amount: roundMoney(amount), percentage: (amount / totalSpent) * 100 }))
+      .map(([name, amount]) => {
+        const rounded = roundMoney(amount);
+        return { name, amount: rounded, percentage: totalSpent > 0 ? (rounded / totalSpent) * 100 : 0 };
+      })
       .sort((a, b) => b.amount - a.amount);
 
     // Top 3 + Others
     const top3 = sorted.slice(0, 3);
-    const othersAmount = sumMoney(sorted.slice(3).map(item => item.amount));
-    const othersPercentage = sorted.slice(3).reduce((sum, item) => sum + item.percentage, 0);
+    const rest = sorted.slice(3);
+    const othersAmount = sumMoney(rest.map(item => item.amount));
+    const othersPercentage = rest.reduce((sum, item) => sum + item.percentage, 0);
 
     const displayItems = [...top3];
     if (othersAmount > 0) {

@@ -1,5 +1,6 @@
 import React, { useState, ReactNode, useCallback } from 'react';
 import { FirebaseHouseholdContext, HouseholdContextType } from './FirebaseHouseholdContext';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   Account,
   BudgetBucket,
@@ -44,13 +45,13 @@ const SEED_BUCKETS: BudgetBucket[] = [
 const SEED_TRANSACTIONS: Transaction[] = [
   {
     id: 'tx1', amount: 45.50, merchant: 'Safeway', category: 'Groceries',
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     status: 'verified', isRecurring: false, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
   {
     id: 'tx2', amount: 120.00, merchant: 'PG&E', category: 'Utilities',
-    date: new Date().toISOString().split('T')[0],
+    date: getLocalDateString(),
     status: 'verified', isRecurring: true, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
