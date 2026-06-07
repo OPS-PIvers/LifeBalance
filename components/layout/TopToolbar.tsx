@@ -21,7 +21,7 @@ const TopToolbar: React.FC = () => {
 
   return (
     <>
-      <div className="relative">
+      <div className="relative z-dropdown">
         <header className="z-sticky w-full bg-brand-800/95 backdrop-blur-md shadow-sm border-b border-white/5 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
