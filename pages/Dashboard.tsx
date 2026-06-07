@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { BarChart2 } from 'lucide-react';
-import AnalyticsModal from '../components/modals/AnalyticsModal';
-import ChallengeHubModal from '../components/modals/ChallengeHubModal';
-import InsightsArchiveModal from '../components/modals/InsightsArchiveModal';
+// Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
+// initial Dashboard bundle and only load when a modal is actually opened.
+const AnalyticsModal = React.lazy(() => import('../components/modals/AnalyticsModal'));
+const ChallengeHubModal = React.lazy(() => import('../components/modals/ChallengeHubModal'));
+const InsightsArchiveModal = React.lazy(() => import('../components/modals/InsightsArchiveModal'));
 import { useActionQueue } from '../hooks/useActionQueue';
 import { ActionQueueItemCard } from '../components/dashboard/ActionQueueItem';
 import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
@@ -177,18 +179,20 @@ const Dashboard: React.FC = () => {
 
       </div>
 
-      {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
-      {isChallengeModalOpen && (
-        <ChallengeHubModal
-          isOpen={isChallengeModalOpen}
-          onClose={() => {
-            setIsChallengeModalOpen(false);
-            setProposedChallenge(null);
-          }}
-          initialData={proposedChallenge}
-        />
-      )}
-      {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
+      <Suspense fallback={null}>
+        {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
+        {isChallengeModalOpen && (
+          <ChallengeHubModal
+            isOpen={isChallengeModalOpen}
+            onClose={() => {
+              setIsChallengeModalOpen(false);
+              setProposedChallenge(null);
+            }}
+            initialData={proposedChallenge}
+          />
+        )}
+        {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
+      </Suspense>
       
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (

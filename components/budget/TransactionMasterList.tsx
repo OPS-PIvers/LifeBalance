@@ -10,6 +10,7 @@ import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
+import { getLocalDateString } from '../../utils/dateHelpers';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 
@@ -215,7 +216,7 @@ const TransactionMasterList: React.FC = () => {
     try {
       await addTransaction({
         ...tx,
-        date: new Date().toISOString().split('T')[0], // Default to today
+        date: getLocalDateString(), // Default to today (local)
         status: 'verified',
         isRecurring: false,
         source: 'manual',

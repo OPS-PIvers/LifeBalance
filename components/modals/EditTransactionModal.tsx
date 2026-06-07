@@ -6,6 +6,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
+import { getLocalDateString } from '../../utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {
@@ -140,7 +141,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         amount: amountNum,
         merchant: trimmedMerchant,
         category,
-        date: new Date().toISOString().split('T')[0], // Default to today for the copy
+        date: getLocalDateString(), // Default to today (local) for the copy
         status: 'verified',
         isRecurring: false,
         source: 'manual',

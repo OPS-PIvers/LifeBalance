@@ -1,5 +1,6 @@
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { InsightAction } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 export const useInsightActions = () => {
@@ -73,7 +74,7 @@ export const useInsightActions = () => {
 
         await addToDo({
           text: payload.text,
-          completeByDate: payload.completeByDate || new Date().toISOString().split('T')[0],
+          completeByDate: payload.completeByDate || getLocalDateString(),
           assignedTo: currentUser?.uid || '',
           isCompleted: false
         });

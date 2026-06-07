@@ -63,6 +63,7 @@ import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
@@ -678,7 +679,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isCompleted: false,
           priority: item.priority || 'medium',
           source: 'voice',
-          completeByDate: new Date().toISOString().split('T')[0], // Default to today
+          completeByDate: getLocalDateString(), // Default to today (local)
           assignedTo: user?.uid || '',
           createdAt: serverTimestamp(),
           createdBy: user?.uid || ''
@@ -700,7 +701,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         category: data.category || 'Uncategorized',
         status: 'pending_review',
         notes: data.notes || '',
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         source: 'voice',
         isRecurring: false,
         autoCategorized: false,
@@ -1459,7 +1460,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
 
       // 4. Create transaction
-      const transactionDate = new Date().toISOString().split('T')[0];
+      const transactionDate = getLocalDateString();
       const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
 
       await addDoc(collection(db, `households/${householdId}/transactions`), {
