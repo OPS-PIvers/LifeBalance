@@ -127,9 +127,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Drag Handle - Only render if reorderable */}
         {isReorderable && (
             <div
+                role="button"
+                tabIndex={0}
                 onPointerDown={(e) => dragControls.start(e)}
-                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300"
-                aria-label="Drag to reorder"
+                onKeyDown={(e) => {
+                    // Space/Enter don't initiate drag but ensure the element is reachable
+                    // by keyboard; actual reorder via keyboard is handled by edit flow.
+                    if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault();
+                    }
+                }}
+                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                aria-label={`Drag to reorder ${item.name}`}
             >
                 <GripVertical size={20} />
             </div>
@@ -241,9 +250,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         <button
             onClick={() => onEdit(item)}
             className="p-3.5 text-slate-300 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
-            aria-label="Edit item"
+            aria-label={`Edit ${item.name}`}
         >
             <Edit2 size={18} />
+        </button>
+
+        {/* Delete Action — keyboard/non-touch alternative to swipe-left */}
+        <button
+            onClick={() => { haptic('medium'); onDelete(item); }}
+            className="p-3.5 text-slate-300 hover:text-red-500 rounded-full hover:bg-red-50 transition-colors dark:text-slate-600 dark:hover:text-rose-400 dark:hover:bg-rose-500/10"
+            aria-label={`Delete ${item.name}`}
+        >
+            <Trash2 size={18} />
         </button>
 
       </motion.div>
