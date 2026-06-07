@@ -3,7 +3,10 @@ import {
   isHabitStale,
   calculateStreak,
   getMultiplier,
-  processToggleHabit
+  processToggleHabit,
+  streakEndingOn,
+  calculatePointsForDate,
+  calculatePointsForDateRange
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks } from 'date-fns';
@@ -337,6 +340,192 @@ describe('habitLogic', () => {
           expect(result?.updatedHabit.completedDates).not.toContain(today);
         });
       });
+    });
+  });
+
+  describe('streakEndingOn', () => {
+    const dates = (n: number, endOffset = 0): string[] => {
+      const out: string[] = [];
+      for (let i = 0; i < n; i++) {
+        out.push(format(subDays(new Date(), endOffset + i), 'yyyy-MM-dd'));
+      }
+      return out;
+    };
+
+    it('returns 0 when the date is not in completedDates', () => {
+      expect(streakEndingOn([yesterday], today)).toBe(0);
+    });
+
+    it('counts consecutive days ending on the given date (inclusive)', () => {
+      // 5 consecutive days ending today.
+      expect(streakEndingOn(dates(5), today)).toBe(5);
+    });
+
+    it('stops at a gap', () => {
+      const threeAgo = format(subDays(new Date(), 3), 'yyyy-MM-dd');
+      // today + yesterday, then a gap, then threeAgo.
+      expect(streakEndingOn([today, yesterday, threeAgo], today)).toBe(2);
+    });
+
+    it('matches calculateStreak when the date is the most recent completed day', () => {
+      const history = dates(8); // 8 consecutive days ending today
+      expect(streakEndingOn(history, today)).toBe(calculateStreak(history));
+    });
+
+    it('reconstructs the streak for a historical date', () => {
+      // 8 consecutive days ending today; the streak ending 3 days ago was 5.
+      const history = dates(8);
+      const threeAgo = format(subDays(new Date(), 3), 'yyyy-MM-dd');
+      expect(streakEndingOn(history, threeAgo)).toBe(5);
+    });
+  });
+
+  const baseHabit: Habit = {
+    id: 'h1',
+    title: 'Test Habit',
+    category: 'Health',
+    count: 0,
+    totalCount: 0,
+    targetCount: 1,
+    basePoints: 10,
+    scoringType: 'incremental',
+    type: 'positive',
+    period: 'daily',
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+    createdBy: 'u1',
+    weatherSensitive: false,
+  };
+
+  describe('calculatePointsForDateRange — per-date streak reconstruction', () => {
+    const consecutive = (n: number): string[] => {
+      // n consecutive days ending today (index 0 = oldest).
+      const out: string[] = [];
+      for (let i = n - 1; i >= 0; i--) {
+        out.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
+      }
+      return out;
+    };
+
+    it('sums per-date multipliers across 8 consecutive days (NOT 8 x current multiplier)', () => {
+      // Threshold habit, basePoints 10, targetCount 1, count 1 (completed today).
+      const history = consecutive(8);
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 8,
+        completedDates: history,
+        streakDays: 8,
+      };
+
+      const startDate = history[0];
+      const endDate = history[history.length - 1];
+      const total = calculatePointsForDateRange([habit], startDate, endDate);
+
+      // Per-date: days 1-2 = 1.0x (10), days 3-6 = 1.5x (floor(15)=15), days 7-8 = 2.0x (20).
+      // 2*10 + 4*15 + 2*20 = 20 + 60 + 40 = 120.
+      expect(total).toBe(120);
+      // The buggy current-multiplier behavior would have been 8 * 20 = 160.
+      expect(total).not.toBe(160);
+    });
+
+    it('handles a broken-then-resumed streak with correct per-date multipliers', () => {
+      // Days (ago): completed 7,6,5,4 (4-day run) then GAP at 3 then 2,1,0 (3-day run).
+      const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+      const history = [d(7), d(6), d(5), d(4), d(2), d(1), d(0)];
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: history.length,
+        completedDates: history,
+        streakDays: 3,
+      };
+
+      const total = calculatePointsForDateRange([habit], d(7), d(0));
+
+      // First run streaks: 1,2,3,4 → mults 1.0,1.0,1.5,1.5 → 10+10+15+15 = 50.
+      // Second run streaks: 1,2,3 → 1.0,1.0,1.5 → 10+10+15 = 35.
+      // Total = 85.
+      expect(total).toBe(85);
+    });
+
+    it('negative (bad) habits always use 1.0x', () => {
+      const history = consecutive(8);
+      const habit: Habit = {
+        ...baseHabit,
+        type: 'negative',
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 8,
+        completedDates: history,
+        streakDays: 8,
+      };
+
+      const total = calculatePointsForDateRange([habit], history[0], history[7]);
+      // 8 days * -10 * 1.0 = -80.
+      expect(total).toBe(-80);
+    });
+
+    it('uses habit.count for today on a daily incremental habit, 1 for other days', () => {
+      const history = consecutive(2); // yesterday + today, both streak < 3 → 1.0x
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'incremental',
+        period: 'daily',
+        basePoints: 10,
+        count: 3, // 3 completions today
+        totalCount: 4,
+        completedDates: history,
+        streakDays: 2,
+      };
+
+      const total = calculatePointsForDateRange([habit], history[0], history[1]);
+      // Yesterday: 1 completion * 10 = 10. Today: 3 completions * 10 = 30. Total 40.
+      expect(total).toBe(40);
+    });
+  });
+
+  describe('calculatePointsForDate — per-date streak reconstruction', () => {
+    it('uses the streak that ended on the target date, not the current streak', () => {
+      // 8 consecutive days ending today; evaluate a historical day (3 ago, streak 5 → 1.5x).
+      const d = (n: number) => format(subDays(new Date(), n), 'yyyy-MM-dd');
+      const history: string[] = [];
+      for (let i = 0; i < 8; i++) history.push(d(i));
+
+      const habit: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 10,
+        count: 1,
+        totalCount: 8,
+        completedDates: history,
+        streakDays: 8,
+      };
+
+      // Streak ending 3 days ago = 5 → 1.5x → 15.
+      expect(calculatePointsForDate([habit], d(3))).toBe(15);
+      // Today's streak = 8 → 2.0x → 20.
+      expect(calculatePointsForDate([habit], today)).toBe(20);
+    });
+
+    it('returns 0 when the habit was not completed on the target date', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+      };
+      expect(calculatePointsForDate([habit], yesterday)).toBe(0);
     });
   });
 });

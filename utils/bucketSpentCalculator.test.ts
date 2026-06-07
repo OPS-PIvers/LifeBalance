@@ -55,6 +55,19 @@ describe('calculateBucketSpent', () => {
     expect(map.get('b1')!.verified).toBe(12);
   });
 
+  it('credits all buckets sharing a (case-insensitive) name so a duplicate is not silently $0', () => {
+    // Transactions link to buckets only by category name; with two buckets named
+    // "Groceries" we cannot disambiguate, so both are credited rather than the
+    // previous first-match-only behavior that left the second bucket at $0.
+    const buckets = [bucket('b1', 'Groceries'), bucket('b2', 'groceries')];
+    const transactions = [tx('Groceries', 30, 'verified')];
+
+    const map = calculateBucketSpent(buckets, transactions, '');
+
+    expect(map.get('b1')).toEqual({ verified: 30, pending: 0 });
+    expect(map.get('b2')).toEqual({ verified: 30, pending: 0 });
+  });
+
   it('filters by pay period when a period id is provided', () => {
     const buckets = [bucket('b1', 'Groceries')];
     const inPeriod = { ...tx('Groceries', 10, 'verified'), payPeriodId: '2026-06-01' } as Transaction;

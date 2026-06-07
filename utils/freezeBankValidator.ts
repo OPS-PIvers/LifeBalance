@@ -1,4 +1,3 @@
-/* eslint-disable */
 import { Habit } from '@/types/schema';
 import { format, subDays, parseISO, differenceInDays } from 'date-fns';
 
@@ -10,15 +9,39 @@ export interface ValidationResult {
 /**
  * Gets dates (within lookback period) where a habit was not completed
  *
+ * The lookback is floored at the habit's earliest known existence so we never
+ * flag days that predate the habit as "missed" — a habit had no streak to
+ * protect before its first-ever completion. Without a `createdAt` on the habit,
+ * the earliest `completedDate` is used as that floor; callers may pass an
+ * explicit `habitCreatedAt` for greater precision once the schema supports it.
+ *
  * @param habit - The habit to check
  * @param lookbackDays - Number of days to look back (default 7)
+ * @param habitCreatedAt - Optional creation date (YYYY-MM-DD) used as the floor
  * @returns Array of date strings (YYYY-MM-DD) where habit was missed
  */
-export function getMissedHabitDates(habit: Habit, lookbackDays: number = 7): string[] {
+export function getMissedHabitDates(
+  habit: Habit,
+  lookbackDays: number = 7,
+  habitCreatedAt?: string
+): string[] {
   // Only consider positive habits for freeze bank usage
   if (habit.type !== 'positive') {
     return [];
   }
+
+  // Without any completion history there is no streak to protect, so nothing
+  // counts as "missed".
+  if (habit.completedDates.length === 0) {
+    return [];
+  }
+
+  // Determine the earliest date the habit could plausibly have been missed.
+  // Prefer an explicit creation date when provided, otherwise fall back to the
+  // earliest completed date. Days before this floor predate the habit.
+  const earliestCompleted = habit.completedDates.reduce((min, d) => (d < min ? d : min));
+  const floorDate =
+    habitCreatedAt && habitCreatedAt < earliestCompleted ? habitCreatedAt : earliestCompleted;
 
   const missedDates: string[] = [];
   const today = new Date();
@@ -27,6 +50,9 @@ export function getMissedHabitDates(habit: Habit, lookbackDays: number = 7): str
   for (let i = 1; i <= lookbackDays; i++) {
     const checkDate = subDays(today, i);
     const dateStr = format(checkDate, 'yyyy-MM-dd');
+
+    // Don't look back earlier than the habit existed.
+    if (dateStr < floorDate) break;
 
     // Check if date is NOT in completedDates
     if (!completedDatesSet.has(dateStr)) {
@@ -104,7 +130,7 @@ export function canUseFreezeBankToken(
       };
     }
 
-  } catch (error) {
+  } catch {
     return {
       allowed: false,
       reason: 'Invalid date format. Expected YYYY-MM-DD.',

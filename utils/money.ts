@@ -14,9 +14,15 @@
  * Rounds magnitude-symmetrically (so -1.005 → -1.01, mirroring 1.005 → 1.01)
  * and nudges by EPSILON to defend against values like 1.005 that float
  * representation would otherwise round *down*.
+ *
+ * Normalizes the result so a zero is always positive zero — `Math.sign(-0.001)`
+ * is -1, which would otherwise produce `-0` for sub-half-cent negatives.
  */
-export const roundMoney = (amount: number): number =>
-  (Math.sign(amount) * Math.round((Math.abs(amount) + Number.EPSILON) * 100)) / 100;
+export const roundMoney = (amount: number): number => {
+  const result = (Math.sign(amount) * Math.round((Math.abs(amount) + Number.EPSILON) * 100)) / 100;
+  // `-0 === 0` is true, so this collapses negative zero to positive zero.
+  return result === 0 ? 0 : result;
+};
 
 /**
  * Sum dollar amounts exactly by accumulating in integer cents.

@@ -30,9 +30,10 @@ export default defineConfig(({ command }) => {
           output: {
             manualChunks: {
               'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-              'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage', 'firebase/functions'],
+              'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/functions', 'firebase/messaging'],
               'vendor-ai': ['@google/genai'],
               'vendor-charts': ['recharts'],
+              'vendor-motion': ['framer-motion'],
               'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'lucide-react']
             }
           }

@@ -47,13 +47,18 @@ interface HouseholdMember {
 }
 
 /**
- * Helper function to send a notification to a user
+ * Helper function to send a notification to a user.
+ * @param memberRef - Optional Firestore document reference for the member. When
+ *   provided, any permanently-invalid FCM tokens detected in the multicast response
+ *   are removed from the member's `fcmTokens` array via arrayRemove so they are
+ *   not retried on future sends.
  */
 async function sendNotificationToUser(
   fcmTokens: string[],
   title: string,
   body: string,
-  data?: Record<string, string>
+  data?: Record<string, string>,
+  memberRef?: admin.firestore.DocumentReference
 ): Promise<void> {
   if (!fcmTokens || fcmTokens.length === 0) {
     logger.info("No FCM tokens available for user");
@@ -75,7 +80,7 @@ async function sendNotificationToUser(
       `Successfully sent notification: ${response.successCount} succeeded, ${response.failureCount} failed`
     );
 
-    // Remove invalid tokens
+    // Remove permanently-invalid tokens from Firestore so they are not retried.
     if (response.failureCount > 0) {
       const tokensToRemove: string[] = [];
       const permanentErrorCodes = [
@@ -91,9 +96,17 @@ async function sendNotificationToUser(
       });
 
       if (tokensToRemove.length > 0) {
-        logger.info("Tokens to remove:", tokensToRemove);
-        // Note: In a real app, you would want to remove these from Firestore here
-        // But we need the userId/householdId context to do that efficiently
+        logger.info("Removing stale FCM tokens:", tokensToRemove);
+        if (memberRef) {
+          try {
+            await memberRef.update({
+              fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokensToRemove),
+            });
+          } catch (cleanupError) {
+            // A cleanup failure must never break notification delivery.
+            logger.error("Failed to remove stale FCM tokens:", cleanupError);
+          }
+        }
       }
     }
   } catch (error) {
@@ -145,12 +158,10 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
   for (const householdDoc of householdsSnapshot.docs) {
     // Fetch members from subcollection
     const membersSnapshot = await householdDoc.ref.collection("members").get();
-    const members = membersSnapshot.docs.map(
-      (doc) => doc.data() as HouseholdMember
-    );
-    logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
+    logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
 
-    for (const member of members) {
+    for (const memberDoc of membersSnapshot.docs) {
+      const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
       if (!prefs?.habitReminders?.enabled) {
@@ -175,7 +186,8 @@ export const sendhabitreminders = onSchedule("every 1 hours", async () => {
           {
             type: "habit_reminder",
             url: "/habits",
-          }
+          },
+          memberDoc.ref
         );
       } else {
         logger.info(`Member ${member.uid}: not time to send yet (current check didn't match scheduled time)`);
@@ -198,12 +210,10 @@ export const sendactionqueuereminders = onSchedule(
     for (const householdDoc of householdsSnapshot.docs) {
       // Fetch members from subcollection
       const membersSnapshot = await householdDoc.ref.collection("members").get();
-      const members = membersSnapshot.docs.map(
-        (doc) => doc.data() as HouseholdMember
-      );
-      logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
+      logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
 
-      for (const member of members) {
+      for (const memberDoc of membersSnapshot.docs) {
+        const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
 
         if (!prefs?.actionQueueReminders?.enabled) {
@@ -242,7 +252,8 @@ export const sendactionqueuereminders = onSchedule(
               {
                 type: "action_queue_reminder",
                 url: "/dashboard",
-              }
+              },
+              memberDoc.ref
             );
           } else {
             logger.info(`Member ${member.uid}: no todos for today, skipping notification`);
@@ -267,12 +278,10 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
   for (const householdDoc of householdsSnapshot.docs) {
     // Fetch members from subcollection
     const membersSnapshot = await householdDoc.ref.collection("members").get();
-    const members = membersSnapshot.docs.map(
-      (doc) => doc.data() as HouseholdMember
-    );
-    logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
+    logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
 
-    for (const member of members) {
+    for (const memberDoc of membersSnapshot.docs) {
+      const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
 
       if (!prefs?.streakWarnings?.enabled) {
@@ -314,7 +323,8 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
             {
               type: "streak_warning",
               url: "/habits",
-            }
+            },
+            memberDoc.ref
           );
         } else {
           logger.info(`Member ${member.uid}: no habits at risk, skipping notification`);
@@ -340,12 +350,10 @@ export const sendbillreminders = onSchedule(
     for (const householdDoc of householdsSnapshot.docs) {
       // Fetch members from subcollection
       const membersSnapshot = await householdDoc.ref.collection("members").get();
-      const members = membersSnapshot.docs.map(
-        (doc) => doc.data() as HouseholdMember
-      );
-      logger.info(`Household ${householdDoc.id}: ${members.length} member(s)`);
+      logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
 
-      for (const member of members) {
+      for (const memberDoc of membersSnapshot.docs) {
+        const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
 
         if (!prefs?.billReminders?.enabled) {
@@ -393,7 +401,8 @@ export const sendbillreminders = onSchedule(
               {
                 type: "bill_reminder",
                 url: "/budget",
-              }
+              },
+              memberDoc.ref
             );
           } else {
             logger.info(`Member ${member.uid}: no upcoming bills, skipping notification`);
@@ -420,9 +429,6 @@ export const sendbudgetalerts = onDocumentUpdated(
 
     // Fetch members from subcollection
     const membersSnapshot = await householdRef.collection("members").get();
-    const members = membersSnapshot.docs.map(
-      (doc) => doc.data() as HouseholdMember
-    );
 
     // Calculate safe-to-spend (simplified)
     const accounts = newData.accounts || [];
@@ -430,7 +436,8 @@ export const sendbudgetalerts = onDocumentUpdated(
       .filter((acc: { type: string; balance: number }) => acc.type === "checking")
       .reduce((sum: number, acc: { balance: number }) => sum + acc.balance, 0);
 
-    for (const member of members) {
+    for (const memberDoc of membersSnapshot.docs) {
+      const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
       if (!prefs?.budgetAlerts?.enabled) continue;
       if (!member.fcmTokens || member.fcmTokens.length === 0) continue;
@@ -447,7 +454,8 @@ export const sendbudgetalerts = onDocumentUpdated(
           {
             type: "budget_alert",
             url: "/budget",
-          }
+          },
+          memberDoc.ref
         );
       }
     }
@@ -516,7 +524,8 @@ export const sendtestnotification = onCall(
       {
         type: "test_notification",
         url: "/settings"
-      }
+      },
+      memberRef
     );
 
     return { success: true, message: "Test notification sent" };

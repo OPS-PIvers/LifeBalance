@@ -21,6 +21,15 @@ describe('roundMoney', () => {
   it('leaves zero alone', () => {
     expect(roundMoney(0)).toBe(0);
   });
+
+  it('normalizes sub-half-cent negatives to positive zero (not -0)', () => {
+    // Math.sign(-0.001) === -1, which without normalization yields -0.
+    expect(Object.is(roundMoney(-0.001), 0)).toBe(true);
+    expect(Object.is(roundMoney(-0.001), -0)).toBe(false);
+    expect(Object.is(roundMoney(-0.004), 0)).toBe(true);
+    // A positive sub-half-cent also rounds to a clean positive zero.
+    expect(Object.is(roundMoney(0.001), 0)).toBe(true);
+  });
 });
 
 describe('sumMoney', () => {

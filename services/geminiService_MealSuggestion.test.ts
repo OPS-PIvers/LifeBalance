@@ -35,6 +35,16 @@ vi.mock('firebase/firestore', () => ({
     exists: () => true,
     data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } })
   })),
+  runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
+    const mockTxn = {
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } }),
+      }),
+      update: vi.fn(),
+    };
+    await fn(mockTxn);
+  }),
   setDoc: vi.fn(() => Promise.resolve()),
   updateDoc: vi.fn(() => Promise.resolve()),
   increment: vi.fn((n) => n),

@@ -90,6 +90,36 @@ export const calculateStreak = (dates: string[]): number => {
 };
 
 /**
+ * Count consecutive completed days ending ON `date` (inclusive), walking
+ * backward day-by-day. Returns 0 if `date` itself isn't in `completedDates`.
+ *
+ * This reconstructs the streak that existed on a specific day so historical
+ * points can be recalculated with the multiplier that actually applied then —
+ * rather than retro-applying the habit's *current* streak multiplier to every
+ * past day (which causes point totals to drift on each recalc).
+ *
+ * Note: `streakEndingOn(dates, today)` equals `calculateStreak(dates)` whenever
+ * `today` is the most recent completed day, so it matches the prospective streak
+ * used at toggle time in `processToggleHabit`.
+ *
+ * @param completedDates - Array of completion dates in YYYY-MM-DD format
+ * @param date - The date (YYYY-MM-DD) the streak should end on
+ * @returns The streak length ending on `date`
+ */
+export const streakEndingOn = (completedDates: string[], date: string): number => {
+  const completedSet = new Set(completedDates);
+  if (!completedSet.has(date)) return 0;
+
+  let streak = 0;
+  let checkDate = date;
+  while (completedSet.has(checkDate)) {
+    streak++;
+    checkDate = format(subDays(parseISO(checkDate), 1), 'yyyy-MM-dd');
+  }
+  return streak;
+};
+
+/**
  * Get the point multiplier based on streak and habit type
  * @param streak - Current streak count
  * @param isPositive - Whether this is a positive habit
@@ -263,8 +293,12 @@ export const calculatePointsForDate = (habits: Habit[], targetDate: string): num
     // or if the targetDate is in completedDates (which means it was completed)
     if (habit.count === 0) continue;
 
-    const currentStreak = calculateStreak(habit.completedDates);
-    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+    // Use the streak that ended on the target date, not the habit's CURRENT
+    // streak. Retro-applying the current multiplier to a past day over- or
+    // under-counts its points on every recalc. For "today" this equals
+    // calculateStreak(completedDates), so the common path is unchanged.
+    const dateStreak = streakEndingOn(habit.completedDates, targetDate);
+    const multiplier = getMultiplier(dateStreak, habit.type === 'positive');
     const sign = habit.type === 'positive' ? 1 : -1;
 
     if (habit.scoringType === 'incremental') {
@@ -295,6 +329,7 @@ export const calculatePointsForDateRange = (
   endDate: string
 ): number => {
   let totalPoints = 0;
+  const today = format(new Date(), 'yyyy-MM-dd');
 
   for (const habit of habits) {
     // Find all completion dates within the range
@@ -304,20 +339,29 @@ export const calculatePointsForDateRange = (
 
     if (completionsInRange.length === 0) continue;
 
-    // For each completion date in range, calculate points
-    // Note: We use the current streak for multiplier calculation
-    const currentStreak = calculateStreak(habit.completedDates);
-    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
     const sign = habit.type === 'positive' ? 1 : -1;
+    const isPositive = habit.type === 'positive';
 
-    if (habit.scoringType === 'incremental') {
-      // For incremental habits, we need to estimate points per completion
-      // Since we don't store historical counts, use basePoints * multiplier per completion day
-      // This is an approximation - for accurate tracking we'd need per-day snapshots
-      totalPoints += sign * completionsInRange.length * Math.floor(habit.basePoints * multiplier);
-    } else {
-      // For threshold: each completed day in range earns the threshold points
-      totalPoints += sign * completionsInRange.length * Math.floor(habit.basePoints * multiplier);
+    // Sum per-date so each day earns the multiplier its OWN streak warranted.
+    // Applying one current-streak multiplier to the whole range causes point
+    // totals to drift up/down on every recalc as the streak grows or breaks.
+    for (const date of completionsInRange) {
+      const dateStreak = streakEndingOn(habit.completedDates, date);
+      const multiplier = getMultiplier(dateStreak, isPositive);
+      const perDayPoints = Math.floor(habit.basePoints * multiplier);
+
+      if (habit.scoringType === 'incremental') {
+        // We don't store historical per-day counts, so each past day counts as a
+        // single completion. The one exception is "today" on a daily habit, where
+        // habit.count reflects the (possibly multiple) completions made today —
+        // preserving the multi-completion behavior daily recalc relies on.
+        const completionsOnDate =
+          date === today && habit.period === 'daily' ? habit.count : 1;
+        totalPoints += sign * completionsOnDate * perDayPoints;
+      } else {
+        // Threshold: each completed day in range earns the threshold points once.
+        totalPoints += sign * perDayPoints;
+      }
     }
   }
 
