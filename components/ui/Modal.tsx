@@ -2,6 +2,24 @@ import React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
+/**
+ * Selector matching elements that can receive keyboard focus.
+ * Used by the focus trap to enumerate tabbable elements inside the dialog.
+ */
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
+  Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.offsetParent !== null || el === document.activeElement
+  );
+
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -71,6 +89,65 @@ export const Modal: React.FC<ModalProps> = ({
   ariaLabelledBy,
   ariaDescribedBy,
 }) => {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  // Focus trap + focus restoration.
+  // - Stores the element that was focused before opening.
+  // - Moves focus into the dialog on open (first focusable, else the container).
+  // - Restores focus to the previously-focused element on close/unmount.
+  // Note: setState is never called here, so react-hooks/set-state-in-effect is satisfied.
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const container = contentRef.current;
+
+    if (container) {
+      const focusables = getFocusableElements(container);
+      (focusables[0] ?? container).focus();
+    }
+
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen]);
+
+  // Trap Tab / Shift+Tab inside the dialog.
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const container = contentRef.current;
+      if (!container) return;
+
+      const focusables = getFocusableElements(container);
+      if (focusables.length === 0) {
+        // Nothing focusable inside; keep focus on the container.
+        e.preventDefault();
+        container.focus();
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+
+      if (e.shiftKey) {
+        if (active === first || !container.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !container.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
+
   // Handle Escape key
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -117,10 +194,7 @@ export const Modal: React.FC<ModalProps> = ({
         paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
         paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
       } : undefined}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={ariaLabelledBy}
-      aria-describedby={ariaDescribedBy}
+      data-testid="modal-backdrop-wrapper"
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
@@ -134,8 +208,14 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Content Container */}
       <div
+        ref={contentRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
+        tabIndex={-1}
         className={twMerge(
-          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
+          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 outline-none",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
           maxWidth,

@@ -15,9 +15,11 @@ import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
 import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
+import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton';
 
 const Dashboard: React.FC = () => {
   const {
+    isLoading,
     activeChallenge,
     currentUser,
     payCalendarItem,
@@ -55,8 +57,12 @@ const Dashboard: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
-    <div className="min-h-screen bg-brand-50 pb-32">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32">
       
       {/* Dashboard Header */}
       <div className="px-6 py-8 flex items-center justify-between">

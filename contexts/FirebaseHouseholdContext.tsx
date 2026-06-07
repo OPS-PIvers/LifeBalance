@@ -70,6 +70,8 @@ import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays,
 
 export interface HouseholdContextType {
   // State
+  /** True during the initial cold load before the first household snapshot resolves. */
+  isLoading: boolean;
   safeToSpend: number;
   dailyPoints: number;
   weeklyPoints: number;
@@ -255,6 +257,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [bucketHistory, setBucketHistory] = useState<BucketPeriodSnapshot[]>([]);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
+  // True until the household document's first snapshot resolves, so the UI can
+  // show skeletons instead of a flash of empty/zeroed state on cold load.
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
@@ -463,6 +468,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const data = snapshot.data() as Household | undefined;
         // Include the document ID in householdSettings
         setHouseholdSettings(data ? { ...data, id: snapshot.id } : null);
+        // Core data has arrived — clear the initial-load skeleton state.
+        setIsInitialLoad(false);
 
         // Extract and set freezeBank
         if (data?.freezeBank) {
@@ -2825,7 +2832,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // Use midnight scheduler to check for rollover with a delay to avoid conflicts
   useMidnightScheduler(checkFreezeBankRollover, !!(householdId && freezeBank), { initialDelayMs: 500 });
 
+  // Show skeletons only while a household is set but its first snapshot hasn't
+  // arrived yet. No household (pre-setup) is not a "loading" state.
+  const isLoading = !!householdId && isInitialLoad;
+
   const contextValue = useMemo(() => ({
+    isLoading,
     safeToSpend,
     dailyPoints,
     weeklyPoints,
@@ -2926,6 +2938,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteToDo,
     completeToDo
   }), [
+    isLoading,
     safeToSpend, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
     calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,

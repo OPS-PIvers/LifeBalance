@@ -1,8 +1,27 @@
-import React, { useEffect, useId } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+
+/**
+ * Selector matching elements that can receive keyboard focus.
+ * Used by the focus trap to enumerate tabbable elements inside the dialog.
+ */
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const getFocusableElements = (container: HTMLElement): HTMLElement[] =>
+  Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.offsetParent !== null || el === document.activeElement
+  );
 
 interface DrawerProps {
   isOpen: boolean;
@@ -35,6 +54,64 @@ export const Drawer: React.FC<DrawerProps> = ({
   disableClose = false
 }) => {
   const titleId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+
+  // Focus trap + focus restoration.
+  // - Stores the element that was focused before opening.
+  // - Moves focus into the drawer on open (first focusable, else the container).
+  // - Restores focus to the previously-focused element on close/unmount.
+  // Note: setState is never called here, so react-hooks/set-state-in-effect is satisfied.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const container = contentRef.current;
+
+    if (container) {
+      const focusables = getFocusableElements(container);
+      (focusables[0] ?? container).focus();
+    }
+
+    return () => {
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen]);
+
+  // Trap Tab / Shift+Tab inside the drawer.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const container = contentRef.current;
+      if (!container) return;
+
+      const focusables = getFocusableElements(container);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        container.focus();
+        return;
+      }
+
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+
+      if (e.shiftKey) {
+        if (active === first || !container.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !container.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleTab);
+    return () => window.removeEventListener('keydown', handleTab);
+  }, [isOpen]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -68,7 +145,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-sm"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
@@ -77,10 +154,12 @@ export const Drawer: React.FC<DrawerProps> = ({
 
           {/* Drawer Content */}
           <motion.div
-            initial={{ y: '100%' }}
+            ref={contentRef}
+            tabIndex={-1}
+            initial={reduceMotion ? false : { y: '100%' }}
             animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            exit={reduceMotion ? { y: 0 } : { y: '100%' }}
+            transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
             className={twMerge(
               "fixed bottom-0 left-0 right-0 z-modal bg-white rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col outline-none",
               className
