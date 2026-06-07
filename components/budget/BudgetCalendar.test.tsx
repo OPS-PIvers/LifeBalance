@@ -30,6 +30,7 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => <div data-testid="chevron-down" />,
   MoreVertical: () => <div data-testid="more-vertical" />,
   Repeat: () => <div data-testid="repeat" />,
+  CalendarPlus: () => <div data-testid="calendar-plus" />,
   TrendingUp: () => <div data-testid="trending-up" />,
   TrendingDown: () => <div data-testid="trending-down" />,
   Check: () => <div data-testid="check" />,

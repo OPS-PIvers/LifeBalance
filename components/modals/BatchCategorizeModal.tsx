@@ -50,12 +50,12 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
     >
       {/* Content */}
       <div className="p-4 space-y-4">
-        <p className="text-brand-600">
+        <p className="text-brand-600 dark:text-slate-300">
           Select a new category for the <strong>{count}</strong> selected transactions.
         </p>
 
         <div>
-          <label htmlFor="batch-category" className="block text-xs font-bold text-brand-400 uppercase mb-1">
+          <label htmlFor="batch-category" className="block text-xs font-bold text-brand-400 dark:text-slate-400 uppercase mb-1">
             New Category
           </label>
           <select
@@ -63,7 +63,7 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             disabled={isSaving}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
+            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
           >
             <option value="">Select Category...</option>
             {categories.map((cat) => (
@@ -76,11 +76,11 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="sticky bottom-0 p-4 border-t border-brand-100 bg-white flex gap-3">
+      <div className="sticky bottom-0 p-4 border-t border-brand-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex gap-3">
         <button
           onClick={onClose}
           disabled={isSaving}
-          className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+          className="flex-1 py-3 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>

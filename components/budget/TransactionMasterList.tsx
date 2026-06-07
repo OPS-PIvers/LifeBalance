@@ -38,14 +38,14 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? "px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-sm text-brand-700 outline-none focus:border-brand-400 min-w-[120px]"
-    : "w-full px-4 py-3 bg-brand-50 border border-brand-200 rounded-xl text-base text-brand-700 outline-none focus:border-brand-400";
+    ? "px-3 py-2 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-lg text-sm text-brand-700 dark:text-slate-200 outline-none focus:border-brand-400 min-w-[120px]"
+    : "w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl text-base text-brand-700 dark:text-slate-200 outline-none focus:border-brand-400";
 
   return (
     <>
       {/* Category Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Category</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Category</label>}
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
@@ -60,7 +60,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Source Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Source</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Source</label>}
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
@@ -76,7 +76,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Store Filter */}
       <div className={isRow ? "" : "space-y-1"}>
-        {!isRow && <label className="text-sm font-medium text-brand-600">Store</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Store</label>}
         <select
           value={storeFilter}
           onChange={(e) => setStoreFilter(e.target.value)}
@@ -400,23 +400,23 @@ const TransactionMasterList: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Filters Card */}
-      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass space-y-3">
+      <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass space-y-3">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
           <input
             type="text"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors"
+            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 hover:text-brand-600 h-auto p-0 hover:bg-transparent shadow-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 h-auto p-0 hover:bg-transparent shadow-none"
             >
               <X size={16} />
             </Button>
@@ -431,7 +431,7 @@ const TransactionMasterList: React.FC = () => {
              onClick={() => setIsFilterDrawerOpen(true)}
            >
              <Filter size={16} className="mr-2" />
-             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
+             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 dark:bg-slate-700 text-brand-700 dark:text-slate-200 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
            </Button>
 
            <Button
@@ -504,29 +504,29 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white/80 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass">
+      <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Income</p>
+          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Income</p>
             <p className="text-lg font-bold text-money-pos font-mono">
               +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Expense</p>
+          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Expense</p>
             <p className="text-lg font-bold text-money-neg font-mono">
               -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Net</p>
+          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Net</p>
             <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
               {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
             </p>
           </div>
-          <div className="bg-slate-50/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-slate-700 font-mono">
+          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
+            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-slate-700 dark:text-slate-200 font-mono">
               {summary.count}
             </p>
           </div>
@@ -535,13 +535,13 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Select All Bar */}
       {isSelectionMode && (
-        <div className="flex items-center justify-between px-2 text-sm text-brand-600">
+        <div className="flex items-center justify-between px-2 text-sm text-brand-600 dark:text-slate-300">
           <Button
             variant="link"
             onClick={handleSelectAll}
             className="flex items-center gap-2 font-bold hover:no-underline"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600' : 'text-brand-300'} />
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600 dark:text-slate-300' : 'text-brand-300 dark:text-slate-600'} />
             Select All ({filteredTransactions.length})
           </Button>
           <span className="text-xs">{selectedIds.size} selected</span>
@@ -551,9 +551,14 @@ const TransactionMasterList: React.FC = () => {
       {/* Transaction List */}
       <div className="space-y-2 pb-24">
         {filteredTransactions.length === 0 ? (
-          <div className="text-center py-10 text-brand-400">
-            <Filter className="w-12 h-12 mx-auto mb-3 opacity-20" />
-            <p>No transactions found matching your filters.</p>
+          <div className="flex flex-col items-center justify-center text-center py-12 px-6">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
+              <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+            </div>
+            <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
+            <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
+              Nothing matches your current search and filters.
+            </p>
             <Button
               variant="link"
               onClick={clearFilters}
@@ -638,8 +643,8 @@ const TransactionMasterList: React.FC = () => {
           disableBackdropClose={isBatchProcessing}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
-            <p className="text-brand-600">
+            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
+            <p className="text-brand-600 dark:text-slate-300">
               Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
             </p>
             <p className="text-sm text-money-neg font-bold">
@@ -697,8 +702,8 @@ const TransactionMasterList: React.FC = () => {
           disableBackdropClose={isDeleting}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800">Confirm Delete</h3>
-            <p className="text-brand-600">
+            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Confirm Delete</h3>
+            <p className="text-brand-600 dark:text-slate-300">
               Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>${transactionToDelete.amount.toFixed(2)}</strong>?
             </p>
             <p className="text-sm text-money-neg font-bold">
@@ -798,7 +803,7 @@ const TransactionMasterList: React.FC = () => {
         <div className="space-y-4 pt-2">
           <FilterControls {...filterProps} layout="stack" />
 
-          <div className="pt-4 space-y-3 border-t border-gray-100">
+          <div className="pt-4 space-y-3 border-t border-gray-100 dark:border-slate-700">
             {/* Export Button */}
             <Button
                variant="primary"

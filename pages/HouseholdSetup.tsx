@@ -76,18 +76,18 @@ const HouseholdSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Header */}
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
               <Home className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 mb-2">
+            <h1 className="text-2xl font-bold text-brand-800 dark:text-slate-100 mb-2">
               {mode === 'success' ? 'All Set!' : 'Set Up Your Household'}
             </h1>
-            <p className="text-brand-500 text-sm">
+            <p className="text-brand-500 dark:text-slate-400 text-sm">
               {mode === 'success'
                 ? 'Your household is ready to use'
                 : 'Create a new household or join an existing one'}
@@ -107,7 +107,7 @@ const HouseholdSetup: React.FC = () => {
 
               <button
                 onClick={() => setMode('join')}
-                className="w-full bg-white border-2 border-brand-200 text-brand-800 font-semibold py-4 px-6 rounded-xl hover:bg-brand-50 hover:border-brand-300 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
+                className="w-full bg-white dark:bg-slate-800 border-2 border-brand-200 dark:border-slate-700 text-brand-800 dark:text-slate-100 font-semibold py-4 px-6 rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700/50 hover:border-brand-300 dark:hover:border-slate-600 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
               >
                 <LogIn size={20} />
                 <span>Join Existing Household</span>
@@ -121,14 +121,14 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
+                <label className="block text-sm font-semibold text-brand-700 dark:text-slate-200 mb-2">
                   Household Name
                 </label>
                 <input
@@ -136,7 +136,7 @@ const HouseholdSetup: React.FC = () => {
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-brand-200 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
                   required
                   disabled={loading}
                 />
@@ -168,14 +168,14 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 hover:text-brand-700 font-medium text-sm"
+                className="flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 mb-2">
+                <label className="block text-sm font-semibold text-brand-700 dark:text-slate-200 mb-2">
                   Invite Code
                 </label>
                 <input
@@ -183,12 +183,12 @@ const HouseholdSetup: React.FC = () => {
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 border-2 border-brand-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-lg tracking-wider text-center uppercase"
+                  className="w-full px-4 py-3 border-2 border-brand-200 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-lg tracking-wider text-center uppercase"
                   maxLength={6}
                   required
                   disabled={loading}
                 />
-                <p className="text-xs text-brand-500 mt-2">
+                <p className="text-xs text-brand-500 dark:text-slate-400 mt-2">
                   Enter the 6-character code shared by your household admin
                 </p>
               </div>
@@ -216,12 +216,12 @@ const HouseholdSetup: React.FC = () => {
           {/* Success View */}
           {mode === 'success' && createdInviteCode && (
             <div className="space-y-4">
-              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4 text-center">
+              <div className="bg-green-50 dark:bg-green-500/15 border-2 border-green-200 dark:border-green-500/30 rounded-xl p-4 text-center">
                 <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
                   <Users className="w-6 h-6 text-white" />
                 </div>
-                <p className="text-green-800 font-semibold">Household Created!</p>
-                <p className="text-green-600 text-sm mt-1">
+                <p className="text-green-800 dark:text-green-200 font-semibold">Household Created!</p>
+                <p className="text-green-600 dark:text-green-300 text-sm mt-1">
                   Invite family members to join
                 </p>
               </div>

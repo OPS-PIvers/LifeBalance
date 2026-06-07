@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { X, Flame, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
+import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '../modals/HabitFormModal';
@@ -11,6 +11,9 @@ import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { subDays, format } from 'date-fns';
+import { haptic } from '@/utils/haptics';
+import StreakFlame from './StreakFlame';
+import CountUp from './CountUp';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -58,21 +61,26 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
 
   const containerClasses = cn(
     "relative flex items-center justify-between p-5 rounded-2xl transition-all duration-300 select-none group/card shadow-glass",
-    !isActive && "bg-white/80 backdrop-blur-xl ring-1 ring-black/5",
-    isActive && isPositive && "bg-emerald-50/50 ring-1 ring-emerald-500/20",
-    isActive && !isPositive && "bg-rose-50/50 ring-1 ring-rose-500/20"
+    !isActive && "bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/5",
+    isActive && isPositive && "bg-emerald-50/50 dark:bg-emerald-500/10 ring-1 ring-emerald-500/20",
+    isActive && !isPositive && "bg-rose-50/50 dark:bg-rose-500/10 ring-1 ring-rose-500/20"
   );
 
   const buttonClasses = cn(
     "relative flex items-center justify-center w-14 h-14 rounded-2xl shadow-sm transition-all duration-200 z-10",
-    !isActive && "bg-slate-50 ring-1 ring-slate-200 text-slate-300 group-hover/card:ring-slate-300 group-hover/card:bg-slate-100",
+    !isActive && "bg-slate-50 dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 text-slate-300 dark:text-slate-500 group-hover/card:ring-slate-300 dark:group-hover/card:ring-slate-500 group-hover/card:bg-slate-100 dark:group-hover/card:bg-slate-600",
     isActive && isPositive && "bg-money-pos text-white shadow-emerald-200/50 ring-0",
     isActive && !isPositive && "bg-money-neg text-white shadow-rose-200/50 ring-0",
     // Threshold visual overrides
-    isActive && isThreshold && !isCompleted && isPositive && "bg-emerald-100 text-emerald-600 ring-1 ring-emerald-200"
+    isActive && isThreshold && !isCompleted && isPositive && "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-500/30"
   );
 
   const handleCardClick = () => {
+    // Fire tactile feedback based on whether this tap completes the habit.
+    // Reaching (or staying at) the target counts as a "success"; otherwise it
+    // is a light increment nudge. Negative habits always use the light pattern.
+    const willComplete = isPositive && !isCompleted && habit.count + 1 >= habit.targetCount;
+    haptic(willComplete ? 'success' : 'light');
     toggleHabit(habit.id, 'up');
   };
 
@@ -154,7 +162,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-0.5" viewBox="0 0 36 36">
                  {/* Background Track */}
                  <path
-                   className={isActive && !isCompleted ? "text-brand-800/10" : "text-white/20"}
+                   className={isActive && !isCompleted ? "text-brand-800/10 dark:text-white/10" : "text-white/20"}
                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                    fill="none"
                    stroke="currentColor"
@@ -181,7 +189,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white ring-1 ring-slate-200 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:bg-rose-50 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 bg-white dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 dark:text-slate-300 shadow-sm active:scale-90 hover:bg-rose-50 dark:hover:bg-rose-500/20 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 20 }}
             >
@@ -194,7 +202,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
         <div className="flex-1 min-w-0 pointer-events-none" style={{ zIndex: 2 }}>
           <div className="flex justify-between items-start">
             <div>
-              <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-slate-900" : "text-slate-600")}>
+              <h3 className={cn("font-semibold tracking-tight text-sm truncate", isActive ? "text-slate-900 dark:text-slate-100" : "text-slate-600 dark:text-slate-300")}>
                 {habit.title}
               </h3>
             </div>
@@ -202,7 +210,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             {/* Context Menu Trigger & Drag Handle */}
             <div className="flex items-center gap-1 -mr-2 relative" style={{ zIndex: 3 }}>
               {dragHandle && (
-                <div className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
+                <div className="text-slate-300 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-300 cursor-grab active:cursor-grabbing p-1 pointer-events-auto">
                   {dragHandle}
                 </div>
               )}
@@ -212,7 +220,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   setIsMenuOpen(!isMenuOpen);
                   setFocusedMenuIndex(0); // Reset focus to first item
                 }}
-                className="p-1 text-slate-300 hover:text-slate-600 rounded-full hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-slate-400 pointer-events-auto"
+                className="p-1 text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-slate-400 pointer-events-auto"
                 aria-label="Habit options menu"
                 aria-haspopup="true"
                 aria-expanded={isMenuOpen}
@@ -227,25 +235,36 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
             {/* Points Potential */}
             <span className={cn(
               "inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold tracking-wide",
-              isPositive ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+              isPositive
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
             )}>
-              {signedPointsDisplay} pts
+              <CountUp value={signedPointsDisplay} suffix=" pts" />
             </span>
 
             {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
             {isPositive && habit.streakDays >= 2 && (
               <span className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold transition-colors",
-                habit.streakDays >= 3 ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"
+                habit.streakDays >= 3
+                  ? "bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
+                  : "bg-gray-100 text-gray-500 dark:bg-slate-700/50 dark:text-slate-400"
               )}>
-                <Flame size={10} fill={habit.streakDays >= 3 ? "currentColor" : "none"} />
+                <StreakFlame streakDays={habit.streakDays} size={10} />
                 {habit.streakDays} Day{habit.streakDays !== 1 ? 's' : ''}
+              </span>
+            )}
+
+            {/* Multiplier nudge: one day short of the next tier (3-day=1.5x, 7-day=2x) */}
+            {isPositive && (habit.streakDays === 2 || habit.streakDays === 6) && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                1 day from {habit.streakDays === 6 ? '2x' : '1.5x'}!
               </span>
             )}
 
             {/* Linked Challenge Badge */}
             {isLinkedToChallenge && (
-               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold bg-indigo-100 text-indigo-700">
+               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
                 <Target size={10} /> Goal
               </span>
             )}
@@ -265,7 +284,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               style={{ zIndex: 10 }}
             />
             <div
-              className="absolute top-10 right-2 bg-white rounded-xl shadow-xl border border-brand-100 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
+              className="absolute top-10 right-2 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-brand-100 dark:border-slate-700 py-1 min-w-[120px] animate-in fade-in zoom-in-95 duration-100"
               role="menu"
               aria-orientation="vertical"
               aria-label="Habit actions menu"
@@ -278,8 +297,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   handleEdit();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 0 && "bg-brand-50"
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 0 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -292,8 +311,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   handleViewLog();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 hover:bg-brand-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === 1 && "bg-brand-50"
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === 1 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -308,8 +327,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           setIsMenuOpen(false);
                   }}
                   className={cn(
-                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 focus:outline-none",
-                    focusedMenuIndex === 2 && "bg-indigo-50"
+                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 flex items-center gap-2 focus:outline-none",
+                    focusedMenuIndex === 2 && "bg-indigo-50 dark:bg-indigo-500/15"
                   )}
                   role="menuitem"
                   tabIndex={-1}
@@ -323,8 +342,8 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
                   handleDelete();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 flex items-center gap-2 focus:outline-none",
-                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50"
+                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 flex items-center gap-2 focus:outline-none",
+                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50 dark:bg-rose-500/15"
                 )}
                 role="menuitem"
                 tabIndex={-1}
@@ -362,7 +381,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
           {isEligibleForRepair && (
             <Button
               variant="ghost"
-              className="w-full justify-start text-lg py-4 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+              className="w-full justify-start text-lg py-4 text-indigo-600 dark:text-indigo-300 hover:text-indigo-700 dark:hover:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-500/15"
               leftIcon={<Wrench className="text-indigo-500" />}
               onClick={() => {
                 consumeFreezeBankToken(habit.id, yesterday);
@@ -372,7 +391,7 @@ const HabitCard: React.FC<HabitCardProps> = ({ habit, dragHandle }) => {
               Repair Streak ({freezeBank?.tokens})
             </Button>
           )}
-          <div className="h-px bg-gray-100 my-2" />
+          <div className="h-px bg-gray-100 dark:bg-slate-700 my-2" />
           <Button
             variant="ghost-destructive"
             className="w-full justify-start text-lg py-4"

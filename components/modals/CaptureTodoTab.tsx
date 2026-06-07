@@ -26,7 +26,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
-        <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+        <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Task
         </label>
         <input
@@ -35,13 +35,13 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter task description"
-          className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+          className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
           autoFocus
         />
       </div>
 
       <div>
-        <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+        <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Due Date
         </label>
         <div className="relative w-full">
@@ -50,19 +50,19 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
+            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
             style={{ WebkitAppearance: 'none' }}
           />
-          <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 pointer-events-none" />
+          <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 dark:text-slate-400 pointer-events-none" />
         </div>
       </div>
 
       <fieldset>
-        <legend className="block text-xs font-bold text-brand-500 uppercase tracking-wider mb-1">
+        <legend className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Assign To
         </legend>
         {members.length === 0 ? (
-          <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
+          <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-400 py-2">
             <AlertCircle size={16} className="flex-shrink-0" />
             <span>No household members available.</span>
           </div>
@@ -76,13 +76,13 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
                   assignee === member.uid
                     ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                    : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
+                    : 'bg-white dark:bg-slate-800 text-brand-600 dark:text-slate-300 border-brand-200 dark:border-slate-700 hover:bg-brand-50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 {member.photoURL ? (
                   <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-xxs font-bold text-brand-600">
+                  <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-700 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-300">
                     {member.displayName?.charAt(0) ?? 'U'}
                   </div>
                 )}

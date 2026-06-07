@@ -274,24 +274,24 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       disableBackdropClose={!!deleteConfirmHabit}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 dark:border-slate-700 flex-shrink-0">
         <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
                 onClick={() => setView('main')}
-                className="p-1 text-brand-400 hover:text-brand-600 -ml-1"
+                className="p-1 text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 -ml-1"
                 aria-label="Back to main view"
               >
                 <ChevronRight size={20} className="rotate-180" />
               </button>
             )}
-            <h2 className="text-lg font-bold text-brand-800">
+            <h2 className="text-lg font-bold text-brand-800 dark:text-slate-100">
               {VIEW_TITLES[view]}
             </h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-brand-400 hover:bg-brand-50 rounded-full"
+            className="p-2 text-brand-400 dark:text-slate-400 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-full"
             aria-label="Close habit manager"
           >
             <X size={20} />
@@ -308,18 +308,18 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               {/* Create Custom Button */}
               <button
                 onClick={openCreateCustom}
-                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-brand-50 to-indigo-50 border-2 border-dashed border-brand-200 rounded-xl hover:border-brand-400 transition-colors group"
+                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-brand-50 to-indigo-50 dark:from-slate-700/50 dark:to-indigo-500/10 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl hover:border-brand-400 dark:hover:border-slate-500 transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center text-brand-600 group-hover:bg-brand-200 transition-colors">
+                  <div className="w-10 h-10 bg-brand-100 dark:bg-slate-700/50 rounded-xl flex items-center justify-center text-brand-600 dark:text-slate-300 group-hover:bg-brand-200 transition-colors">
                     <Plus size={20} />
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-brand-800">Create Custom Habit</p>
-                    <p className="text-xs text-brand-400">Define your own habit with custom settings</p>
+                    <p className="font-bold text-brand-800 dark:text-slate-100">Create Custom Habit</p>
+                    <p className="text-xs text-brand-400 dark:text-slate-400">Define your own habit with custom settings</p>
                   </div>
                 </div>
-                <ChevronRight size={18} className="text-brand-400" />
+                <ChevronRight size={18} className="text-brand-400 dark:text-slate-400" />
               </button>
 
               {/* Custom Habits List */}
@@ -352,7 +352,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-100 flex-shrink-0">
+        <div className="p-4 border-t border-brand-100 dark:border-slate-700 flex-shrink-0">
           {view === 'main' ? (
             <button
               onClick={handleClose}
@@ -374,23 +374,23 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       {deleteConfirmHabit && (
         <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40" onClick={cancelDelete} />
-          <div className="relative bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
+          <div className="relative bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-money-neg">
+              <div className="w-10 h-10 bg-rose-100 dark:bg-rose-500/15 rounded-full flex items-center justify-center text-money-neg">
                 <AlertTriangle size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-brand-800">Delete Habit?</h3>
-                <p className="text-sm text-brand-400">This action cannot be undone.</p>
+                <h3 className="font-bold text-brand-800 dark:text-slate-100">Delete Habit?</h3>
+                <p className="text-sm text-brand-400 dark:text-slate-400">This action cannot be undone.</p>
               </div>
             </div>
-            <p className="text-sm text-brand-600 mb-6">
+            <p className="text-sm text-brand-600 dark:text-slate-300 mb-6">
               Are you sure you want to delete <span className="font-semibold">&quot;{deleteConfirmHabit.title}&quot;</span>?
             </p>
             <div className="flex gap-3">
               <button
                 onClick={cancelDelete}
-                className="flex-1 py-2.5 bg-brand-100 text-brand-700 font-semibold rounded-xl hover:bg-brand-200 transition-colors"
+                className="flex-1 py-2.5 bg-brand-100 dark:bg-slate-700/50 text-brand-700 dark:text-slate-200 font-semibold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors"
               >
                 Cancel
               </button>

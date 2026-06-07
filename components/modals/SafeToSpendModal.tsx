@@ -92,29 +92,29 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
           {/* Top Line: Checking Balance */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 text-emerald-600 rounded-xl">
+              <div className="p-2 bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 rounded-xl">
                 <Wallet size={20} />
               </div>
               <div>
-                <p className="text-xs font-bold text-brand-400 uppercase">Checking Balance</p>
-                <p className="text-sm text-brand-500">Available Cash</p>
+                <p className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">Checking Balance</p>
+                <p className="text-sm text-brand-500 dark:text-slate-400">Available Cash</p>
               </div>
             </div>
-            <span className="text-lg font-mono font-bold text-brand-800">
+            <span className="text-lg font-mono font-bold text-brand-800 dark:text-slate-100">
               ${totalChecking.toLocaleString()}
             </span>
           </div>
 
-          <hr className="border-brand-100" />
+          <hr className="border-brand-100 dark:border-slate-700" />
 
           {/* Reserved: Bills */}
           <div className="space-y-3">
-             <div className="flex items-center justify-between text-rose-600">
+             <div className="flex items-center justify-between text-rose-600 dark:text-rose-300">
                 <div className="flex items-center gap-2">
                   <Receipt size={16} />
                   <div className="flex flex-col">
                     <span className="font-bold text-sm">Reserved for Bills</span>
-                    <span className="text-xxs text-brand-400">{rangeLabel}</span>
+                    <span className="text-xxs text-brand-400 dark:text-slate-400">{rangeLabel}</span>
                   </div>
                 </div>
                 <span className="font-mono font-bold">-${totalUnpaidBills.toLocaleString()}</span>
@@ -122,7 +122,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              {unpaidBillsItems.length > 0 && (
                <div className="pl-6 space-y-1">
                  {unpaidBillsItems.map(bill => (
-                   <div key={bill.id} className="flex justify-between text-xs text-brand-400">
+                   <div key={bill.id} className="flex justify-between text-xs text-brand-400 dark:text-slate-400">
                      <span>{bill.title} ({format(parseISO(bill.date), 'MMM d')})</span>
                      <span>${bill.amount}</span>
                    </div>
@@ -133,15 +133,15 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
           {/* Informational: Bucket Balances */}
           <div className="space-y-3">
-             <div className="flex items-center justify-between text-brand-500">
+             <div className="flex items-center justify-between text-brand-500 dark:text-slate-400">
                 <div className="flex items-center gap-2">
                   <CreditCard size={16} />
                   <div className="flex flex-col">
                     <span className="font-bold text-sm">Bucket Balances</span>
-                    <span className="text-xxs text-brand-400">For reference only</span>
+                    <span className="text-xxs text-brand-400 dark:text-slate-400">For reference only</span>
                   </div>
                 </div>
-                <span className="font-mono font-bold text-brand-600">
+                <span className="font-mono font-bold text-brand-600 dark:text-slate-300">
                   ${totalBucketLiability.toLocaleString()}
                 </span>
              </div>
@@ -155,11 +155,11 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
                    return (
                      <div key={b.id} className="space-y-1">
-                       <div className="flex justify-between items-center text-xs text-brand-400">
+                       <div className="flex justify-between items-center text-xs text-brand-400 dark:text-slate-400">
                          <div className="flex items-center gap-2">
                            <span>{b.name}</span>
                            {b.spent.pending > 0 && (
-                             <span className="text-xxs text-amber-600">
+                             <span className="text-xxs text-amber-600 dark:text-amber-300">
                                ({b.spent.pending} pending)
                              </span>
                            )}
@@ -169,7 +169,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
                        {/* Meter */}
                        <div
-                         className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden"
+                         className="h-1.5 w-full bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden"
                          role="progressbar"
                          aria-valuemin={0}
                          aria-valuemax={100}
@@ -186,18 +186,18 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                  })}
                </div>
              ) : (
-               <p className="pl-6 text-xs text-brand-300 italic">No remaining bucket funds.</p>
+               <p className="pl-6 text-xs text-brand-300 dark:text-slate-500 italic">No remaining bucket funds.</p>
              )}
           </div>
 
-          <div className="bg-brand-50 rounded-xl p-4 border border-brand-100 flex items-center justify-between">
-            <span className="font-bold text-brand-800">Safe to Spend</span>
+          <div className="bg-brand-50 dark:bg-slate-700/50 rounded-xl p-4 border border-brand-100 dark:border-slate-700 flex items-center justify-between">
+            <span className="font-bold text-brand-800 dark:text-slate-100">Safe to Spend</span>
             <span className={`text-2xl font-mono font-bold ${safeToSpend >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
               ${Math.abs(safeToSpend).toLocaleString()}
             </span>
           </div>
           
-          <p className="text-xxs text-center text-brand-400">
+          <p className="text-xxs text-center text-brand-400 dark:text-slate-400">
             This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
       </div>

@@ -58,27 +58,27 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
       noPadding={true}
     >
       <div className="p-4 space-y-4">
-        <p className="text-brand-600">
+        <p className="text-brand-600 dark:text-slate-300">
           Select a new due date for the <strong>{count}</strong> selected tasks.
         </p>
 
         <div className="grid grid-cols-2 gap-3">
             <button
                 onClick={setTomorrow}
-                className="py-2 px-3 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium rounded-xl transition-colors text-sm border border-brand-200"
+                className="py-2 px-3 bg-brand-50 dark:bg-slate-700/50 hover:bg-brand-100 dark:hover:bg-slate-700/50 text-brand-700 dark:text-slate-200 font-medium rounded-xl transition-colors text-sm border border-brand-200 dark:border-slate-700"
             >
                 Tomorrow
             </button>
             <button
                 onClick={setNextWeek}
-                className="py-2 px-3 bg-brand-50 hover:bg-brand-100 text-brand-700 font-medium rounded-xl transition-colors text-sm border border-brand-200"
+                className="py-2 px-3 bg-brand-50 dark:bg-slate-700/50 hover:bg-brand-100 dark:hover:bg-slate-700/50 text-brand-700 dark:text-slate-200 font-medium rounded-xl transition-colors text-sm border border-brand-200 dark:border-slate-700"
             >
                 Next Week (+7 days)
             </button>
         </div>
 
         <div>
-          <label htmlFor="batch-date" className="block text-xs font-bold text-brand-400 uppercase mb-1">
+          <label htmlFor="batch-date" className="block text-xs font-bold text-brand-400 dark:text-slate-400 uppercase mb-1">
             New Due Date
           </label>
           <input
@@ -87,16 +87,16 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             disabled={isSaving}
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
+            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
           />
         </div>
       </div>
 
-      <div className="sticky bottom-0 p-4 border-t border-brand-100 bg-white flex gap-3">
+      <div className="sticky bottom-0 p-4 border-t border-brand-100 dark:border-slate-700 bg-white dark:bg-slate-800 flex gap-3">
         <button
           onClick={onClose}
           disabled={isSaving}
-          className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+          className="flex-1 py-3 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>

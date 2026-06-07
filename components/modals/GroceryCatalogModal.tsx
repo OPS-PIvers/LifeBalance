@@ -127,35 +127,35 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       noPadding={true}
     >
       {/* Header */}
-      <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-slate-500" />
+      <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center">
+            <Clock className="w-5 h-5 text-slate-500 dark:text-slate-400" />
         </div>
         <div>
-          <h3 className="text-lg font-bold text-slate-900 tracking-tight">Previously Purchased</h3>
-          <p className="text-xs text-slate-500">Quickly add items back to your list</p>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">Previously Purchased</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Quickly add items back to your list</p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50">
+      <div className="px-6 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-700/30">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search history..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
             autoFocus
           />
         </div>
       </div>
 
       {/* List */}
-      <div className="p-4 space-y-2 bg-slate-50/30 min-h-[50vh]">
+      <div className="p-4 space-y-2 bg-slate-50/30 dark:bg-slate-700/20 min-h-[50vh]">
           {filteredCatalog.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
+            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
               <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
               <p>No history found matching &quot;{searchQuery}&quot;</p>
               <p className="text-xs mt-1">Items you check off your shopping list will appear here.</p>
@@ -164,12 +164,12 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             filteredCatalog.map(item => (
               <div
                 key={item.id}
-                className="group flex items-center gap-3 p-3 bg-white/80 border border-slate-100 rounded-2xl hover:border-slate-200 hover:shadow-glass hover:bg-white transition-all"
+                className="group flex items-center gap-3 p-3 bg-white/80 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl hover:border-slate-200 dark:hover:border-slate-600 hover:shadow-glass hover:bg-white dark:hover:bg-slate-700/50 transition-all"
               >
                 {/* Add Button Area */}
                 <button
                   onClick={() => handleAddItem(item)}
-                  className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-brand-50 hover:text-brand-600 hover:scale-105 transition-all shrink-0"
+                  className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-brand-50 dark:hover:bg-slate-700/50 hover:text-brand-600 dark:hover:text-slate-300 hover:scale-105 transition-all shrink-0"
                   aria-label={`Add ${item.name} to list`}
                 >
                   <Plus className="w-5 h-5" />
@@ -181,12 +181,12 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
                   onClick={() => handleAddItem(item)}
                 >
-                  <div className="font-medium text-slate-900 truncate">{item.name}</div>
-                  <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                    <span className="bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-medium">{item.category}</span>
-                    {item.defaultStore && <span className="truncate max-w-[80px] text-slate-400">• {item.defaultStore}</span>}
+                  <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
+                    <span className="bg-slate-100 dark:bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-600 dark:text-slate-300 font-medium">{item.category}</span>
+                    {item.defaultStore && <span className="truncate max-w-[80px] text-slate-400 dark:text-slate-500">• {item.defaultStore}</span>}
                     {item.lastPurchased && (
-                      <span className="text-slate-300">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
+                      <span className="text-slate-300 dark:text-slate-600">• {formatDistanceToNow(new Date(item.lastPurchased))} ago</span>
                     )}
                   </div>
                 </button>
@@ -194,7 +194,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 {/* Mobile Actions */}
                 <button
                     onClick={() => setActionItem(item)}
-                    className="sm:hidden w-10 h-10 flex items-center justify-center text-gray-400 active:text-brand-600 active:bg-gray-100 rounded-full"
+                    className="sm:hidden w-10 h-10 flex items-center justify-center text-gray-400 dark:text-slate-500 active:text-brand-600 active:bg-gray-100 rounded-full"
                     aria-label="More options"
                 >
                     <MoreVertical className="w-5 h-5" />
@@ -204,14 +204,14 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => setEditingItem(item)}
-                    className="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                    className="p-2 text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-full transition-colors"
                     aria-label="Edit history item"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleDeleteItem(item.id)}
-                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    className="p-2 text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 rounded-full transition-colors"
                     aria-label="Delete from history"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -229,9 +229,9 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
         title="Item Options"
       >
           <div className="space-y-3">
-             <div className="bg-gray-50 rounded-xl p-4 mb-4">
+             <div className="bg-gray-50 dark:bg-slate-700/50 rounded-xl p-4 mb-4">
                 <p className="font-bold text-lg">{actionItem?.name}</p>
-                <p className="text-gray-500">{actionItem?.category}</p>
+                <p className="text-gray-500 dark:text-slate-400">{actionItem?.category}</p>
              </div>
 
              <button
@@ -239,7 +239,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                  setEditingItem(actionItem);
                  setActionItem(null);
                }}
-               className="w-full flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-xl font-bold text-slate-700 active:bg-slate-50"
+               className="w-full flex items-center gap-3 p-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl font-bold text-slate-700 dark:text-slate-200 active:bg-slate-50"
              >
                 <Edit2 className="w-5 h-5" />
                 Edit Details
@@ -251,7 +251,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                      handleDeleteItem(actionItem.id);
                  }
                }}
-               className="w-full flex items-center gap-3 p-4 bg-white border border-red-100 text-red-600 rounded-xl font-bold active:bg-red-50"
+               className="w-full flex items-center gap-3 p-4 bg-white dark:bg-slate-800 border border-red-100 dark:border-red-500/30 text-red-600 dark:text-red-300 rounded-xl font-bold active:bg-red-50"
              >
                 <Trash2 className="w-5 h-5" />
                 Remove from History
@@ -269,7 +269,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
           <div className="space-y-4">
 
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Name</label>
+              <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Name</label>
               <input
                 type="text"
                 value={editingItem.name}
@@ -278,7 +278,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-gray-400 uppercase">Category</label>
+              <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Category</label>
               <input
                 type="text"
                 value={editingItem.category}
@@ -288,7 +288,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Qty</label>
+                 <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Default Qty</label>
                  <input
                   type="text"
                   value={editingItem.defaultQuantity || ''}
@@ -298,7 +298,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 />
               </div>
               <div>
-                 <label className="text-xs font-bold text-gray-400 uppercase">Default Store</label>
+                 <label className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase">Default Store</label>
                  <input
                   type="text"
                   value={editingItem.defaultStore || ''}
@@ -310,10 +310,10 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             </div>
           </div>
 
-          <div className="sticky bottom-0 flex gap-3 mt-6 p-4 border-t border-gray-100 bg-white">
+          <div className="sticky bottom-0 flex gap-3 mt-6 p-4 border-t border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800">
             <button
               onClick={() => setEditingItem(null)}
-              className="flex-1 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-lg"
+              className="flex-1 py-2 text-gray-600 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-lg"
             >
               Cancel
             </button>

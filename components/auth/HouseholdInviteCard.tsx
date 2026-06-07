@@ -17,12 +17,12 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
   };
 
   return (
-    <div className="bg-brand-50 border-2 border-brand-200 rounded-xl p-4">
-      <p className="text-xs font-bold text-brand-500 uppercase tracking-wider mb-2">
+    <div className="bg-brand-50 dark:bg-slate-700/50 border-2 border-brand-200 dark:border-slate-700 rounded-xl p-4">
+      <p className="text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-2">
         Household Invite Code
       </p>
       <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-2xl font-bold text-brand-800 tracking-wider">
+        <span className="font-mono text-2xl font-bold text-brand-800 dark:text-slate-100 tracking-wider">
           {inviteCode}
         </span>
         <button
@@ -33,7 +33,7 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
           {copied ? <Check size={20} /> : <Copy size={20} />}
         </button>
       </div>
-      <p className="text-xs text-brand-500 mt-3">
+      <p className="text-xs text-brand-500 dark:text-slate-400 mt-3">
         Share this code with family members to join your household
       </p>
     </div>

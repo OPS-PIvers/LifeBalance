@@ -41,39 +41,39 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
       className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
-          ? 'bg-slate-50 border-slate-300 ring-1 ring-slate-300'
-          : 'bg-white/80 border-transparent hover:ring-slate-200 hover:shadow-glass'
+          ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-300 ring-1 ring-slate-300 dark:ring-slate-600'
+          : 'bg-white/80 dark:bg-slate-800/60 border-transparent hover:ring-slate-200 dark:hover:ring-slate-700 hover:shadow-glass'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
         {/* Selection Checkbox */}
         {isSelectionMode && (
-          <div className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900' : 'text-slate-300'}`}>
+          <div className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
             {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded-md" />}
           </div>
         )}
 
         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-black/5 shadow-sm ${
            tx.category === INCOME_CATEGORY
-            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 text-emerald-600'
-            : 'bg-gradient-to-br from-slate-50 to-slate-100 text-slate-500'
+            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/15 dark:to-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+            : 'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700/50 dark:to-slate-700/50 text-slate-500 dark:text-slate-400'
         }`}>
           {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-bold tracking-tight text-slate-900 truncate text-base">{tx.merchant}</p>
+            <p className="font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs font-medium text-slate-500 truncate flex items-center gap-1.5 mt-0.5">
+          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
             {format(parseISO(tx.date), 'MMM d, yyyy')}
-            <span className="w-1 h-1 rounded-full bg-slate-300" />
-            <span className="font-medium text-slate-600">{tx.category}</span>
+            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+            <span className="font-medium text-slate-600 dark:text-slate-300">{tx.category}</span>
             {tx.store && (
               <>
-                <span className="w-1 h-1 rounded-full bg-slate-300" />
-                <span className="font-medium text-slate-600">{tx.store}</span>
+                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                <span className="font-medium text-slate-600 dark:text-slate-300">{tx.store}</span>
               </>
             )}
           </p>
@@ -83,7 +83,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
           <p className={`font-mono font-bold tracking-tight text-base ${
-            tx.category === INCOME_CATEGORY ? 'text-emerald-600' : 'text-slate-900'
+            tx.category === INCOME_CATEGORY ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'
           }`}>
             {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}
           </p>
@@ -103,7 +103,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
                 aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
               >
                 <Edit size={16} />
@@ -112,7 +112,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
-                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
                 aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
               >
                 <Copy size={16} />
@@ -121,7 +121,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
-                className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg"
+                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
                 aria-label={getSanitizedLabel(tx.merchant, 'Split')}
               >
                 <Scissors size={16} />
@@ -130,7 +130,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost-destructive"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
-                className="text-brand-400 hover:text-money-neg hover:bg-rose-50 rounded-lg"
+                className="text-brand-400 dark:text-slate-500 hover:text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 rounded-lg"
                 aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
               >
                 <Trash2 size={16} />
@@ -144,7 +144,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                   variant="ghost"
                   size="icon"
                   onClick={(e) => { e.stopPropagation(); onMore(tx); }}
-                  className="text-brand-400 active:bg-brand-100 rounded-lg"
+                  className="text-brand-400 dark:text-slate-500 active:bg-brand-100 dark:active:bg-slate-700/50 rounded-lg"
                   aria-label={getSanitizedLabel(tx.merchant, 'More options')}
                 >
                   <MoreVertical size={20} />

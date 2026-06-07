@@ -175,21 +175,21 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       maxWidth="max-w-5xl"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white z-10">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 z-10">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Activity className="text-brand-600" size={24} />
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Activity className="text-brand-600 dark:text-slate-300" size={24} />
             Analytics & Insights
           </h2>
-          <p className="text-xs text-slate-500 font-medium mt-0.5">Track your progress and financial health</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">Track your progress and financial health</p>
         </div>
-        <Button variant="ghost" size="icon" className="rounded-full text-slate-600" onClick={onClose} aria-label="Close modal">
+        <Button variant="ghost" size="icon" className="rounded-full text-slate-600 dark:text-slate-300" onClick={onClose} aria-label="Close modal">
           <X size={20} />
         </Button>
       </div>
 
       {/* Tabs */}
-      <div className="flex px-6 pt-4 pb-2 bg-white shrink-0 gap-8 border-b border-slate-100">
+      <div className="flex px-6 pt-4 pb-2 bg-white dark:bg-slate-800 shrink-0 gap-8 border-b border-slate-100 dark:border-slate-700">
         {[
           { id: 'pulse', label: 'Pulse', icon: Activity },
           { id: 'behavior', label: 'Behavior', icon: Brain },
@@ -200,7 +200,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               onClick={() => setActiveTab(tab.id as any)}
               className={clsx(
                 "pb-3 text-sm font-bold transition-all relative flex items-center gap-2",
-                activeTab === tab.id ? "text-brand-600" : "text-slate-400 hover:text-slate-600"
+                activeTab === tab.id ? "text-brand-600 dark:text-slate-300" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
               )}
             >
               <tab.icon size={16} />
@@ -213,7 +213,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 scroll-contain-y bg-slate-50/50 p-4 sm:p-6 space-y-6">
+        <div className="flex-1 scroll-contain-y bg-slate-50/50 dark:bg-slate-700/30 p-4 sm:p-6 space-y-6">
 
           {/* ================= PULSE TAB ================= */}
           {activeTab === 'pulse' && (
@@ -222,41 +222,41 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               {/* Hero Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Weekly Points */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Target size={80} />
                   </div>
                   <div className="flex justify-between items-start mb-2 relative z-10">
-                    <div className="p-2 bg-brand-50 rounded-lg text-brand-600">
+                    <div className="p-2 bg-brand-50 dark:bg-slate-700/50 rounded-lg text-brand-600 dark:text-slate-300">
                       <Target size={20} />
                     </div>
                     <div className={clsx(
                       "px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1",
-                      weeklyProgress.change >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                      weeklyProgress.change >= 0 ? "bg-green-100 text-green-700 dark:text-green-300" : "bg-red-100 text-red-700 dark:text-red-300"
                     )}>
                       {weeklyProgress.change >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                       {Math.abs(weeklyProgress.change)}%
                     </div>
                   </div>
-                  <div className="text-3xl font-black text-slate-800 relative z-10">{weeklyProgress.current}</div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-1 relative z-10">Points This Week</div>
+                  <div className="text-3xl font-black text-slate-800 dark:text-slate-100 relative z-10">{weeklyProgress.current}</div>
+                  <div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mt-1 relative z-10">Points This Week</div>
                 </div>
 
                 {/* Consistency Score */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                      <Brain size={80} />
                   </div>
                   <div className="flex justify-between items-start mb-2 relative z-10">
-                    <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-500/15 rounded-lg text-blue-600 dark:text-blue-300">
                       <Activity size={20} />
                     </div>
                   </div>
                   <div className="flex items-end gap-2 relative z-10">
-                    <div className="text-3xl font-black text-slate-800">{consistencyScore}%</div>
-                    <div className="mb-1 text-xs font-medium text-slate-400">consistency</div>
+                    <div className="text-3xl font-black text-slate-800 dark:text-slate-100">{consistencyScore}%</div>
+                    <div className="mb-1 text-xs font-medium text-slate-400 dark:text-slate-500">consistency</div>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden relative z-10">
+                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-700/50 rounded-full mt-3 overflow-hidden relative z-10">
                     <div
                       className="h-full bg-blue-500 rounded-full transition-all duration-1000"
                       style={{ width: `${consistencyScore}%` }}
@@ -265,24 +265,24 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Active Streaks */}
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Flame size={80} />
                   </div>
                   <div className="flex justify-between items-start mb-2 relative z-10">
-                    <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+                    <div className="p-2 bg-orange-50 dark:bg-orange-500/15 rounded-lg text-orange-600 dark:text-orange-300">
                       <Flame size={20} />
                     </div>
                   </div>
-                  <div className="text-3xl font-black text-slate-800 relative z-10">{streakStats.count}</div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-1 relative z-10">Active Streaks</div>
+                  <div className="text-3xl font-black text-slate-800 dark:text-slate-100 relative z-10">{streakStats.count}</div>
+                  <div className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide mt-1 relative z-10">Active Streaks</div>
                 </div>
               </div>
 
               {/* Chart A: Balance (Points vs Spending) */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center gap-2">
-                  <Activity size={16} className="text-brand-500"/>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
+                  <Activity size={16} className="text-brand-500 dark:text-slate-400"/>
                   Daily Balance: Effort vs. Spending
                 </h3>
                 <div className="h-64">
@@ -339,9 +339,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart B: Week-over-Week */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center gap-2">
-                  <Target size={16} className="text-blue-500"/>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
+                  <Target size={16} className="text-blue-500 dark:text-blue-300"/>
                   Performance: This Week vs Last
                 </h3>
                 <div className="h-64">
@@ -366,8 +366,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
             <div className="space-y-6">
 
               {/* Chart C: Consistency Radar */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-2">Category Balance</h3>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Category Balance</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
@@ -389,9 +389,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart D: Heatmap */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-sm font-bold text-slate-700">Consistency Heatmap (90 Days)</h3>
+                  <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Consistency Heatmap (90 Days)</h3>
                 </div>
 
                 <div className="grid grid-flow-col grid-rows-7 gap-1 overflow-x-auto pb-2">
@@ -408,7 +408,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                   ))}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-slate-400 uppercase tracking-wide">
+                <div className="flex items-center justify-end gap-2 mt-4 text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
                   <span>Less</span>
                   <div className="flex gap-1">
                     {[0,1,2,3,4].map(i => (
@@ -427,9 +427,9 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
             <div className="space-y-6">
 
               {/* Chart E: Burn Down */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-6 flex items-center gap-2">
-                  <Wallet size={16} className="text-red-500"/>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
+                  <Wallet size={16} className="text-red-500 dark:text-red-400"/>
                   Budget Burn-Down
                 </h3>
                 <div className="h-64">
@@ -477,8 +477,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart F: Variable Expense Trend */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                <h3 className="text-sm font-bold text-slate-700 mb-6">Variable Expense Trend (6 Months)</h3>
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6">Variable Expense Trend (6 Months)</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={trendData}>

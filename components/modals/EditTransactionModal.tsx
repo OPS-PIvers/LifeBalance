@@ -282,12 +282,12 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       </div>
 
       {/* Actions */}
-      <div className="sticky bottom-0 bg-white border-t border-brand-100 p-4 space-y-2">
+      <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-brand-100 dark:border-slate-700 p-4 space-y-2">
         <div className="flex gap-2">
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-3 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>
@@ -313,7 +313,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             <button
               onClick={handleDuplicate}
               disabled={isSaving}
-              className="flex-1 py-3 bg-white border border-brand-200 text-brand-600 font-bold rounded-xl hover:bg-brand-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-3 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Copy size={16} />
               Duplicate
@@ -339,7 +339,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={isSaving}
-                className="flex-1 py-2 bg-white text-brand-600 font-bold rounded-lg border border-brand-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2 bg-white dark:bg-slate-800 text-brand-600 dark:text-slate-300 font-bold rounded-lg border border-brand-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
