@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
@@ -17,7 +17,8 @@ import Input from '../components/ui/Input';
 import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
 
 const ToDosPage: React.FC = () => {
-  const { todos, addToDo, updateToDo, deleteToDo, completeToDo, members, currentUser } = useHousehold();
+  const { todos, addToDo, updateToDo, deleteToDo, completeToDo } = useTodos();
+  const { members, currentUser } = useHouseholdCore();
 
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');

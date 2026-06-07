@@ -2,13 +2,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { format, addDays, startOfToday } from 'date-fns';
 
 // Mock dependencies
 vi.mock('../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useTodos: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
+
+// ToDosPage now reads the `useTodos` and `useHouseholdCore` slices. Both mocks
+// receive the same composed value object so existing per-test data still works.
+const setHouseholdMock = (value: any) => {
+  (useTodos as any).mockReturnValue(value);
+  (useHouseholdCore as any).mockReturnValue(value);
+};
 
 vi.mock('../utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
@@ -83,7 +91,7 @@ describe('ToDosPage Reschedule Features', () => {
   const mockCompleteToDo = vi.fn();
 
   const setup = () => {
-    (useHousehold as any).mockReturnValue({
+    setHouseholdMock({
       todos: mockTodos,
       members: mockMembers,
       currentUser: mockMembers[0],

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useMeals } from '@/contexts/FirebaseHouseholdContext';
 import { QuickStockList } from '@/types/schema';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { ShoppingBag } from 'lucide-react';
@@ -13,7 +13,7 @@ import clsx from 'clsx';
 const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
 
 export const QuickRestockRow: React.FC = () => {
-  const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useHousehold();
+  const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useMeals();
 
   if (!quickStockLists || quickStockLists.length === 0) return null;
 

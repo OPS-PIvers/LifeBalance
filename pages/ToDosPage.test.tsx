@@ -2,15 +2,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '../utils/exportUtils';
 import { format, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
 
 // Mock dependencies
 vi.mock('../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useTodos: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
+
+// ToDosPage now reads the `useTodos` and `useHouseholdCore` slices. Both mocks
+// receive the same composed value object so existing per-test data still works.
+const setHouseholdMock = (value: any) => {
+  (useTodos as any).mockReturnValue(value);
+  (useHouseholdCore as any).mockReturnValue(value);
+};
 
 vi.mock('../utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
@@ -103,7 +111,7 @@ describe('ToDosPage', () => {
   const mockCompleteToDo = vi.fn();
 
   const setup = (todos = mockTodos, members = mockMembers) => {
-    (useHousehold as any).mockReturnValue({
+    setHouseholdMock({
       todos,
       members: members,
       currentUser: members[0] || null,
@@ -343,7 +351,7 @@ describe('ToDosPage', () => {
         points: { daily: 0, weekly: 0, total: 0 }
       };
 
-      (useHousehold as any).mockReturnValue({
+      setHouseholdMock({
         todos: [],
         members: [],
         currentUser: mockUser,
