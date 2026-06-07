@@ -16,7 +16,8 @@ export const formatShoppingListForShare = (items: ShoppingItem[]): string => {
 
   sortedCategories.forEach(category => {
     lines.push(`${category}:`);
-    groupedItems[category].forEach(item => {
+    // category comes from Object.keys(groupedItems), so groupedItems[category] is always defined.
+    groupedItems[category]!.forEach(item => {
       let line = `- `;
       if (item.store) {
         line += `[${item.store}] `;

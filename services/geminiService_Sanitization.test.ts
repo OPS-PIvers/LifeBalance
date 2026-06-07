@@ -90,7 +90,7 @@ describe('geminiService Sanitization', () => {
 
     await generateInsight('id', [maliciousTransaction], [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Check that quotes and newlines are removed/sanitized
@@ -121,7 +121,7 @@ describe('geminiService Sanitization', () => {
 
     await analyzeHabitPoints('id', [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     expect(promptText).not.toContain('Habit " Injection');
@@ -145,7 +145,7 @@ describe('geminiService Sanitization', () => {
 
     await analyzeHabitPatterns('id', [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     expect(promptText).not.toContain('Habit " Injection');

@@ -207,9 +207,9 @@ describe('CookbookModal', () => {
     );
 
     const cloneButtons = screen.getAllByLabelText('Clone as New Meal');
-    fireEvent.click(cloneButtons[0]);
+    fireEvent.click(cloneButtons[0]!);
 
-    expect(mockOnClone).toHaveBeenCalledWith(mockMeals[0]);
+    expect(mockOnClone).toHaveBeenCalledWith(mockMeals[0]!);
   });
 
   it('has accessible labels', () => {

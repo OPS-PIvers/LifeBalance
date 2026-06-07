@@ -140,7 +140,7 @@ describe('geminiService', () => {
 
     expect(generateContentMock).toHaveBeenCalled();
     // Check if the prompt (which is inside contents.parts[0].text) contains the previous insights
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     expect(promptText).toContain("PREVIOUS INSIGHTS");
@@ -330,7 +330,7 @@ describe('geminiService', () => {
     // TS narrowing check
     if (result.detectedType === 'shopping') {
         expect(result.items).toHaveLength(1);
-        expect(result.items[0].item).toBe('Milk');
+        expect(result.items[0]!.item).toBe('Milk');
     } else {
         throw new Error('Expected detectedType to be shopping');
     }
@@ -407,7 +407,7 @@ describe('geminiService', () => {
 
     // Verify the prompt sent to Gemini contains the date
     // We access the first argument of the first call, which is the model options/config object
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[1].text; // The second part is text
 
     expect(promptText).toContain("Today's date is 2026-02-15");
@@ -436,7 +436,7 @@ describe('geminiService', () => {
 
     await parseBankStatement('test-id', 'base64-img');
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[1].text;
 
     expect(promptText).toContain("Today's date is 2026-03-10");

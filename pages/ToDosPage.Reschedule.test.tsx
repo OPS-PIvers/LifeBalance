@@ -105,7 +105,7 @@ describe('ToDosPage Reschedule Features', () => {
     const moveBtns = screen.getAllByTitle('Move to Tomorrow');
     expect(moveBtns.length).toBeGreaterThan(0);
 
-    fireEvent.click(moveBtns[0]);
+    fireEvent.click(moveBtns[0]!);
 
     await waitFor(() => {
       expect(mockUpdateToDo).toHaveBeenCalledWith('1', {

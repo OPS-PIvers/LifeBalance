@@ -262,7 +262,7 @@ const Habits: React.FC = () => {
                 <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 ml-2">
                   {category}
                 </h2>
-                <HabitCategoryList category={category} habits={groupedHabits[category]} />
+                <HabitCategoryList category={category} habits={groupedHabits[category] ?? []} />
               </div>
             ))}
           </TabsContent>

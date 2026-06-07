@@ -166,6 +166,7 @@ export function suggestFreezeBankDate(habit: Habit): string | null {
 
   if (missedDates.length === 0) return null;
 
-  // Return the most recent missed date (last in array since we iterate backwards)
-  return missedDates[0];
+  // Return the most recent missed date (first in array since we iterate backwards from today)
+  // missedDates[0] is defined: the length === 0 guard above ensures the array is non-empty.
+  return missedDates[0] ?? null;
 }

@@ -83,7 +83,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             let isAuthorized = false;
             if (!snapshot.empty) {
-              const testerData = snapshot.docs[0].data();
+              const testerData = snapshot.docs[0]!.data(); // non-empty checked above
               if (testerData.status === 'active') {
                 isAuthorized = true;
               }

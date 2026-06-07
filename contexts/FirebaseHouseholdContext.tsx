@@ -793,7 +793,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
           setInsightsHistory(data);
           if (data.length > 0) {
-            setInsight(data[0].text);
+            setInsight(data[0]!.text); // length > 0 checked above
           }
         },
         (error) => {

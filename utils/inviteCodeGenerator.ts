@@ -43,7 +43,9 @@ export const generateInviteCode = async (): Promise<string> => {
         bufferIndex = 0;
       }
 
-      const randomValue = randomBuffer[bufferIndex];
+      // bufferIndex is always within [0, bufferSize) here: the refill guard above
+      // resets it to 0 whenever it reaches bufferSize, so this access is always in bounds.
+      const randomValue = randomBuffer[bufferIndex]!;
       bufferIndex++;
 
       // Rejection sampling: discard if value falls in the biased zone

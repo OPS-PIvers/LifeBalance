@@ -132,8 +132,12 @@ describe('Tabs', () => {
         </>
       );
 
-      const [trigger1, trigger2] = screen.getAllByRole('tab');
-      const [panel1, panel2] = screen.getAllByRole('tabpanel');
+      const triggers = screen.getAllByRole('tab');
+      const panels = screen.getAllByRole('tabpanel');
+      const trigger1 = triggers[0]!;
+      const trigger2 = triggers[1]!;
+      const panel1 = panels[0]!;
+      const panel2 = panels[1]!;
 
       expect(trigger1.id).not.toBe(trigger2.id);
       expect(panel1.id).not.toBe(panel2.id);

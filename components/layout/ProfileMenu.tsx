@@ -82,7 +82,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           currentIndex === -1 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
       }
 
-      items[nextIndex].focus();
+      items[nextIndex]?.focus();
     },
     [containerRef]
   );

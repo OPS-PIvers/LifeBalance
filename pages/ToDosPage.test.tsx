@@ -228,7 +228,7 @@ describe('ToDosPage', () => {
       setup();
       // Find the check button for the first task
       const completeButtons = screen.getAllByLabelText('Complete task');
-      fireEvent.click(completeButtons[0]);
+      fireEvent.click(completeButtons[0]!);
 
       await waitFor(() => {
         expect(mockCompleteToDo).toHaveBeenCalledWith('1');
@@ -258,7 +258,7 @@ describe('ToDosPage', () => {
 
     it('duplicates a task', async () => {
         setup();
-        const duplicateBtn = screen.getAllByLabelText('Duplicate task')[0];
+        const duplicateBtn = screen.getAllByLabelText('Duplicate task')[0]!;
         fireEvent.click(duplicateBtn);
 
         await waitFor(() => {

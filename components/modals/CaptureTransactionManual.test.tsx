@@ -82,7 +82,7 @@ describe('CaptureTransactionManual', () => {
       expect(mockOnAddTransaction).toHaveBeenCalledTimes(1);
     });
 
-    const calledArg = mockOnAddTransaction.mock.calls[0][0];
+    const calledArg = mockOnAddTransaction.mock.calls[0]![0];
     expect(calledArg).toMatchObject({
       amount: 25.00,
       merchant: 'Pizza Place',
@@ -148,7 +148,7 @@ describe('CaptureTransactionManual', () => {
       expect(mockOnAddTransaction).toHaveBeenCalledTimes(1);
     });
 
-    const calledArg = mockOnAddTransaction.mock.calls[0][0];
+    const calledArg = mockOnAddTransaction.mock.calls[0]![0];
     expect(calledArg).toMatchObject({
       amount: 50,
       merchant: 'Test Merchant',

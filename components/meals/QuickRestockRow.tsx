@@ -70,7 +70,7 @@ export const QuickRestockRow: React.FC = () => {
       >
         {quickStockLists.map(list => {
           const colorKey = list.color || DEFAULT_STORE_COLOR;
-          const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
+          const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
           const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
 
           return (

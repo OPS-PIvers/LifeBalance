@@ -123,7 +123,7 @@ describe('geminiService - Meal Suggestion', () => {
 
     await suggestMeal('test-household', request);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify constraints are included
@@ -160,7 +160,7 @@ describe('geminiService - Meal Suggestion', () => {
 
     await suggestMeal('test-household', request);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify previous meals are mentioned

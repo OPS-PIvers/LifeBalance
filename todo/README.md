@@ -24,6 +24,7 @@ The items below remain intentionally deferred:
 | 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + rules migration | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
 | 6 | **List virtualization** — window large transaction/todo/shopping lists | Layout/UX work for variable-height + drag-and-drop rows | [06-list-virtualization.md](./06-list-virtualization.md) |
 | 7 | **Import-path normalization** — relative imports → `@/` alias | ~190-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
+| 8 | **Dead `animate-in` classes** — entrance-animation utilities render nothing (plugin missing) | Restoring them adds motion (behavior change) + needs reduced-motion gating | [08-dead-animation-classes.md](./08-dead-animation-classes.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.

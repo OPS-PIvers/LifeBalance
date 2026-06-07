@@ -27,6 +27,7 @@
     "noEmit": true,
     "esModuleInterop": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },

@@ -117,7 +117,11 @@ function calculatePercentageProgress(
   // Check if challenge month matches current month
   // If challenge.month is set and different, use that month instead
   const challengeMonth = challenge.month || monthKey;
-  const [year, month] = challengeMonth.split('-').map(Number);
+  const parts = challengeMonth.split('-').map(Number);
+  // challengeMonth is always 'YYYY-MM' (derived from format or challenge.month),
+  // so parts[0] and parts[1] are always defined.
+  const year = parts[0]!;
+  const month = parts[1]!;
   const monthStart = new Date(year, month - 1, 1);
   // const monthEnd = endOfMonth(monthStart); // Unused
   const daysInMonth = getDaysInMonth(monthStart);

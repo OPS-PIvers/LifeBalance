@@ -81,7 +81,7 @@ describe('CaptureTransactionReview', () => {
     );
 
     const selectButtons = screen.getAllByLabelText(/select transaction/i);
-    const [firstButton, secondButton] = selectButtons;
+    const [firstButton, secondButton] = selectButtons as [HTMLElement, HTMLElement];
 
     // Toggle second transaction (currently unselected)
     fireEvent.click(secondButton);
@@ -170,7 +170,7 @@ describe('CaptureTransactionReview', () => {
 
     // Click the 'Food' chip for the first transaction
     const foodChips = screen.getAllByText('Food');
-    fireEvent.click(foodChips[0]);
+    fireEvent.click(foodChips[0]!);
     expect(mockOnUpdate).toHaveBeenCalledWith('1', { category: 'Food', subBucketId: undefined });
   });
 

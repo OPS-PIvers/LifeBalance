@@ -68,7 +68,7 @@ describe('calendarRecurrence', () => {
         new Date('2024-01-31')
       );
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe(baseItem.id);
+      expect(result[0]!.id).toBe(baseItem.id);
     });
 
     it('generates weekly instances correctly with new ID format', () => {
@@ -85,11 +85,11 @@ describe('calendarRecurrence', () => {
       const result = generateRecurringInstances(weeklyItem, rangeStart, rangeEnd);
 
       expect(result).toHaveLength(3);
-      expect(result[0].date).toBe('2024-01-01');
-      expect(result[1].date).toBe('2024-01-08');
-      expect(result[2].date).toBe('2024-01-15');
+      expect(result[0]!.date).toBe('2024-01-01');
+      expect(result[1]!.date).toBe('2024-01-08');
+      expect(result[2]!.date).toBe('2024-01-15');
       // Check ID generation format
-      expect(result[1].id).toBe('test-item-1_instance_2024-01-08');
+      expect(result[1]!.id).toBe('test-item-1_instance_2024-01-08');
     });
 
     it('generates bi-weekly instances correctly', () => {
@@ -106,9 +106,9 @@ describe('calendarRecurrence', () => {
       const result = generateRecurringInstances(biWeeklyItem, rangeStart, rangeEnd);
 
       expect(result).toHaveLength(3);
-      expect(result[0].date).toBe('2024-01-01');
-      expect(result[1].date).toBe('2024-01-15');
-      expect(result[2].date).toBe('2024-01-29');
+      expect(result[0]!.date).toBe('2024-01-01');
+      expect(result[1]!.date).toBe('2024-01-15');
+      expect(result[2]!.date).toBe('2024-01-29');
     });
 
     it('generates monthly instances correctly', () => {
@@ -125,9 +125,9 @@ describe('calendarRecurrence', () => {
       const result = generateRecurringInstances(monthlyItem, rangeStart, rangeEnd);
 
       expect(result).toHaveLength(3);
-      expect(result[0].date).toBe('2024-01-01');
-      expect(result[1].date).toBe('2024-02-01');
-      expect(result[2].date).toBe('2024-03-01');
+      expect(result[0]!.date).toBe('2024-01-01');
+      expect(result[1]!.date).toBe('2024-02-01');
+      expect(result[2]!.date).toBe('2024-03-01');
     });
 
     it('optimizes start date for old recurring items (jump logic)', () => {
@@ -145,8 +145,8 @@ describe('calendarRecurrence', () => {
       const result = generateRecurringInstances(oldItem, rangeStart, rangeEnd);
 
       expect(result).toHaveLength(2);
-      expect(result[0].date).toBe('2024-01-01');
-      expect(result[1].date).toBe('2024-01-08');
+      expect(result[0]!.date).toBe('2024-01-01');
+      expect(result[1]!.date).toBe('2024-01-08');
     });
 
     it('handles bi-weekly jumps correctly', () => {
@@ -164,7 +164,7 @@ describe('calendarRecurrence', () => {
       const result = generateRecurringInstances(oldItem, rangeStart, rangeEnd);
 
       expect(result).toHaveLength(1);
-      expect(result[0].date).toBe('2024-01-29');
+      expect(result[0]!.date).toBe('2024-01-29');
     });
 
     it('handles unknown frequency safely by preventing infinite loop', () => {
@@ -185,7 +185,7 @@ describe('calendarRecurrence', () => {
         // It will only return the initial instance if it falls in range.
         expect(result.length).toBeLessThanOrEqual(1);
         if (result.length === 1) {
-            expect(result[0].date).toBe('2024-01-01');
+            expect(result[0]!.date).toBe('2024-01-01');
         }
     });
   });

@@ -100,13 +100,13 @@ describe('mapWeeklyPlan', () => {
 
   it('defaults startDate to plan.weekOf', () => {
     const mapped = mapWeeklyPlan(samplePlan);
-    expect(mapped.planItems[0].date).toBe('2026-06-01');
+    expect(mapped.planItems[0]!.date).toBe('2026-06-01');
   });
 
   it('builds shopping items from the consolidated list with store names', () => {
     const mapped = mapWeeklyPlan(samplePlan);
     expect(mapped.shoppingItems).toHaveLength(3);
-    expect(mapped.shoppingItems[0]).toMatchObject({
+    expect(mapped.shoppingItems[0]!).toMatchObject({
       name: 'Onion',
       category: 'Produce',
       quantity: '1',
@@ -114,7 +114,7 @@ describe('mapWeeklyPlan', () => {
       isPurchased: false,
       order: 0,
     });
-    expect(mapped.shoppingItems[1].category).toBe('Meat');
+    expect(mapped.shoppingItems[1]!.category).toBe('Meat');
   });
 });
 
@@ -127,9 +127,9 @@ describe('money helpers', () => {
   it('groups items by store honoring storeOrder', () => {
     const groups = groupItemsByStore(samplePlan);
     expect(groups.map(g => g.key)).toEqual(['tj', 'target']);
-    expect(groups[0].name).toBe("Trader Joe's");
-    expect(groups[0].items).toHaveLength(2);
-    expect(subtotal(groups[0].items)).toBeCloseTo(10.3);
-    expect(groups[1].items).toHaveLength(1);
+    expect(groups[0]!.name).toBe("Trader Joe's");
+    expect(groups[0]!.items).toHaveLength(2);
+    expect(subtotal(groups[0]!.items)).toBeCloseTo(10.3);
+    expect(groups[1]!.items).toHaveLength(1);
   });
 });

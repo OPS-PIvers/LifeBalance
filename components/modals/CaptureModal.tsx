@@ -123,7 +123,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setTodoDate(prev => prev || getLocalDateString());
       // Default assignee to current user or first member
       setTodoAssignee(prev =>
-        prev || (currentUser?.uid ?? (members.length > 0 ? members[0].uid : ''))
+        prev || (currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''))
       );
 
       hasInitialized.current = true;

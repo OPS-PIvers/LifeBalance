@@ -422,8 +422,8 @@ describe('habitLogic', () => {
         streakDays: 8,
       };
 
-      const startDate = history[0];
-      const endDate = history[history.length - 1];
+      const startDate = history[0]!;
+      const endDate = history[history.length - 1]!;
       const total = calculatePointsForDateRange([habit], startDate, endDate);
 
       // Per-date: days 1-2 = 1.0x (10), days 3-6 = 1.5x (floor(15)=15), days 7-8 = 2.0x (20).
@@ -470,7 +470,7 @@ describe('habitLogic', () => {
         streakDays: 8,
       };
 
-      const total = calculatePointsForDateRange([habit], history[0], history[7]);
+      const total = calculatePointsForDateRange([habit], history[0]!, history[7]!);
       // 8 days * -10 * 1.0 = -80.
       expect(total).toBe(-80);
     });
@@ -488,7 +488,7 @@ describe('habitLogic', () => {
         streakDays: 2,
       };
 
-      const total = calculatePointsForDateRange([habit], history[0], history[1]);
+      const total = calculatePointsForDateRange([habit], history[0]!, history[1]!);
       // Yesterday: 1 completion * 10 = 10. Today: 3 completions * 10 = 30. Total 40.
       expect(total).toBe(40);
     });

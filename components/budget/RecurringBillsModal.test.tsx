@@ -141,7 +141,7 @@ describe('RecurringBillsModal', () => {
     // Note: Since we have multiple edit buttons, we need to be specific or assume order.
     // The items are mapped in order. Netflix is index 0.
     const editButtons = screen.getAllByTestId('edit-icon');
-    fireEvent.click(editButtons[0].parentElement!);
+    fireEvent.click(editButtons[0]!.parentElement!);
 
     // Check if inputs appear
     const titleInput = screen.getByPlaceholderText('Title');
@@ -172,7 +172,7 @@ describe('RecurringBillsModal', () => {
       render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
 
       const editButtons = screen.getAllByTestId('edit-icon');
-      fireEvent.click(editButtons[0].parentElement!);
+      fireEvent.click(editButtons[0]!.parentElement!);
 
       const amountInput = screen.getByPlaceholderText('Amount');
       fireEvent.change(amountInput, { target: { value: '-5' } }); // Negative
@@ -196,7 +196,7 @@ describe('RecurringBillsModal', () => {
     render(<RecurringBillsModal isOpen={true} onClose={onClose} />);
 
     const deleteButtons = screen.getAllByTestId('trash-icon');
-    fireEvent.click(deleteButtons[0].parentElement!);
+    fireEvent.click(deleteButtons[0]!.parentElement!);
 
     await waitFor(() => {
       expect(mockDeleteCalendarItem).toHaveBeenCalledWith('item-1');

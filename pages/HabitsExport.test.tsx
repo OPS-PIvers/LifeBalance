@@ -92,7 +92,7 @@ describe('Habits Page Export', () => {
     expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
     // Verify the data passed to generateCsvExport
-    const callArgs = vi.mocked(generateCsvExport).mock.calls[0];
+    const callArgs = vi.mocked(generateCsvExport).mock.calls[0]!; // known-present: generateCsvExport was called once
     const exportData = callArgs[0];
     const filename = callArgs[1];
 

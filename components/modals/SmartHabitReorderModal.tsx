@@ -156,7 +156,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
                 <div key={category} className="space-y-2">
                   <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-2">{category}</h3>
                   <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl overflow-hidden divide-y divide-slate-50">
-                    {previewHabits.grouped[category].map(habit => (
+                    {(previewHabits.grouped[category] ?? []).map(habit => (
                       <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}

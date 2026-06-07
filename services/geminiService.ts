@@ -273,7 +273,7 @@ export interface GroceryItem {
  */
 const extractMimeType = (base64Image: string): string => {
   const match = base64Image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
-  return match ? match[1] : 'image/jpeg';
+  return match?.[1] ?? 'image/jpeg';
 };
 
 /**

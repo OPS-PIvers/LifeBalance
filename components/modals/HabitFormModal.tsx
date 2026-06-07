@@ -16,7 +16,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
   // Form State
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(CATEGORIES[0] ?? 'Health');
   const [type, setType] = useState<'positive' | 'negative'>('positive');
   const [scoringType, setScoringType] = useState<'incremental' | 'threshold'>('threshold');
   const [period, setPeriod] = useState<'daily' | 'weekly'>('daily');
@@ -35,7 +35,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     } else {
       // Reset defaults
       setTitle('');
-      setCategory(CATEGORIES[0]);
+      setCategory(CATEGORIES[0] ?? 'Health');
       setType('positive');
       setScoringType('threshold');
       setPeriod('daily');
@@ -50,7 +50,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     if (!title || !basePoints || !targetCount || isSaving) return;
 
     // Enforce non-empty category
-    const finalCategory = category.trim() || CATEGORIES[0];
+    const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
 
     const habitData: Habit = {
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),

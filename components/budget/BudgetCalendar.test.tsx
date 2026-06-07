@@ -166,7 +166,7 @@ describe('BudgetCalendar', () => {
 
     // The modal has a "Add Event" button which is the second one on the screen (first one is the trigger)
     const saveButtons = screen.getAllByText('Add Event');
-    fireEvent.click(saveButtons[1]);
+    fireEvent.click(saveButtons[1]!);
 
     await waitFor(() => {
       expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({

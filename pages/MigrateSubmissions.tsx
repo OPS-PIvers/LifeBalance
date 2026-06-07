@@ -127,6 +127,7 @@ const MigrateSubmissions: React.FC = () => {
         // Process each date and create submission
         for (let i = 0; i < sortedDates.length; i++) {
           const date = sortedDates[i];
+          if (date === undefined) continue; // noUncheckedIndexedAccess: i is always in-bounds here, but narrow for TS
 
           // Calculate streak as of this date
           const datesUpToNow = sortedDates.slice(0, i + 1);

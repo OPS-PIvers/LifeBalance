@@ -31,7 +31,7 @@ export const ThemeToggle: React.FC = () => {
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (index - 1 + OPTIONS.length) % OPTIONS.length;
     if (next === null) return;
     e.preventDefault();
-    select(OPTIONS[next].value);
+    select(OPTIONS[next]!.value); // next is always a valid index: modulo OPTIONS.length
     btnRefs.current[next]?.focus();
   };
 

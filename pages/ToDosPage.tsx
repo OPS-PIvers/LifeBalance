@@ -180,7 +180,7 @@ const ToDosPage: React.FC = () => {
   const openAddModal = useCallback(() => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
-    const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0].uid : '');
+    const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -306,8 +306,10 @@ const ToDosPage: React.FC = () => {
       });
 
       exportData.sort((a, b) => {
-        if (a['Due Date'] !== b['Due Date']) {
-          return a['Due Date'].localeCompare(b['Due Date']);
+        const aDate = a['Due Date'] ?? '';
+        const bDate = b['Due Date'] ?? '';
+        if (aDate !== bDate) {
+          return aDate.localeCompare(bDate);
         }
         return 0;
       });

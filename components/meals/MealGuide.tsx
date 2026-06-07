@@ -460,8 +460,10 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
 
 const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose: () => void }> = ({ meal, steps, onClose }) => {
   const [i, setI] = useState(0);
-  const step = steps[i];
+  const step = steps[i]; // steps is non-empty (CookMode only renders when schedule.steps.length > 0)
   const progress = steps.length ? ((i + 1) / steps.length) * 100 : 0;
+
+  if (!step) return null;
 
   return (
     <div className="fixed inset-0 z-modal bg-white dark:bg-slate-900 flex flex-col p-6 pt-safe pb-safe">

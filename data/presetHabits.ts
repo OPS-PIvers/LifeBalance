@@ -807,8 +807,9 @@ export const getPresetHabitsByCategory = (): Record<string, PresetHabit[]> => {
 
   // Add habits to their categories
   PRESET_HABITS.forEach(habit => {
-    if (result[habit.category]) {
-      result[habit.category].push(habit);
+    const existing = result[habit.category];
+    if (existing) {
+      existing.push(habit);
     } else {
       result[habit.category] = [habit];
     }
@@ -816,7 +817,8 @@ export const getPresetHabitsByCategory = (): Record<string, PresetHabit[]> => {
 
   // Remove empty categories
   Object.keys(result).forEach(key => {
-    if (result[key].length === 0) {
+    // key comes from Object.keys(result), so result[key] is always defined here.
+    if (result[key]!.length === 0) {
       delete result[key];
     }
   });

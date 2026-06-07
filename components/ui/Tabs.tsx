@@ -95,6 +95,7 @@ export const TabsList: React.FC<{ children: React.ReactNode; className?: string 
     if (nextIndex !== null) {
       e.preventDefault();
       const nextValue = tabValues[nextIndex];
+      if (nextValue === undefined) return;
       onValueChange(nextValue);
       // Move DOM focus to the newly-selected trigger button
       const listEl = e.currentTarget;

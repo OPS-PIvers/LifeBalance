@@ -68,7 +68,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
   const extractJson = (raw: string): string => {
     let s = raw.trim();
     const fence = /^```(?:json)?\s*([\s\S]*?)\s*```$/m.exec(s);
-    if (fence) s = fence[1].trim();
+    if (fence) s = fence[1]!.trim(); // capture group 1 always present when exec() succeeds
     if (!s.startsWith('{')) {
       const first = s.indexOf('{');
       const last = s.lastIndexOf('}');
@@ -131,8 +131,8 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             {
               date: pi.date,
               type: pi.type,
-              mealId: ids[pi.mealIndex],
-              mealName: mapped.meals[pi.mealIndex].name,
+              mealId: ids[pi.mealIndex]!, // pi.mealIndex is a valid index into the parallel ids array
+              mealName: mapped.meals[pi.mealIndex]!.name, // pi.mealIndex is a valid index into mapped.meals
               isCooked: false,
             },
             { suppressToast: true },

@@ -735,7 +735,7 @@ const MealPlanTab: React.FC = () => {
                     const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : null;
                     const mealName = planItem.mealName || linkedMeal?.name || 'Untitled meal';
                     const isCooked = planItem.isCooked;
-                    const typeMeta = MEAL_TYPE_META[planItem.type] || MEAL_TYPE_META.dinner;
+                    const typeMeta = MEAL_TYPE_META[planItem.type] ?? MEAL_TYPE_META['dinner']!; // 'dinner' is a known key
 
                     return (
                         <div
