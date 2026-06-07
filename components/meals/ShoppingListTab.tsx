@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useMeals, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart } from 'lucide-react';
 import { Reorder } from 'framer-motion';
@@ -96,7 +96,7 @@ const ShoppingListTab: React.FC = () => {
     quickStockLists,
     addGroceryCatalogItem,
     updateQuickStockList,
-  } = useMeals();
+  } = useShopping();
   const { householdId } = useHouseholdCore();
 
   const isDesktop = useMediaQuery('(min-width: 640px)');

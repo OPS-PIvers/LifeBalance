@@ -4,19 +4,21 @@ import MealPlanTab from './MealPlanTab';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useMeals: () => ({
+  useMealPlan: () => ({
     meals: [] as unknown[],
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
-    addShoppingItem: vi.fn(),
-    addShoppingItems: vi.fn(),
-    shoppingList: [] as unknown[],
-    groceryCatalog: [] as unknown[],
     mealPlan: [] as unknown[],
     addMealPlanItem: vi.fn(),
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
     ensureMealPlanWeek: vi.fn(),
+  }),
+  useShopping: () => ({
+    addShoppingItem: vi.fn(),
+    addShoppingItems: vi.fn(),
+    shoppingList: [] as unknown[],
+    groceryCatalog: [] as unknown[],
   }),
   useHouseholdCore: () => ({
     householdId: 'test-household',

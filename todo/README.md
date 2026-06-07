@@ -22,10 +22,15 @@ a product/security decision.
   budget-alert balance bug, rate-limit transaction, Gemini kill-switch cache, last blanket
   `eslint-disable` removal, `functions` strict types, ref-stabilized habit callbacks, more atomic
   `writeBatch` paths, ConfirmDialog/ARIA a11y).
-- **This pass** — Safe-to-Spend now folds current-period pending transactions *(was todo #3)*;
-  `TransactionMasterList` is virtualized with `@tanstack/react-virtual` *(was todo #6)*; the dead
-  entrance-animation classes are restored via `tailwindcss-animate` with reduced-motion gating
+- **PR #618** — Safe-to-Spend folds current-period pending transactions *(was todo #3)*;
+  `TransactionMasterList` virtualized with `@tanstack/react-virtual` *(was todo #6)*; dead
+  entrance-animation classes restored via `tailwindcss-animate` with reduced-motion gating
   *(was todo #8)*.
+- **This pass** — weekly habits now earn streak multipliers measured in consecutive weeks
+  (2wk → 1.5×, 4wk → 2.0×) *(was todo #9)*; `MealsContext` split into `useMealPlan()` /
+  `useShopping()` so shopping changes don't re-render the meal planner *(was todo #12)*; minor
+  deferrals — run-once guards on the bucket/paycheck migration effects + batched voice-command
+  shopping writes *(was todo #13)*.
 
 ## Remaining deferred items
 
@@ -34,21 +39,14 @@ a product/security decision.
 | 4 | **Notification scan** — stop hourly full-collection scans in scheduled functions | Needs a member-field migration + DST-correct timeslot + careful deploy ordering | [04-notification-scan.md](./04-notification-scan.md) |
 | 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + Firestore rules / custom-claims migration with lockout risk | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
 | 7 | **Import-path normalization** — relative imports → `@/` alias | ~266-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
-| 9 | **Weekly-habit streaks** — `calculateStreak` counts days, so weekly habits never earn multipliers | Behavior change + threshold-in-weeks is a product decision | [09-weekly-habit-streaks.md](./09-weekly-habit-streaks.md) |
-| 10 | **Daily points after midnight reset** — auto-reset leaves `completedDates`, so recalc can zero earned points | Points-critical; needs a repro test before fixing | [10-daily-points-after-midnight-reset.md](./10-daily-points-after-midnight-reset.md) |
-| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
-| 12 | **Meals context split** — `useMeals()` re-renders all meal/shopping consumers on any shopping change | Many consumers; continuation of the context-split strategy | [12-meals-context-split.md](./12-meals-context-split.md) |
-| 13 | **Minor deferrals** — migration-effect run-once guard; voice-command shopping batching | Low impact; batch into any cleanup PR | [13-minor-deferrals.md](./13-minor-deferrals.md) |
+| 10 | **Daily points after midnight reset** — auto-reset leaves `completedDates`, so recalc can zero earned points | In flight in PR #620 | [10-daily-points-after-midnight-reset.md](./10-daily-points-after-midnight-reset.md) |
+| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully (coordinate with #10) | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
 
-Items 09–13 were scoped during the PR #619 optimization pass (Net-Flow expense bug,
-budget-alert account-balance bug, rate-limit transaction + Gemini kill-switch cache,
-removal of the last blanket `eslint-disable` test files, `functions` strict-type flags,
-`useHabitActions` ref-stabilized callbacks, atomic `writeBatch` for
-`updateTransactionCategory` / `useFreezeBankToken` / `addMember`, and an a11y pass) and
-deferred to their own follow-ups.
+Items 10–13 were scoped during the PR #619 optimization pass; #9, #12, and #13 shipped
+in the pass above and #10 is in flight (PR #620), leaving #10/#11 on the points path.
 
 ## Kickoff prompts
 

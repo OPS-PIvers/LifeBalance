@@ -9,7 +9,8 @@ import {
   useGamification,
   useHousehold,
   type FinanceContextValue,
-  type MealsContextValue,
+  type MealPlanContextValue,
+  type ShoppingContextValue,
   type TodosContextValue,
   type GamificationContextValue,
   type HouseholdCoreContextValue,
@@ -27,7 +28,8 @@ const makeFinance = (transactions: unknown[]): FinanceContextValue =>
 // Stable references for the slices we are NOT changing — mirrors how the real
 // provider memoizes each slice with a tight dependency array, so these keep the
 // same identity across a finance-only update.
-const MEALS = {} as unknown as MealsContextValue;
+const MEAL_PLAN = {} as unknown as MealPlanContextValue;
+const SHOPPING = {} as unknown as ShoppingContextValue;
 const TODOS = {} as unknown as TodosContextValue;
 const GAMIFICATION = {} as unknown as GamificationContextValue;
 const CORE = {} as unknown as HouseholdCoreContextValue;
@@ -75,7 +77,8 @@ const Harness: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <HouseholdSliceProviders
         finance={finance}
         gamification={GAMIFICATION}
-        meals={MEALS}
+        mealPlan={MEAL_PLAN}
+        shopping={SHOPPING}
         todos={TODOS}
         core={CORE}
       >

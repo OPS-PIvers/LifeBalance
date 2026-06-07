@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
-import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
+import { streakForHabit, getMultiplier } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
@@ -43,8 +43,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         let relevantCount = 0;
         let relevantDates: string[] = [];
 
-        const currentStreak = calculateStreak(habit.completedDates);
-        const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+        const currentStreak = streakForHabit(habit);
+        const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
 
         if (view === 'daily') {
           if (!habit.completedDates.includes(today)) return null;
@@ -160,9 +160,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         newCompletedDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     }
 
-    // Recalculate streak based on NEW dates to get correct multiplier
-    const newStreak = calculateStreak(newCompletedDates);
-    const multiplier = getMultiplier(newStreak, habit.type === 'positive');
+    // Recalculate streak based on NEW dates to get correct multiplier (period-aware)
+    const newStreak = streakForHabit({ period: habit.period, completedDates: newCompletedDates });
+    const multiplier = getMultiplier(newStreak, habit.type === 'positive', habit.period);
     const pointsPerCompletion = Math.floor(habit.basePoints * multiplier);
 
     // Determine points change
@@ -183,7 +183,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         // Update habit
         await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
             completedDates: newCompletedDates,
-            streakDays: newStreak,
+            streakDays: newStreak, // already computed from streakForHabit above
             lastUpdated: serverTimestamp()
         });
 

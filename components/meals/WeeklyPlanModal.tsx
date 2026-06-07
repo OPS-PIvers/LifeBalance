@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
-import { useMeals, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { WeeklyPlan, WeeklyPlanConstraints } from '@/types/weeklyPlan';
 import { mapWeeklyPlan } from '@/utils/weeklyPlanMapper';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -23,7 +23,8 @@ interface WeeklyPlanModalProps {
  * writing the meals, dinners and shopping list into the household.
  */
 export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClose, weekStart }) => {
-  const { meals, shoppingList, addMeal, addMealPlanItem, addShoppingItems } = useMeals();
+  const { meals, addMeal, addMealPlanItem } = useMealPlan();
+  const { shoppingList, addShoppingItems } = useShopping();
   const { householdId } = useHouseholdCore();
 
   const [mode, setMode] = useState<Mode>('choose');

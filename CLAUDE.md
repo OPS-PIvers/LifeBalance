@@ -71,13 +71,14 @@ VITE_FIREBASE_VAPID_KEY=your_vapid_key_here
 
 ### State Management
 
-The entire application state is managed through a single **React Context**: `FirebaseHouseholdContext` ([contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx)).
+Application state lives in `FirebaseHouseholdContext` ([contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx)), which owns the Firestore listeners but exposes state through **domain-sliced contexts** so a change in one domain doesn't re-render consumers of another. Consume the narrowest slice you need:
+- `useFinance()` — accounts, budget buckets, transactions, calendar items, pay periods, Safe-to-Spend
+- `useGamification()` — habits, points (daily/weekly/total), challenges, rewards, freeze bank
+- `useMealPlan()` — meals (recipes) + weekly meal plan; `useShopping()` — shopping list, grocery catalog, stores (split so checking off a shopping item doesn't re-render the meal planner)
+- `useTodos()` — shared household to-dos
+- `useHouseholdCore()` — household id, members, loading, settings, insights
 
-This context provides:
-- **Finance**: Accounts, budget buckets, transactions, calendar items, pay periods
-- **Gamification**: Habits, points (daily/weekly/total), challenges, rewards
-- **Meals**: Meal recipes, weekly meal planning, shopping lists
-- **Safe-to-Spend Calculation**: Real-time financial health metric
+A backward-compatible `useHousehold()` shim composes all slices (and `useMeals()` composes the two meal slices) for un-migrated consumers; prefer the granular hooks in new/heavy components. `MockHouseholdContext` mirrors these slices for Test Mode.
 
 All data is persisted in **Firestore** with real-time synchronization across devices using Firebase's `onSnapshot` listeners.
 
@@ -104,13 +105,15 @@ Habits support two scoring modes:
 1. **Threshold**: Points awarded only when `targetCount` is reached (e.g., "Read 30 mins" = 1 completion)
 2. **Incremental**: Points on every action (e.g., "Late night snack" = -10 pts each time)
 
-**Streak Multipliers** (the multiplier reflects the streak *including* the current day's completion):
-- 3-6 days: 1.5x points
-- 7+ days: 2.0x points
+**Streak Multipliers** (the multiplier reflects the streak *including* the current completion). Streaks are measured in the habit's own cadence — consecutive **days** for daily habits, consecutive ISO **weeks** (local-week-anchored) for weekly habits — so weekly habits actually earn multipliers instead of resetting every ~7-day gap:
+- **Daily** habits: 3-6 days → 1.5x, 7+ days → 2.0x
+- **Weekly** habits: 2-3 weeks → 1.5x, 4+ weeks → 2.0x
+
+`calculateStreak`/`streakEndingOn` are the day-based primitives; `calculateWeeklyStreak`/`streakEndingOnWeek` are the week-based analogues. Call sites use the period-dispatching helpers `streakForHabit(habit)` / `streakEndingOnForHabit(habit, date)`, and `getMultiplier(streak, isPositive, period)` applies the per-cadence thresholds. (Note: the duplicated `calculateStreak` in `functions/src/quickAdd/habitProcessor.ts` is still day-based — a known follow-up for quickAdd weekly habits.)
 
 **Atomicity:** Habit mutations that touch both a habit document and the household points — `toggleHabit`, `resetHabit`, `addHabitSubmission`, `updateHabitSubmission`, `deleteHabitSubmission` — commit in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). The same applies to bucket reallocation and paycheck approval, and to the multi-document context mutations `updateTransactionCategory` (transaction + related habits + points), `useFreezeBankToken` (habit + token balance), and `addMember` (member doc + `memberUids`). Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
 
-**Point recalculation:** `calculatePointsForDate`/`calculatePointsForDateRange` (used to re-sync daily/weekly/total points) reconstruct each completion day's streak via `streakEndingOn()` and apply the historical per-day multiplier — they do **not** apply the current streak to past days, so totals don't drift on recalculation.
+**Point recalculation:** `calculatePointsForDate`/`calculatePointsForDateRange` (used to re-sync daily/weekly/total points) reconstruct each completion day's streak via the period-aware `streakEndingOnForHabit()` (day- or week-based per `habit.period`) and apply the historical per-period multiplier — they do **not** apply the current streak to past days, so totals don't drift on recalculation.
 
 **Dates:** Calendar dates are stored as `yyyy-MM-dd` strings in the user's **local** timezone. Use `getLocalDateString()` from [utils/dateHelpers.ts](utils/dateHelpers.ts) to derive "today" — never `new Date().toISOString().split('T')[0]` (that returns the UTC day, which is wrong in the evening for western timezones).
 
