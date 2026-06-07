@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
 import { Account } from '../../types/schema';
+import { sumMoney, subtractMoney } from '../../utils/money';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Drawer } from '../ui/Drawer';
@@ -44,15 +45,15 @@ const BudgetAccounts: React.FC = () => {
       .filter(a => a.type === 'credit')
       .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
-    const assetsTotal = assetAccts.reduce((sum, a) => sum + a.balance, 0);
-    const debtsTotal = liabilityAccts.reduce((sum, a) => sum + a.balance, 0);
+    const assetsTotal = sumMoney(assetAccts.map(a => a.balance));
+    const debtsTotal = sumMoney(liabilityAccts.map(a => a.balance));
 
     return {
       assetAccounts: assetAccts,
       liabilityAccounts: liabilityAccts,
       assets: assetsTotal,
       debts: debtsTotal,
-      netWorth: assetsTotal - debtsTotal
+      netWorth: subtractMoney(assetsTotal, debtsTotal)
     };
   }, [accounts]);
 

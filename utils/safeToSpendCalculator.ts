@@ -1,6 +1,7 @@
 import { Account, CalendarItem, BudgetBucket } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
+import { sumMoney, subtractMoney } from '@/utils/money';
 
 /**
  * Helper to find the next unpaid income item after a given date from a list of expanded items.
@@ -52,27 +53,28 @@ function calculateUnpaidBillsInRange(
   // Prevents calling toLowerCase() N * M times inside the loop
   const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
 
-  return expandedItems
-    .filter(item => {
-      const itemDate = parseISO(item.date);
-      const itemTitleLower = item.title.toLowerCase();
+  const billsInRange = expandedItems.filter(item => {
+    const itemDate = parseISO(item.date);
+    const itemTitleLower = item.title.toLowerCase();
 
-      // Exclude bills covered by buckets to avoid double-counting
-      // Optimized check using pre-calculated bucket names
-      const isCoveredByBucket = normalizedBuckets.some(bucketName =>
-        itemTitleLower.includes(bucketName) ||
-        bucketName.includes(itemTitleLower)
-      );
+    // Exclude bills covered by buckets to avoid double-counting
+    // Optimized check using pre-calculated bucket names
+    const isCoveredByBucket = normalizedBuckets.some(bucketName =>
+      itemTitleLower.includes(bucketName) ||
+      bucketName.includes(itemTitleLower)
+    );
 
-      return (
-        item.type === 'expense' &&
-        !item.isPaid &&
-        isAfter(itemDate, startDate) && // AFTER start date (exclusive)
-        (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) && // Up to range end (inclusive)
-        !isCoveredByBucket
-      );
-    })
-    .reduce((sum, item) => sum + item.amount, 0);
+    return (
+      item.type === 'expense' &&
+      !item.isPaid &&
+      isAfter(itemDate, startDate) && // AFTER start date (exclusive)
+      (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) && // Up to range end (inclusive)
+      !isCoveredByBucket
+    );
+  });
+
+  // Sum in integer cents to avoid floating-point drift across many bills.
+  return sumMoney(billsInRange.map(item => item.amount));
 }
 
 /**
@@ -146,9 +148,9 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
 ): SafeToSpendBreakdown => {
   // 1. Available Checking Balance (Assets)
   // STRICT: Only Checking. No Savings, No Credit.
-  const checkingBalance = accounts
-    .filter(a => a.type === 'checking')
-    .reduce((sum, a) => sum + a.balance, 0);
+  const checkingBalance = sumMoney(
+    accounts.filter(a => a.type === 'checking').map(a => a.balance)
+  );
 
   // 2. Without paycheck tracking, the full checking balance is available.
   if (!currentPeriodId) {
@@ -167,7 +169,7 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
   return {
     checkingBalance,
     unpaidBills,
-    safeToSpend: checkingBalance - unpaidBills,
+    safeToSpend: subtractMoney(checkingBalance, unpaidBills),
     nextPaycheckDate: paycheckBDate,
   };
 };

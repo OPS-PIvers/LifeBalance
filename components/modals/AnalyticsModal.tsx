@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { sumMoney } from '../../utils/money';
 import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -154,7 +155,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
     // Calculate total budget (sum of bucket limits)
     // Note: detailed budget logic might be more complex (income based), but bucket limits is a good proxy for "Planned Spend"
-    const totalBudget = buckets.reduce((sum, b) => sum + b.limit, 0);
+    const totalBudget = sumMoney(buckets.map(b => b.limit));
 
     // If there is no budget, return an empty dataset instead of using a fake $1 budget
     if (totalBudget <= 0) {

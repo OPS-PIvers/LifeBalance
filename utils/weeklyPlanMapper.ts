@@ -4,6 +4,7 @@
  * into the meal plan + shopping list. Pure functions — fully unit-testable.
  */
 import { addDays, format, parseISO } from 'date-fns';
+import { sumMoney } from './money';
 import { Meal, MealIngredient, MealPlanItem, ShoppingItem } from '@/types/schema';
 import {
   WeeklyPlan,
@@ -179,7 +180,7 @@ export const itemPrice = (it: WeeklyPlanGroceryItem): number =>
 
 /** Sum of prices for a set of grocery items. */
 export const subtotal = (items: WeeklyPlanGroceryItem[]): number =>
-  items.reduce((acc, it) => acc + itemPrice(it), 0);
+  sumMoney(items.map(itemPrice));
 
 /** Grand total across the whole plan's grocery list. */
 export const grandTotal = (plan: WeeklyPlan): number => subtotal(plan.items ?? []);

@@ -17,6 +17,7 @@ import {
   itemPrice,
   groupItemsByStore,
 } from '@/utils/weeklyPlanMapper';
+import { sumMoney } from '@/utils/money';
 import {
   CalendarDays, ShoppingCart, ChevronRight, ChevronLeft, Clock, Check,
   ArrowLeft, ArrowRight, Box, Timer, Hourglass, Baby, ChefHat, X,
@@ -367,7 +368,7 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
   const groups = groupItemsByStore(plan);
   const allItems = useMemo(() => plan.items ?? [], [plan.items]);
   const total = subtotal(allItems);
-  const remaining = allItems.reduce((acc, it, i) => acc + (checkedItems.has(itemId(it, i)) ? 0 : itemPrice(it)), 0);
+  const remaining = sumMoney(allItems.map((it, i) => (checkedItems.has(itemId(it, i)) ? 0 : itemPrice(it))));
   const itemsLeft = allItems.filter((it, i) => !checkedItems.has(itemId(it, i))).length;
 
   // Stable index lookup so checkbox ids match across renders.

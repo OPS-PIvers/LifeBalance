@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { startOfWeek, subWeeks, isSameWeek, parseISO, formatDistanceToNow } from 'date-fns';
+import { roundMoney } from '../../utils/money';
 import { TrendingUp, TrendingDown, Receipt, ArrowRight, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -30,7 +31,10 @@ export const MoneyPulseWidget: React.FC = () => {
       }
     });
 
-    const diff = thisWeekTotal - lastWeekTotal;
+    // Round the accumulated totals to the cent before deriving the comparison.
+    thisWeekTotal = roundMoney(thisWeekTotal);
+    lastWeekTotal = roundMoney(lastWeekTotal);
+    const diff = roundMoney(thisWeekTotal - lastWeekTotal);
     const percentChange = lastWeekTotal > 0 ? (diff / lastWeekTotal) * 100 : 0;
 
     return {

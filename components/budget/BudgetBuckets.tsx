@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
+import { sumMoney } from '../../utils/money';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import toast from 'react-hot-toast';
@@ -218,7 +219,7 @@ const BudgetBuckets: React.FC = () => {
           key={UNBUDGETED_BUCKET.id}
           bucket={UNBUDGETED_BUCKET}
           spent={{
-            verified: transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.reduce((sum, t) => sum + t.amount, 0),
+            verified: sumMoney(transactionsByBucket.get(UNBUDGETED_BUCKET.id)!.map(t => t.amount)),
             pending: 0
           }}
           bucketTransactions={transactionsByBucket.get(UNBUDGETED_BUCKET.id)!}

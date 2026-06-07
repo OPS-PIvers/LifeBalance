@@ -1,6 +1,7 @@
 /**
  * Utility functions for exporting data to files (JSON, CSV)
  */
+import { getLocalDateString } from './dateHelpers';
 
 /**
  * Triggers a browser download for a given content string
@@ -25,7 +26,7 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
  * Exports a full data object as a JSON file
  */
 export const generateJsonBackup = (data: Record<string, unknown>, filenamePrefix: string = 'lifebalance-backup') => {
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getLocalDateString();
   const filename = `${filenamePrefix}-${dateStr}.json`;
   const content = JSON.stringify(data, null, 2);
   downloadFile(content, filename, 'application/json');
@@ -67,7 +68,7 @@ export const convertToCSV = (data: Record<string, unknown>[]): string => {
  * Exports an array of objects as a CSV file
  */
 export const generateCsvExport = (data: Record<string, unknown>[], filenamePrefix: string = 'export') => {
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getLocalDateString();
   const filename = `${filenamePrefix}-${dateStr}.csv`;
   const content = convertToCSV(data);
   downloadFile(content, filename, 'text/csv');

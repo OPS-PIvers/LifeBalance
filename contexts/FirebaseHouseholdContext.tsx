@@ -63,6 +63,8 @@ import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { roundMoney } from '@/utils/money';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
@@ -678,7 +680,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           isCompleted: false,
           priority: item.priority || 'medium',
           source: 'voice',
-          completeByDate: new Date().toISOString().split('T')[0], // Default to today
+          completeByDate: getLocalDateString(), // Default to today (local)
           assignedTo: user?.uid || '',
           createdAt: serverTimestamp(),
           createdBy: user?.uid || ''
@@ -700,7 +702,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         category: data.category || 'Uncategorized',
         status: 'pending_review',
         notes: data.notes || '',
-        date: new Date().toISOString().split('T')[0],
+        date: getLocalDateString(),
         source: 'voice',
         isRecurring: false,
         autoCategorized: false,
@@ -1441,11 +1443,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       }
 
-      // 2. Update account balance
-      const newBalance = item.type === 'expense' ? account.balance - item.amount : account.balance + item.amount;
+      // 2. Update account balance atomically. Using increment() (a server-side
+      // delta) instead of writing an absolute balance computed from local state
+      // prevents lost updates when household members act concurrently.
+      const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
 
       await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
-        balance: newBalance,
+        balance: increment(roundMoney(balanceDelta)),
         lastUpdated: serverTimestamp(),
       });
 
@@ -1459,7 +1463,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
 
       // 4. Create transaction
-      const transactionDate = new Date().toISOString().split('T')[0];
+      const transactionDate = getLocalDateString();
       const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
 
       await addDoc(collection(db, `households/${householdId}/transactions`), {
@@ -1673,11 +1677,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
       console.log('Transaction added successfully');
 
-      // Update checking account balance
+      // Update checking account balance atomically (server-side delta avoids
+      // lost updates from concurrent edits / stale local state).
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
         await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: checkingAcc.balance - tx.amount,
+          balance: increment(roundMoney(-tx.amount)),
           lastUpdated: serverTimestamp(),
         });
       }
@@ -1823,12 +1828,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         payPeriodId,
       });
 
-      // Update checking account balance if amount changed
+      // Update checking account balance if amount changed (atomic server-side delta).
       if (amountDifference !== 0) {
         const checkingAcc = accounts.find(a => a.type === 'checking');
         if (checkingAcc) {
           await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: checkingAcc.balance - amountDifference,
+            balance: increment(roundMoney(-amountDifference)),
             lastUpdated: serverTimestamp(),
           });
         }
@@ -1852,11 +1857,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
-      // Restore checking account balance
+      // Restore checking account balance atomically (server-side delta avoids
+      // lost updates from concurrent edits / stale local state).
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
         await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: checkingAcc.balance + transaction.amount,
+          balance: increment(roundMoney(transaction.amount)),
           lastUpdated: serverTimestamp(),
         });
       }

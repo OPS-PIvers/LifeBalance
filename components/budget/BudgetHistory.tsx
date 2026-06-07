@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { BucketPeriodSnapshot } from '../../types/schema';
 import { format, parseISO } from 'date-fns';
+import { roundMoney } from '../../utils/money';
 import { ChevronDown, ChevronUp, History, Download } from 'lucide-react';
 import Card from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -42,9 +43,9 @@ const BudgetHistory: React.FC = () => {
 
       const group = groups.get(snapshot.periodId)!;
       group.snapshots.push(snapshot);
-      group.totalLimit += snapshot.limit;
-      group.totalSpent += snapshot.totalSpent;
-      group.totalPending += snapshot.totalPending;
+      group.totalLimit = roundMoney(group.totalLimit + snapshot.limit);
+      group.totalSpent = roundMoney(group.totalSpent + snapshot.totalSpent);
+      group.totalPending = roundMoney(group.totalPending + snapshot.totalPending);
       group.transactionCount += snapshot.transactionCount;
     });
 

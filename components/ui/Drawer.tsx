@@ -89,7 +89,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             exit={reduceMotion ? { y: 0 } : { y: '100%' }}
             transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
             className={twMerge(
-              "fixed bottom-0 left-0 right-0 z-modal bg-white rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col outline-none",
+              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col outline-none",
               className
             )}
             drag="y"
@@ -108,14 +108,14 @@ export const Drawer: React.FC<DrawerProps> = ({
           >
              {/* Handle bar for visual cue */}
              <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
-               <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+               <div className="w-12 h-1.5 bg-gray-300 dark:bg-slate-600 rounded-full" />
              </div>
 
              {/* Header */}
              {title && (
-               <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 shrink-0">
-                 <h3 id={titleId} className="font-bold text-lg text-slate-800">{title}</h3>
-                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100" aria-label="Close drawer" disabled={disableClose}>
+               <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 dark:border-slate-700 shrink-0">
+                 <h3 id={titleId} className="font-bold text-lg text-slate-800 dark:text-slate-100">{title}</h3>
+                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 dark:text-slate-500 dark:hover:text-slate-200 dark:hover:bg-slate-700" aria-label="Close drawer" disabled={disableClose}>
                    <X size={20} />
                  </button>
                </div>
