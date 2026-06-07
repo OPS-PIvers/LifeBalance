@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, type ThemePreference } from '@/contexts/ThemeContext';
 import { cn } from '@/utils/cn';
@@ -12,24 +12,45 @@ const OPTIONS: { value: ThemePreference; label: string; icon: React.ReactNode }[
 
 /**
  * Three-way appearance selector (Light / Dark / System) backed by ThemeContext.
+ *
+ * Implements the ARIA radiogroup pattern: roving tabIndex (only the checked
+ * option is in the tab order) with arrow keys moving selection + focus.
  */
 export const ThemeToggle: React.FC = () => {
   const { theme, setTheme } = useTheme();
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const select = (value: ThemePreference) => {
+    setTheme(value);
+    haptic('light');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+    let next: number | null = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (index + 1) % OPTIONS.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (index - 1 + OPTIONS.length) % OPTIONS.length;
+    if (next === null) return;
+    e.preventDefault();
+    select(OPTIONS[next].value);
+    btnRefs.current[next]?.focus();
+  };
 
   return (
     <div role="radiogroup" aria-label="Appearance" className="grid grid-cols-3 gap-2">
-      {OPTIONS.map((opt) => {
+      {OPTIONS.map((opt, index) => {
         const isActive = theme === opt.value;
         return (
           <button
             key={opt.value}
+            ref={(el) => {
+              btnRefs.current[index] = el;
+            }}
             type="button"
             role="radio"
             aria-checked={isActive}
-            onClick={() => {
-              setTheme(opt.value);
-              haptic('light');
-            }}
+            tabIndex={isActive ? 0 : -1}
+            onClick={() => select(opt.value)}
+            onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
               'flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-bold tracking-tight transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
               isActive

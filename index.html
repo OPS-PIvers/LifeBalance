@@ -28,10 +28,10 @@
           var stored = localStorage.getItem('LIFEBALANCE_THEME');
           var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
           var dark = stored === 'dark' || ((stored === 'system' || !stored) && prefersDark);
-          if (dark) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.style.colorScheme = 'dark';
-          }
+          document.documentElement.classList.toggle('dark', dark);
+          // Always set color-scheme to the resolved theme so UA-native controls
+          // (scrollbars, form widgets) match even when the choice opposes the OS.
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         } catch (e) {}
       })();
     </script>
