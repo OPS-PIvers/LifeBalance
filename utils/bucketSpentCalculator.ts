@@ -1,4 +1,5 @@
 import { BudgetBucket, Transaction } from '@/types/schema';
+import { sumMoney } from '@/utils/money';
 
 export interface BucketSpent {
   verified: number;
@@ -53,17 +54,19 @@ export function calculateBucketSpent(
     // so this should always be defined. Using ! to match original fail-fast behavior.
     const currentSpent = spentMap.get(bucketId)!;
 
+    // Accumulate in integer cents to avoid floating-point drift; converted back
+    // to dollars once at the end. (e.g. 0.1 + 0.2 must not become 0.30000000000000004)
     if (tx.status === 'verified') {
-      currentSpent.verified += tx.amount;
+      currentSpent.verified += Math.round(tx.amount * 100);
     } else if (tx.status === 'pending_review') {
-      currentSpent.pending += tx.amount;
+      currentSpent.pending += Math.round(tx.amount * 100);
     }
   });
 
-  // Round all values to 2 decimal places to prevent floating point errors
+  // Convert the accumulated cents back to dollars.
   spentMap.forEach(spent => {
-    spent.verified = Math.round(spent.verified * 100) / 100;
-    spent.pending = Math.round(spent.pending * 100) / 100;
+    spent.verified = spent.verified / 100;
+    spent.pending = spent.pending / 100;
   });
 
   return spentMap;
@@ -103,10 +106,7 @@ export function getTransactionsForBucket(
  * @returns Total verified spending
  */
 export function getTotalVerifiedSpending(bucketSpentMap: Map<string, BucketSpent>): number {
-  return Array.from(bucketSpentMap.values()).reduce(
-    (sum, spent) => sum + spent.verified,
-    0
-  );
+  return sumMoney(Array.from(bucketSpentMap.values(), spent => spent.verified));
 }
 
 /**
@@ -115,10 +115,7 @@ export function getTotalVerifiedSpending(bucketSpentMap: Map<string, BucketSpent
  * @returns Total pending spending
  */
 export function getTotalPendingSpending(bucketSpentMap: Map<string, BucketSpent>): number {
-  return Array.from(bucketSpentMap.values()).reduce(
-    (sum, spent) => sum + spent.pending,
-    0
-  );
+  return sumMoney(Array.from(bucketSpentMap.values(), spent => spent.pending));
 }
 
 /**
