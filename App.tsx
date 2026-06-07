@@ -7,6 +7,7 @@ import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
+import OfflineBanner from './components/layout/OfflineBanner';
 
 // Lazy load pages for code splitting and faster initial load
 const Login = React.lazy(() => import('./pages/Login'));
@@ -245,6 +246,7 @@ const App: React.FC = () => {
                 },
               }}
             />
+            <OfflineBanner />
           </div>
         </HouseholdProviderComponent>
       </AuthProviderComponent>
