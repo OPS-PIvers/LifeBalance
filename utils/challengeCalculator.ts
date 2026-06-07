@@ -1,6 +1,26 @@
 import { Habit, Challenge } from '@/types/schema';
 import { format, parseISO, getDaysInMonth } from 'date-fns';
-import { getEffectiveTargetValue, getEffectiveTargetType } from './migrations/challengeMigration';
+import { getEffectiveTargetType } from './migrations/challengeMigration';
+
+/**
+ * Resolves the effective target value for a challenge, treating non-positive or
+ * non-finite stored values as invalid so the safe default (100) is used.
+ *
+ * A stored `targetValue`/`targetTotalCount` of 0 (or negative) would otherwise
+ * propagate into the progress divisions below and yield Infinity/NaN.
+ *
+ * @param challenge - The challenge object
+ * @returns the first finite, positive target value, or 100 as a fallback
+ */
+function getValidTargetValue(challenge: Challenge): number {
+  const candidates = [challenge.targetValue, challenge.targetTotalCount];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+      return candidate;
+    }
+  }
+  return 100;
+}
 
 export interface ChallengeProgress {
   currentValue: number;
@@ -28,7 +48,7 @@ export function calculateChallengeProgress(
   }
 
   const targetType = getEffectiveTargetType(challenge);
-  const targetValue = getEffectiveTargetValue(challenge);
+  const targetValue = getValidTargetValue(challenge);
 
   if (targetType === 'count') {
     return calculateCountProgress(linkedHabits, targetValue);
@@ -65,7 +85,8 @@ function calculateCountProgress(
     }
   }
 
-  const progress = Math.min(100, (currentValue / targetValue) * 100);
+  // Guard against divide-by-zero: a non-positive target yields no measurable progress.
+  const progress = targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 0;
 
   return {
     currentValue,
@@ -96,7 +117,11 @@ function calculatePercentageProgress(
   // Check if challenge month matches current month
   // If challenge.month is set and different, use that month instead
   const challengeMonth = challenge.month || monthKey;
-  const [year, month] = challengeMonth.split('-').map(Number);
+  const parts = challengeMonth.split('-').map(Number);
+  // challengeMonth is always 'YYYY-MM' (derived from format or challenge.month),
+  // so parts[0] and parts[1] are always defined.
+  const year = parts[0]!;
+  const month = parts[1]!;
   const monthStart = new Date(year, month - 1, 1);
   // const monthEnd = endOfMonth(monthStart); // Unused
   const daysInMonth = getDaysInMonth(monthStart);
@@ -123,7 +148,8 @@ function calculatePercentageProgress(
 
   const daysCompleted = successDays.size;
   const currentValue = Math.round((daysCompleted / daysInMonth) * 100);
-  const progress = Math.min(100, (currentValue / targetValue) * 100);
+  // Guard against divide-by-zero: a non-positive target yields no measurable progress.
+  const progress = targetValue > 0 ? Math.min(100, (currentValue / targetValue) * 100) : 0;
 
   return {
     currentValue,

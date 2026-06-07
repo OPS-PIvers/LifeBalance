@@ -48,12 +48,13 @@ vi.mock('../modals/BatchCategorizeModal', () => ({
 
 // Mock generic Modal
 vi.mock('../ui/Modal', () => ({
-  Modal: ({ children, onClose }: { children: React.ReactNode, onClose: () => void }) => (
-    <div data-testid="generic-modal">
-      <button onClick={onClose} aria-label="Close">X</button>
-      {children}
-    </div>
-  )
+  Modal: ({ isOpen, children, onClose }: { isOpen: boolean; children: React.ReactNode, onClose: () => void }) =>
+    isOpen ? (
+      <div data-testid="generic-modal">
+        <button onClick={onClose} aria-label="Close">X</button>
+        {children}
+      </div>
+    ) : null
 }));
 
 // Mock Lucide icons
@@ -138,6 +139,15 @@ describe('TransactionMasterList', () => {
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
   });
 
+  describe('Accessibility', () => {
+    it('search input has aria-label', () => {
+      render(<TransactionMasterList />);
+      const searchInput = screen.getByRole('textbox', { name: /search transactions/i });
+      expect(searchInput).toBeInTheDocument();
+      expect(searchInput).toHaveAttribute('placeholder', 'Search merchant or amount...');
+    });
+  });
+
   describe('Rendering & Sorting', () => {
     it('renders transactions sorted by date descending', () => {
       render(<TransactionMasterList />);
@@ -173,7 +183,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
       // First select is Category (based on options)
       const selects = screen.getAllByRole('combobox');
-      const categorySelect = selects[0]; // Assuming first is category
+      const categorySelect = selects[0]!; // first combobox is category
 
       fireEvent.change(categorySelect, { target: { value: 'Food' } });
 
@@ -184,7 +194,7 @@ describe('TransactionMasterList', () => {
     it('filters by source', () => {
       render(<TransactionMasterList />);
       const selects = screen.getAllByRole('combobox');
-      const sourceSelect = selects[1]; // Assuming second is source
+      const sourceSelect = selects[1]!; // second combobox is source
 
       fireEvent.change(sourceSelect, { target: { value: 'recurring' } });
 
@@ -196,7 +206,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
       // Set a category filter so the "Clear" button appears
       const selects = screen.getAllByRole('combobox');
-      const categorySelect = selects[0];
+      const categorySelect = selects[0]!;
       fireEvent.change(categorySelect, { target: { value: 'Food' } });
 
       // Verify filter is active
@@ -218,7 +228,7 @@ describe('TransactionMasterList', () => {
 
       // Find delete button for Groceries (last item)
       const deleteButtons = screen.getAllByLabelText(/Delete transaction from/);
-      fireEvent.click(deleteButtons[2]);
+      fireEvent.click(deleteButtons[2]!);
 
       expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
       expect(screen.getByText(/Are you sure you want to delete the transaction from/)).toBeInTheDocument();
@@ -237,7 +247,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
 
       const editButtons = screen.getAllByLabelText(/Edit transaction from/);
-      fireEvent.click(editButtons[0]); // Click first one
+      fireEvent.click(editButtons[0]!); // Click first one
 
       expect(screen.getByTestId('edit-modal')).toBeInTheDocument();
     });
@@ -246,7 +256,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
 
       const splitButtons = screen.getAllByLabelText(/Split transaction from/);
-      fireEvent.click(splitButtons[0]); // Click first one
+      fireEvent.click(splitButtons[0]!); // Click first one
 
       expect(screen.getByTestId('split-modal')).toBeInTheDocument();
     });
@@ -255,7 +265,7 @@ describe('TransactionMasterList', () => {
       render(<TransactionMasterList />);
 
       const duplicateButtons = screen.getAllByLabelText(/Duplicate transaction from/);
-      fireEvent.click(duplicateButtons[0]); // Click first one (Bus Ticket)
+      fireEvent.click(duplicateButtons[0]!); // Click first one (Bus Ticket)
 
       await waitFor(() => {
         expect(mockAddTransaction).toHaveBeenCalledWith(expect.objectContaining({
@@ -299,7 +309,7 @@ describe('TransactionMasterList', () => {
       // Click on the first transaction item (the div acts as the checkbox area in selection mode)
       const transactions = screen.getAllByText(/Groceries|Bus Ticket|Netflix/);
       // Parent of the text is the container
-      const item = transactions[0].closest('div.cursor-pointer');
+      const item = transactions[0]!.closest('div.cursor-pointer');
       if (item) fireEvent.click(item);
 
       // "1 selected" appears in the bar AND the FAB
@@ -313,6 +323,13 @@ describe('TransactionMasterList', () => {
 
       const verifyButton = screen.getByText('Verify').closest('button');
       if (verifyButton) fireEvent.click(verifyButton);
+
+      // ConfirmDialog should appear
+      expect(screen.getByText('Verify Transactions')).toBeInTheDocument();
+
+      // Confirm — scope to the dialog to avoid collision with the FAB "Verify" button
+      const dialog = screen.getByTestId('generic-modal');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^Verify$/i }));
 
       await waitFor(() => {
         expect(mockUpdateTransaction).toHaveBeenCalledTimes(3);

@@ -154,7 +154,7 @@ describe('HabitHistoryCalendar', () => {
   });
 
   it('handles habits with no completed dates', () => {
-    mockContextValue.habits = [{ ...mockHabits[0], completedDates: [] }];
+    mockContextValue.habits = [{ ...mockHabits[0]!, completedDates: [] }];
     render(<HabitHistoryCalendar />);
 
     // Select today (Jan 15)

@@ -1,6 +1,6 @@
 # Lint and Type Error Suppressions Audit
 
-**Last Updated:** 2026-01-19
+**Last Updated:** 2026-06-07
 
 **WARNING:** This document tracks all ESLint and TypeScript error suppressions in the codebase. These suppressions are **technical debt** and should be eliminated whenever possible.
 
@@ -15,9 +15,34 @@ Suppressions should only exist for:
 
 ## Current Suppressions
 
-### Status: CLEAN 🎉
+### Status: No blanket suppressions; a few granular ones remain
 
-All blanket `/* eslint-disable */` suppressions and `any` types identified in the previous audit have been resolved. The codebase is currently lint-free.
+`pnpm lint` is green (0 errors, 0 warnings). There are **zero** blanket `/* eslint-disable */`
+files and **zero** `@ts-ignore`/`@ts-expect-error`/`@ts-nocheck`. A 2026-06-07 pass removed the
+six blanket-disabled files that a prior version of this doc had incorrectly marked resolved
+(`components/modals/CaptureModal.tsx`, `components/modals/AnalyticsModal.tsx`,
+`components/settings/NotificationSettings.tsx`, `utils/migrations/freezeBankMigration.ts`,
+`utils/freezeBankValidator.ts`, `pages/MigrateSubmissions.tsx`) and fixed the `as any` casts they
+were hiding (`AnalyticsModal`, `CaptureModal`) plus two `react-hooks/exhaustive-deps` suppressions
+(`SmartHabitAdjustModal`, `SmartHabitReorderModal`, fixed via a `habitsRef` snapshot).
+
+#### Remaining granular `eslint-disable-next-line` (pre-existing tech debt — fix when touched)
+
+Legitimate (per policy — keep):
+- `react-refresh/only-export-components` on context/hook exports: `contexts/AuthContext.tsx`,
+  `contexts/ThemeContext.tsx`, `contexts/FirebaseHouseholdContext.tsx` — standard React pattern.
+
+Candidates to eliminate when next editing these files:
+- `@typescript-eslint/no-explicit-any`: `components/analytics/CustomTooltip.tsx` (×2, recharts
+  payload typing), `hooks/useGroceryOptimizer.ts` (×2, dynamic AI response), `utils/firestoreSanitizer.ts`,
+  `contexts/MockAuthContext.tsx` — type the third-party/dynamic shapes with `unknown` + guards.
+- `react-hooks/set-state-in-effect`: `components/modals/BucketFormModal.tsx`,
+  `components/meals/ShoppingListTab.tsx`, `components/budget/BudgetBucketCard.tsx` — restructure to
+  derive state instead of setting it in an effect.
+- `@typescript-eslint/no-unused-vars`: `pages/Settings.tsx` (intentional destructure-omit).
+
+These were out of scope for the optimization pass (granular, pre-existing, and in third-party/
+dynamic-data boundaries); they are tracked here so they're addressed as those files are touched.
 
 ### Historical Fixes
 

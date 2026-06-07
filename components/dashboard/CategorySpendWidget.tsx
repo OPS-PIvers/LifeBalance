@@ -83,6 +83,11 @@ export const CategorySpendWidget: React.FC = () => {
             </div>
             <div className="h-1.5 bg-slate-100/50 dark:bg-slate-700/50 rounded-full overflow-hidden">
                <div
+                 role="progressbar"
+                 aria-valuemin={0}
+                 aria-valuemax={100}
+                 aria-valuenow={Math.round(item.percentage)}
+                 aria-label={`${item.name}: ${Math.round(item.percentage)}% of spending`}
                  className={`h-full rounded-full transition-all duration-500 ${
                     idx === 0 ? 'bg-purple-500' :
                     idx === 1 ? 'bg-purple-400' :

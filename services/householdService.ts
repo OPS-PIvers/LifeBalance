@@ -29,7 +29,7 @@ export const getUserHousehold = async (userId: string): Promise<string | null> =
       return null;
     }
 
-    return snapshot.docs[0].id;
+    return snapshot.docs[0]?.id ?? null;
   } catch (error) {
     console.error('Error getting user household:', error);
     throw error;

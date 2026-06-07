@@ -31,7 +31,8 @@ function findNextPaycheckFromExpanded(
     .sort((a, b) => a.itemDate.getTime() - b.itemDate.getTime())
     .map(({ item }) => item);
 
-  return upcomingPaychecks.length > 0 ? upcomingPaychecks[0].date : null;
+  // upcomingPaychecks[0] is defined: the length > 0 guard above ensures non-empty.
+  return upcomingPaychecks.length > 0 ? upcomingPaychecks[0]!.date : null;
 }
 
 /**

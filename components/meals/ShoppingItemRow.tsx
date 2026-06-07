@@ -183,7 +183,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                             ? (() => {
                                 const storeObj = stores.find(s => s.name === item.store);
                                 const colorKey = storeObj?.color || DEFAULT_STORE_COLOR;
-                                const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
+                                const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
                                 return `${color.bg} ${color.text} ${color.border}`;
                             })()
                             : "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700/50 dark:text-slate-400 dark:border-slate-600"
@@ -219,7 +219,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                           activeQuickList
                               ? (() => {
                                   const colorKey = activeQuickList.color || DEFAULT_STORE_COLOR;
-                                  const color = STORE_COLORS[colorKey] || STORE_COLORS[DEFAULT_STORE_COLOR];
+                                  const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
                                   return `${color.bg} ${color.text} ${color.border}`;
                               })()
                               : "bg-slate-50 text-slate-400 border-slate-200 border-dashed hover:bg-slate-100 hover:border-slate-300 dark:bg-slate-700/40 dark:text-slate-500 dark:border-slate-600 dark:hover:bg-slate-700/60"

@@ -26,10 +26,15 @@ import {
 
 const db = admin.firestore();
 
+/** Minimal subset of the Express/Firebase response object used by the helpers below. */
+interface HttpResponse {
+  status(code: number): { json(body: unknown): void; send(body: string): void };
+  set(header: string, value: string): void;
+}
+
 // Common response helpers
 function jsonResponse(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  res: any,
+  res: HttpResponse,
   status: number,
   data: Record<string, unknown>
 ): void {
@@ -37,8 +42,7 @@ function jsonResponse(
 }
 
 function errorResponse(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  res: any,
+  res: HttpResponse,
   status: number,
   message: string,
   code: string

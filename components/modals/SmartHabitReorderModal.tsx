@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
@@ -17,6 +17,11 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Keep the latest habits in a ref so the open-effect can read the current
+  // value at fetch time without re-running every time `habits` changes.
+  const habitsRef = useRef(habits);
+  habitsRef.current = habits;
+
   // Analyze habits when modal opens
   useEffect(() => {
     if (isOpen && householdId) {
@@ -24,7 +29,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
         setIsLoading(true);
         setError(null);
         try {
-          const result = await reorganizeHabits(householdId, habits);
+          const result = await reorganizeHabits(householdId, habitsRef.current);
           setPlan(result);
         } catch (err) {
           console.error("Failed to reorganize habits:", err);
@@ -41,8 +46,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       setIsLoading(false);
       setError(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, householdId]);
 
   const handleApply = async () => {
     if (!plan) return;
@@ -152,7 +156,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
                 <div key={category} className="space-y-2">
                   <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-2">{category}</h3>
                   <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl overflow-hidden divide-y divide-slate-50">
-                    {previewHabits.grouped[category].map(habit => (
+                    {(previewHabits.grouped[category] ?? []).map(habit => (
                       <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}

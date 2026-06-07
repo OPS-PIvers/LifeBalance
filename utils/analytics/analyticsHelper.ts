@@ -180,7 +180,8 @@ export const calculateNetFlowData = (transactions: Transaction[]) => {
   });
 
   // Single pass through transactions
-  const sixMonthsAgo = months[0];
+  // months[0] is always defined: Array.from({length:6},...) always has 6 elements
+  const sixMonthsAgo = months[0]!;
   transactions.forEach(t => {
     const monthKey = t.date.substring(0, 7); // YYYY-MM
     if (monthKey >= sixMonthsAgo && buckets.has(monthKey)) {
@@ -261,7 +262,8 @@ export const calculateCategoryTrend = (transactions: Transaction[]) => {
     return key;
   });
 
-  const sixMonthsAgo = months[0];
+  // months[0] is always defined: Array.from({length:6},...) always has 6 elements
+  const sixMonthsAgo = months[0]!;
 
   // Single pass to aggregate both total per category (for ranking) and per month (for chart)
   transactions.forEach(t => {

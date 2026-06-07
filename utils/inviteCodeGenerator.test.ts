@@ -37,7 +37,7 @@ describe('generateInviteCode', () => {
     const getRandomValuesSpy = vi.spyOn(crypto, 'getRandomValues');
     await generateInviteCode();
     expect(getRandomValuesSpy).toHaveBeenCalled();
-    expect(getRandomValuesSpy.mock.calls[0][0]).toBeInstanceOf(Uint32Array);
+    expect(getRandomValuesSpy.mock.calls[0]![0]).toBeInstanceOf(Uint32Array);
   });
 
   it('should retry on collision', async () => {

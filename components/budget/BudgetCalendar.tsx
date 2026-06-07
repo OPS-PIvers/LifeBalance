@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { format, isSameMonth, isSameDay, isToday, parseISO, addMonths, subMonths } from 'date-fns';
+import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
 import { useCalendarGrid } from '../../hooks/useCalendarGrid';
@@ -45,14 +45,48 @@ const BudgetCalendar: React.FC = () => {
     [calendarItems, startDate, endDate]
   );
 
-  // Filter items for the selected date
-  const selectedItems = expandedCalendarItems.filter(item =>
-    isSameDay(parseISO(item.date), selectedDate)
+  // Pre-group calendar items by date string for O(1) day-cell lookup
+  const calendarItemsByDate = useMemo(() => {
+    const map = new Map<string, typeof expandedCalendarItems>();
+    for (const item of expandedCalendarItems) {
+      const key = item.date; // already 'yyyy-MM-dd'
+      let list = map.get(key);
+      if (!list) {
+        list = [];
+        map.set(key, list);
+      }
+      list.push(item);
+    }
+    return map;
+  }, [expandedCalendarItems]);
+
+  // Pre-group pending todos by date string for O(1) day-cell lookup
+  const pendingTodosByDate = useMemo(() => {
+    const map = new Map<string, typeof todos>();
+    for (const todo of todos) {
+      if (todo.isCompleted) continue;
+      const key = todo.completeByDate; // already 'yyyy-MM-dd'
+      let list = map.get(key);
+      if (!list) {
+        list = [];
+        map.set(key, list);
+      }
+      list.push(todo);
+    }
+    return map;
+  }, [todos]);
+
+  // Filter items for the selected date (O(1) lookup)
+  const selectedDateKey = format(selectedDate, 'yyyy-MM-dd');
+  const selectedItems = useMemo(
+    () => calendarItemsByDate.get(selectedDateKey) ?? [],
+    [calendarItemsByDate, selectedDateKey]
   );
 
-  // Filter todos for the selected date
-  const selectedTodos = todos.filter(todo =>
-    isSameDay(parseISO(todo.completeByDate), selectedDate) && !todo.isCompleted
+  // Filter todos for the selected date (O(1) lookup)
+  const selectedTodos = useMemo(
+    () => pendingTodosByDate.get(selectedDateKey) ?? [],
+    [pendingTodosByDate, selectedDateKey]
   );
 
   const openAddModal = () => {
@@ -246,16 +280,34 @@ const BudgetCalendar: React.FC = () => {
         </div>
         <div className="grid grid-cols-7 gap-y-3">
           {days.map(day => {
-            const dateItems = expandedCalendarItems.filter(i => isSameDay(parseISO(i.date), day));
+            const dayKey = format(day, 'yyyy-MM-dd');
+            const dateItems = calendarItemsByDate.get(dayKey) ?? [];
             const hasIncome = dateItems.some(i => i.type === 'income');
             const hasExpense = dateItems.some(i => i.type === 'expense');
-            const hasTodo = todos.some(t => isSameDay(parseISO(t.completeByDate), day) && !t.isCompleted);
+            const hasTodo = (pendingTodosByDate.get(dayKey)?.length ?? 0) > 0;
             const isSelected = isSameDay(day, selectedDate);
 
+            const eventParts: string[] = [];
+            if (hasIncome) eventParts.push('income');
+            if (hasExpense) eventParts.push('expense');
+            if (hasTodo) eventParts.push('tasks');
+            const ariaLabel = eventParts.length > 0
+              ? `${format(day, 'MMMM d, yyyy')}, has ${eventParts.join(', ')}`
+              : format(day, 'MMMM d, yyyy');
+
             return (
-              <div 
-                key={day.toString()} 
+              <div
+                key={day.toString()}
+                role="button"
+                tabIndex={0}
+                aria-label={ariaLabel}
                 onClick={() => setSelectedDate(day)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedDate(day);
+                  }
+                }}
                 className={`
                   relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-2xl text-sm font-medium cursor-pointer transition-all duration-200
                   ${!isSameMonth(day, monthStart) ? 'text-slate-300 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300'}
@@ -264,7 +316,7 @@ const BudgetCalendar: React.FC = () => {
                 `}
               >
                 {format(day, 'd')}
-                
+
                 {/* Dots */}
                 <div className="absolute bottom-1.5 flex gap-0.5">
                   {hasIncome && <div className="w-1 h-1 rounded-full bg-emerald-400"></div>}

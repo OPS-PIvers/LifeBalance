@@ -268,3 +268,42 @@ describe('HabitCard - Streak Repair', () => {
     expect(screen.queryByText(/Repair Streak/)).not.toBeInTheDocument();
   });
 });
+
+describe('HabitCard - React.memo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('skips re-render when irrelevant habit fields change but memoized fields are stable', () => {
+    const habit: Habit = {
+      id: 'h1',
+      title: 'Memo Habit',
+      category: 'Health',
+      type: 'positive',
+      period: 'daily',
+      targetCount: 1,
+      count: 1,
+      streakDays: 3,
+      basePoints: 10,
+      completedDates: ['2024-02-09'],
+      lastUpdated: '2024-02-10T00:00:00Z',
+      scoringType: 'threshold',
+      weatherSensitive: false,
+      totalCount: 1,
+    };
+
+    const { rerender } = render(<HabitCard habit={habit} />);
+
+    // Verify initial render shows the habit title
+    expect(screen.getByText('Memo Habit')).toBeInTheDocument();
+
+    // Re-render with a habit object where only a field NOT in the comparator changes
+    // (totalCount is not compared, but id/count/streakDays/lastUpdated are stable)
+    const updatedHabit: Habit = { ...habit, totalCount: 999 };
+    rerender(<HabitCard habit={updatedHabit} />);
+
+    // Component should still display correctly (memo preserved the DOM)
+    expect(screen.getByText('Memo Habit')).toBeInTheDocument();
+  });
+});

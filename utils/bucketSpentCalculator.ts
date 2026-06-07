@@ -31,14 +31,23 @@ export function calculateBucketSpent(
     ? transactions.filter(tx => tx.payPeriodId === currentPeriodId)
     : transactions; // No period tracking = include all transactions
 
-  // ⚡ Bolt Optimization: Create a map for fast bucket lookup by name (case-insensitive)
-  // Replaces O(Buckets * Transactions) search with O(Buckets + Transactions) map lookup
-  const bucketNameMap = new Map<string, string>();
+  // ⚡ Fast bucket lookup by name (case-insensitive) — replaces an
+  // O(Buckets * Transactions) search with O(Buckets + Transactions) map lookups.
+  //
+  // Transactions link to buckets only by their `category` name (the Transaction
+  // schema has no bucket-id field), so a name is the only available key. When two
+  // buckets share a (case-insensitive) name we cannot disambiguate which one a
+  // transaction belongs to, so we map each name to ALL matching bucket ids and
+  // credit every one of them. This avoids the previous first-match-only behavior
+  // where a duplicate-named bucket silently showed $0.
+  const bucketIdsByName = new Map<string, string[]>();
   buckets.forEach(b => {
     const key = b.name.toLowerCase();
-    // Preserve first-match behavior: only set if this name hasn't been seen yet
-    if (!bucketNameMap.has(key)) {
-      bucketNameMap.set(key, b.id);
+    const existing = bucketIdsByName.get(key);
+    if (existing) {
+      existing.push(b.id);
+    } else {
+      bucketIdsByName.set(key, [b.id]);
     }
   });
 
@@ -46,21 +55,23 @@ export function calculateBucketSpent(
   relevantTransactions.forEach(tx => {
     if (!tx.category) return; // Skip uncategorized transactions
 
-    const bucketId = bucketNameMap.get(tx.category.toLowerCase());
+    const bucketIds = bucketIdsByName.get(tx.category.toLowerCase());
 
-    if (!bucketId) return; // Transaction category doesn't match any bucket
-
-    // We know bucketId exists in buckets, and spentMap is initialized from buckets,
-    // so this should always be defined. Using ! to match original fail-fast behavior.
-    const currentSpent = spentMap.get(bucketId)!;
+    if (!bucketIds) return; // Transaction category doesn't match any bucket
 
     // Accumulate in integer cents to avoid floating-point drift; converted back
     // to dollars once at the end. (e.g. 0.1 + 0.2 must not become 0.30000000000000004)
-    if (tx.status === 'verified') {
-      currentSpent.verified += Math.round(tx.amount * 100);
-    } else if (tx.status === 'pending_review') {
-      currentSpent.pending += Math.round(tx.amount * 100);
-    }
+    const cents = Math.round(tx.amount * 100);
+
+    bucketIds.forEach(bucketId => {
+      // spentMap is initialized from buckets, so every id here is present.
+      const currentSpent = spentMap.get(bucketId)!;
+      if (tx.status === 'verified') {
+        currentSpent.verified += cents;
+      } else if (tx.status === 'pending_review') {
+        currentSpent.pending += cents;
+      }
+    });
   });
 
   // Convert the accumulated cents back to dollars.

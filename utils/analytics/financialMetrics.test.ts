@@ -29,13 +29,13 @@ describe('calculateBurnDown', () => {
     // differenceInDays(2023-10-30, 2023-10-01) = 29. +1 = 30 days.
     expect(data).toHaveLength(30);
 
-    expect(data[0].day).toBe('Day 1');
-    expect(data[0].spent).toBe(100);
-    expect(data[0].idealPacing).toBe(100);
+    expect(data[0]!.day).toBe('Day 1');
+    expect(data[0]!.spent).toBe(100);
+    expect(data[0]!.idealPacing).toBe(100);
 
-    expect(data[1].day).toBe('Day 2');
-    expect(data[1].spent).toBe(300); // 100 + 200
-    expect(data[1].idealPacing).toBe(200);
+    expect(data[1]!.day).toBe('Day 2');
+    expect(data[1]!.spent).toBe(300); // 100 + 200
+    expect(data[1]!.idealPacing).toBe(200);
   });
 
   it('stops plotting actual spent for future dates', () => {
@@ -52,11 +52,11 @@ describe('calculateBurnDown', () => {
     // 2023-10-16 is Day 16 (Future).
 
     // Day 15 (Index 14)
-    expect(data[14].date).toBe('2023-10-15');
-    expect(data[14].spent).not.toBeNull();
+    expect(data[14]!.date).toBe('2023-10-15');
+    expect(data[14]!.spent).not.toBeNull();
 
     // Day 16 (Index 15)
-    expect(data[15].date).toBe('2023-10-16');
-    expect(data[15].spent).toBeNull();
+    expect(data[15]!.date).toBe('2023-10-16');
+    expect(data[15]!.spent).toBeNull();
   });
 });

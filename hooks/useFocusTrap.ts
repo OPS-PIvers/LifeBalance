@@ -67,8 +67,8 @@ export function useFocusTrap<T extends HTMLElement>(active: boolean) {
         return;
       }
 
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
+      const first = focusables[0]!; // length > 0 checked above
+      const last = focusables[focusables.length - 1]!; // length > 0 checked above
       const activeEl = document.activeElement;
 
       if (e.shiftKey) {

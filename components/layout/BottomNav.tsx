@@ -18,12 +18,12 @@ const BottomNav: React.FC = () => {
 
   return (
     <>
-      <nav className="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-t border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 shadow-nav pb-safe">
+      <nav aria-label="Main navigation" className="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-t border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 shadow-nav pb-safe">
         <div className="flex items-center justify-between h-16 px-2 relative">
           
           {/* Left Group */}
           <div className="flex items-center flex-1 justify-around">
-            <NavLink to="/" className={navLinkClass}>
+            <NavLink to="/" end className={navLinkClass}>
               {({ isActive }) => (
                 <>
                   <LayoutDashboard className={iconClass(isActive)} />
@@ -69,7 +69,7 @@ const BottomNav: React.FC = () => {
             <button
               onClick={() => setIsModalOpen(true)}
               className="group flex items-center justify-center w-16 h-16 bg-brand-800 dark:bg-brand-700 text-white rounded-full shadow-xl shadow-brand-900/20 border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-transform"
-              aria-label="Add Transaction"
+              aria-label="Capture transaction, task, or item"
             >
               <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
             </button>

@@ -51,7 +51,7 @@ import {
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
-import { calculateSafeToSpendFromExpanded } from '@/utils/safeToSpendCalculator';
+import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, calculateStreak } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -65,7 +65,7 @@ import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
-import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService';
+import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -75,6 +75,12 @@ export interface HouseholdContextType {
   /** True during the initial cold load before the first household snapshot resolves. */
   isLoading: boolean;
   safeToSpend: number;
+  /**
+   * Itemized breakdown behind the safe-to-spend number (memoized, no re-expansion).
+   * Optional because alternate providers (e.g. the Test Mode mock context) may not
+   * supply it; the real Firebase provider always does.
+   */
+  safeToSpendBreakdown?: SafeToSpendBreakdown;
   dailyPoints: number;
   weeklyPoints: number;
   totalPoints: number;
@@ -239,6 +245,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     bucketsRef.current = buckets;
   }, [buckets]);
 
+  // Ref to access the latest authenticated user inside the listener callbacks
+  // without keying the listener effect on the whole `user` object (Firebase
+  // swaps that reference on every ~hourly token refresh — see the listener
+  // effect's dependency note). uid is stable, so the effect re-subscribes only
+  // on a real account change; the callbacks read fresh user fields from the ref.
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -279,9 +296,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   );
 
   // Other derived state
-  const activeChallenge = challenges.find(c => c.status === 'active') || null;
+  const activeChallenge = useMemo(() => challenges.find(c => c.status === 'active') ?? null, [challenges]);
   const activeYearlyGoals = useMemo(() => yearlyGoals.filter(g => g.status === 'in_progress'), [yearlyGoals]);
-  const primaryYearlyGoal = activeYearlyGoals[0] || null;
+  const primaryYearlyGoal = useMemo(() => activeYearlyGoals[0] ?? null, [activeYearlyGoals]);
 
   // Memoize expanded calendar items separately to prevent expensive re-calculation
   // when only accounts/balance changes (which happens frequently)
@@ -293,10 +310,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     return expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
   }, [calendarItems, currentPeriodId]);
 
-  const safeToSpend = useMemo(
-    () => calculateSafeToSpendFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId),
+  const safeToSpendBreakdown = useMemo(
+    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId),
     [accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId]
   );
+  const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = householdSettings?.points?.daily || 0;
   const weeklyPoints = householdSettings?.points?.weekly || 0;
   const totalPoints = householdSettings?.points?.total || 0;
@@ -305,6 +323,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const stores = useMemo(() => householdSettings?.stores || [], [householdSettings?.stores]);
   const groceryCategories = useMemo(() => householdSettings?.groceryCategories || [], [householdSettings?.groceryCategories]);
   const quickStockLists = useMemo(() => householdSettings?.quickStockLists || [], [householdSettings?.quickStockLists]);
+
+  // Tracks the household for which the missing-member-document recovery has
+  // already been attempted, so the recovery getDoc runs at most once per
+  // household (not on every members snapshot). Storing the householdId rather
+  // than a boolean means it auto-resets when the household changes.
+  const memberRecoveryAttemptedForHousehold = useRef<string | null>(null);
 
   // Real-time listeners
   useEffect(() => {
@@ -425,27 +449,31 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
         setMembers(data);
 
-        // Set current user
-        const current = data.find(m => m.uid === user?.uid);
+        // Set current user (read latest user from the ref, not effect closure)
+        const u = userRef.current;
+        const current = data.find(m => m.uid === u?.uid);
         setCurrentUser(current || null);
 
         // AUTO-FIX: Ensure current user has a member document
-        // This handles legacy households created before member documents were required
-        if (user && !current) {
+        // This handles legacy households created before member documents were required.
+        // Guard with a ref so the recovery getDoc runs at most once per household,
+        // instead of firing on every snapshot while the member doc is missing.
+        if (u && !current && memberRecoveryAttemptedForHousehold.current !== householdId) {
+          memberRecoveryAttemptedForHousehold.current = householdId;
           console.log('[FirebaseHouseholdContext] Member document missing for current user, creating...');
           try {
             // Check if user is in household's memberUids array
             const householdDoc = await getDoc(doc(db, 'households', householdId));
             const householdData = householdDoc.data();
 
-            if (householdData && householdData.memberUids?.includes(user.uid)) {
+            if (householdData && householdData.memberUids?.includes(u.uid)) {
               // User is in memberUids but missing member document - create it
-              const isCreator = householdData.createdBy === user.uid;
-              await setDoc(doc(db, 'households', householdId, 'members', user.uid), {
-                uid: user.uid,
-                displayName: user.displayName || 'User',
-                email: user.email || '',
-                photoURL: user.photoURL || '',
+              const isCreator = householdData.createdBy === u.uid;
+              await setDoc(doc(db, 'households', householdId, 'members', u.uid), {
+                uid: u.uid,
+                displayName: u.displayName || 'User',
+                email: u.email || '',
+                photoURL: u.photoURL || '',
                 role: isCreator ? 'admin' : 'member',
                 points: {
                   daily: 0,
@@ -460,6 +488,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             }
           } catch (error) {
             console.error('[FirebaseHouseholdContext] Failed to create member document:', error);
+            // Transient failure (offline/permission blip/doc not yet propagated):
+            // clear the guard so a later snapshot retries, instead of leaving the
+            // current user without a member document for the whole session.
+            if (memberRecoveryAttemptedForHousehold.current === householdId) {
+              memberRecoveryAttemptedForHousehold.current = null;
+            }
           }
         }
       })
@@ -640,25 +674,36 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     async function handleShoppingItems(parsed: ParsedShoppingList) {
       const shoppingRef = collection(db, `households/${householdId}/shoppingList`);
 
-      for (const item of parsed.items) {
-        // Check for duplicates (same logic as quickAddShoppingItem)
-        const existingQuery = query(
-          shoppingRef,
-          where('name', '==', item.item),
-          where('isPurchased', '==', false)
-        );
-        const existing = await getDocs(existingQuery);
+      // Fetch the unpurchased shopping list ONCE (avoids a per-item N+1 round-trip)
+      // and index existing items by normalized name for case-insensitive dedupe
+      // (so "Milk" and "milk" collapse to the same entry).
+      const normalize = (name: string) => name.trim().toLowerCase();
+      const unpurchasedSnapshot = await getDocs(
+        query(shoppingRef, where('isPurchased', '==', false))
+      );
+      const existingByName = new Map<string, ReturnType<typeof doc>>();
+      for (const docSnap of unpurchasedSnapshot.docs) {
+        const name = (docSnap.data().name as string | undefined) ?? '';
+        const key = normalize(name);
+        // Keep the first occurrence (mirrors prior `existing.docs[0]` behavior).
+        if (!existingByName.has(key)) {
+          existingByName.set(key, docSnap.ref);
+        }
+      }
 
-        if (!existing.empty) {
-          // Increment quantity
-          const existingDoc = existing.docs[0];
-          await updateDoc(existingDoc.ref, {
+      for (const item of parsed.items) {
+        const key = normalize(item.item);
+        const existingDocRef = existingByName.get(key);
+
+        if (existingDocRef) {
+          // Increment quantity on the matched existing item
+          await updateDoc(existingDocRef, {
             quantity: increment(item.quantity),
             lastUpdated: serverTimestamp()
           });
         } else {
           // Add new item
-          await addDoc(shoppingRef, {
+          const newDocRef = await addDoc(shoppingRef, {
             name: item.item,
             quantity: String(item.quantity),
             category: item.category,
@@ -666,6 +711,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             source: 'voice',
             createdAt: serverTimestamp()
           });
+          // Track it so later parsed items with the same name dedupe against it
+          // (preserves the original re-query-each-iteration behavior).
+          existingByName.set(key, newDocRef);
         }
       }
     }
@@ -681,9 +729,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           priority: item.priority || 'medium',
           source: 'voice',
           completeByDate: getLocalDateString(), // Default to today (local)
-          assignedTo: user?.uid || '',
+          assignedTo: userRef.current?.uid || '',
           createdAt: serverTimestamp(),
-          createdBy: user?.uid || ''
+          createdBy: userRef.current?.uid || ''
         });
       }
     }
@@ -751,7 +799,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
           setInsightsHistory(data);
           if (data.length > 0) {
-            setInsight(data[0].text);
+            setInsight(data[0]!.text); // length > 0 checked above
           }
         },
         (error) => {
@@ -764,7 +812,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [householdId, user]);
+    // Key on user?.uid (not the whole user object) so the ~hourly Firebase token
+    // refresh — which replaces the user object reference — does not tear down and
+    // re-subscribe every listener. The callbacks read fresh user fields from userRef.
+  }, [householdId, user?.uid]);
 
   // Memoize habit reset data to avoid unnecessary callback re-creation
   // Only recreate when habit IDs, periods, or lastUpdated values change
@@ -982,6 +1033,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         currentPoints.weekly !== correctWeeklyPoints ||
         currentPoints.total !== correctTotalPoints;
 
+      // Short-circuit to avoid redundant writes: if the stored values already
+      // match the recomputed ones AND the reset markers are already stamped for
+      // today, there is nothing to do. Without this, every habit toggle (which
+      // mutates householdSettings.points) re-runs this effect and would otherwise
+      // re-stamp lastDaily/WeeklyPointsReset on each pass, creating churn.
+      const resetMarkersUpToDate =
+        lastDailyPointsReset === today &&
+        lastWeeklyPointsReset === today;
+
+      if (!needsUpdate && resetMarkersUpToDate) {
+        return;
+      }
+
       if (needsUpdate) {
         console.log(`[PointsSync] Correcting points:
           daily: ${currentPoints.daily} -> ${correctDailyPoints}
@@ -1004,7 +1068,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     syncHouseholdPoints();
-  }, [householdId, householdSettings?.points, habits]);
+  }, [householdId, householdSettings?.points, habits, lastDailyPointsReset, lastWeeklyPointsReset]);
 
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
@@ -1141,13 +1205,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     if (!sourceBucket || !targetBucket) return;
 
-    await updateDoc(doc(db, `households/${householdId}/buckets`, sourceId), {
-      limit: sourceBucket.limit - amount,
+    // Commit both limit changes in a single batch so a partial write can never
+    // leave the source debited without crediting the target. Use increment()
+    // (server-side field value) rather than absolute values from local state so
+    // concurrent edits to either bucket's limit are not clobbered.
+    const batch = writeBatch(db);
+    batch.update(doc(db, `households/${householdId}/buckets`, sourceId), {
+      limit: increment(-amount),
     });
-
-    await updateDoc(doc(db, `households/${householdId}/buckets`, targetId), {
-      limit: targetBucket.limit + amount,
+    batch.update(doc(db, `households/${householdId}/buckets`, targetId), {
+      limit: increment(amount),
     });
+    await batch.commit();
 
     toast.success('Funds reallocated');
   }, [householdId, buckets]);
@@ -1190,6 +1259,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           lastResetDate: periodStart,
         });
       }
+
+      // Advance the household's last paycheck date IN THE SAME BATCH as the
+      // bucket resets, so periods can never desync (either everything commits
+      // or nothing does).
+      const householdRef = doc(db, `households/${householdId}`);
+      batch.update(householdRef, {
+        lastPaycheckDate: newPeriodId,
+      });
 
       // Commit all changes atomically
       await batch.commit();
@@ -1241,14 +1318,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
-      // Reset buckets for the period that just ended
+      // Reset buckets for the period that just ended. This also advances the
+      // household's lastPaycheckDate within the same atomic batch, so the bucket
+      // resets and the period pointer can never desync from a partial write.
       await resetBucketsForNewPeriod(paycheckDate);
-
-      // Update household's last paycheck date
-      const householdRef = doc(db, `households/${householdId}`);
-      await updateDoc(householdRef, {
-        lastPaycheckDate: paycheckDate,
-      });
     } catch (error) {
       console.error('[handlePaycheckApproval] Failed:', error);
       toast.error('Failed to process paycheck approval. Please try again.');
@@ -2855,6 +2928,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const contextValue = useMemo(() => ({
     isLoading,
     safeToSpend,
+    safeToSpendBreakdown,
     dailyPoints,
     weeklyPoints,
     totalPoints,
@@ -2955,7 +3029,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     completeToDo
   }), [
     isLoading,
-    safeToSpend, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
+    safeToSpend, safeToSpendBreakdown, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
     calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
     currentPeriodId, bucketSpentMap, householdSettings, meals, shoppingList, mealPlan, todos,

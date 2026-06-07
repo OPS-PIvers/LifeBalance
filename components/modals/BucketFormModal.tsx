@@ -5,6 +5,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface BucketFormModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ const COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500
 
 const getColorName = (colorClass: string) => {
   // e.g., "bg-emerald-500" -> "emerald"
-  return colorClass.split('-')[1] || 'color';
+  return colorClass.split('-')[1] ?? 'color';
 };
 
 const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, editingBucket }) => {
@@ -24,9 +25,10 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
 
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
-  const [color, setColor] = useState(COLORS[0]);
+  const [color, setColor] = useState(COLORS[0] ?? 'bg-emerald-500'); // COLORS[0] is always defined
   const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
   const [newSubBucketName, setNewSubBucketName] = useState('');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,7 +42,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       } else {
         setName('');
         setLimit('');
-        setColor(COLORS[0]);
+        setColor(COLORS[0] ?? 'bg-emerald-500'); // COLORS[0] is always defined
         setSubBuckets([]);
       }
       setNewSubBucketName('');
@@ -85,14 +87,29 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
 
   const handleDelete = () => {
     if (editingBucket) {
-      if (window.confirm('Delete this bucket? Transactions will remain but categorization may break.')) {
-        deleteBucket(editingBucket.id);
-        onClose();
-      }
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (editingBucket) {
+      deleteBucket(editingBucket.id);
+      setIsDeleteConfirmOpen(false);
+      onClose();
     }
   };
 
   return (
+    <>
+    <ConfirmDialog
+      isOpen={isDeleteConfirmOpen}
+      onClose={() => setIsDeleteConfirmOpen(false)}
+      onConfirm={confirmDelete}
+      title="Delete Bucket"
+      message="Delete this bucket? Transactions will remain but categorization may break."
+      confirmLabel="Delete"
+      confirmVariant="destructive"
+    />
     <Drawer isOpen={isOpen} onClose={onClose} title={editingBucket ? 'Edit Bucket' : 'New Bucket'}>
       <div className="space-y-4">
         <Input
@@ -205,6 +222,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         )}
       </div>
     </Drawer>
+    </>
   );
 };
 

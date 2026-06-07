@@ -64,7 +64,7 @@ describe('GroceryCatalogModal Mobile Optimization', () => {
     render(<GroceryCatalogModal isOpen={true} onClose={vi.fn()} />);
 
     const moreButtons = screen.getAllByLabelText('More options');
-    fireEvent.click(moreButtons[0]);
+    fireEvent.click(moreButtons[0]!);
 
     // Check if the drawer with "Item Options" title appears
     expect(screen.getByText('Item Options')).toBeInTheDocument();

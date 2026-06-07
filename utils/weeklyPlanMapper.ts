@@ -64,15 +64,15 @@ export const parseIngredientString = (raw: string): MealIngredient => {
 
   let i = 0;
   const qtyParts: string[] = [];
-  while (i < tokens.length && isNumericToken(tokens[i])) {
-    qtyParts.push(tokens[i]);
+  while (i < tokens.length && isNumericToken(tokens[i]!)) {
+    qtyParts.push(tokens[i]!);
     i++;
   }
   if (qtyParts.length === 0) return { name: value, quantity: '' };
 
   // Optionally fold one recognized unit word into the quantity.
-  if (i < tokens.length && INGREDIENT_UNITS.has(tokens[i].toLowerCase().replace(/\.$/, ''))) {
-    qtyParts.push(tokens[i]);
+  if (i < tokens.length && INGREDIENT_UNITS.has(tokens[i]!.toLowerCase().replace(/\.$/, ''))) {
+    qtyParts.push(tokens[i]!);
     i++;
   }
 

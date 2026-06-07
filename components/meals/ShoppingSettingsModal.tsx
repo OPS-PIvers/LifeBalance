@@ -409,7 +409,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                            </div>
                         ) : (
                             <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR]).iconBg}`}>
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${(STORE_COLORS[store.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!).iconBg}`}>
                                     <StoreIcon className="w-4 h-4" />
                                 </div>
                                 <span className="font-medium text-slate-800 dark:text-slate-200">{store.name}</span>
@@ -512,7 +512,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                   <div className="space-y-3">
                     {quickStockLists.map(list => {
                        const Icon = TEMPLATE_ICONS.find(i => i.id === list.icon)?.icon || ShoppingBag;
-                       const color = STORE_COLORS[list.color || DEFAULT_STORE_COLOR] || STORE_COLORS[DEFAULT_STORE_COLOR];
+                       const color = STORE_COLORS[list.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
 
                        return (
                       <div key={list.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100/50 flex items-center justify-between group dark:bg-slate-800 dark:border-slate-700">

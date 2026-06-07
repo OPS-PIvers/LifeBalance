@@ -166,7 +166,7 @@ describe('BudgetCalendar', () => {
 
     // The modal has a "Add Event" button which is the second one on the screen (first one is the trigger)
     const saveButtons = screen.getAllByText('Add Event');
-    fireEvent.click(saveButtons[1]);
+    fireEvent.click(saveButtons[1]!);
 
     await waitFor(() => {
       expect(mockAddCalendarItem).toHaveBeenCalledWith(expect.objectContaining({
@@ -427,6 +427,30 @@ describe('BudgetCalendar', () => {
     // Verify Edit is hidden but Delete is shown
     expect(screen.queryByText('Edit Event')).not.toBeInTheDocument();
     expect(screen.getByText('Delete Event')).toBeInTheDocument();
+  });
+
+  it('day cells have role=button, tabIndex, and aria-label for keyboard access', () => {
+    render(<BudgetCalendar />);
+
+    // All day cells should be keyboard-accessible buttons
+    const dayButtons = screen.getAllByRole('button').filter(el => el.getAttribute('aria-label')?.match(/\w+ \d+, \d{4}/));
+    expect(dayButtons.length).toBeGreaterThan(0);
+
+    // Each should have tabIndex 0
+    dayButtons.forEach(btn => {
+      expect(btn).toHaveAttribute('tabindex', '0');
+    });
+
+    // Pressing Enter on a day cell should activate it (select the date)
+    // Find the cell for the 15th (the mocked current date)
+    const cell15 = dayButtons.find(btn => btn.getAttribute('aria-label')?.includes('January 15'));
+    expect(cell15).toBeDefined();
+
+    // Pressing Space on the cell should call setSelectedDate
+    fireEvent.keyDown(cell15!, { key: ' ', code: 'Space' });
+
+    // After pressing Space, the selected day should show "January 15" as the detail heading
+    expect(screen.getByText('January 15')).toBeInTheDocument();
   });
 
   it('opens recurring manager modal when repeat button is clicked', () => {

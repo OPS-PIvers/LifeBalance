@@ -1,9 +1,10 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface ProfileMenuProps {
   isOpen: boolean;
@@ -14,16 +15,21 @@ interface ProfileMenuProps {
 const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef }) => {
   const { currentUser, logout } = useAuth();
   const { household } = useHousehold();
-  const menuRef = useRef<HTMLDivElement>(null);
+  // useFocusTrap manages focus-in on open, Tab trapping, and focus restoration on close.
+  const menuRef = useFocusTrap<HTMLDivElement>(isOpen);
   const navigate = useNavigate();
+
+  // We also need a plain ref to the container for the click-outside handler.
+  // Since useFocusTrap returns a RefObject we can use it directly.
+  const containerRef = menuRef as React.RefObject<HTMLDivElement>;
 
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
         isOpen &&
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node) &&
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node) &&
         anchorRef.current &&
         !anchorRef.current.contains(event.target as Node)
       ) {
@@ -35,17 +41,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose, anchorRef]);
+  }, [isOpen, onClose, anchorRef, containerRef]);
 
-  // Close menu when pressing Escape for keyboard accessibility
+  // Close menu when pressing Escape and return focus to the anchor button.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isOpen && event.key === 'Escape') {
         onClose();
-        // Return focus to profile button when closed via keyboard
-        if (anchorRef.current) {
-          anchorRef.current.focus();
-        }
+        anchorRef.current?.focus();
       }
     };
 
@@ -55,15 +58,34 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     };
   }, [isOpen, onClose, anchorRef]);
 
-  // Manage focus when the profile menu opens
-  useEffect(() => {
-    if (isOpen && menuRef.current) {
-      const firstFocusable = menuRef.current.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  /** Move focus between menuitems with ArrowDown/ArrowUp. */
+  const handleMenuKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      event.preventDefault();
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const items = Array.from(
+        container.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
       );
-      firstFocusable?.focus();
-    }
-  }, [isOpen]);
+      if (items.length === 0) return;
+
+      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+      let nextIndex: number;
+
+      if (event.key === 'ArrowDown') {
+        nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % items.length;
+      } else {
+        nextIndex =
+          currentIndex === -1 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
+      }
+
+      items[nextIndex]?.focus();
+    },
+    [containerRef]
+  );
 
   const handleLogout = async () => {
     try {
@@ -84,6 +106,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
       className="absolute top-14 right-4 z-dropdown w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
       role="menu"
       aria-label="Profile Menu"
+      onKeyDown={handleMenuKeyDown}
     >
       {/* User Info Header */}
       <div className="bg-brand-50 p-4 border-b border-brand-100">
@@ -118,6 +141,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           }}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-brand-700 rounded-lg transition-colors text-left"
           role="menuitem"
+          tabIndex={-1}
         >
           <Settings className="w-4 h-4" />
           Settings
@@ -129,6 +153,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
           role="menuitem"
+          tabIndex={-1}
         >
           <LogOut className="w-4 h-4" />
           Log Out

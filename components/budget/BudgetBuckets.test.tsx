@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetBuckets from './BudgetBuckets';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -171,52 +171,44 @@ describe('BudgetBuckets', () => {
   });
 
   it('deletes transaction when confirmed', async () => {
-    // Mock window.confirm
-    const confirmSpy = vi.spyOn(window, 'confirm');
-    confirmSpy.mockImplementation(() => true);
-
     render(<BudgetBuckets />);
 
     // Expand first
     const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
     fireEvent.click(toggleButton);
 
-    // Click delete transaction
+    // Click delete transaction -> opens the confirm dialog
     const deleteButton = screen.getByTitle('Delete transaction');
     fireEvent.click(deleteButton);
 
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
+    // Confirm in the accessible dialog
+    const dialog = screen.getByRole('dialog');
+    const confirmButton = within(dialog).getByRole('button', { name: 'Delete' });
+    fireEvent.click(confirmButton);
 
-    confirmSpy.mockRestore();
+    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
   });
 
   it('does not delete transaction when cancelled', async () => {
-     // Mock window.confirm
-     const confirmSpy = vi.spyOn(window, 'confirm');
-     confirmSpy.mockImplementation(() => false);
-
      render(<BudgetBuckets />);
 
      // Expand first
      const toggleButton = screen.getByRole('button', { name: /Toggle 1 transactions for Groceries/i });
      fireEvent.click(toggleButton);
 
-     // Click delete transaction
+     // Click delete transaction -> opens the confirm dialog
      const deleteButton = screen.getByTitle('Delete transaction');
      fireEvent.click(deleteButton);
 
-     expect(confirmSpy).toHaveBeenCalled();
-     expect(mockDeleteTransaction).not.toHaveBeenCalled();
+     // Cancel in the dialog
+     const dialog = screen.getByRole('dialog');
+     const cancelButton = within(dialog).getByRole('button', { name: 'Cancel' });
+     fireEvent.click(cancelButton);
 
-     confirmSpy.mockRestore();
+     expect(mockDeleteTransaction).not.toHaveBeenCalled();
   });
 
   it('opens transaction actions drawer on mobile', async () => {
-    // Mock window.confirm
-    const confirmSpy = vi.spyOn(window, 'confirm');
-    confirmSpy.mockImplementation(() => true);
-
     render(<BudgetBuckets />);
 
     // Expand first
@@ -245,12 +237,13 @@ describe('BudgetBuckets', () => {
     // Re-open drawer (since it closes on action)
     fireEvent.click(moreButton);
 
-    // Check if Delete button works
+    // Check if Delete button works -> opens the confirm dialog
     const deleteButton = screen.getByText('Delete');
     fireEvent.click(deleteButton);
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
 
-    confirmSpy.mockRestore();
+    // Confirm in the accessible dialog
+    const dialog = screen.getByRole('dialog', { name: 'Delete Transaction' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(mockDeleteTransaction).toHaveBeenCalledWith('t1');
   });
 });

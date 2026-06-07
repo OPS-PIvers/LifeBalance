@@ -96,7 +96,8 @@ async function migrateHabitSubmissions(): Promise<MigrationStats> {
 
         // Process each date and create submission
         for (let i = 0; i < sortedDates.length; i++) {
-          const date = sortedDates[i];
+          // i is always within [0, sortedDates.length), so this access is in bounds.
+          const date = sortedDates[i]!;
 
           // Calculate streak as of this date
           const datesUpToNow = sortedDates.slice(0, i + 1);

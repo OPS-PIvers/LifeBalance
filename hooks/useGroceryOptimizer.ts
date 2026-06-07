@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { OptimizableItem } from '@/services/geminiService';
+import type { OptimizableItem } from '@/services/geminiService.types';
 import { normalizeValue } from '@/utils/stringNormalizer';
 
 interface UseGroceryOptimizerConfig<T> {

@@ -35,6 +35,16 @@ vi.mock('firebase/firestore', () => ({
     exists: () => true,
     data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } })
   })),
+  runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
+    const mockTxn = {
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } }),
+      }),
+      update: vi.fn(),
+    };
+    await fn(mockTxn);
+  }),
   setDoc: vi.fn(() => Promise.resolve()),
   updateDoc: vi.fn(() => Promise.resolve()),
   increment: vi.fn((n) => n),
@@ -113,7 +123,7 @@ describe('geminiService - Meal Suggestion', () => {
 
     await suggestMeal('test-household', request);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify constraints are included
@@ -150,7 +160,7 @@ describe('geminiService - Meal Suggestion', () => {
 
     await suggestMeal('test-household', request);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Verify previous meals are mentioned

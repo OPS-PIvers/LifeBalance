@@ -3,14 +3,28 @@ import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/sche
 import { WeeklyPlan, WeeklyPlanConstraints } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
-import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, runTransaction, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
+
+// Re-export plain types so existing importers keep compiling unchanged.
+export type {
+  ParsedShoppingList,
+  ParsedTodoList,
+  ParsedExpense,
+  OptimizableItem,
+  HabitPatternInsight,
+  HabitReorganizationPlan,
+  MagicActionType,
+  MagicActionResponse,
+  HabitPointAdjustmentSuggestion,
+} from './geminiService.types';
 
 /**
  * Single source of truth for the Gemini model name.
+ * Override at build/runtime via VITE_GEMINI_MODEL env var.
  * This is a preview model — bump the string here when a stable release is available.
  */
-export const GEMINI_MODEL = 'gemini-3-flash-preview';
+export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3-flash-preview';
 
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
@@ -31,13 +45,26 @@ const validateApiKey = () => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Quota management (fix #3 — single Firestore transaction to prevent TOCTOU)
+// ---------------------------------------------------------------------------
+
+/** Daily AI request cap. Mirrors the comment in the original code. */
+const AI_DAILY_QUOTA = 100;
+
 /**
- * Checks if the household is allowed to make AI requests
- * Implements circuit breaker and quota limits
+ * Atomically checks the household's daily AI quota and, if under the limit,
+ * increments the counter — all inside a single Firestore transaction so
+ * concurrent callers cannot all pass the check before any increment lands.
+ *
+ * @throws Error("AI features are temporarily disabled.") when the global kill-switch is on.
+ * @throws Error("Household not found") when the householdId is invalid.
+ * @throws Error("Daily AI quota exceeded …") when the household is at the cap.
  */
-const checkAiAvailability = async (householdId: string) => {
-  // 1. Check Global Kill Switch
+const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
+  // 1. Check Global Kill Switch (read-only, outside the transaction — fail-open on error)
   try {
+    const { getDoc } = await import("firebase/firestore");
     const globalConfigRef = doc(db, 'app_config', 'global');
     const globalConfigSnap = await getDoc(globalConfigRef);
     if (globalConfigSnap.exists()) {
@@ -48,77 +75,178 @@ const checkAiAvailability = async (householdId: string) => {
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes("temporarily disabled")) {
-        throw error;
+      throw error;
     }
     // Fail open if config fetch fails (don't block users due to config db error)
     console.warn("Failed to check global AI config:", error);
   }
 
-  // 2. Check Household Quota
+  // 2. Atomically check + increment quota
   const householdRef = doc(db, 'households', householdId);
-  const householdSnap = await getDoc(householdRef);
-
-  if (!householdSnap.exists()) {
-      // Should not happen for authenticated users with valid householdId
-      throw new Error("Household not found");
-  }
-
-  const householdData = householdSnap.data() as Household;
   const today = getLocalDateString();
 
-  const usage = householdData.aiUsage || { dailyCount: 0, lastResetDate: today };
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(householdRef);
 
-  // If date changed, effectively count is 0
-  const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
+    if (!snap.exists()) {
+      throw new Error("Household not found");
+    }
 
-  // Limit: 100 requests per day for development/testing (was 20 for Alpha)
-  if (currentCount >= 100) {
-    throw new Error("Daily AI quota exceeded (100 requests/day). Try again tomorrow.");
+    const data = snap.data() as Household;
+    const usage = data.aiUsage ?? { dailyCount: 0, lastResetDate: today };
+
+    // If the date rolled over, treat the count as 0 for the new day.
+    const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
+
+    if (currentCount >= AI_DAILY_QUOTA) {
+      throw new Error(`Daily AI quota exceeded (${AI_DAILY_QUOTA} requests/day). Try again tomorrow.`);
+    }
+
+    // Write the updated counter (reset if new day, otherwise increment).
+    if (usage.lastResetDate !== today) {
+      txn.update(householdRef, {
+        aiUsage: { dailyCount: 1, lastResetDate: today },
+      });
+    } else {
+      // Firestore field-path increment is not available inside a transaction's
+      // update call — we must provide the full new value.
+      txn.update(householdRef, {
+        aiUsage: { dailyCount: currentCount + 1, lastResetDate: today },
+      });
+    }
+  });
+};
+
+/**
+ * Best-effort refund of one AI quota unit, used when a request was counted up
+ * front (by checkAndIncrementAiUsage) but then failed at the API layer. This
+ * keeps the net effect "only successful requests consume quota" while the
+ * up-front increment still enforces the cap atomically against concurrent
+ * callers. Never throws — a refund failure must not mask the original error.
+ */
+const refundAiUsage = async (householdId: string): Promise<void> => {
+  const householdRef = doc(db, 'households', householdId);
+  const today = getLocalDateString();
+  try {
+    await runTransaction(db, async (txn) => {
+      const snap = await txn.get(householdRef);
+      if (!snap.exists()) return;
+      const usage = (snap.data() as Household).aiUsage;
+      // Only refund if the counter is still for today and above zero.
+      if (!usage || usage.lastResetDate !== today || usage.dailyCount <= 0) return;
+      txn.update(householdRef, {
+        aiUsage: { dailyCount: usage.dailyCount - 1, lastResetDate: today },
+      });
+    });
+  } catch (err) {
+    console.warn("Failed to refund AI usage after a failed request:", err);
   }
 };
 
 /**
- * Increments AI usage counter and logs request
+ * Fire-and-forget audit log for a SUCCESSFUL AI request. Kept separate from the
+ * quota increment so the audit trail reflects successful usage only (matching
+ * the original behavior) and never blocks or fails the caller.
  */
-const incrementAiUsage = async (householdId: string, modelName: string) => {
-  const today = getLocalDateString();
-  const householdRef = doc(db, 'households', householdId);
-
-  try {
-    // We need to read-modify-write or use smart updates to handle day reset
-    const householdSnap = await getDoc(householdRef);
-    if (householdSnap.exists()) {
-        const data = householdSnap.data() as Household;
-        const currentUsage = data.aiUsage || { dailyCount: 0, lastResetDate: today };
-
-        if (currentUsage.lastResetDate !== today) {
-            // New day, reset to 1
-            await updateDoc(householdRef, {
-                aiUsage: {
-                    dailyCount: 1,
-                    lastResetDate: today
-                }
-            });
-        } else {
-            // Same day, increment
-            await updateDoc(householdRef, {
-                'aiUsage.dailyCount': increment(1)
-            });
-        }
-    }
-
-    // Log for auditing
-    await addDoc(collection(db, 'logs/ai_usage/requests'), {
+const logAiUsage = (householdId: string, modelName: string): void => {
+  Promise.resolve(
+    addDoc(collection(db, 'logs/ai_usage/requests'), {
       householdId,
       model: modelName,
-      timestamp: serverTimestamp()
-    });
-
-  } catch (error) {
-    console.error("Failed to track AI usage:", error);
-    // We don't throw here to avoid failing the user's successful operation just because logging failed
-  }
+      timestamp: serverTimestamp(),
+    })
+  ).catch((err: unknown) => {
+    console.error("Failed to write AI audit log:", err);
+  });
 };
+
+// ---------------------------------------------------------------------------
+// Timeout + retry helper (fix #2)
+// ---------------------------------------------------------------------------
+
+/** Default per-request timeout in milliseconds. */
+const GEMINI_REQUEST_TIMEOUT_MS = 30_000;
+
+/** Maximum number of retries for transient failures (in addition to the initial attempt). */
+const GEMINI_MAX_RETRIES = 2;
+
+/**
+ * Returns true if the thrown error is considered transient and worth retrying.
+ * Matches network errors and HTTP 429 / 503 status codes.
+ * Uses defensive narrowing of `unknown` — no `any`.
+ */
+const isTransientError = (error: unknown): boolean => {
+  if (error instanceof TypeError) {
+    // fetch-level network failures (e.g. "Failed to fetch", "NetworkError")
+    return true;
+  }
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    // 429 Too Many Requests / 503 Service Unavailable may appear in the message
+    if (msg.includes('429') || msg.includes('503') ||
+        msg.includes('rate limit') || msg.includes('service unavailable') ||
+        msg.includes('quota') && msg.includes('resource')) {
+      return true;
+    }
+    // Some SDK versions expose a `status` property
+    const asRecord = error as unknown as Record<string, unknown>;
+    const status = asRecord['status'];
+    if (status === 429 || status === 503) return true;
+  }
+  return false;
+};
+
+/**
+ * Wraps a factory function that produces a Promise with:
+ *  - A hard timeout (rejects after `timeoutMs` ms)
+ *  - Exponential-backoff retries for transient failures (up to `maxRetries`)
+ *
+ * Non-transient errors are rethrown immediately without retrying.
+ */
+async function withTimeoutAndRetry<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number = GEMINI_REQUEST_TIMEOUT_MS,
+  maxRetries: number = GEMINI_MAX_RETRIES,
+): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff: 500 ms, 1000 ms, …
+      await new Promise<void>(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error(`Gemini request timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      });
+
+      return await Promise.race([fn(), timeoutPromise]);
+    } catch (error) {
+      lastError = error;
+
+      // Do not retry auth/validation/timeout errors or non-transient API errors.
+      if (!isTransientError(error)) {
+        throw error;
+      }
+
+      if (attempt === maxRetries) {
+        // Last attempt exhausted — fall through to final throw.
+        break;
+      }
+    } finally {
+      // Always clear the timeout timer so a resolved/rejected fn() doesn't leak
+      // a pending timer (which would keep the event loop alive, notably in tests).
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastError;
+}
 
 /**
  * AI Prompt template for generating household insights.
@@ -172,26 +300,12 @@ export interface GroceryItem {
 }
 
 /**
- * Interface for items that can be optimized by AI.
- * Used to normalize grocery items across components.
- * The optional fields allow for flexibility in what data is available
- * for optimization.
- */
-export interface OptimizableItem {
-  id: string;
-  name: string;
-  category?: string;
-  quantity?: string;
-  store?: string;
-}
-
-/**
  * Extracts MIME type from base64 data URL
  * Supports formats like image/jpeg, image/png, image/webp, image/svg+xml
  */
 const extractMimeType = (base64Image: string): string => {
   const match = base64Image.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,/);
-  return match ? match[1] : 'image/jpeg';
+  return match?.[1] ?? 'image/jpeg';
 };
 
 /**
@@ -240,7 +354,13 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
 };
 
 /**
- * Generic helper to generate JSON content from Gemini
+ * Generic helper to generate JSON content from Gemini.
+ *
+ * Includes:
+ *  - API key validation
+ *  - Atomic quota check + increment (runTransaction)
+ *  - Per-request timeout (30 s default)
+ *  - Exponential-backoff retry for transient errors (up to 2 retries)
  */
 async function generateJsonContent<T>(
   householdId: string,
@@ -251,8 +371,8 @@ async function generateJsonContent<T>(
 ): Promise<T> {
   validateApiKey();
 
-  // 1. Check Circuit Breaker & Quota
-  await checkAiAvailability(householdId);
+  // 1. Atomic quota check + increment (prevents TOCTOU race)
+  await checkAndIncrementAiUsage(householdId);
 
   const client = _aiClient || ai;
 
@@ -261,25 +381,32 @@ async function generateJsonContent<T>(
     : { parts: promptOrParts };
 
   try {
-    const response = await client.models.generateContent({
-      model: modelName,
-      contents,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema
-      }
-    });
+    // 2. Call Gemini with timeout + transient-error retry
+    const response = await withTimeoutAndRetry(() =>
+      client.models.generateContent({
+        model: modelName,
+        contents,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema
+        }
+      })
+    );
 
     const text = response.text;
     if (!text) throw new Error("No data returned from Gemini");
 
-    // 2. Log Success & Increment Quota
-    await incrementAiUsage(householdId, modelName);
-
-    return JSON.parse(text) as T;
+    const parsed = JSON.parse(text) as T;
+    // Only log audit usage on success (the quota was already incremented up front).
+    logAiUsage(householdId, modelName);
+    return parsed;
   } catch (error) {
-      console.error("Gemini API Error:", error);
-      throw error;
+    console.error("Gemini API Error:", error);
+    // The request was counted up front for atomic cap enforcement; since it
+    // failed (timeout, transient/non-transient API error, or unparseable
+    // response), refund the quota unit so failures don't lock users out.
+    await refundAiUsage(householdId);
+    throw error;
   }
 }
 
@@ -566,10 +693,10 @@ export const parseGroceryReceipt = async (
  */
 export const optimizeGroceryList = async (
   householdId: string,
-  items: OptimizableItem[],
+  items: import('./geminiService.types').OptimizableItem[],
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<OptimizableItem[]> => {
+): Promise<import('./geminiService.types').OptimizableItem[]> => {
   if (items.length === 0) return [];
 
   try {
@@ -607,7 +734,7 @@ export const optimizeGroceryList = async (
       Return a JSON array of objects with keys: id, name, category, quantity, store.
     `;
 
-    return await generateJsonContent<OptimizableItem[]>(
+    return await generateJsonContent<import('./geminiService.types').OptimizableItem[]>(
       householdId,
       prompt,
       {
@@ -639,14 +766,14 @@ export const optimizeGroceryList = async (
 
 /**
  * Generates a concise, helpful insight based on habits and spending data.
- * 
+ *
  * **Privacy Note**: This function sends data to Google's Gemini AI service:
  * - Transaction data: amount, category, date, and optionally merchant names
  * - Habit data: title, type, count, streak, and recent completion dates
- * 
+ *
  * Habit titles are always included in the analysis. Users should avoid using
  * sensitive or identifying information in habit titles if privacy is a concern.
- * 
+ *
  * @param householdId - The household ID for quota tracking
  * @param transactions - List of recent transactions
  * @param habits - List of habits with completion data
@@ -748,29 +875,6 @@ export const generateInsight = async (
   }
 };
 
-export type MagicActionType = 'transaction' | 'todo' | 'shopping' | 'unknown';
-
-export interface MagicActionResponse {
-  type: MagicActionType;
-  confidence: number;
-  data: {
-    // Transaction fields
-    merchant?: string;
-    amount?: number;
-    category?: string;
-    date?: string;
-
-    // Todo fields
-    text?: string;
-    completeByDate?: string;
-
-    // Shopping fields
-    item?: string;
-    quantity?: string;
-    store?: string;
-  };
-}
-
 /**
  * Parses a natural language input to determine intent and extract data.
  * @param input - The user's natural language string (e.g., "Spent 50 at Shell")
@@ -786,7 +890,7 @@ export const parseMagicAction = async (
     todayDate: string;
   },
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<MagicActionResponse> => {
+): Promise<import('./geminiService.types').MagicActionResponse> => {
   try {
     const sanitizedInput = sanitizeForPrompt(input);
     const categoryList = context.categories.length > 0
@@ -811,7 +915,7 @@ export const parseMagicAction = async (
       Return JSON.
     `;
 
-    return await generateJsonContent<MagicActionResponse>(
+    return await generateJsonContent<import('./geminiService.types').MagicActionResponse>(
       householdId,
       prompt,
       {
@@ -845,14 +949,6 @@ export const parseMagicAction = async (
   }
 };
 
-export interface HabitPointAdjustmentSuggestion {
-  habitId: string;
-  habitTitle: string;
-  currentPoints: number;
-  suggestedPoints: number;
-  reasoning: string;
-}
-
 /**
  * Analyzes habits and suggests point adjustments based on performance.
  * @param householdId - The household ID for quota tracking
@@ -863,7 +959,7 @@ export const analyzeHabitPoints = async (
   householdId: string,
   habits: Habit[],
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<HabitPointAdjustmentSuggestion[]> => {
+): Promise<import('./geminiService.types').HabitPointAdjustmentSuggestion[]> => {
   if (habits.length === 0) return [];
 
   try {
@@ -920,7 +1016,7 @@ export const analyzeHabitPoints = async (
       - reasoning: (string) brief, encouraging explanation for the change (e.g., "You're crushing this! Dropping points slightly to balance the economy." or "Struggling here? Let's bump the reward to get you back on track!")
     `;
 
-    const rawSuggestions = await generateJsonContent<HabitPointAdjustmentSuggestion[]>(
+    const rawSuggestions = await generateJsonContent<import('./geminiService.types').HabitPointAdjustmentSuggestion[]>(
       householdId,
       prompt,
       {
@@ -989,13 +1085,6 @@ export const analyzeHabitPoints = async (
   }
 };
 
-export interface HabitPatternInsight {
-  title: string;
-  description: string;
-  type: 'praise' | 'critique' | 'suggestion';
-  relatedHabitId?: string;
-}
-
 /**
  * Analyzes habit completion patterns to provide coaching insights.
  * @param householdId - The household ID for quota tracking
@@ -1006,7 +1095,7 @@ export const analyzeHabitPatterns = async (
   householdId: string,
   habits: Habit[],
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<HabitPatternInsight[]> => {
+): Promise<import('./geminiService.types').HabitPatternInsight[]> => {
   if (habits.length === 0) return [];
 
   try {
@@ -1043,7 +1132,7 @@ export const analyzeHabitPatterns = async (
       - relatedHabitId: (Optional) The ID of the specific habit this insight is about.
     `;
 
-    return await generateJsonContent<HabitPatternInsight[]>(
+    return await generateJsonContent<import('./geminiService.types').HabitPatternInsight[]>(
       householdId,
       prompt,
       {
@@ -1068,35 +1157,11 @@ export const analyzeHabitPatterns = async (
   }
 };
 
-// Natural Language Command Parsing Types
-
-export interface ParsedShoppingList {
-  items: Array<{
-    item: string;
-    quantity: number;
-    category: string;
-  }>;
-}
-
-export interface ParsedTodoList {
-  tasks: Array<{
-    task: string;
-    priority: 'low' | 'medium' | 'high';
-  }>;
-}
-
-export interface ParsedExpense {
-  amount?: number;
-  merchant?: string;
-  category?: string;
-  notes?: string;
-  error?: string;
-}
-
+// Natural Language Command Parsing Types (re-exported for convenience)
 export type NaturalLanguageResult =
-  | (ParsedShoppingList & { detectedType: 'shopping'; confidence: number })
-  | (ParsedTodoList & { detectedType: 'todo'; confidence: number })
-  | (ParsedExpense & { detectedType: 'expense'; confidence: number })
+  | (import('./geminiService.types').ParsedShoppingList & { detectedType: 'shopping'; confidence: number })
+  | (import('./geminiService.types').ParsedTodoList & { detectedType: 'todo'; confidence: number })
+  | (import('./geminiService.types').ParsedExpense & { detectedType: 'expense'; confidence: number })
   | { detectedType: 'unclear' | 'unknown'; confidence: number; error?: string };
 
 /**
@@ -1144,7 +1209,7 @@ Return ONLY a JSON object with this structure (no markdown, no explanation):
 
 If no items found, return {"items": []}`;
 
-      const result = await generateJsonContent<ParsedShoppingList>(
+      const result = await generateJsonContent<import('./geminiService.types').ParsedShoppingList>(
         householdId,
         prompt,
         {
@@ -1190,7 +1255,7 @@ Return ONLY a JSON object:
 
 If no tasks found, return {"tasks": []}`;
 
-      const result = await generateJsonContent<ParsedTodoList>(
+      const result = await generateJsonContent<import('./geminiService.types').ParsedTodoList>(
         householdId,
         prompt,
         {
@@ -1239,7 +1304,7 @@ Return ONLY a JSON object:
 
 If no amount found, return { "error": "No amount found" }`;
 
-      const result = await generateJsonContent<ParsedExpense>(
+      const result = await generateJsonContent<import('./geminiService.types').ParsedExpense>(
         householdId,
         prompt,
         {
@@ -1329,15 +1394,6 @@ If no amount found, return { "error": "No amount found" }`;
   }
 };
 
-export interface HabitReorganizationPlan {
-  habits: {
-    id: string;
-    category: string;
-    order: number;
-  }[];
-  reasoning: string;
-}
-
 /**
  * Reorganizes habits into logical categories and sorts them.
  * @param householdId - The household ID for quota tracking
@@ -1348,7 +1404,7 @@ export const reorganizeHabits = async (
   householdId: string,
   habits: Habit[],
   _aiClient?: Pick<typeof ai, 'models'>
-): Promise<HabitReorganizationPlan> => {
+): Promise<import('./geminiService.types').HabitReorganizationPlan> => {
   // Test Mode Bypass
   if (import.meta.env.VITE_ENABLE_TEST_MODE === 'true' && !_aiClient) {
     return {
@@ -1393,7 +1449,7 @@ export const reorganizeHabits = async (
       - reasoning: Brief explanation of the new structure (e.g., "I grouped morning tasks together and moved health habits to the top for better visibility.").
     `;
 
-    return await generateJsonContent<HabitReorganizationPlan>(
+    return await generateJsonContent<import('./geminiService.types').HabitReorganizationPlan>(
       householdId,
       prompt,
       {

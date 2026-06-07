@@ -163,7 +163,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const groupedSubmissions = useMemo(() => {
     return submissions.reduce((acc, sub) => {
       if (!acc[sub.date]) acc[sub.date] = [];
-      acc[sub.date].push(sub);
+      const bucket = acc[sub.date];
+      if (bucket) bucket.push(sub);
       return acc;
     }, {} as Record<string, HabitSubmission[]>);
   }, [submissions]);

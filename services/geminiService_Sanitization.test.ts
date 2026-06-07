@@ -17,6 +17,16 @@ vi.mock('firebase/firestore', () => ({
     exists: () => true,
     data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2024-01-01' } })
   }),
+  runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
+    const mockTxn = {
+      get: vi.fn().mockResolvedValue({
+        exists: () => true,
+        data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2024-01-01' } }),
+      }),
+      update: vi.fn(),
+    };
+    await fn(mockTxn);
+  }),
   updateDoc: vi.fn(),
   increment: vi.fn(),
   collection: vi.fn(),
@@ -80,7 +90,7 @@ describe('geminiService Sanitization', () => {
 
     await generateInsight('id', [maliciousTransaction], [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     // Check that quotes and newlines are removed/sanitized
@@ -111,7 +121,7 @@ describe('geminiService Sanitization', () => {
 
     await analyzeHabitPoints('id', [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     expect(promptText).not.toContain('Habit " Injection');
@@ -135,7 +145,7 @@ describe('geminiService Sanitization', () => {
 
     await analyzeHabitPatterns('id', [maliciousHabit]);
 
-    const callArgs = generateContentMock.mock.calls[0][0];
+    const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[0].text;
 
     expect(promptText).not.toContain('Habit " Injection');

@@ -5,6 +5,7 @@ import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from '
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface GroceryCatalogModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
   const [actionItem, setActionItem] = useState<GroceryCatalogItem | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Wrapper for onClose to reset state
   const handleClose = () => {
@@ -110,13 +112,18 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
     setEditingItem(null);
   };
 
-  const handleDeleteItem = async (id: string) => {
-    if (window.confirm('Remove from history? This won\'t affect your current list.')) {
-      await deleteGroceryCatalogItem(id);
-      // Close action drawer if open for this item
-      if (actionItem?.id === id) {
-        setActionItem(null);
-      }
+  const handleDeleteItem = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleDeleteItemConfirmed = async () => {
+    if (!deleteConfirmId) return;
+    const id = deleteConfirmId;
+    setDeleteConfirmId(null);
+    await deleteGroceryCatalogItem(id);
+    // Close action drawer if open for this item
+    if (actionItem?.id === id) {
+      setActionItem(null);
     }
   };
 
@@ -326,6 +333,17 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
           </div>
         </Drawer>
       )}
+
+      {/* Delete from History Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={handleDeleteItemConfirmed}
+        title="Remove from History"
+        message="Remove from history? This won't affect your current list."
+        confirmLabel="Remove"
+        confirmVariant="destructive"
+      />
     </Drawer>
   );
 };

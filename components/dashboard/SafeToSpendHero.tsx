@@ -15,13 +15,21 @@ const currency = (n: number) =>
  * (Checking − Unpaid bills) so the number is trustworthy, not magic.
  */
 export const SafeToSpendHero: React.FC = () => {
-  const { accounts, buckets, calendarItems, currentPeriodId } = useHousehold();
+  const { accounts, buckets, calendarItems, currentPeriodId, safeToSpendBreakdown: contextBreakdown } = useHousehold();
   const [expanded, setExpanded] = useState(false);
 
-  const breakdown = useMemo(
-    () => calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId),
-    [accounts, calendarItems, buckets, currentPeriodId]
+  // When the context provides a memoized breakdown (Firebase provider), use it directly
+  // to avoid re-expanding calendar items every render. Fall back to local calculation
+  // in test mode where the mock provider does not supply it.
+  const localBreakdown = useMemo(
+    () =>
+      contextBreakdown === undefined
+        ? calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId)
+        : null,
+    [contextBreakdown, accounts, calendarItems, buckets, currentPeriodId]
   );
+
+  const breakdown = contextBreakdown ?? localBreakdown!;
 
   // Headline and itemization both come from `breakdown`, so the big number can
   // never contradict the rows beneath it.
@@ -44,6 +52,7 @@ export const SafeToSpendHero: React.FC = () => {
           haptic('light');
         }}
         aria-expanded={expanded}
+        aria-controls="sts-breakdown"
         className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
       >
         <div className="flex items-start justify-between">
@@ -75,7 +84,7 @@ export const SafeToSpendHero: React.FC = () => {
       </button>
 
       {expanded && (
-        <div className="mt-4 space-y-2 border-t border-white/20 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div id="sts-breakdown" className="mt-4 space-y-2 border-t border-white/20 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
           <Row icon={<Wallet size={14} />} label="Checking balance" value={currency(breakdown.checkingBalance)} />
           <Row
             icon={<Receipt size={14} />}

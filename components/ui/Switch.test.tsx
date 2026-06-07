@@ -44,4 +44,16 @@ describe('Switch', () => {
     const label = screen.getByRole('checkbox').parentElement;
     expect(label).toHaveClass('custom-class');
   });
+
+  it('is accessible by aria-label when no visible label is present', () => {
+    render(
+      <Switch
+        checked={false}
+        onCheckedChange={() => {}}
+        aria-label="Enable notifications"
+      />
+    );
+    const checkbox = screen.getByRole('checkbox', { name: 'Enable notifications' });
+    expect(checkbox).toBeInTheDocument();
+  });
 });

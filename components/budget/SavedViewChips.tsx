@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bookmark, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 interface SavedView {
   id: string;
@@ -40,6 +41,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
 
   const [isSaving, setIsSaving] = useState(false);
   const [newViewName, setNewViewName] = useState('');
+  const [viewToDelete, setViewToDelete] = useState<string | null>(null);
 
   // Save to localStorage whenever views change
   useEffect(() => {
@@ -66,15 +68,29 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
 
   const handleDeleteView = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this saved view?')) {
-      setViews(prev => prev.filter(v => v.id !== id));
-      toast.success('View deleted');
-    }
+    setViewToDelete(id);
+  };
+
+  const confirmDeleteView = () => {
+    if (!viewToDelete) return;
+    setViews(prev => prev.filter(v => v.id !== viewToDelete));
+    toast.success('View deleted');
+    setViewToDelete(null);
   };
 
   if (!householdId) return null;
 
   return (
+    <>
+    <ConfirmDialog
+      isOpen={viewToDelete !== null}
+      onClose={() => setViewToDelete(null)}
+      onConfirm={confirmDeleteView}
+      title="Delete Saved View"
+      message="Delete this saved view?"
+      confirmLabel="Delete"
+      confirmVariant="destructive"
+    />
     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-brand-100 dark:border-slate-700 mt-2">
       <div className="text-xs font-bold text-brand-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
         <Bookmark size={12} />
@@ -146,6 +162,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
         </button>
       )}
     </div>
+    </>
   );
 };
 

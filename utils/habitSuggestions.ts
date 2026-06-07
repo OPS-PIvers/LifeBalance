@@ -112,7 +112,7 @@ function habitMatchesKeywords(habit: Habit, keywords: string[]): boolean {
     const keywordLower = keyword.toLowerCase();
     return habitTitle.includes(keywordLower) ||
            habitCategory.includes(keywordLower) ||
-           keywordLower.includes(habitTitle.split(' ')[0]) || // Match first word of habit
+           keywordLower.includes(habitTitle.split(' ')[0] ?? '') || // Match first word of habit
            keywordLower.includes(habitCategory);
   });
 }

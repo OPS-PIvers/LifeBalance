@@ -42,9 +42,9 @@ describe('analyticsHelper', () => {
       const data = calculatePulseData(habits, transactions, 1);
 
       expect(data).toHaveLength(1);
-      expect(data[0].points).toBe(10);
-      expect(data[0].spending).toBe(50);
-      expect(data[0].fullDate).toBe('2023-10-15');
+      expect(data[0]!.points).toBe(10);
+      expect(data[0]!.spending).toBe(50);
+      expect(data[0]!.fullDate).toBe('2023-10-15');
     });
 
     it('handles negative habits', () => {
@@ -60,7 +60,7 @@ describe('analyticsHelper', () => {
 
       const data = calculatePulseData(habits, transactions, 1);
 
-      expect(data[0].points).toBe(-10);
+      expect(data[0]!.points).toBe(-10);
     });
   });
 
@@ -81,9 +81,9 @@ describe('analyticsHelper', () => {
       expect(data).toHaveLength(7);
 
       // Monday check
-      expect(data[0].day).toBe('Mon');
-      expect(data[0]["This Week"]).toBe(10); // Oct 9
-      expect(data[0]["Last Week"]).toBe(10); // Oct 2
+      expect(data[0]!.day).toBe('Mon');
+      expect(data[0]!["This Week"]).toBe(10); // Oct 9
+      expect(data[0]!["Last Week"]).toBe(10); // Oct 2
     });
   });
 
@@ -101,8 +101,8 @@ describe('analyticsHelper', () => {
       const data = calculateHabitConsistency(habits);
 
       expect(data).toHaveLength(1);
-      expect(data[0].subject).toBe('Health');
-      expect(data[0].points).toBe(20);
+      expect(data[0]!.subject).toBe('Health');
+      expect(data[0]!.points).toBe(20);
     });
   });
 
@@ -142,7 +142,7 @@ describe('analyticsHelper', () => {
       const data = calculateNetFlowData(transactions);
 
       // Oct 2023 should be the last month (since we are in Oct)
-      const currentMonth = data[data.length - 1];
+      const currentMonth = data[data.length - 1]!;
 
       expect(currentMonth.month).toBe('Oct');
       expect(currentMonth.Income).toBe(1000);
@@ -165,7 +165,7 @@ describe('analyticsHelper', () => {
       expect(categories).toContain('Transport');
       expect(categories).toContain('Misc');
 
-      const currentMonth = data[data.length - 1];
+      const currentMonth = data[data.length - 1]!;
       expect(currentMonth['Food']).toBe(100);
       expect(currentMonth['Transport']).toBe(50);
     });

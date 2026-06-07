@@ -114,19 +114,22 @@ describe('BucketFormModal', () => {
       isCore: true
     };
 
-    // Mock window.confirm
-    const confirmSpy = vi.spyOn(window, 'confirm');
-    confirmSpy.mockReturnValue(true);
-
     render(<BucketFormModal isOpen={true} onClose={mockOnClose} editingBucket={bucket} />);
 
+    // Click Delete Bucket — opens ConfirmDialog
     fireEvent.click(screen.getByRole('button', { name: /delete bucket/i }));
 
-    expect(confirmSpy).toHaveBeenCalled();
+    // ConfirmDialog should now be visible — find it by its message text
+    expect(screen.getByText(/Transactions will remain but categorization may break/)).toBeInTheDocument();
+
+    // Click the "Delete" confirm button (it only says "Delete", not "Delete Bucket")
+    const allButtons = screen.getAllByRole('button');
+    const deleteConfirmButton = allButtons.find(btn => btn.textContent?.trim() === 'Delete');
+    expect(deleteConfirmButton).toBeDefined();
+    fireEvent.click(deleteConfirmButton!);
+
     expect(mockDeleteBucket).toHaveBeenCalledWith('1');
     expect(mockOnClose).toHaveBeenCalled();
-
-    confirmSpy.mockRestore();
   });
 
   it('disables submit if required fields are missing or invalid', () => {

@@ -130,7 +130,7 @@ describe('TransactionMasterList Summary Widget', () => {
   it('updates summary when filtered by category', () => {
     render(<TransactionMasterList />);
     const selects = screen.getAllByRole('combobox');
-    const categorySelect = selects[0];
+    const categorySelect = selects[0]!;
 
     // Filter to only 'Income'
     fireEvent.change(categorySelect, { target: { value: INCOME_CATEGORY } });

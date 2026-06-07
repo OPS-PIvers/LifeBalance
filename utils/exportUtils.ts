@@ -39,7 +39,8 @@ export const generateJsonBackup = (data: Record<string, unknown>, filenamePrefix
 export const convertToCSV = (data: Record<string, unknown>[]): string => {
   if (data.length === 0) return '';
 
-  const headers = Object.keys(data[0]);
+  // data[0] is defined: the length === 0 guard above ensures data is non-empty.
+  const headers = Object.keys(data[0]!);
   const csvRows = [headers.join(',')];
 
   for (const row of data) {

@@ -158,6 +158,9 @@ const ToDosPage: React.FC = () => {
     };
   }, [todos, currentDate]);
 
+  // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
+  const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
+
   const viewModeOptions = useMemo(() => [
     { value: 'active', label: 'Active' },
     {
@@ -166,18 +169,18 @@ const ToDosPage: React.FC = () => {
             <span className="flex items-center gap-1.5">
                 Completed
                 <span className="bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-normal">
-                    {todos.filter(t => t.isCompleted).length}
+                    {completedCount}
                 </span>
             </span>
         )
     }
-  ], [todos]);
+  ], [completedCount]);
 
   // Open modal for adding
   const openAddModal = useCallback(() => {
     setText('');
     setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
-    const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0].uid : '');
+    const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
@@ -303,8 +306,10 @@ const ToDosPage: React.FC = () => {
       });
 
       exportData.sort((a, b) => {
-        if (a['Due Date'] !== b['Due Date']) {
-          return a['Due Date'].localeCompare(b['Due Date']);
+        const aDate = a['Due Date'] ?? '';
+        const bDate = b['Due Date'] ?? '';
+        if (aDate !== bDate) {
+          return aDate.localeCompare(bDate);
         }
         return 0;
       });
@@ -704,9 +709,10 @@ const ToDosPage: React.FC = () => {
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         className="p-6"
+        ariaLabelledBy="todo-modal-title"
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-brand-800 dark:text-slate-100">
+          <h2 id="todo-modal-title" className="text-xl font-bold text-brand-800 dark:text-slate-100">
             {editingId ? 'Edit Task' : 'New Task'}
           </h2>
           <Button
@@ -894,8 +900,7 @@ const ToDosPage: React.FC = () => {
   );
 };
 
-// Sub-component for sections
-const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }: {
+interface SectionProps {
   title: string;
   subtitle: string;
   items: ToDo[];
@@ -908,9 +913,16 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
   onMore: (todo: ToDo) => void;
   members: HouseholdMember[];
   isSelectionMode: boolean;
-  selectedIds: Set<string>;
+  /** Full selection set — Section only re-renders when its own items' membership changes. */
+  selectedIds: ReadonlySet<string>;
   onToggleSelection: (id: string) => void;
-}) {
+}
+
+// Sub-component for sections.
+// Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
+// at least one of this section's own items changed its selected/deselected state.
+// This prevents toggling an item in one section from re-rendering the other two sections.
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }: SectionProps) {
 
   // Create member lookup Map for O(1) access instead of O(n) for each item
   const memberMap = useMemo(() => {
@@ -1124,6 +1136,30 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
         })}
       </div>
     </div>
+  );
+}, (prev: SectionProps, next: SectionProps) => {
+  // Fast-path: if the section's items array reference changed, always re-render.
+  if (prev.items !== next.items) return false;
+  // Check non-set props with reference equality (callbacks are stable via useCallback).
+  const sameOtherProps =
+    prev.isSelectionMode === next.isSelectionMode &&
+    prev.members === next.members &&
+    prev.color === next.color &&
+    prev.title === next.title &&
+    prev.subtitle === next.subtitle &&
+    prev.onComplete === next.onComplete &&
+    prev.onEdit === next.onEdit &&
+    prev.onDelete === next.onDelete &&
+    prev.onDuplicate === next.onDuplicate &&
+    prev.onMoveToTomorrow === next.onMoveToTomorrow &&
+    prev.onMore === next.onMore &&
+    prev.onToggleSelection === next.onToggleSelection;
+  if (!sameOtherProps) return false;
+  // selectedIds reference changed — only re-render if at least one item in THIS
+  // section switched its selected/deselected state.
+  if (prev.selectedIds === next.selectedIds) return true;
+  return !prev.items.some(
+    item => prev.selectedIds.has(item.id) !== next.selectedIds.has(item.id)
   );
 });
 

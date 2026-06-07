@@ -234,21 +234,26 @@ export const useHabitActions = (
     const today = format(new Date(), 'yyyy-MM-dd');
     const newCompletedDates = habit.completedDates.filter(d => d !== today);
 
-    await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+    // Atomically commit habit state + points in a single batch so both writes
+    // succeed together or neither does (prevents points/habit desync on crash).
+    const resetBatch = writeBatch(db);
+
+    resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
       completedDates: newCompletedDates,
       streakDays: calculateStreak(newCompletedDates),
       lastUpdated: serverTimestamp(),
     });
 
-    // Use increment() with negative value for atomic server-side calculation
     if (pointsToRemove !== 0) {
-      await updateDoc(doc(db, `households/${householdId}`), {
+      resetBatch.update(doc(db, `households/${householdId}`), {
         'points.daily': increment(-pointsToRemove),
         'points.weekly': increment(-pointsToRemove),
         'points.total': increment(-pointsToRemove),
       });
     }
+
+    await resetBatch.commit();
 
     toast('Reset', { icon: '↺' });
   }, [householdId, householdSettings, habits]);
@@ -296,8 +301,6 @@ export const useHabitActions = (
         createdAt: new Date().toISOString(),
       };
 
-      await addDoc(collection(db, `households/${householdId}/habits/${habitId}/submissions`), submission);
-
       // Update habit's completedDates and count (maintain backwards compatibility)
       const updatedCompletedDates = [...habit.completedDates];
       if (!updatedCompletedDates.includes(submissionDate)) {
@@ -305,7 +308,15 @@ export const useHabitActions = (
         updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
       }
 
-      await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+      // Atomically commit the submission doc, habit state, and points in a single
+      // batch so all three writes succeed together or none do (prevents
+      // points/habit desync on crash).
+      const addBatch = writeBatch(db);
+
+      const submissionRef = doc(collection(db, `households/${householdId}/habits/${habitId}/submissions`));
+      addBatch.set(submissionRef, submission);
+
+      addBatch.update(doc(db, `households/${householdId}/habits`, habitId), {
         count: habit.count + count,
         totalCount: habit.totalCount + count,
         completedDates: updatedCompletedDates,
@@ -314,14 +325,15 @@ export const useHabitActions = (
         lastUpdated: serverTimestamp(),
       });
 
-      // Update household points
       if (pointsEarned !== 0) {
-        await updateDoc(doc(db, `households/${householdId}`), {
+        addBatch.update(doc(db, `households/${householdId}`), {
           'points.daily': increment(pointsEarned),
           'points.weekly': increment(pointsEarned),
           'points.total': increment(pointsEarned),
         });
       }
+
+      await addBatch.commit();
 
       toast.success(`Logged +${count} submission(s)`);
     } catch (error) {
@@ -479,8 +491,13 @@ export const useHabitActions = (
         }
       }
 
+      // Steps 3–5: Atomically commit the submission update, habit aggregate
+      // update, and points adjustment in a single batch so all writes succeed
+      // together or none do (prevents points/habit desync on crash).
+      const updateBatch = writeBatch(db);
+
       // Step 3: Update submission document
-      await updateDoc(submissionRef, {
+      updateBatch.update(submissionRef, {
         ...updates,
         updatedAt: new Date().toISOString(),
       });
@@ -488,7 +505,7 @@ export const useHabitActions = (
       // Step 4: Update habit aggregate counts
       if (updates.count !== undefined) {
         const countDelta = updates.count - originalSubmission.count;
-        await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+        updateBatch.update(doc(db, `households/${householdId}/habits`, habitId), {
           count: habit.count + countDelta,
           totalCount: habit.totalCount + countDelta,
           lastUpdated: serverTimestamp(),
@@ -515,8 +532,10 @@ export const useHabitActions = (
           pointUpdates['points.weekly'] = increment(pointsDelta);
         }
 
-        await updateDoc(doc(db, `households/${householdId}`), pointUpdates);
+        updateBatch.update(doc(db, `households/${householdId}`), pointUpdates);
       }
+
+      await updateBatch.commit();
 
       toast.success('Submission updated');
     } catch (error) {
