@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { CalendarItem } from '../../types/schema';
 import { Button } from '../ui/Button';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
@@ -14,7 +14,7 @@ interface RecurringBillsModalProps {
 }
 
 const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClose }) => {
-  const { calendarItems, updateCalendarItem, deleteCalendarItem } = useHousehold();
+  const { calendarItems, updateCalendarItem, deleteCalendarItem } = useFinance();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
 

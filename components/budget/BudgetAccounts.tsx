@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
 import { Account } from '../../types/schema';
 import { sumMoney, subtractMoney } from '../../utils/money';
@@ -11,7 +11,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 
 const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useHousehold();
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useFinance();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 

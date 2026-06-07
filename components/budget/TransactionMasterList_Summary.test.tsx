@@ -5,9 +5,20 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { INCOME_CATEGORY } from '../../types/schema';
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
-}));
+// The component reads granular slices (useFinance/useHouseholdCore/useMeals).
+// Back every hook with one shared mock fn so existing `useHousehold` mock setup
+// drives all of them with the same value object.
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  const fn = vi.fn();
+  return {
+    useHousehold: fn,
+    useFinance: fn,
+    useHouseholdCore: fn,
+    useMeals: fn,
+    useTodos: fn,
+    useGamification: fn,
+  };
+});
 
 vi.mock('../../utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),

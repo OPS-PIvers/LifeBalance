@@ -48,16 +48,26 @@ const mockAccounts: Account[] = [
   }
 ];
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  // BudgetAccounts reads useFinance; alias every hook to the same value so the
+  // mock data resolves regardless of which slice hook the component uses.
+  const value = () => ({
     accounts: mockAccounts,
     updateAccountBalance: updateAccountBalanceMock,
     addAccount: addAccountMock,
     setAccountGoal: setAccountGoalMock,
     deleteAccount: deleteAccountMock,
     reorderAccounts: reorderAccountsMock,
-  }),
-}));
+  });
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+    useGamification: value,
+  };
+});
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({

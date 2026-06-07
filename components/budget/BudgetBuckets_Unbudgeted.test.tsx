@@ -6,9 +6,19 @@ import BudgetBuckets from './BudgetBuckets';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 // Mock the Household Context
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
-}));
+// BudgetBuckets reads useFinance. Back every hook with one shared mock fn so the
+// existing `useHousehold` mock setup drives all of them with the same value.
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  const fn = vi.fn();
+  return {
+    useHousehold: fn,
+    useFinance: fn,
+    useHouseholdCore: fn,
+    useMeals: fn,
+    useTodos: fn,
+    useGamification: fn,
+  };
+});
 
 // Mock Toast
 vi.mock('react-hot-toast', () => ({

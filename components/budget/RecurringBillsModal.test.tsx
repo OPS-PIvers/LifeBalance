@@ -4,9 +4,19 @@ import RecurringBillsModal from './RecurringBillsModal';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
-}));
+// RecurringBillsModal reads useFinance. Back every hook with one shared mock fn
+// so the existing `useHousehold` mock setup drives all of them with one value.
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  const fn = vi.fn();
+  return {
+    useHousehold: fn,
+    useFinance: fn,
+    useHouseholdCore: fn,
+    useMeals: fn,
+    useTodos: fn,
+    useGamification: fn,
+  };
+});
 
 vi.mock('react-hot-toast', () => ({
   default: {

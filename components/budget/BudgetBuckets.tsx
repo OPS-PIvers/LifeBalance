@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
 import { sumMoney } from '../../utils/money';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '../../types/schema';
@@ -35,7 +35,7 @@ const BudgetBuckets: React.FC = () => {
     transactions,
     currentPeriodId,
     deleteTransaction,
-  } = useHousehold();
+  } = useFinance();
 
   // ⚡ Bolt Optimization: Pre-calculate transactions grouped by bucket
   const transactionsByBucket = useMemo(() => {

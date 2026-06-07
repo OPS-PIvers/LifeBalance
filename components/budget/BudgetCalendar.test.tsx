@@ -4,9 +4,20 @@ import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
-}));
+// BudgetCalendar reads useFinance + useTodos (and renders RecurringBillsModal,
+// which reads useFinance). Back every hook with one shared mock fn so existing
+// `useHousehold` mock setup drives all of them with the same value object.
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  const fn = vi.fn();
+  return {
+    useHousehold: fn,
+    useFinance: fn,
+    useHouseholdCore: fn,
+    useMeals: fn,
+    useTodos: fn,
+    useGamification: fn,
+  };
+});
 
 vi.mock('react-hot-toast', () => ({
   default: {
