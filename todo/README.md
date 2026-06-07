@@ -25,6 +25,19 @@ The items below remain intentionally deferred:
 | 6 | **List virtualization** — window large transaction/todo/shopping lists | Layout/UX work for variable-height + drag-and-drop rows | [06-list-virtualization.md](./06-list-virtualization.md) |
 | 7 | **Import-path normalization** — relative imports → `@/` alias | ~190-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
 | 8 | **Dead `animate-in` classes** — entrance-animation utilities render nothing (plugin missing) | Restoring them adds motion (behavior change) + needs reduced-motion gating | [08-dead-animation-classes.md](./08-dead-animation-classes.md) |
+| 9 | **Weekly-habit streaks** — `calculateStreak` counts days, so weekly habits never earn multipliers | Behavior change + threshold-in-weeks is a product decision | [09-weekly-habit-streaks.md](./09-weekly-habit-streaks.md) |
+| 10 | **Daily points after midnight reset** — auto-reset leaves `completedDates`, so recalc can zero earned points | Points-critical; needs a repro test before fixing | [10-daily-points-after-midnight-reset.md](./10-daily-points-after-midnight-reset.md) |
+| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
+| 12 | **Meals context split** — `useMeals()` re-renders all meal/shopping consumers on any shopping change | Many consumers; continuation of the context-split strategy | [12-meals-context-split.md](./12-meals-context-split.md) |
+| 13 | **Minor deferrals** — migration-effect run-once guard; voice-command shopping batching | Low impact; batch into any cleanup PR | [13-minor-deferrals.md](./13-minor-deferrals.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
+
+A later optimization pass (PR #619) shipped Wave 1–2: the Net-Flow expense bug, the
+budget-alert account-balance bug, rate-limit transaction + Gemini kill-switch cache,
+removal of the last blanket `eslint-disable` test files, `functions` strict-type flags,
+`useHabitActions` ref-stabilized callbacks, and atomic `writeBatch` for
+`updateTransactionCategory` / `useFreezeBankToken` / `addMember`, plus an a11y pass
+(ConfirmDialog, ARIA roles, focus management). Items 09–13 above were scoped during
+that pass and deferred.
