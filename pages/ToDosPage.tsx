@@ -1,9 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { ToDo, HouseholdMember } from '../types/schema';
 import toast from 'react-hot-toast';
+import { haptic } from '@/utils/haptics';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { showDeleteConfirmation } from '../utils/toastHelpers';
 import { generateCsvExport } from '../utils/exportUtils';
 import { Modal } from '../components/ui/Modal';
@@ -162,7 +165,7 @@ const ToDosPage: React.FC = () => {
         label: (
             <span className="flex items-center gap-1.5">
                 Completed
-                <span className="bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-xs font-normal">
+                <span className="bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-normal">
                     {todos.filter(t => t.isCompleted).length}
                 </span>
             </span>
@@ -174,7 +177,7 @@ const ToDosPage: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 text-rose-700">
+        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
           <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
           <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
         </div>
@@ -209,6 +212,7 @@ const ToDosPage: React.FC = () => {
               assignedTo: todo.assignedTo,
               isCompleted: false,
           });
+          haptic('success');
           toast.success('Task duplicated');
       } catch (error) {
           console.error('Failed to duplicate task:', error);
@@ -337,6 +341,7 @@ const ToDosPage: React.FC = () => {
           assignedTo,
           isCompleted: false
         });
+        haptic('success');
         toast.success('Task added');
       }
       setIsAddModalOpen(false);
@@ -453,10 +458,10 @@ const ToDosPage: React.FC = () => {
           <div>
             {isSelectionMode ? (
               <div className="flex flex-col">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Select Tasks</h1>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Select Tasks</h1>
                 <button
                     onClick={handleSelectAll}
-                    className="text-sm text-brand-600 font-medium flex items-center gap-1 mt-1 hover:text-brand-800"
+                    className="text-sm text-brand-600 dark:text-brand-400 font-medium flex items-center gap-1 mt-1 hover:text-brand-800 dark:hover:text-brand-200"
                 >
                   <CheckSquare size={14} className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
                   {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect All' : 'Select All'}
@@ -464,8 +469,8 @@ const ToDosPage: React.FC = () => {
               </div>
             ) : (
               <>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900">To-Do List</h1>
-                <p className="text-sm text-slate-500 leading-relaxed">Stay on top of your tasks</p>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">To-Do List</h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Stay on top of your tasks</p>
               </>
             )}
           </div>
@@ -499,7 +504,7 @@ const ToDosPage: React.FC = () => {
                 size="icon"
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
                 disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`${isSelectionMode ? 'bg-slate-100 border-slate-200' : ''}`}
+                className={`${isSelectionMode ? 'bg-slate-100 border-slate-200 dark:bg-slate-700 dark:border-slate-600' : ''}`}
                 title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
                 aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
               >
@@ -575,12 +580,15 @@ const ToDosPage: React.FC = () => {
             />
 
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
-                 <div className="text-center py-20 bg-white/50 rounded-3xl border border-dashed border-slate-200">
-                     <div className="w-16 h-16 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-300">
-                         <Check size={32} />
+                 <div className="text-center py-20 px-6 bg-white/50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
+                         <ClipboardList size={28} />
                      </div>
-                     <h3 className="text-lg font-bold text-slate-900">All caught up!</h3>
-                     <p className="text-slate-500">No active tasks. Enjoy your day!</p>
+                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">All caught up!</h3>
+                     <p className="text-slate-500 dark:text-slate-400 mt-1 mb-6">No active tasks. Add one to get started.</p>
+                     <Button variant="primary" onClick={openAddModal} leftIcon={<Plus size={16} />}>
+                         New Task
+                     </Button>
                  </div>
             )}
           </>
@@ -625,12 +633,12 @@ const ToDosPage: React.FC = () => {
             />
 
             {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && (
-                 <div className="text-center py-20 bg-white/50 rounded-3xl border border-dashed border-slate-200">
-                     <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                         <History size={32} />
+                 <div className="text-center py-20 px-6 bg-white/50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-500">
+                         <History size={28} />
                      </div>
-                     <h3 className="text-lg font-bold text-slate-900">No history yet</h3>
-                     <p className="text-slate-500">Completed tasks will appear here.</p>
+                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No history yet</h3>
+                     <p className="text-slate-500 dark:text-slate-400 mt-1">Completed tasks will appear here.</p>
                  </div>
             )}
           </>
@@ -698,17 +706,17 @@ const ToDosPage: React.FC = () => {
         className="p-6"
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-brand-800">
+          <h2 className="text-xl font-bold text-brand-800 dark:text-slate-100">
             {editingId ? 'Edit Task' : 'New Task'}
           </h2>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsAddModalOpen(false)}
-            className="rounded-full hover:bg-brand-50"
+            className="rounded-full hover:bg-brand-50 dark:hover:bg-slate-700/50"
             aria-label="Close dialog"
           >
-            <X size={20} className="text-brand-400" />
+            <X size={20} className="text-brand-400 dark:text-slate-500" />
           </Button>
         </div>
 
@@ -734,11 +742,11 @@ const ToDosPage: React.FC = () => {
           />
 
           <fieldset>
-            <legend className="block text-xs font-bold text-brand-400 uppercase tracking-wider mb-1">
+            <legend className="block text-xs font-bold text-brand-400 dark:text-slate-500 uppercase tracking-wider mb-1">
               Assign To
             </legend>
             {members.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-brand-400 py-2">
+              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-500 py-2">
                 <AlertCircle size={16} className="flex-shrink-0" />
                 <span>No household members available to assign this task.</span>
               </div>
@@ -753,14 +761,14 @@ const ToDosPage: React.FC = () => {
                     aria-pressed={assignedTo === member.uid}
                     className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
                       assignedTo === member.uid
-                        ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50'
+                        ? 'bg-brand-800 text-white border-brand-800 shadow-md dark:bg-brand-600 dark:border-brand-600'
+                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-slate-700/50 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700'
                     }`}
                   >
                     {member.photoURL ? (
                       <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full bg-brand-200 flex items-center justify-center text-xxs font-bold text-brand-600">
+                      <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-200">
                         {member.displayName?.charAt(0) ?? 'U'}
                       </div>
                     )}
@@ -790,11 +798,11 @@ const ToDosPage: React.FC = () => {
           disableBackdropClose={isBatchProcessing}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800">Batch Delete</h3>
-            <p className="text-brand-600">
+            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
+            <p className="text-brand-600 dark:text-slate-300">
               Are you sure you want to delete <strong>{selectedIds.size}</strong> tasks?
             </p>
-            <p className="text-sm text-money-neg font-bold">
+            <p className="text-sm text-money-neg dark:text-rose-400 font-bold">
               This action cannot be undone.
             </p>
 
@@ -802,7 +810,7 @@ const ToDosPage: React.FC = () => {
               <button
                 onClick={() => setShowBatchDeleteConfirm(false)}
                 disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50"
+                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
               >
                 Cancel
               </button>
@@ -858,7 +866,7 @@ const ToDosPage: React.FC = () => {
                 Duplicate
               </Button>
 
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-gray-100 dark:bg-slate-700 my-2" />
 
               <Button
                 variant="ghost-destructive"
@@ -869,6 +877,7 @@ const ToDosPage: React.FC = () => {
                    // and potential interaction issues with the toast/modal overlay
                    setActionTodo(null);
                    showDeleteConfirmation(async () => {
+                     haptic('medium');
                      await deleteToDo(actionTodo.id);
                      toast.success('Task deleted');
                    });
@@ -919,9 +928,9 @@ const Section: React.FC<{
   };
 
   const badgeStyles = {
-    rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50',
-    amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50',
-    blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50',
+    rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+    amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+    blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/20',
   };
 
   return (
@@ -929,9 +938,9 @@ const Section: React.FC<{
       <div className="flex items-baseline justify-between mb-4 px-1">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-sm`}></div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight">{title}</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">{title}</h2>
         </div>
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{subtitle}</span>
+        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{subtitle}</span>
       </div>
 
       <div className="space-y-3">
@@ -939,20 +948,19 @@ const Section: React.FC<{
            const assignee = memberMap.get(item.assignedTo);
            const isSelected = selectedIds.has(item.id);
 
-           return (
+           const cardInner = (
              <div
-                key={item.id}
                 onClick={() => isSelectionMode && onToggleSelection(item.id)}
-                className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 transition-all active:scale-[0.99] ${
+                className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 dark:ring-white/5 transition-all active:scale-[0.99] ${
                   isSelectionMode
-                    ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200' : 'bg-white/80 backdrop-blur-xl'}`
-                    : 'bg-white/80 backdrop-blur-xl'
+                    ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200 dark:bg-brand-700/30 dark:ring-brand-500/40' : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'}`
+                    : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'
                 }`}
              >
                <div className="flex items-start gap-3">
                  {/* Complete Checkbox or Selection Box */}
                  {isSelectionMode ? (
-                   <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600' : 'text-brand-200'}`}>
+                   <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
                       {isSelected ? <CheckSquare size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
                    </div>
                  ) : (
@@ -960,6 +968,7 @@ const Section: React.FC<{
                      onClick={async (e) => {
                        e.stopPropagation();
                        try {
+                         haptic('light');
                          await onComplete(item.id);
                          toast.success('To-Do completed! 🎉');
                        } catch (error) {
@@ -968,9 +977,9 @@ const Section: React.FC<{
                        }
                      }}
                      className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100' :
-                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100' :
-                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100'
+                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-500/40 dark:hover:bg-rose-500/15' :
+                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
+                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
                      }`}
                      aria-label="Complete task"
                    >
@@ -979,11 +988,11 @@ const Section: React.FC<{
                  )}
 
                  <div className="flex-1 min-w-0">
-                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800' : 'text-slate-900'}`}>{item.text}</p>
+                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'}`}>{item.text}</p>
 
                    <div className="flex flex-wrap items-center gap-2 mt-2">
                      {isBefore(parseISO(item.completeByDate), startOfToday()) ? (
-                       <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700">
+                       <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300">
                           <AlertCircle size={10} />
                           Overdue ({format(parseISO(item.completeByDate), 'MMM d')})
                        </div>
@@ -997,7 +1006,7 @@ const Section: React.FC<{
                      )}
 
                      {assignee && (
-                       <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md">
+                       <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md dark:text-slate-400 dark:bg-slate-700/50">
                          {assignee.photoURL ? (
                            <img
                              src={assignee.photoURL}
@@ -1050,11 +1059,12 @@ const Section: React.FC<{
                           onClick={(e) => {
                             e.stopPropagation();
                             showDeleteConfirmation(async () => {
+                              haptic('medium');
                               await onDelete(item.id);
                               toast.success('Task deleted');
                             });
                           }}
-                          className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50"
+                          className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50 dark:hover:text-rose-300 dark:active:bg-rose-500/15"
                           aria-label="Delete task"
                         >
                           <Trash2 size={16} />
@@ -1076,8 +1086,73 @@ const Section: React.FC<{
                </div>
              </div>
            );
+
+           // In selection mode we keep tap-to-select intact and skip the swipe gesture.
+           if (isSelectionMode) {
+             return <React.Fragment key={item.id}>{cardInner}</React.Fragment>;
+           }
+
+           return (
+             <SwipeableTodoRow
+               key={item.id}
+               onDelete={() => {
+                 showDeleteConfirmation(async () => {
+                   haptic('medium');
+                   await onDelete(item.id);
+                   toast.success('Task deleted');
+                 });
+               }}
+             >
+               {cardInner}
+             </SwipeableTodoRow>
+           );
         })}
       </div>
+    </div>
+  );
+};
+
+// Swipe-left-to-delete wrapper for to-do rows. Falls back to a plain container
+// (relying on the row's existing delete buttons) when the user prefers reduced motion.
+const SWIPE_THRESHOLD = 80;
+
+const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNode }> = ({ onDelete, children }) => {
+  const reduceMotion = useReducedMotion();
+  const x = useMotionValue(0);
+  const deleteOpacity = useTransform(x, [-SWIPE_THRESHOLD, -20, 0], [1, 0.4, 0]);
+
+  if (reduceMotion) {
+    // No drag animation; the row still exposes accessible delete buttons.
+    return <>{children}</>;
+  }
+
+  const handleDragEnd = (_: unknown, info: PanInfo) => {
+    if (info.offset.x < -SWIPE_THRESHOLD) {
+      onDelete();
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl">
+      <motion.div
+        className="absolute inset-0 flex items-center justify-end pr-6 rounded-2xl bg-rose-500 text-white z-0"
+        style={{ opacity: deleteOpacity }}
+        aria-hidden="true"
+      >
+        <span className="flex items-center gap-2 font-bold text-sm">
+          <Trash2 size={18} /> Delete
+        </span>
+      </motion.div>
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={{ left: 0.6, right: 0 }}
+        onDragEnd={handleDragEnd}
+        style={{ x, touchAction: 'pan-y' }}
+        className="relative z-10"
+      >
+        {children}
+      </motion.div>
     </div>
   );
 };
@@ -1103,8 +1178,8 @@ const CompletedSection: React.FC<{
     return (
         <div className="animate-in slide-in-from-bottom-4 duration-500 opacity-80">
             <div className="flex items-center gap-2 mb-3 px-1">
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">{title}</h2>
-                <div className="h-px bg-slate-200 flex-1"></div>
+                <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</h2>
+                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
             </div>
 
             <div className="space-y-2">
@@ -1115,19 +1190,19 @@ const CompletedSection: React.FC<{
                     return (
                         <div
                             key={item.id}
-                            className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-sm transition-all group"
+                            className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-sm transition-all group dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800"
                         >
                             <button
-                                onClick={() => onUncomplete(item.id)}
-                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0"
+                                onClick={() => { haptic('light'); onUncomplete(item.id); }}
+                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                                 title="Mark as incomplete"
                             >
                                 <RotateCcw size={14} />
                             </button>
 
                             <div className="flex-1 min-w-0">
-                                <p className="text-slate-500 line-through decoration-slate-300">{item.text}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
+                                <p className="text-slate-500 dark:text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{item.text}</p>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 dark:text-slate-500">
                                     {completedDate && (
                                         <span className="flex items-center gap-1">
                                             <Check size={10} />
@@ -1149,7 +1224,7 @@ const CompletedSection: React.FC<{
                                     variant="ghost"
                                     size="icon-sm"
                                     onClick={() => onDuplicate(item)}
-                                    className="text-slate-400 hover:text-brand-600 hover:bg-brand-50"
+                                    className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:text-slate-500 dark:hover:text-brand-300 dark:hover:bg-slate-700/50"
                                     title="Duplicate task"
                                 >
                                     <Copy size={14} />
@@ -1158,6 +1233,7 @@ const CompletedSection: React.FC<{
                                     variant="ghost-destructive"
                                     size="icon-sm"
                                     onClick={() => showDeleteConfirmation(async () => {
+                                        haptic('medium');
                                         await onDelete(item.id);
                                         toast.success('Task deleted');
                                     })}
@@ -1172,7 +1248,7 @@ const CompletedSection: React.FC<{
                                  variant="ghost"
                                  size="icon"
                                  onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50"
+                                 className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 dark:text-slate-500 dark:hover:text-slate-300 dark:active:bg-slate-700/50"
                                  aria-label="More options"
                                >
                                  <MoreVertical size={20} />

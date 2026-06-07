@@ -43,6 +43,7 @@ vi.mock('lucide-react', () => ({
   Copy: () => <div data-testid="copy-icon" />,
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  ClipboardList: () => <div data-testid="clipboard-list-icon" />,
 }));
 
 describe('ToDosPage', () => {
