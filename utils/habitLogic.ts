@@ -276,6 +276,39 @@ export const calculateResetPoints = (habit: Habit): number => {
 };
 
 /**
+ * Compute the field updates for auto-resetting a stale habit's period counter.
+ *
+ * Mirrors the manual `resetHabit` path (hooks/useHabitActions): it zeroes `count`
+ * AND drops `today` from `completedDates`, then recomputes `streakDays`. Dropping
+ * today preserves the invariant "completedDates contains today ⟺ count reflects
+ * today". Without it, a habit completed today but reset (count = 0) would still
+ * carry today in `completedDates`, so `calculatePointsForDate` (which skips
+ * `count === 0`) returns 0 for today while `calculatePointsForDateRange` (no such
+ * guard) still counts it — desyncing the daily total from weekly/total on the
+ * next points recalc. See todo/10-daily-points-after-midnight-reset.md.
+ *
+ * On a genuine new-day reset, `today` is not in `completedDates` (the completion
+ * was on a prior day), so the filter is a no-op and historical completions —
+ * and their weekly/total points — are preserved.
+ *
+ * @param habit - The habit being reset (only `completedDates` is read)
+ * @param today - Today's date in YYYY-MM-DD format (caller's local timezone)
+ * @returns The fields to persist: zeroed count, today-stripped completedDates,
+ *          and the recomputed streak
+ */
+export const getHabitResetUpdate = (
+  habit: Pick<Habit, 'completedDates'>,
+  today: string
+): { count: 0; completedDates: string[]; streakDays: number } => {
+  const completedDates = habit.completedDates.filter(date => date !== today);
+  return {
+    count: 0,
+    completedDates,
+    streakDays: calculateStreak(completedDates),
+  };
+};
+
+/**
  * Calculate points earned from habits completed on a specific date
  * Used to recalculate daily points after a reset or on login
  * @param habits - Array of all habits
