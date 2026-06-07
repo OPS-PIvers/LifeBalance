@@ -9,7 +9,7 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   return (
     <div className="flex flex-col h-[100dvh] overflow-hidden bg-brand-50 dark:bg-brand-900 transition-colors">
-      <div className="flex-none relative z-dropdown">
+      <div className="flex-none">
         <TopToolbar />
       </div>
 
