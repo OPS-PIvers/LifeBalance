@@ -28,11 +28,8 @@ describe('getLocalDateString', () => {
     const lateEvening = new Date(2026, 5, 7, 23, 30);
     vi.setSystemTime(lateEvening);
 
-    const expected = `2026-06-0${lateEvening.getDate()}`;
+    // The day must match the Date's own *local* getDate() (not the UTC day).
+    const expected = `2026-06-${String(lateEvening.getDate()).padStart(2, '0')}`;
     expect(getLocalDateString()).toBe(expected);
-    // The local-day digit must match the Date's own local getDate().
-    expect(getLocalDateString()).toBe(
-      `2026-06-${String(lateEvening.getDate()).padStart(2, '0')}`
-    );
   });
 });

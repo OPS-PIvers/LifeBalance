@@ -179,7 +179,7 @@ const Dashboard: React.FC = () => {
 
       </div>
 
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-sm" />}>
         {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
         {isChallengeModalOpen && (
           <ChallengeHubModal
