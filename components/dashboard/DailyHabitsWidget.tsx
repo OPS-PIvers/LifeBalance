@@ -152,7 +152,7 @@ export const DailyHabitsWidget: React.FC = () => {
                      {/* Streak */}
                      {habit.streakDays > 0 && (
                         <span className={`flex items-center gap-0.5 ${habit.streakDays >= 3 ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                           <Flame size={10} className={habit.streakDays >= 3 ? 'fill-orange-500' : ''} />
+                           <Flame size={10} className={`${habit.streakDays >= 3 ? 'fill-orange-500' : ''} ${habit.streakDays >= 7 ? 'animate-pulse' : ''}`} />
                            {habit.streakDays}
                         </span>
                      )}

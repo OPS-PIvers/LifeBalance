@@ -152,6 +152,69 @@ export const calculateSafeToSpendFromExpanded = (
 };
 
 /**
+ * Itemized breakdown behind the safe-to-spend number, for display in the UI.
+ */
+export interface SafeToSpendBreakdown {
+  /** Sum of checking-account balances (the only funds counted as available). */
+  checkingBalance: number;
+  /** Unpaid bills from this paycheck to the next (bucket-covered bills excluded). */
+  unpaidBills: number;
+  /** checkingBalance - unpaidBills. */
+  safeToSpend: number;
+  /** Date of the next paycheck bounding the range, or null if none found. */
+  nextPaycheckDate: string | null;
+}
+
+/**
+ * Breakdown variant using pre-expanded calendar items (memo-friendly).
+ * Mirrors calculateSafeToSpendFromExpanded but returns the component parts.
+ */
+export const calculateSafeToSpendBreakdownFromExpanded = (
+  accounts: Account[],
+  allExpandedItems: CalendarItem[],
+  buckets: BudgetBucket[],
+  currentPeriodId: string = ''
+): SafeToSpendBreakdown => {
+  const checkingBalance = accounts
+    .filter(a => a.type === 'checking')
+    .reduce((sum, a) => sum + a.balance, 0);
+
+  if (!currentPeriodId) {
+    return { checkingBalance, unpaidBills: 0, safeToSpend: checkingBalance, nextPaycheckDate: null };
+  }
+
+  const paycheckA = parseISO(currentPeriodId);
+  const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
+  const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
+  const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate, buckets);
+
+  return {
+    checkingBalance,
+    unpaidBills,
+    safeToSpend: checkingBalance - unpaidBills,
+    nextPaycheckDate: paycheckBDate,
+  };
+};
+
+/**
+ * Breakdown variant that expands calendar items internally.
+ */
+export const calculateSafeToSpendBreakdown = (
+  accounts: Account[],
+  calendarItems: CalendarItem[],
+  buckets: BudgetBucket[],
+  currentPeriodId: string = ''
+): SafeToSpendBreakdown => {
+  if (!currentPeriodId) {
+    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], buckets, currentPeriodId);
+  }
+  const paycheckA = parseISO(currentPeriodId);
+  const searchWindowEnd = addMonths(paycheckA, 2);
+  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId);
+};
+
+/**
  * Calculate the safe-to-spend amount based on checking balance and unpaid bills
  * between paychecks. This is the primary financial health metric for the household.
  *

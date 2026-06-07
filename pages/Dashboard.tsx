@@ -16,6 +16,7 @@ import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget
 import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
 import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton';
+import { SafeToSpendHero } from '../components/dashboard/SafeToSpendHero';
 
 const Dashboard: React.FC = () => {
   const {
@@ -80,6 +81,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="px-4 space-y-8">
+
+        {/* Hero: Safe to Spend */}
+        <SafeToSpendHero />
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (

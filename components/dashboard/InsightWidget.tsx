@@ -3,6 +3,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useInsightActions } from '../../hooks/useInsightActions';
 import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
 import { CreateChallengePayload } from '@/types/schema';
+import { Skeleton } from '../ui/Skeleton';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
@@ -66,12 +67,22 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
               </button>
             </div>
           </div>
-          <p className="text-indigo-900 dark:text-indigo-100 font-medium leading-relaxed mb-3">
-            &quot;{insight}&quot;
-          </p>
+          {isGeneratingInsight ? (
+            // "Generating" shimmer so a live AI call feels live.
+            <div className="mb-3 space-y-2" aria-live="polite" aria-busy="true">
+              <span className="sr-only">Generating insight…</span>
+              <Skeleton className="h-4 w-full bg-indigo-200/60 dark:bg-indigo-500/20" />
+              <Skeleton className="h-4 w-11/12 bg-indigo-200/60 dark:bg-indigo-500/20" />
+              <Skeleton className="h-4 w-2/3 bg-indigo-200/60 dark:bg-indigo-500/20" />
+            </div>
+          ) : (
+            <p className="text-indigo-900 dark:text-indigo-100 font-medium leading-relaxed mb-3">
+              &quot;{insight}&quot;
+            </p>
+          )}
 
           {/* Action Pills */}
-          {insightActions && insightActions.length > 0 && (
+          {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
             <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
               {insightActions.map((action, idx) => (
                 <button
