@@ -5,14 +5,14 @@ import MealPlanTab from './MealPlanTab';
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHousehold: () => ({
-    meals: [],
+    meals: [] as unknown[],
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
     addShoppingItem: vi.fn(),
     addShoppingItems: vi.fn(),
-    shoppingList: [],
-    groceryCatalog: [],
-    mealPlan: [],
+    shoppingList: [] as unknown[],
+    groceryCatalog: [] as unknown[],
+    mealPlan: [] as unknown[],
     addMealPlanItem: vi.fn(),
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),

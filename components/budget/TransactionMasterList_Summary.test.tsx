@@ -18,9 +18,9 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Mock Child Modals (simplified)
-vi.mock('../modals/EditTransactionModal', () => ({ default: () => null }));
-vi.mock('../modals/SplitTransactionModal', () => ({ default: () => null }));
-vi.mock('../modals/BatchCategorizeModal', () => ({ default: () => null }));
+vi.mock('../modals/EditTransactionModal', () => ({ default: (): null => null }));
+vi.mock('../modals/SplitTransactionModal', () => ({ default: (): null => null }));
+vi.mock('../modals/BatchCategorizeModal', () => ({ default: (): null => null }));
 vi.mock('../ui/Modal', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 // Mock Lucide icons

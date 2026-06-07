@@ -11,7 +11,6 @@ import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
 import { SegmentedControl, SegmentedControlOption } from '../ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';

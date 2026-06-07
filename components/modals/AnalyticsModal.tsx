@@ -4,7 +4,6 @@ import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } f
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { sumMoney } from '../../utils/money';
 import {
-  PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer,
   Line,

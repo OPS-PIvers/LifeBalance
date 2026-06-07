@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { MealSuggestionRequest } from './geminiService';
+import { MealSuggestionRequest, MealSuggestionResponse } from './geminiService';
 
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {
@@ -59,7 +59,7 @@ describe('geminiService - Meal Suggestion', () => {
   it('suggestMeal generates meal suggestions based on preferences', async () => {
     const { suggestMeal } = await import('./geminiService');
 
-    const mockResponse = {
+    const mockResponse: MealSuggestionResponse = {
       name: "Quick Pasta",
       description: "Simple pasta dish",
       ingredients: [{ name: "Pasta", quantity: "200g" }, { name: "Tomato Sauce", quantity: "1 cup" }],
@@ -90,7 +90,7 @@ describe('geminiService - Meal Suggestion', () => {
   it('suggestMeal includes budget and time constraints in prompt', async () => {
     const { suggestMeal } = await import('./geminiService');
 
-    const mockResponse = {
+    const mockResponse: MealSuggestionResponse = {
       name: "Budget Meal",
       description: "Cheap and quick",
       ingredients: [],
@@ -124,7 +124,7 @@ describe('geminiService - Meal Suggestion', () => {
   it('suggestMeal avoids previous meals when new flag is set', async () => {
     const { suggestMeal } = await import('./geminiService');
 
-    const mockResponse = {
+    const mockResponse: MealSuggestionResponse = {
       name: "New Meal",
       description: "Something different",
       ingredients: [],

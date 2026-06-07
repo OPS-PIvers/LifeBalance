@@ -14,16 +14,16 @@ vi.mock('react-hot-toast', () => ({
 // Mock useHousehold
 const mockUseHousehold = {
   addTransaction: vi.fn(),
-  buckets: [],
-  habits: [],
-  transactions: [],
+  buckets: [] as unknown[],
+  habits: [] as unknown[],
+  transactions: [] as unknown[],
   addToDo: vi.fn(),
-  members: [],
+  members: [] as unknown[],
   currentUser: { uid: 'test-user' },
   addShoppingItem: vi.fn(),
   householdId: 'test-household',
-  stores: [],
-  accounts: [],
+  stores: [] as unknown[],
+  accounts: [] as unknown[],
 };
 
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({

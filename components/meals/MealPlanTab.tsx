@@ -330,7 +330,7 @@ const MealPlanTab: React.FC = () => {
       });
 
       setTargetDate(planItem.date);
-      setEditingMealId(planItem.mealId); // If it exists
+      setEditingMealId(planItem.mealId ?? null); // If it exists
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);

@@ -234,6 +234,18 @@ const ToDosPage: React.FC = () => {
       }
   }, [updateToDo]);
 
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  }, []);
+
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
@@ -352,18 +364,6 @@ const ToDosPage: React.FC = () => {
   };
 
   // --- Batch Mode Handlers ---
-
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  }, []);
 
   const handleSelectAll = () => {
     if (selectedIds.size === allActiveCount && allActiveCount > 0) {

@@ -1,7 +1,7 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
+import { YearlyGoal } from '../../types/schema';
 
 // Mock contexts
 const mockCreateYearlyGoal = vi.fn();
@@ -48,14 +48,14 @@ describe('YearlyGoalFormModal', () => {
   });
 
   it('populates form when editingGoal is provided', async () => {
-    const goal = {
+    const goal: YearlyGoal = {
       id: 'test-id',
       title: 'Existing Goal',
       description: 'Existing Description',
       year: 2025,
       requiredMonths: 8,
       successfulMonths: [],
-      status: 'in_progress' as const,
+      status: 'in_progress',
       createdBy: 'user',
       createdAt: 'date'
     };

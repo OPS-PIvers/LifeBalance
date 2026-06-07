@@ -266,7 +266,7 @@ describe('habitLogic', () => {
         };
 
         it('day-1 completion (no prior history) gets 1.0x multiplier', () => {
-          const habit = { ...singleStepHabit, completedDates: [] };
+          const habit = { ...singleStepHabit, completedDates: [] as string[] };
           const result = processToggleHabit(habit, 'up');
           expect(result?.multiplier).toBe(1.0);
           expect(result?.pointsChange).toBe(100);

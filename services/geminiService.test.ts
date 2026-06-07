@@ -99,7 +99,7 @@ describe('geminiService', () => {
 
     const mockInsightData = {
       text: "You have been spending consistent amounts on Dining.",
-      actions: []
+      actions: [] as unknown[]
     };
 
     generateContentMock.mockResolvedValue({
@@ -117,7 +117,7 @@ describe('geminiService', () => {
 
     const mockInsightData = {
       text: "New insight.",
-      actions: []
+      actions: [] as unknown[]
     };
 
     generateContentMock.mockResolvedValue({

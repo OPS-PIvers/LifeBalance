@@ -7,7 +7,7 @@ import { expandCalendarItems } from '../../utils/calendarRecurrence';
 // Mock dependencies
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
   useHousehold: () => ({
-    calendarItems: [], // Mocked per test but default to empty
+    calendarItems: [] as unknown[], // Mocked per test but default to empty
   }),
 }));
 

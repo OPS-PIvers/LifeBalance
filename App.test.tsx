@@ -90,7 +90,7 @@ describe('App Routing', () => {
     signOut: vi.fn(),
     logout: vi.fn(),
     setHouseholdId: vi.fn(),
-    accessDeniedEmail: null,
+    accessDeniedEmail: null as string | null,
     clearAccessError: vi.fn(),
   };
 

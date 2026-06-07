@@ -1,4 +1,3 @@
-import React from 'react';
 import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { messaging, db, auth } from '@/firebase.config';

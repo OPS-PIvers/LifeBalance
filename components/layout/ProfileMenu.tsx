@@ -8,7 +8,7 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 interface ProfileMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  anchorRef: React.RefObject<HTMLButtonElement>;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef }) => {

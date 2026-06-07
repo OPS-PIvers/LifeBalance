@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ListsPage from './ListsPage';
-import React from 'react';
 
 // Mock child components
 vi.mock('./ToDosPage', () => ({

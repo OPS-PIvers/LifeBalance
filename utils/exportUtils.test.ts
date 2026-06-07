@@ -13,7 +13,7 @@ describe('exportUtils', () => {
     });
 
     it('should handle null or undefined values', () => {
-      const data = [
+      const data: Record<string, unknown>[] = [
         { name: 'John', age: null },
         { name: 'Jane', age: undefined },
       ];

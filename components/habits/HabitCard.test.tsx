@@ -11,7 +11,7 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
     toggleHabit: vi.fn(),
     deleteHabit: vi.fn(),
     resetHabit: vi.fn(),
-    activeChallenge: null,
+    activeChallenge: null as unknown,
     freezeBank: { tokens: 3 },
     useFreezeBankToken: vi.fn(),
   }

@@ -1,5 +1,4 @@
 
-import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import BucketFormModal from './BucketFormModal';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
