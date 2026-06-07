@@ -3,7 +3,7 @@ import { Reorder, useDragControls } from 'framer-motion';
 import { GripVertical } from 'lucide-react';
 import { Habit } from '../../types/schema';
 import HabitCard from './HabitCard';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 
 interface HabitCategoryListProps {
   category: string;
@@ -13,7 +13,7 @@ interface HabitCategoryListProps {
 const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits }) => {
   // Local state for immediate reorder feedback
   const [items, setItems] = useState(habits);
-  const { reorderHabits } = useHousehold();
+  const { reorderHabits } = useGamification();
 
   // Sync with props when not dragging (simple approach: sync when props change)
   useEffect(() => {

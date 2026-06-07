@@ -230,8 +230,146 @@ export interface HouseholdContextType {
   completeToDo: (id: string) => Promise<void>;
 }
 
+// --- DOMAIN CONTEXT SLICES ---
+//
+// The household state is split into five domain slices so a component only
+// re-renders when the slice it actually reads changes (adding a transaction no
+// longer re-renders the meal planner, etc.). The slice value types are derived
+// from `HouseholdContextType` with `Pick` so they stay in sync with the legacy
+// shape automatically — there is a single source of truth for every field.
+
+export type FinanceContextValue = Pick<HouseholdContextType,
+  | 'safeToSpend' | 'safeToSpendBreakdown' | 'accounts' | 'buckets' | 'calendarItems' | 'transactions'
+  | 'currentPeriodId' | 'bucketSpentMap' | 'bucketHistory'
+  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'deleteAccount'
+  | 'updateAccountOrder' | 'reorderAccounts'
+  | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
+  | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
+  | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+>;
+
+export type GamificationContextValue = Pick<HouseholdContextType,
+  | 'dailyPoints' | 'weeklyPoints' | 'totalPoints' | 'habits'
+  | 'activeChallenge' | 'challenges'
+  | 'yearlyGoals' | 'activeYearlyGoals' | 'primaryYearlyGoal'
+  | 'rewardsInventory' | 'freezeBank'
+  | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
+  | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
+  | 'updateChallenge' | 'markChallengeComplete' | 'redeemReward'
+  | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
+  | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
+>;
+
+export type MealsContextValue = Pick<HouseholdContextType,
+  | 'meals' | 'shoppingList' | 'mealPlan' | 'groceryCatalog'
+  | 'stores' | 'groceryCategories' | 'quickStockLists'
+  | 'addMeal' | 'updateMeal' | 'deleteMeal'
+  | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
+  | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
+  | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
+  | 'addQuickStockList' | 'updateQuickStockList' | 'deleteQuickStockList'
+  | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
+  | 'addMealPlanItem' | 'updateMealPlanItem' | 'deleteMealPlanItem'
+>;
+
+export type TodosContextValue = Pick<HouseholdContextType,
+  | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
+>;
+
+export type HouseholdCoreContextValue = Pick<HouseholdContextType,
+  | 'isLoading' | 'currentUser' | 'members'
+  | 'insight' | 'insightsHistory' | 'isGeneratingInsight'
+  | 'pendingItemsCount' | 'apiKeys'
+  | 'householdId' | 'householdSettings' | 'household'
+  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember'
+>;
+
+const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
+const GamificationContext = createContext<GamificationContextValue | undefined>(undefined);
+const MealsContext = createContext<MealsContextValue | undefined>(undefined);
+const TodosContext = createContext<TodosContextValue | undefined>(undefined);
+const HouseholdCoreContext = createContext<HouseholdCoreContextValue | undefined>(undefined);
+
 // eslint-disable-next-line react-refresh/only-export-components
-export const FirebaseHouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
+export const useFinance = (): FinanceContextValue => {
+  const ctx = useContext(FinanceContext);
+  if (!ctx) throw new Error('useFinance must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useGamification = (): GamificationContextValue => {
+  const ctx = useContext(GamificationContext);
+  if (!ctx) throw new Error('useGamification must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useMeals = (): MealsContextValue => {
+  const ctx = useContext(MealsContext);
+  if (!ctx) throw new Error('useMeals must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useTodos = (): TodosContextValue => {
+  const ctx = useContext(TodosContext);
+  if (!ctx) throw new Error('useTodos must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useHouseholdCore = (): HouseholdCoreContextValue => {
+  const ctx = useContext(HouseholdCoreContext);
+  if (!ctx) throw new Error('useHouseholdCore must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+/**
+ * Backward-compatible shim. Reads every slice and merges them into the legacy
+ * shape so un-migrated consumers keep working unchanged.
+ *
+ * NOTE: because it subscribes to all five contexts, a component using this hook
+ * re-renders on any slice change. Migrate hot components to the granular hooks
+ * above (`useFinance`, `useMeals`, …) to get the render-isolation win.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useHousehold = (): HouseholdContextType => {
+  const finance = useFinance();
+  const gamification = useGamification();
+  const meals = useMeals();
+  const todos = useTodos();
+  const core = useHouseholdCore();
+  return useMemo(
+    () => ({ ...finance, ...gamification, ...meals, ...todos, ...core }),
+    [finance, gamification, meals, todos, core]
+  );
+};
+
+/**
+ * Nests the five domain context providers. Shared by the real Firestore-backed
+ * provider and the Test Mode mock provider so both stay in lockstep.
+ */
+export const HouseholdSliceProviders: React.FC<{
+  finance: FinanceContextValue;
+  gamification: GamificationContextValue;
+  meals: MealsContextValue;
+  todos: TodosContextValue;
+  core: HouseholdCoreContextValue;
+  children: ReactNode;
+}> = ({ finance, gamification, meals, todos, core, children }) => (
+  <HouseholdCoreContext.Provider value={core}>
+    <FinanceContext.Provider value={finance}>
+      <GamificationContext.Provider value={gamification}>
+        <MealsContext.Provider value={meals}>
+          <TodosContext.Provider value={todos}>
+            {children}
+          </TodosContext.Provider>
+        </MealsContext.Provider>
+      </GamificationContext.Provider>
+    </FinanceContext.Provider>
+  </HouseholdCoreContext.Provider>
+);
 
 export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, householdId } = useAuth();
@@ -2925,46 +3063,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // (pre-setup) is not a "loading" state.
   const isLoading = !!householdId && loadedHouseholdId !== householdId;
 
-  const contextValue = useMemo(() => ({
-    isLoading,
+  // Each slice value is memoized with a TIGHT dependency array so a change in
+  // one domain (e.g. a transaction edit) does not produce a new reference for
+  // unrelated slices (meals, todos, …) — that is the render-isolation win.
+
+  const financeValue = useMemo<FinanceContextValue>(() => ({
     safeToSpend,
     safeToSpendBreakdown,
-    dailyPoints,
-    weeklyPoints,
-    totalPoints,
-    currentUser,
-    members,
     accounts,
     buckets,
     calendarItems,
     transactions,
-    habits,
-    activeChallenge,
-    challenges,
-    yearlyGoals,
-    activeYearlyGoals,
-    primaryYearlyGoal,
-    rewardsInventory: rewards,
-    freezeBank,
-    insight,
-    insightsHistory,
-    isGeneratingInsight,
-    householdId,
     currentPeriodId,
     bucketSpentMap,
-    householdSettings,
-    household: householdSettings, // Provide alias
-    meals,
-    shoppingList,
-    mealPlan,
-    todos,
-    groceryCatalog,
     bucketHistory,
-    pendingItemsCount,
-    stores,
-    groceryCategories,
-    quickStockLists,
-    apiKeys,
     addAccount,
     updateAccountBalance,
     setAccountGoal,
@@ -2986,20 +3098,52 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+  }), [
+    safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
+    addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
+    addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
+    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
+    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+  ]);
+
+  const gamificationValue = useMemo<GamificationContextValue>(() => ({
+    dailyPoints,
+    weeklyPoints,
+    totalPoints,
+    habits,
+    activeChallenge,
+    challenges,
+    yearlyGoals,
+    activeYearlyGoals,
+    primaryYearlyGoal,
+    rewardsInventory: rewards,
+    freezeBank,
     ...habitActions,
     updateChallenge,
     markChallengeComplete,
     redeemReward,
-    refreshInsight,
     createYearlyGoal,
     updateYearlyGoal,
     updateYearlyGoalProgress,
     deleteYearlyGoal,
     useFreezeBankToken,
     rolloverFreezeBankTokens,
-    addMember,
-    updateMember,
-    removeMember,
+  }), [
+    dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
+    primaryYearlyGoal, rewards, freezeBank, habitActions,
+    updateChallenge, markChallengeComplete, redeemReward,
+    createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
+    useFreezeBankToken, rolloverFreezeBankTokens,
+  ]);
+
+  const mealsValue = useMemo<MealsContextValue>(() => ({
+    meals,
+    shoppingList,
+    mealPlan,
+    groceryCatalog,
+    stores,
+    groceryCategories,
+    quickStockLists,
     addMeal,
     updateMeal,
     deleteMeal,
@@ -3023,49 +3167,54 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMealPlanItem,
     updateMealPlanItem,
     deleteMealPlanItem,
-    addToDo,
-    updateToDo,
-    deleteToDo,
-    completeToDo
   }), [
-    isLoading,
-    safeToSpend, safeToSpendBreakdown, dailyPoints, weeklyPoints, totalPoints, currentUser, members, accounts, buckets,
-    calendarItems, transactions, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
-    primaryYearlyGoal, rewards, freezeBank, insight, insightsHistory, isGeneratingInsight, householdId,
-    currentPeriodId, bucketSpentMap, householdSettings, meals, shoppingList, mealPlan, todos,
-    groceryCatalog, bucketHistory, pendingItemsCount, stores, groceryCategories, quickStockLists, apiKeys,
-    addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
-    addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
-    addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
-    addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
-    habitActions,
-    updateChallenge, markChallengeComplete, redeemReward, refreshInsight,
-    createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
-    useFreezeBankToken, rolloverFreezeBankTokens,
-    addMember, updateMember, removeMember,
+    meals, shoppingList, mealPlan, groceryCatalog, stores, groceryCategories, quickStockLists,
     addMeal, updateMeal, deleteMeal,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
     addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
-    addToDo, updateToDo, deleteToDo, completeToDo
+  ]);
+
+  const todosValue = useMemo<TodosContextValue>(() => ({
+    todos,
+    addToDo,
+    updateToDo,
+    deleteToDo,
+    completeToDo,
+  }), [todos, addToDo, updateToDo, deleteToDo, completeToDo]);
+
+  const coreValue = useMemo<HouseholdCoreContextValue>(() => ({
+    isLoading,
+    currentUser,
+    members,
+    insight,
+    insightsHistory,
+    isGeneratingInsight,
+    pendingItemsCount,
+    apiKeys,
+    householdId,
+    householdSettings,
+    household: householdSettings, // Provide alias
+    refreshInsight,
+    addMember,
+    updateMember,
+    removeMember,
+  }), [
+    isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, pendingItemsCount, apiKeys,
+    householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember,
   ]);
 
   return (
-    <FirebaseHouseholdContext.Provider
-      value={contextValue}
+    <HouseholdSliceProviders
+      finance={financeValue}
+      gamification={gamificationValue}
+      meals={mealsValue}
+      todos={todosValue}
+      core={coreValue}
     >
       {children}
-    </FirebaseHouseholdContext.Provider>
+    </HouseholdSliceProviders>
   );
-};
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useHousehold = () => {
-  const context = useContext(FirebaseHouseholdContext);
-  if (!context) {
-    throw new Error('useHousehold must be used within FirebaseHouseholdProvider');
-  }
-  return context;
 };

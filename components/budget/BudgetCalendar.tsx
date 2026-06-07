@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos } from '../../contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '../../types/schema';
@@ -17,7 +17,8 @@ import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
 const BudgetCalendar: React.FC = () => {
-  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, todos, completeToDo, accounts } = useHousehold();
+  const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useFinance();
+  const { todos, completeToDo } = useTodos();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 

@@ -6,7 +6,7 @@ import BudgetAccounts from '../components/budget/BudgetAccounts';
 import TransactionMasterList from '../components/budget/TransactionMasterList';
 import BudgetHistory from '../components/budget/BudgetHistory';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
 
 const BudgetSkeleton: React.FC = () => (
@@ -52,7 +52,7 @@ const BudgetSkeleton: React.FC = () => (
 );
 
 const Budget: React.FC = () => {
-  const { isLoading } = useHousehold();
+  const { isLoading } = useHouseholdCore();
 
   if (isLoading) {
     return <BudgetSkeleton />;

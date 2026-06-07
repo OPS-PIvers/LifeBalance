@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
 import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -13,7 +13,7 @@ interface UpcomingBillsWidgetProps {
 }
 
 export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay }) => {
-  const { calendarItems } = useHousehold();
+  const { calendarItems } = useFinance();
 
   const upcomingBills = useMemo(() => {
     const today = startOfToday();

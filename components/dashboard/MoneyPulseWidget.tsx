@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { startOfWeek, subWeeks, isSameWeek, parseISO, formatDistanceToNow } from 'date-fns';
 import { roundMoney } from '../../utils/money';
 import { TrendingUp, TrendingDown, Receipt, ArrowRight, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const MoneyPulseWidget: React.FC = () => {
-  const { transactions } = useHousehold();
+  const { transactions } = useFinance();
 
   // 1. Calculate Spending Pulse
   const spendingStats = useMemo(() => {

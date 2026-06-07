@@ -5,11 +5,20 @@ import { BrowserRouter } from 'react-router-dom';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  // UpcomingBillsWidget reads useFinance; alias every hook to the same value.
+  const value = () => ({
     calendarItems: [] as unknown[], // Mocked per test but default to empty
-  }),
-}));
+  });
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useGamification: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+  };
+});
 
 vi.mock('../../utils/calendarRecurrence', () => ({
   expandCalendarItems: vi.fn(),

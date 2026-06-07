@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { isHabitStale } from '../../utils/habitLogic';
 import { format, startOfToday } from 'date-fns';
 import { Check, Flame, ArrowRight, LayoutList, Plus } from 'lucide-react';
@@ -9,7 +9,7 @@ const MAX_VISIBLE_HABITS = 5;
 const DEFAULT_ORDER_FALLBACK = 999;
 
 export const DailyHabitsWidget: React.FC = () => {
-  const { habits, toggleHabit } = useHousehold();
+  const { habits, toggleHabit } = useGamification();
 
   const today = format(startOfToday(), 'yyyy-MM-dd');
 

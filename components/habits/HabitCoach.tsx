@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { HabitPatternInsight } from '@/services/geminiService';
 import { Sparkles, Trophy, TrendingUp, AlertCircle, RefreshCw, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const HabitCoach: React.FC = () => {
-  const { habits, householdId } = useHousehold();
+  const { habits } = useGamification();
+  const { householdId } = useHouseholdCore();
   const [insights, setInsights] = useState<HabitPatternInsight[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasRun, setHasRun] = useState(false);

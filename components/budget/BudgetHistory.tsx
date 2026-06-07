@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { BucketPeriodSnapshot } from '../../types/schema';
 import { format, parseISO } from 'date-fns';
 import { roundMoney } from '../../utils/money';
@@ -21,7 +21,7 @@ interface PeriodGroup {
 }
 
 const BudgetHistory: React.FC = () => {
-  const { bucketHistory } = useHousehold();
+  const { bucketHistory } = useFinance();
   const [expandedPeriodId, setExpandedPeriodId] = useState<string | null>(null);
 
   const historyGroups = useMemo(() => {

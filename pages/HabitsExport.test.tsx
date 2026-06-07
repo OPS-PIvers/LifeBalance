@@ -68,9 +68,20 @@ const mockUseHousehold = vi.fn(() => ({
   habits: mockHabits,
 }));
 
-vi.mock('../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => mockUseHousehold(),
-}));
+vi.mock('../contexts/FirebaseHouseholdContext', () => {
+  // Habits page reads useGamification (habits) + useHouseholdCore (isLoading),
+  // and its child components/modals read various slices. Alias every hook to the
+  // same source so existing mockReturnValue(Once) setup keeps driving the tree.
+  const value = () => mockUseHousehold();
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useGamification: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+  };
+});
 
 describe('Habits Page Export', () => {
   beforeEach(() => {

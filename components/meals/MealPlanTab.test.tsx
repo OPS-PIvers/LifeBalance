@@ -4,7 +4,7 @@ import MealPlanTab from './MealPlanTab';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+  useMeals: () => ({
     meals: [] as unknown[],
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
@@ -16,6 +16,8 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
     addMealPlanItem: vi.fn(),
     updateMealPlanItem: vi.fn(),
     deleteMealPlanItem: vi.fn(),
+  }),
+  useHouseholdCore: () => ({
     householdId: 'test-household',
   }),
 }));

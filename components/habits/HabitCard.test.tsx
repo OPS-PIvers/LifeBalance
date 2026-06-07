@@ -17,9 +17,18 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => mockHouseholdContext,
-}));
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  // HabitCard reads useGamification; alias every hook to the same value object.
+  const value = () => mockHouseholdContext;
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useGamification: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+  };
+});
 
 // Mock child modals
 vi.mock('../modals/HabitFormModal', () => ({

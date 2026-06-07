@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { Pencil } from 'lucide-react';
 import { calculateChallengeProgress } from '../../utils/challengeCalculator';
 import { getEffectiveTargetValue } from '../../utils/migrations/challengeMigration';
@@ -9,7 +9,7 @@ interface ChallengeWidgetProps {
 }
 
 export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal }) => {
-  const { activeChallenge, habits, primaryYearlyGoal } = useHousehold();
+  const { activeChallenge, habits, primaryYearlyGoal } = useGamification();
 
   if (!activeChallenge) return null;
 

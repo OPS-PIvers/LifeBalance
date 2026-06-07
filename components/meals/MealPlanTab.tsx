@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useMeals, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -40,8 +40,8 @@ const MealPlanTab: React.FC = () => {
     addMealPlanItem,
     updateMealPlanItem,
     deleteMealPlanItem,
-    householdId
-  } = useHousehold();
+  } = useMeals();
+  const { householdId } = useHouseholdCore();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());

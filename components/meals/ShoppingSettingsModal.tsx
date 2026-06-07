@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useMeals } from '@/contexts/FirebaseHouseholdContext';
 import { Store as StoreIcon, Plus, Trash2, Save, RotateCcw, Search, Check, ShoppingBag, X } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { QuickStockList } from '@/types/schema';
@@ -28,7 +28,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     updateQuickStockList,
     deleteQuickStockList,
     addGroceryCatalogItem
-  } = useHousehold();
+  } = useMeals();
 
   const [activeTab, setActiveTab] = useState<'stores' | 'categories' | 'templates'>('stores');
 

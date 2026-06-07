@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { Plus, Sparkles } from 'lucide-react';
 
 interface EmptyChallengeWidgetProps {
@@ -7,7 +7,7 @@ interface EmptyChallengeWidgetProps {
 }
 
 export const EmptyChallengeWidget: React.FC<EmptyChallengeWidgetProps> = ({ onOpenModal }) => {
-  const { primaryYearlyGoal } = useHousehold();
+  const { primaryYearlyGoal } = useGamification();
 
   return (
     <button

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useHouseholdCore, useMeals } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -98,7 +98,9 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 // --- Main Component ---
 
 const TransactionMasterList: React.FC = () => {
-  const { transactions, deleteTransaction, updateTransaction, addTransaction, householdId, stores } = useHousehold();
+  const { transactions, deleteTransaction, updateTransaction, addTransaction } = useFinance();
+  const { householdId } = useHouseholdCore();
+  const { stores } = useMeals();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
