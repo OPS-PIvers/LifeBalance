@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -25,6 +26,20 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [isAddMode, setIsAddMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [deleteSubmissionId, setDeleteSubmissionId] = useState<string | null>(null);
+
+  // IDs for ARIA tab panel association
+  const logTabId = useId();
+  const statsTabId = useId();
+  const calendarTabId = useId();
+  const logPanelId = useId();
+  const statsPanelId = useId();
+  const calendarPanelId = useId();
+
+  // IDs for form label association
+  const dateInputId = useId();
+  const timeInputId = useId();
+  const countInputId = useId();
 
   // Form state
   const [formDate, setFormDate] = useState('');
@@ -90,11 +105,21 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     setEditingSubmission(null);
   };
 
-  const handleDelete = async (submissionId: string) => {
-    if (!confirm('Delete this submission? This will adjust your points.')) return;
+  const handleDelete = (submissionId: string) => {
+    setDeleteSubmissionId(submissionId);
+  };
 
-    await deleteHabitSubmission(habit.id, submissionId);
-    await loadSubmissions();
+  const confirmDeleteSubmission = async () => {
+    if (!deleteSubmissionId) return;
+    try {
+      await deleteHabitSubmission(habit.id, deleteSubmissionId);
+    } catch (error) {
+      console.error('Failed to delete submission:', error);
+    } finally {
+      // Always reset state so the confirmation dialog can't get stuck open.
+      setDeleteSubmissionId(null);
+      await loadSubmissions();
+    }
   };
 
   // Analytics calculations
@@ -196,38 +221,69 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
     >
       {/* Tab Navigation */}
       <div className="px-4 pt-3 pb-0 border-b border-brand-100 dark:border-slate-700">
-        <div className="flex gap-1 bg-brand-50 dark:bg-slate-700/50 p-1 rounded-xl">
+        <div
+          role="tablist"
+          aria-label="Habit analytics tabs"
+          className="flex gap-1 bg-brand-50 dark:bg-slate-700/50 p-1 rounded-xl"
+        >
           <button
+            role="tab"
+            id={logTabId}
+            aria-selected={activeTab === 'log'}
+            aria-controls={logPanelId}
+            tabIndex={activeTab === 'log' ? 0 : -1}
             onClick={() => setActiveTab('log')}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('stats'); }
+              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('calendar'); }
+            }}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'log'
                 ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" />
+            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
             Log
           </button>
           <button
+            role="tab"
+            id={statsTabId}
+            aria-selected={activeTab === 'stats'}
+            aria-controls={statsPanelId}
+            tabIndex={activeTab === 'stats' ? 0 : -1}
             onClick={() => setActiveTab('stats')}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('calendar'); }
+              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('log'); }
+            }}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'stats'
                 ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
-            <BarChart3 className="inline-block w-4 h-4 mr-1.5" />
+            <BarChart3 className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
             Stats
           </button>
           <button
+            role="tab"
+            id={calendarTabId}
+            aria-selected={activeTab === 'calendar'}
+            aria-controls={calendarPanelId}
+            tabIndex={activeTab === 'calendar' ? 0 : -1}
             onClick={() => setActiveTab('calendar')}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all ${
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('log'); }
+              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('stats'); }
+            }}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'calendar'
                 ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" />
+            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
             Calendar
           </button>
         </div>
@@ -241,7 +297,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             Loading...
           </div>
         ) : activeTab === 'calendar' ? (
-          <div className="p-4 space-y-4">
+          <div
+            role="tabpanel"
+            id={calendarPanelId}
+            aria-labelledby={calendarTabId}
+            className="p-4 space-y-4"
+          >
             {/* Calendar Controls */}
             <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border border-brand-100 dark:border-slate-700 shadow-sm">
               <button
@@ -329,7 +390,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             </div>
           </div>
         ) : activeTab === 'stats' ? (
-          <div className="p-4 space-y-4">
+          <div
+            role="tabpanel"
+            id={statsPanelId}
+            aria-labelledby={statsTabId}
+            className="p-4 space-y-4"
+          >
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/10 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30">
@@ -457,7 +523,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             )}
           </div>
         ) : (
-          <div className="p-4">
+          <div
+            role="tabpanel"
+            id={logPanelId}
+            aria-labelledby={logTabId}
+            className="p-4"
+          >
             {/* Add New Submission Button */}
             {!isAddMode && (
               <button
@@ -474,8 +545,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 <h3 className="font-bold text-sm text-brand-700 dark:text-slate-200 mb-3">New Submission</h3>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div>
-                    <label className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Date</label>
+                    <label htmlFor={dateInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Date</label>
                     <input
+                      id={dateInputId}
                       type="date"
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
@@ -484,8 +556,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Time</label>
+                    <label htmlFor={timeInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Time</label>
                     <input
+                      id={timeInputId}
                       type="time"
                       value={formTime}
                       onChange={(e) => setFormTime(e.target.value)}
@@ -493,8 +566,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Count</label>
+                    <label htmlFor={countInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Count</label>
                     <input
+                      id={countInputId}
                       type="number"
                       value={formCount}
                       onChange={(e) => setFormCount(e.target.value)}
@@ -656,6 +730,15 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!deleteSubmissionId}
+        onClose={() => setDeleteSubmissionId(null)}
+        onConfirm={confirmDeleteSubmission}
+        title="Delete Submission"
+        message="Delete this submission? This will adjust your points."
+        confirmLabel="Delete"
+      />
     </Drawer>
   );
 };

@@ -87,11 +87,12 @@ Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offl
 
 The core financial metric (`safeToSpend`) is calculated as:
 ```
-Checking Balance - Unpaid Bills (this period) - Remaining Budget Bucket Limits
+Checking Balance - Unpaid Bills (this period)
 ```
 
 **Critical implementation details:**
 - Only checking accounts count as available funds (not savings or credit)
+- **Bucket limits are NOT subtracted** from `safeToSpend`. Bucket balances are surfaced for reference in the UI (`SafeToSpendModal`) but do not reduce the headline number — the calculator only deducts unpaid bills. (Earlier docs described subtracting "remaining bucket limits"; that was never implemented.)
 - Bills covered by buckets are excluded to avoid double-counting. A bill is matched to a bucket by exact `CalendarItem.bucketId` when set; otherwise it falls back to whole-word token matching of the bucket name against the bill title (bucket names shorter than 3 chars are skipped to avoid false matches)
 - Money is summed in integer cents (`utils/money.ts`) to avoid floating-point drift
 - Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx). The context exposes a memoized `safeToSpendBreakdown` so widgets (e.g. `SafeToSpendHero`) consume it without re-expanding calendar items.
@@ -108,7 +109,7 @@ Habits support two scoring modes:
 - 3-6 days: 1.5x points
 - 7+ days: 2.0x points
 
-**Atomicity:** Habit mutations that touch both a habit document and the household points — `toggleHabit`, `resetHabit`, `addHabitSubmission`, `updateHabitSubmission`, `deleteHabitSubmission` — commit in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). The same applies to bucket reallocation and paycheck approval in the context. Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
+**Atomicity:** Habit mutations that touch both a habit document and the household points — `toggleHabit`, `resetHabit`, `addHabitSubmission`, `updateHabitSubmission`, `deleteHabitSubmission` — commit in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). The same applies to bucket reallocation and paycheck approval, and to the multi-document context mutations `updateTransactionCategory` (transaction + related habits + points), `useFreezeBankToken` (habit + token balance), and `addMember` (member doc + `memberUids`). Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
 
 **Point recalculation:** `calculatePointsForDate`/`calculatePointsForDateRange` (used to re-sync daily/weekly/total points) reconstruct each completion day's streak via `streakEndingOn()` and apply the historical per-day multiplier — they do **not** apply the current streak to past days, so totals don't drift on recalculation.
 

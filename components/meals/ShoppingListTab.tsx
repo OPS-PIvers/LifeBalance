@@ -46,14 +46,14 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
       <div className="fixed inset-0 z-10" onClick={onClose} aria-hidden="true" />
       <div
         ref={dropdownRef}
-        role="listbox"
+        role="menu"
         aria-label="Filter by store"
         className="absolute top-full right-0 mt-2 w-48 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 dark:ring-white/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200"
       >
         <div className="max-h-60 scroll-contain-y">
           <button
-            role="option"
-            aria-selected={!filterStore}
+            role="menuitemradio"
+            aria-checked={!filterStore}
             onClick={() => onSelect(null)}
             className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
           >
@@ -63,8 +63,8 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
           {stores.map(store => (
             <button
               key={store.id}
-              role="option"
-              aria-selected={filterStore === store.name}
+              role="menuitemradio"
+              aria-checked={filterStore === store.name}
               onClick={() => onSelect(store.name)}
               className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
             >

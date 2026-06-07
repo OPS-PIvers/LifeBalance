@@ -52,6 +52,53 @@ const validateApiKey = () => {
 /** Daily AI request cap. Mirrors the comment in the original code. */
 const AI_DAILY_QUOTA = 100;
 
+// ---------------------------------------------------------------------------
+// Kill-switch cache (TTL = 60 s) so we don't hit Firestore on every AI call.
+// ---------------------------------------------------------------------------
+
+/** How long (ms) to reuse a cached kill-switch value before re-fetching. */
+const KILL_SWITCH_CACHE_TTL_MS = 60_000;
+
+/**
+ * Cache the in-flight promise (not just the resolved value) so that concurrent
+ * AI calls during a cold/expired cache window collapse onto a single Firestore
+ * read instead of each triggering their own (cache-stampede / request-collapse).
+ */
+let killSwitchPromise: Promise<boolean> | null = null;
+let killSwitchFetchedAt = 0;
+
+/**
+ * Returns the current `aiEnabled` value from the global app config.
+ * The fetch promise is cached for KILL_SWITCH_CACHE_TTL_MS (60 s) to avoid a
+ * Firestore read on every single AI call. After the TTL expires the next call
+ * re-fetches so operator changes take effect within ~60 s.
+ *
+ * Fails open (returns true) if the config doc is missing or the read fails.
+ */
+const getAiEnabled = (): Promise<boolean> => {
+  const now = Date.now();
+  if (killSwitchPromise !== null && now - killSwitchFetchedAt < KILL_SWITCH_CACHE_TTL_MS) {
+    return killSwitchPromise;
+  }
+
+  killSwitchFetchedAt = now;
+  killSwitchPromise = (async (): Promise<boolean> => {
+    try {
+      const { getDoc } = await import("firebase/firestore");
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data().aiEnabled !== false : true;
+    } catch {
+      // Fail open: don't block AI if config is unreachable. Clear the cache so
+      // the next call retries rather than caching the fail-open result for 60 s.
+      killSwitchPromise = null;
+      return true;
+    }
+  })();
+
+  return killSwitchPromise;
+};
+
 /**
  * Atomically checks the household's daily AI quota and, if under the limit,
  * increments the counter — all inside a single Firestore transaction so
@@ -62,16 +109,11 @@ const AI_DAILY_QUOTA = 100;
  * @throws Error("Daily AI quota exceeded …") when the household is at the cap.
  */
 const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
-  // 1. Check Global Kill Switch (read-only, outside the transaction — fail-open on error)
+  // 1. Check Global Kill Switch (cached with 60 s TTL — fail-open on error)
   try {
-    const { getDoc } = await import("firebase/firestore");
-    const globalConfigRef = doc(db, 'app_config', 'global');
-    const globalConfigSnap = await getDoc(globalConfigRef);
-    if (globalConfigSnap.exists()) {
-      const data = globalConfigSnap.data();
-      if (data.aiEnabled === false) {
-        throw new Error("AI features are temporarily disabled.");
-      }
+    const aiEnabled = await getAiEnabled();
+    if (!aiEnabled) {
+      throw new Error("AI features are temporarily disabled.");
     }
   } catch (error) {
     if (error instanceof Error && error.message.includes("temporarily disabled")) {

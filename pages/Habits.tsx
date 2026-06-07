@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGamification, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { Habit } from '../types/schema';
@@ -79,29 +79,41 @@ const Habits: React.FC = () => {
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
 
-  if (isLoading) {
-    return <HabitsSkeleton />;
-  }
-
-  // Check if there are habits that need migration
-  const habitsNeedingMigration = habits.filter(
-    h => !h.hasSubmissionTracking && h.completedDates && h.completedDates.length > 0
+  // Memoize derived collections so they don't recompute on unrelated re-renders.
+  const habitsNeedingMigration = useMemo(
+    () => habits.filter(
+      h => !h.hasSubmissionTracking && h.completedDates && h.completedDates.length > 0
+    ),
+    [habits]
   );
 
   // Group Habits by Category (with Sorting)
   // Sort habits by order first
-  const sortedHabits = [...habits].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+  const sortedHabits = useMemo(
+    () => [...habits].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+    [habits]
+  );
 
   // Extract categories from sorted habits (Set preserves insertion order which is now sorted order)
-  const categories: string[] = Array.from(new Set(sortedHabits.map(h => h.category)));
+  const categories = useMemo<string[]>(
+    () => Array.from(new Set(sortedHabits.map(h => h.category))),
+    [sortedHabits]
+  );
 
-  const groupedHabits: Record<string, Habit[]> = categories.reduce((acc, category) => {
-    // Sort habits within category too
-    acc[category] = habits
-      .filter(h => h.category === category)
-      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    return acc;
-  }, {} as Record<string, Habit[]>);
+  const groupedHabits = useMemo<Record<string, Habit[]>>(
+    () => categories.reduce((acc, category) => {
+      // Sort habits within category too
+      acc[category] = habits
+        .filter(h => h.category === category)
+        .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+      return acc;
+    }, {} as Record<string, Habit[]>),
+    [categories, habits]
+  );
+
+  if (isLoading) {
+    return <HabitsSkeleton />;
+  }
 
   const handleExport = () => {
     try {

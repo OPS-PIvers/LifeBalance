@@ -924,6 +924,219 @@ const ToDosPage: React.FC = () => {
   );
 };
 
+interface TodoRowProps {
+  item: ToDo;
+  color: 'rose' | 'amber' | 'blue';
+  assignee: HouseholdMember | undefined;
+  isSelected: boolean;
+  isSelectionMode: boolean;
+  onComplete: (id: string) => void;
+  onEdit: (todo: ToDo) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (todo: ToDo) => void;
+  onMoveToTomorrow: (todo: ToDo) => void;
+  onMore: (todo: ToDo) => void;
+  onToggleSelection: (id: string) => void;
+}
+
+const badgeStyleMap = {
+  rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
+  amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+  blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/20',
+} as const;
+
+// Memoized row for a single active to-do.
+// Uses a field-by-field comparator so toggling selection in one row does not
+// re-render sibling rows that haven't changed their selected state.
+const TodoRow = React.memo(function TodoRow({
+  item,
+  color,
+  assignee,
+  isSelected,
+  isSelectionMode,
+  onComplete,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onMoveToTomorrow,
+  onMore,
+  onToggleSelection,
+}: TodoRowProps) {
+  // Parse the due date once per row render to avoid repeated parseISO calls
+  const dueDate = parseISO(item.completeByDate);
+  const isOverdue = isBefore(dueDate, startOfToday());
+
+  const cardInner = (
+    <div
+      onClick={() => isSelectionMode && onToggleSelection(item.id)}
+      {...(isSelectionMode ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        'aria-pressed': isSelected,
+        'aria-label': `${isSelected ? 'Deselect' : 'Select'} task: ${item.text}`,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleSelection(item.id);
+          }
+        }
+      } : {})}
+      className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 dark:ring-white/5 transition-all active:scale-[0.99] ${
+        isSelectionMode
+          ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200 dark:bg-brand-700/30 dark:ring-brand-500/40' : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'}`
+          : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        {/* Complete Checkbox or Selection Box */}
+        {isSelectionMode ? (
+          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
+            {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+          </div>
+        ) : (
+          <button
+            onClick={async (e) => {
+              e.stopPropagation();
+              try {
+                haptic('light');
+                await onComplete(item.id);
+                toast.success('To-Do completed! 🎉');
+              } catch (error) {
+                console.error('Failed to complete task:', error);
+                toast.error('Failed to complete to-do');
+              }
+            }}
+            className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+              color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-500/40 dark:hover:bg-rose-500/15' :
+              color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
+              'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
+            }`}
+            aria-label="Complete task"
+          >
+            <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
+          </button>
+        )}
+
+        <div className="flex-1 min-w-0">
+          <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'}`}>{item.text}</p>
+
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            {isOverdue ? (
+              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                <AlertCircle size={10} />
+                Overdue ({format(dueDate, 'MMM d')})
+              </div>
+            ) : (
+              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium ${badgeStyleMap[color]}`}>
+                <Clock size={10} />
+                {isToday(dueDate) ? 'Today' :
+                 isTomorrow(dueDate) ? 'Tomorrow' :
+                 format(dueDate, 'MMM d')}
+              </div>
+            )}
+
+            {assignee && (
+              <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md dark:text-slate-400 dark:bg-slate-700/50">
+                {assignee.photoURL ? (
+                  <img
+                    src={assignee.photoURL}
+                    className="w-3 h-3 rounded-full"
+                    alt={assignee.displayName ?? 'Task assignee'}
+                  />
+                ) : (
+                  <User size={10} />
+                )}
+                <span>{assignee.displayName?.split(' ')[0] ?? 'User'}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        {!isSelectionMode && (
+          <>
+            {/* Desktop Actions */}
+            <div className="hidden sm:flex items-center gap-1 pl-2">
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
+                aria-label="Move to Tomorrow"
+                title="Move to Tomorrow"
+              >
+                <Calendar size={16} />
+              </Button>
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
+                aria-label="Duplicate task"
+                title="Duplicate"
+              >
+                <Copy size={16} />
+              </Button>
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onEdit(item); }}
+                aria-label="Edit task"
+              >
+                <Edit2 size={16} />
+              </Button>
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showDeleteConfirmation(async () => {
+                    haptic('medium');
+                    await onDelete(item.id);
+                    toast.success('Task deleted');
+                  });
+                }}
+                className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50 dark:hover:text-rose-300 dark:active:bg-rose-500/15"
+                aria-label="Delete task"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </div>
+            {/* Mobile Actions */}
+            <div className="flex sm:hidden pl-2">
+              <Button
+                variant="ghost-brand"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); onMore(item); }}
+                aria-label={`More options for: ${item.text}`}
+              >
+                <MoreVertical size={20} />
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  // In selection mode we keep tap-to-select intact and skip the swipe gesture.
+  if (isSelectionMode) {
+    return <>{cardInner}</>;
+  }
+
+  return (
+    <SwipeableTodoRow
+      onDelete={() => {
+        showDeleteConfirmation(async () => {
+          haptic('medium');
+          await onDelete(item.id);
+          toast.success('Task deleted');
+        });
+      }}
+    >
+      {cardInner}
+    </SwipeableTodoRow>
+  );
+});
+
 interface SectionProps {
   title: string;
   subtitle: string;
@@ -963,12 +1176,6 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     blue: 'bg-blue-500',
   };
 
-  const badgeStyles = {
-    rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
-    amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
-    blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/20',
-  };
-
   return (
     <div className="animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-baseline justify-between mb-4 px-1">
@@ -980,184 +1187,23 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
       </div>
 
       <div className="space-y-3">
-        {items.map(item => {
-           const assignee = memberMap.get(item.assignedTo);
-           const isSelected = selectedIds.has(item.id);
-           // Parse the due date once per item to avoid repeated parseISO calls in render
-           const dueDate = parseISO(item.completeByDate);
-           const isOverdue = isBefore(dueDate, startOfToday());
-
-           const cardInner = (
-             <div
-                onClick={() => isSelectionMode && onToggleSelection(item.id)}
-                {...(isSelectionMode ? {
-                  role: 'button' as const,
-                  tabIndex: 0,
-                  'aria-pressed': isSelected,
-                  'aria-label': `${isSelected ? 'Deselect' : 'Select'} task: ${item.text}`,
-                  onKeyDown: (e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onToggleSelection(item.id);
-                    }
-                  }
-                } : {})}
-                className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 dark:ring-white/5 transition-all active:scale-[0.99] ${
-                  isSelectionMode
-                    ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200 dark:bg-brand-700/30 dark:ring-brand-500/40' : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'}`
-                    : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'
-                }`}
-             >
-               <div className="flex items-start gap-3">
-                 {/* Complete Checkbox or Selection Box */}
-                 {isSelectionMode ? (
-                   <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
-                      {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
-                   </div>
-                 ) : (
-                   <button
-                     onClick={async (e) => {
-                       e.stopPropagation();
-                       try {
-                         haptic('light');
-                         await onComplete(item.id);
-                         toast.success('To-Do completed! 🎉');
-                       } catch (error) {
-                         console.error('Failed to complete task:', error);
-                         toast.error('Failed to complete to-do');
-                       }
-                     }}
-                     className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                       color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-500/40 dark:hover:bg-rose-500/15' :
-                       color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
-                       'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
-                     }`}
-                     aria-label="Complete task"
-                   >
-                     <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
-                   </button>
-                 )}
-
-                 <div className="flex-1 min-w-0">
-                   <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'}`}>{item.text}</p>
-
-                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                     {isOverdue ? (
-                       <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300">
-                          <AlertCircle size={10} />
-                          Overdue ({format(dueDate, 'MMM d')})
-                       </div>
-                     ) : (
-                       <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium ${badgeStyles[color]}`}>
-                          <Clock size={10} />
-                          {isToday(dueDate) ? 'Today' :
-                           isTomorrow(dueDate) ? 'Tomorrow' :
-                           format(dueDate, 'MMM d')}
-                       </div>
-                     )}
-
-                     {assignee && (
-                       <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md dark:text-slate-400 dark:bg-slate-700/50">
-                         {assignee.photoURL ? (
-                           <img
-                             src={assignee.photoURL}
-                             className="w-3 h-3 rounded-full"
-                             alt={assignee.displayName ?? 'Task assignee'}
-                           />
-                         ) : (
-                           <User size={10} />
-                         )}
-                         <span>{assignee.displayName?.split(' ')[0] ?? 'User'}</span>
-                       </div>
-                     )}
-                   </div>
-                 </div>
-
-                 {/* Actions */}
-                 {!isSelectionMode && (
-                   <>
-                     {/* Desktop Actions */}
-                     <div className="hidden sm:flex items-center gap-1 pl-2">
-                        <Button
-                          variant="ghost-brand"
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); onMoveToTomorrow(item); }}
-                          aria-label="Move to Tomorrow"
-                          title="Move to Tomorrow"
-                        >
-                          <Calendar size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost-brand"
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
-                          aria-label="Duplicate task"
-                          title="Duplicate"
-                        >
-                          <Copy size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost-brand"
-                          size="icon"
-                          onClick={(e) => { e.stopPropagation(); onEdit(item); }}
-                          aria-label="Edit task"
-                        >
-                          <Edit2 size={16} />
-                        </Button>
-                        <Button
-                          variant="ghost-brand"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            showDeleteConfirmation(async () => {
-                              haptic('medium');
-                              await onDelete(item.id);
-                              toast.success('Task deleted');
-                            });
-                          }}
-                          className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50 dark:hover:text-rose-300 dark:active:bg-rose-500/15"
-                          aria-label="Delete task"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                     </div>
-                     {/* Mobile Actions */}
-                     <div className="flex sm:hidden pl-2">
-                       <Button
-                         variant="ghost-brand"
-                         size="icon"
-                         onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                         aria-label={`More options for: ${item.text}`}
-                       >
-                         <MoreVertical size={20} />
-                       </Button>
-                     </div>
-                   </>
-                 )}
-               </div>
-             </div>
-           );
-
-           // In selection mode we keep tap-to-select intact and skip the swipe gesture.
-           if (isSelectionMode) {
-             return <React.Fragment key={item.id}>{cardInner}</React.Fragment>;
-           }
-
-           return (
-             <SwipeableTodoRow
-               key={item.id}
-               onDelete={() => {
-                 showDeleteConfirmation(async () => {
-                   haptic('medium');
-                   await onDelete(item.id);
-                   toast.success('Task deleted');
-                 });
-               }}
-             >
-               {cardInner}
-             </SwipeableTodoRow>
-           );
-        })}
+        {items.map(item => (
+          <TodoRow
+            key={item.id}
+            item={item}
+            color={color}
+            assignee={memberMap.get(item.assignedTo)}
+            isSelected={selectedIds.has(item.id)}
+            isSelectionMode={isSelectionMode}
+            onComplete={onComplete}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onDuplicate={onDuplicate}
+            onMoveToTomorrow={onMoveToTomorrow}
+            onMore={onMore}
+            onToggleSelection={onToggleSelection}
+          />
+        ))}
       </div>
     </div>
   );

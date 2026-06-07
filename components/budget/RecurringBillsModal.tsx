@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { CalendarItem } from '../../types/schema';
 import { Button } from '../ui/Button';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '../ui/Drawer';
@@ -17,6 +18,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   const { calendarItems, updateCalendarItem, deleteCalendarItem } = useFinance();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Edit Form State
   const [editTitle, setEditTitle] = useState('');
@@ -93,19 +95,24 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this recurring item? Future instances will stop appearing.')) {
-      try {
-        await deleteCalendarItem(id);
-        toast.success('Deleted recurring item');
-      } catch (_error) {
-        toast.error('Failed to delete');
-      }
+  const handleDelete = (id: string) => {
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    try {
+      await deleteCalendarItem(deleteConfirmId);
+      toast.success('Deleted recurring item');
+    } catch (_error) {
+      toast.error('Failed to delete');
+    } finally {
+      setDeleteConfirmId(null);
     }
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} noPadding={true}>
+    <Drawer isOpen={isOpen} onClose={onClose} noPadding={true} ariaLabel="Recurring Bills">
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -296,6 +303,15 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
           )}
         </div>
       </Drawer>
+
+      <ConfirmDialog
+        isOpen={!!deleteConfirmId}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={confirmDelete}
+        title="Delete Recurring Item"
+        message="Are you sure you want to delete this recurring item? Future instances will stop appearing."
+        confirmLabel="Delete"
+      />
     </Drawer>
   );
 };

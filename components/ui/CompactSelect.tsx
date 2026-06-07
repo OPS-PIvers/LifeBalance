@@ -6,6 +6,8 @@ interface CompactSelectProps {
   options: Array<{ id: string; label: string }>;
   placeholder: string;
   className?: string;
+  /** Accessible name for the select when there is no associated visible label. */
+  'aria-label'?: string;
 }
 
 /**
@@ -17,11 +19,13 @@ export const CompactSelect: React.FC<CompactSelectProps> = ({
   onChange,
   options,
   placeholder,
-  className = ''
+  className = '',
+  'aria-label': ariaLabel,
 }) => {
   return (
     <select
       value={value}
+      aria-label={ariaLabel ?? placeholder}
       onChange={(e) => onChange(e.target.value || '')}
       className={`px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full dark:bg-brand-700/40 dark:border-brand-500/40 dark:text-brand-100 ${className}`}
     >

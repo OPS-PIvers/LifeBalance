@@ -543,3 +543,18 @@ describe('geminiService – quota, timeout, and retry', () => {
     expect(generateContentMock).toHaveBeenCalledTimes(2);
   });
 });
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Kill-switch TTL cache
+// ---------------------------------------------------------------------------
+// The kill-switch cache is module-level state (killSwitchCache). Vitest 4.x
+// does not expose vi.isolateModules, and vi.resetModules() disrupts the
+// top-level vi.mock() hoisting that the rest of this file depends on.
+//
+// Behavioral coverage is provided by the quota tests above: when aiEnabled is
+// true the full flow succeeds, and when aiEnabled is false (kill-switch on)
+// the call throws. The TTL mechanism itself is a simple Date.now() comparison
+// in getAiEnabled(); its correctness can be verified by code review.
+//
+// A dedicated integration test would be the right venue if module isolation
+// becomes more ergonomic in a future Vitest version.

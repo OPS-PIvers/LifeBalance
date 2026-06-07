@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useId } from 'react';
 import { MealIngredient, ShoppingItem } from '@/types/schema';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +22,8 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   shoppingList,
   onConfirm
 }) => {
+  const titleId = useId();
+
   // Memoize the set of unpurchased shopping list items for O(1) lookups
   // This avoids O(N*M) complexity in the render loop
   const unpurchasedItemNames = useMemo(() =>
@@ -72,12 +74,12 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md" ariaLabelledBy={titleId}>
       <div className="flex flex-col h-full max-h-[80vh]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 z-10">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add Ingredients</h3>
+            <h3 id={titleId} className="text-lg font-bold text-slate-900 dark:text-slate-100">Add Ingredients</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{mealName}</p>
           </div>
           <button

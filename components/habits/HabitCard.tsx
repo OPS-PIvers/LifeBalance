@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Habit } from '../../types/schema';
 import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
@@ -31,6 +31,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const isDesktop = useMediaQuery('(min-width: 640px)');
+  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus to the first menu item when the desktop menu opens
+  useEffect(() => {
+    if (isMenuOpen && isDesktop && firstMenuItemRef.current) {
+      firstMenuItemRef.current.focus();
+    }
+  }, [isMenuOpen, isDesktop]);
   
   // Logic helpers
   const isPositive = habit.type === 'positive';
@@ -182,14 +190,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
             )}
           </div>
           
-          {/* Reset Button (X) */}
+          {/* Reset Button (X) - p-2 -m-2 enlarges tappable area to ~44px */}
           {isActive && (
             <button
               onClick={(e) => {
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 bg-white dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 dark:text-slate-300 shadow-sm active:scale-90 hover:bg-rose-50 dark:hover:bg-rose-500/20 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 dark:text-slate-300 shadow-sm active:scale-90 hover:bg-rose-50 dark:hover:bg-rose-500/20 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 20 }}
             >
@@ -292,6 +300,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
               style={{ zIndex: 20 }}
             >
               <button
+                ref={firstMenuItemRef}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleEdit();

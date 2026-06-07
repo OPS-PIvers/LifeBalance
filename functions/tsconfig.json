@@ -3,6 +3,8 @@
     "module": "commonjs",
     "noImplicitReturns": true,
     "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noUncheckedIndexedAccess": true,
     "outDir": "lib",
     "sourceMap": true,
     "strict": true,

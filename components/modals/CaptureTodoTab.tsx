@@ -95,9 +95,9 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
 
       <button
         onClick={onSubmit}
-        disabled={members.length === 0}
+        disabled={members.length === 0 || !text.trim()}
         className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-          members.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-900 active:scale-[0.98]'
+          members.length === 0 || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-900 active:scale-[0.98]'
         }`}
       >
         Create Task

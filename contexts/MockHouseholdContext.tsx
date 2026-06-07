@@ -149,7 +149,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Transaction operations
-  const addTransaction = useCallback(async (tx: Omit<Transaction, 'id'>) => {
+  const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     const newTx = { ...tx, id: generateId() } as Transaction;
     setTransactions(prev => [...prev, newTx]);
     toast.success('Mock: Transaction added');

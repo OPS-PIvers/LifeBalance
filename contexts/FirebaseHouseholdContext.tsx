@@ -9,6 +9,7 @@ import {
   deleteDoc,
   deleteField,
   serverTimestamp,
+  type FieldValue,
   Timestamp,
   writeBatch,
   getDoc,
@@ -231,7 +232,7 @@ export interface HouseholdContextType {
   deferCalendarItem: (itemId: string) => Promise<void>;
 
   // Transaction Actions
-  addTransaction: (tx: Transaction) => Promise<void>;
+  addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
   updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -2062,8 +2063,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         category = 'Income';
       }
 
-      // 4. Create transaction
-      const transactionDate = getLocalDateString();
+      // 4. Create transaction dated to when the item was actually due/scheduled
+      // (specificDate), not "today" — so a bill due on the 10th but paid on the
+      // 15th records against the 10th and lands in the correct pay period.
+      const transactionDate = specificDate;
       const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
 
       await addDoc(collection(db, `households/${householdId}/transactions`), {
@@ -2182,20 +2185,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- ACTIONS: TRANSACTIONS ---
 
-  const addTransaction = useCallback(async (tx: Transaction) => {
-    console.log('[addTransaction] Called with:', {
-      source: tx.source,
-      amount: tx.amount,
-      merchant: tx.merchant,
-      category: tx.category,
-      date: tx.date,
-      status: tx.status,
-      isRecurring: tx.isRecurring,
-      isRecurringType: typeof tx.isRecurring,
-      autoCategorized: tx.autoCategorized,
-      autoCategorizedType: typeof tx.autoCategorized
-    });
-
+  const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => {
     if (!householdId) {
       console.error('[addTransaction] No household selected');
       throw new Error('No household selected');
@@ -2205,8 +2195,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       throw new Error('Not authenticated');
     }
 
-    // Validate required fields before attempting Firestore write
-    if (!tx.amount || typeof tx.amount !== 'number') {
+    // Validate required fields before attempting Firestore write.
+    // Note: a falsy check would wrongly reject a legitimate $0 transaction, so
+    // we only reject non-numbers / NaN here (negative amounts are valid too,
+    // e.g. refunds).
+    if (typeof tx.amount !== 'number' || isNaN(tx.amount)) {
       console.error('[addTransaction] Invalid amount:', tx.amount, typeof tx.amount);
       throw new Error('Invalid amount');
     }
@@ -2234,8 +2227,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[addTransaction] autoCategorized must be boolean, got:', tx.autoCategorized, typeof tx.autoCategorized);
       throw new Error('autoCategorized must be boolean');
     }
-
-    console.log('[addTransaction] All validations passed');
 
     try {
       // Assign pay period ID based on paycheck approval
@@ -2273,9 +2264,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         docData.notes = tx.notes.trim();
       }
 
-      console.log('Adding transaction to Firestore:', JSON.stringify(docData, null, 2));
       await addDoc(collection(db, `households/${householdId}/transactions`), docData);
-      console.log('Transaction added successfully');
 
       // Update checking account balance atomically (server-side delta avoids
       // lost updates from concurrent edits / stale local state).
@@ -2298,12 +2287,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[]) => {
     if (!householdId || !currentUser) return;
 
-    // Get current transaction status to check if we are verifying a pending one
-    // Only increment habits if transitioning from pending_review -> verified (which this function implies by setting status='verified')
-    // Ideally we should check the current status, but for now assuming this is called from Action Queue (pending items)
+    // Verifying a pending transaction may also increment related habits and the
+    // household points. Commit the transaction update, every habit update, and
+    // the points increment in a SINGLE writeBatch so they can never diverge
+    // (a partial failure previously left habits/points inconsistent).
+    const batch = writeBatch(db);
+    let totalPointsChange = 0;
+    let successfulHabitsCount = 0;
 
     // 1. Update Transaction
-    await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
+    batch.update(doc(db, `households/${householdId}/transactions`, id), {
       category,
       status: 'verified',
       relatedHabitIds: relatedHabitIds || []
@@ -2311,23 +2304,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // 2. Increment Habits if any
     if (relatedHabitIds && relatedHabitIds.length > 0) {
-      let totalPointsChange = 0;
-      let successfulHabitsCount = 0;
-
-      // We need to process each habit sequentially or carefully to update household points correctly
-      // Since toggleHabit updates household points atomically with increment(), calling it multiple times is safe for the counter
-      // However, we need to be careful not to trigger race conditions on the habit document if updated in parallel
-      // Ideally, we should do this in a batch or transaction, but `processToggleHabit` returns derived state that depends on reads
-
-      // Let's loop and process
       for (const habitId of relatedHabitIds) {
         const habit = habits.find(h => h.id === habitId);
         if (habit) {
           // Use extracted business logic
           const result = processToggleHabit(habit, 'up');
           if (result) {
-            // Update habit doc
-            await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
+            batch.update(doc(db, `households/${householdId}/habits`, habitId), {
               count: result.updatedHabit.count,
               totalCount: result.updatedHabit.totalCount,
               completedDates: result.updatedHabit.completedDates,
@@ -2344,36 +2327,41 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       }
 
-      // 3. Update Household Points (Batch the points update if possible, or just one big increment)
+      // 3. Update Household Points
       if (totalPointsChange !== 0) {
-        await updateDoc(doc(db, `households/${householdId}`), {
+        batch.update(doc(db, `households/${householdId}`), {
           'points.daily': increment(totalPointsChange),
           'points.weekly': increment(totalPointsChange),
           'points.total': increment(totalPointsChange),
         });
-
-        // Toast feedback for habits
-        const sign = totalPointsChange > 0 ? '+' : '';
-        toast(
-          <div className="flex items-center gap-2">
-            <span className="font-bold">{sign}{totalPointsChange} pts</span>
-            <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
-          </div>,
-          {
-            duration: 2000,
-            icon: '🌟',
-            style: {
-              background: '#ECFDF5',
-              color: '#065F46',
-              border: '1px solid #A7F3D0',
-            },
-          }
-        );
       }
     }
 
+    // Commit all writes atomically
+    await batch.commit();
+
     // DO NOT update bucket.spent - it's now calculated in real-time from transactions
     // The bucketSpentMap effect will automatically recalculate when transactions change
+
+    // Toast feedback for habits (only after a successful commit)
+    if (totalPointsChange !== 0) {
+      const sign = totalPointsChange > 0 ? '+' : '';
+      toast(
+        <div className="flex items-center gap-2">
+          <span className="font-bold">{sign}{totalPointsChange} pts</span>
+          <span className="text-sm opacity-80">from {successfulHabitsCount} habit(s)</span>
+        </div>,
+        {
+          duration: 2000,
+          icon: '🌟',
+          style: {
+            background: '#ECFDF5',
+            color: '#065F46',
+            border: '1px solid #A7F3D0',
+          },
+        }
+      );
+    }
 
     toast.success('Verified & Categorized!');
   }, [householdId, currentUser, habits]);
@@ -2560,13 +2548,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Check if yearly goal is achieved
     const isAchieved = updatedMonths.length >= goal.requiredMonths;
 
-    const updates: Partial<YearlyGoal> = {
+    // achievedAt is a string on read, but we write a server timestamp; type the
+    // write object to accept a FieldValue for that field instead of casting.
+    const updates: Partial<Omit<YearlyGoal, 'achievedAt'>> & { achievedAt?: string | FieldValue } = {
       successfulMonths: updatedMonths,
     };
 
     if (isAchieved && goal.status !== 'achieved') {
       updates.status = 'achieved';
-      updates.achievedAt = serverTimestamp() as unknown as string;
+      updates.achievedAt = serverTimestamp();
     }
 
     await updateDoc(doc(db, `households/${householdId}/yearlyGoals`, goalId), updates);
@@ -2708,18 +2698,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Recalculate streak with patched date
     const newStreak = calculateStreak(updatedCompletedDates);
 
-    // Update habit
-    await updateDoc(doc(db, `households/${householdId}/habits`, habitId), {
-      completedDates: updatedCompletedDates,
-      streakDays: newStreak,
-    });
-
     // Create history entry
     const historyEntry: FreezeBankHistoryEntry = {
       id: crypto.randomUUID(),
       type: 'used',
       amount: -1,
-      date: format(new Date(), 'yyyy-MM-dd'),
+      date: getLocalDateString(),
       habitId,
       habitDate: targetDate,
       notes: `Used token to patch ${habit.title} on ${targetDate}`,
@@ -2733,9 +2717,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       history: [...freezeBank.history, historyEntry],
     };
 
-    await updateDoc(doc(db, `households/${householdId}`), {
+    // Patch the habit and decrement the token in a SINGLE batch so a date can
+    // never be patched into the habit without a token being consumed (or vice
+    // versa) if one of the two writes were to fail.
+    const batch = writeBatch(db);
+    batch.update(doc(db, `households/${householdId}/habits`, habitId), {
+      completedDates: updatedCompletedDates,
+      streakDays: newStreak,
+    });
+    batch.update(doc(db, `households/${householdId}`), {
       freezeBank: updatedFreezeBank,
     });
+    await batch.commit();
 
     toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);
   }, [householdId, freezeBank, habits]);
@@ -2800,17 +2793,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         points: { daily: 0, weekly: 0, total: 0 },
       } as HouseholdMember;
 
-      // 1. Add to members subcollection
-      // Using setDoc with the UID as document ID
-      await setDoc(doc(db, `households/${householdId}/members`, newMemberUid), {
+      // Write the member doc and the household memberUids array in a SINGLE
+      // batch so they can't desync (a member doc without a matching memberUids
+      // entry would break household access rules).
+      const batch = writeBatch(db);
+      batch.set(doc(db, `households/${householdId}/members`, newMemberUid), {
         ...member,
         joinedAt: serverTimestamp(),
       });
-
-      // 2. Add to household memberUids array
-      await updateDoc(doc(db, `households/${householdId}`), {
+      batch.update(doc(db, `households/${householdId}`), {
         memberUids: arrayUnion(newMemberUid),
       });
+      await batch.commit();
 
       toast.success('Member added successfully');
     } catch (error) {

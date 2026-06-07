@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
-import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '../contexts/FirebaseHouseholdContext';
 import { format, addDays, startOfToday } from 'date-fns';
 
 // Mock dependencies
@@ -11,11 +10,11 @@ vi.mock('../contexts/FirebaseHouseholdContext', () => ({
   useHouseholdCore: vi.fn(),
 }));
 
-// ToDosPage now reads the `useTodos` and `useHouseholdCore` slices. Both mocks
-// receive the same composed value object so existing per-test data still works.
-const setHouseholdMock = (value: any) => {
-  (useTodos as any).mockReturnValue(value);
-  (useHouseholdCore as any).mockReturnValue(value);
+// ToDosPage reads `useTodos` and `useHouseholdCore` slices. Both mocks receive the
+// same composed value object so existing per-test data still works.
+const setHouseholdMock = (value: Partial<TodosContextValue & HouseholdCoreContextValue>) => {
+  vi.mocked(useTodos).mockReturnValue(value as TodosContextValue);
+  vi.mocked(useHouseholdCore).mockReturnValue(value as HouseholdCoreContextValue);
 };
 
 vi.mock('../utils/exportUtils', () => ({
@@ -52,14 +51,14 @@ vi.mock('lucide-react', () => ({
 }));
 
 describe('ToDosPage Reschedule Features', () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = format(startOfToday(), 'yyyy-MM-dd');
   const tomorrow = format(addDays(startOfToday(), 1), 'yyyy-MM-dd');
 
   const mockMembers = [
     {
       uid: 'user1',
       displayName: 'Alice Smith',
-      role: 'member',
+      role: 'member' as const,
       points: { daily: 0, weekly: 0, total: 0 }
     }
   ];

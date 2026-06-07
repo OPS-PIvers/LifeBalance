@@ -344,11 +344,11 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={async () => {
-                    if (confirm('Delete this calendar item?')) {
+                  onClick={() => {
+                    showDeleteConfirmation(async () => {
                       await deleteCalendarItem(item.id);
                       setExpandedId(null);
-                    }
+                    }, 'calendar item');
                   }}
                   className="w-full sm:flex-1"
                   leftIcon={<Trash2 size={16} />}

@@ -91,7 +91,10 @@ async function sendNotificationToUser(
 
       response.responses.forEach((resp, idx) => {
         if (!resp.success && resp.error?.code && permanentErrorCodes.includes(resp.error.code)) {
-          tokensToRemove.push(fcmTokens[idx]);
+          const token = fcmTokens[idx];
+          if (token !== undefined) {
+            tokensToRemove.push(token);
+          }
         }
       });
 
@@ -430,11 +433,18 @@ export const sendbudgetalerts = onDocumentUpdated(
     // Fetch members from subcollection
     const membersSnapshot = await householdRef.collection("members").get();
 
-    // Calculate safe-to-spend (simplified)
-    const accounts = newData.accounts || [];
-    const checkingBalance = accounts
-      .filter((acc: { type: string; balance: number }) => acc.type === "checking")
-      .reduce((sum: number, acc: { balance: number }) => sum + acc.balance, 0);
+    // Calculate the checking balance from the accounts SUBCOLLECTION.
+    // Accounts are NOT stored on the household document, so reading
+    // `newData.accounts` always yielded an empty array (and a false $0.00
+    // "low balance" alert on every household write). Read the real data.
+    const accountsSnapshot = await householdRef.collection("accounts").get();
+    const checkingBalance = accountsSnapshot.docs
+      .map((accDoc) => accDoc.data())
+      .filter((acc) => acc.type === "checking")
+      .reduce(
+        (sum, acc) => sum + (typeof acc.balance === "number" ? acc.balance : 0),
+        0
+      );
 
     for (const memberDoc of membersSnapshot.docs) {
       const member = memberDoc.data() as HouseholdMember;
