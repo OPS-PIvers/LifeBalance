@@ -238,9 +238,9 @@ const TransactionMasterList: React.FC = () => {
         isRecurring: false,
         source: 'manual',
         autoCategorized: false,
-        payPeriodId: undefined, // Let context logic handle pay period assignment
         relatedHabitIds: [], // Don't carry over habit links
-      } as unknown as Transaction);
+        // id/createdAt/createdBy/payPeriodId are assigned by addTransaction
+      });
       toast.success('Transaction duplicated');
     } catch (error) {
       console.error('Failed to duplicate transaction:', error);

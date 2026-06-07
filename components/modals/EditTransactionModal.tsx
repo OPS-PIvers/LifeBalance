@@ -108,6 +108,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       onClose();
     } catch (error) {
       console.error('Failed to delete transaction:', error);
+      toast.error('Failed to delete transaction. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -150,7 +151,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         store: store || undefined,
         accountId: accountId || undefined
         // Let addTransaction handle ID and timestamps
-      } as unknown as Transaction);
+      });
 
       toast.success('Transaction duplicated');
       onClose();

@@ -108,7 +108,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
 
     setIsProcessing(true);
     try {
-      const newTransactions = splits.map(split => ({
+      const newTransactions = splits.map((split): Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'> => ({
         amount: parseFloat(split.amount),
         merchant: split.merchant.trim(),
         category: split.category,
@@ -118,7 +118,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         source: 'manual',
         autoCategorized: false,
         relatedHabitIds: [], // Don't carry over habit links
-      } as unknown as Transaction)); // Type casting to satisfy Omit constraints in context
+      }));
 
       await splitTransaction(transaction.id, newTransactions);
       onClose();
