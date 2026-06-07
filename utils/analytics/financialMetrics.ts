@@ -1,5 +1,6 @@
 import { Transaction } from '../../types/schema';
 import { differenceInDays, parseISO, addDays, format, isAfter, startOfDay } from 'date-fns';
+import { sumMoney, roundMoney } from '../money';
 
 export const calculateBurnDown = (
   transactions: Transaction[],
@@ -36,11 +37,13 @@ export const calculateBurnDown = (
       continue;
     }
 
-    const daySpend = transactions
-      .filter(t => t.date === dateStr && t.category !== 'Income')
-      .reduce((sum, t) => sum + t.amount, 0);
+    const daySpend = sumMoney(
+      transactions
+        .filter(t => t.date === dateStr && t.category !== 'Income')
+        .map(t => t.amount)
+    );
 
-    cumulativeSpent += daySpend;
+    cumulativeSpent = roundMoney(cumulativeSpent + daySpend);
 
     data.push({
       date: dateStr,

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '../../types/schema';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { sumMoney, subtractMoney } from '../../utils/money';
 import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -52,8 +53,8 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
 
   // Calculate totals
   const totalAmount = transaction?.amount || 0;
-  const currentTotal = splits.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-  const remaining = totalAmount - currentTotal;
+  const currentTotal = sumMoney(splits.map(item => parseFloat(item.amount) || 0));
+  const remaining = subtractMoney(totalAmount, currentTotal);
   const isValidTotal = Math.abs(remaining) < 0.01;
 
   const handleAddSplit = () => {

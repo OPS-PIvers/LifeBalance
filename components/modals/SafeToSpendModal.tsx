@@ -2,6 +2,7 @@ import React from 'react';
 import { Wallet, Receipt, CreditCard } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
+import { sumMoney, addMoney, subtractMoney } from '../../utils/money';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
@@ -28,7 +29,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
 
   // 1. Checking
   const checkingAccounts = accounts.filter(a => a.type === 'checking');
-  const totalChecking = checkingAccounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalChecking = sumMoney(checkingAccounts.map(a => a.balance));
 
   // 2. Bills (paycheck-based date range)
   let unpaidBillsItems: CalendarItem[] = [];
@@ -68,18 +69,18 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
         !isCoveredByBucket
       );
     });
-    totalUnpaidBills = unpaidBillsItems.reduce((sum, i) => sum + i.amount, 0);
+    totalUnpaidBills = sumMoney(unpaidBillsItems.map(i => i.amount));
   }
 
   // 3. Buckets (for informational display only)
   const bucketBreakdown = buckets.map(b => {
     const spent = bucketSpentMap.get(b.id) || { verified: 0, pending: 0 };
-    const remaining = Math.max(0, b.limit - spent.verified);
+    const remaining = Math.max(0, subtractMoney(b.limit, spent.verified));
     const bucketTxs = getTransactionsForBucket(b.name, transactions, currentPeriodId);
     return { ...b, spent, remaining, transactions: bucketTxs };
   }).filter(b => b.remaining > 0);
 
-  const totalBucketLiability = bucketBreakdown.reduce((sum, b) => sum + b.remaining, 0);
+  const totalBucketLiability = sumMoney(bucketBreakdown.map(b => b.remaining));
 
   return (
     <Drawer
@@ -149,7 +150,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
              {bucketBreakdown.length > 0 ? (
                <div className="pl-6 space-y-3 max-h-64 scroll-contain-y pr-2">
                  {bucketBreakdown.map(b => {
-                   const spent = b.spent.verified + b.spent.pending;
+                   const spent = addMoney(b.spent.verified, b.spent.pending);
                    const percent = b.limit > 0 ? Math.min(100, (spent / b.limit) * 100) : 0;
                    const isOverspent = spent > b.limit;
 

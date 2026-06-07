@@ -11,6 +11,7 @@ import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '../../utils/exportUtils';
 import { getLocalDateString } from '../../utils/dateHelpers';
+import { roundMoney } from '../../utils/money';
 import { TransactionItem } from './TransactionItem';
 import SavedViewChips from './SavedViewChips';
 
@@ -177,7 +178,7 @@ const TransactionMasterList: React.FC = () => {
 
   // Derived State: Summary Statistics
   const summary = useMemo(() => {
-    return filteredTransactions.reduce(
+    const totals = filteredTransactions.reduce(
       (acc, tx) => {
         if (tx.category === INCOME_CATEGORY) {
           acc.income += tx.amount;
@@ -189,9 +190,11 @@ const TransactionMasterList: React.FC = () => {
       },
       { income: 0, expense: 0, count: 0 }
     );
+    // Round the accumulated currency totals to the cent.
+    return { income: roundMoney(totals.income), expense: roundMoney(totals.expense), count: totals.count };
   }, [filteredTransactions]);
 
-  const net = summary.income - summary.expense;
+  const net = roundMoney(summary.income - summary.expense);
 
   // Handlers (Memoized for stable references)
   const handleEdit = useCallback((tx: Transaction) => {

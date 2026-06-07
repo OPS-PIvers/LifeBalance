@@ -3,6 +3,7 @@ import {
   format, subDays, eachDayOfInterval, parseISO,
   startOfWeek, subWeeks, subMonths
 } from 'date-fns';
+import { sumMoney, roundMoney } from '../money';
 
 // Colors for Heatmap
 export const HEATMAP_COLORS = {
@@ -43,9 +44,11 @@ export const calculatePulseData = (habits: Habit[], transactions: Transaction[],
     });
 
     // Calculate Spending
-    const spending = transactions
-      .filter(t => t.date === dateStr && t.category !== 'Income')
-      .reduce((sum, t) => sum + t.amount, 0);
+    const spending = sumMoney(
+      transactions
+        .filter(t => t.date === dateStr && t.category !== 'Income')
+        .map(t => t.amount)
+    );
 
     data.push({
       date: format(date, 'MMM d'), // "Oct 24"
@@ -211,7 +214,7 @@ export const calculateSpendingCategories = (transactions: Transaction[]) => {
       totals.set(t.category, (totals.get(t.category) || 0) + t.amount);
     });
 
-  const totalAllCategories = Array.from(totals.values()).reduce((acc, val) => acc + val, 0);
+  const totalAllCategories = sumMoney(Array.from(totals.values()));
 
   const getCategoryColor = (categoryName: string) => {
     let hash = 0;
@@ -234,7 +237,7 @@ export const calculateSpendingCategories = (transactions: Transaction[]) => {
   const remaining = allCategories.slice(6);
 
   if (remaining.length > 0) {
-    const otherTotal = remaining.reduce((acc, cat) => acc + cat.value, 0);
+    const otherTotal = sumMoney(remaining.map(cat => cat.value));
     top6.push({
       name: 'Other',
       value: otherTotal,
@@ -298,9 +301,9 @@ export const calculateCategoryTrend = (transactions: Transaction[]) => {
     if (bucket) {
       bucket.forEach((amount, category) => {
         if (topCategories.includes(category)) {
-          monthData[category] = (monthData[category] as number) + amount;
+          monthData[category] = roundMoney((monthData[category] as number) + amount);
         } else {
-          monthData['Other'] = (monthData['Other'] as number) + amount;
+          monthData['Other'] = roundMoney((monthData['Other'] as number) + amount);
         }
       });
     }
