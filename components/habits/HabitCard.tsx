@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Habit } from '../../types/schema';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -25,7 +25,7 @@ interface HabitCardProps {
 }
 
 const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) => {
-  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useHousehold();
+  const { toggleHabit, deleteHabit, resetHabit, activeChallenge, freezeBank, useFreezeBankToken: consumeFreezeBankToken } = useGamification();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);

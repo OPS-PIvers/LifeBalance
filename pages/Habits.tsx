@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { Habit } from '../types/schema';
 import { Skeleton } from '../components/ui/Skeleton';
 import HabitCategoryList from '../components/habits/HabitCategoryList';
@@ -73,7 +73,8 @@ const HabitsSkeleton: React.FC = () => (
 
 const Habits: React.FC = () => {
   const navigate = useNavigate();
-  const { habits, isLoading } = useHousehold();
+  const { habits } = useGamification();
+  const { isLoading } = useHouseholdCore();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);

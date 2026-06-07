@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -56,7 +56,7 @@ const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intens
 CalendarDay.displayName = 'CalendarDay';
 
 const HabitHistoryCalendar: React.FC = () => {
-  const { habits } = useHousehold();
+  const { habits } = useGamification();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 

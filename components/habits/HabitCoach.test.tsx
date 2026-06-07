@@ -17,9 +17,18 @@ vi.mock('@/services/geminiService', () => ({
   analyzeHabitPatterns: (...args: unknown[]) => analyzeHabitPatternsMock(...args),
 }));
 
-vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => mockHouseholdContext,
-}));
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
+  // HabitCoach reads useGamification + useHouseholdCore; alias all hooks.
+  const value = () => mockHouseholdContext;
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useGamification: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+  };
+});
 
 vi.mock('react-hot-toast', () => ({
   default: {

@@ -20,9 +20,18 @@ const mockContextValue = {
   habits: [] as Habit[],
 };
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(() => mockContextValue),
-}));
+vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+  // HabitHistoryCalendar reads useGamification; alias every hook to one fn.
+  const value = vi.fn(() => mockContextValue);
+  return {
+    useHousehold: value,
+    useFinance: value,
+    useGamification: value,
+    useHouseholdCore: value,
+    useMeals: value,
+    useTodos: value,
+  };
+});
 
 describe('HabitHistoryCalendar', () => {
   const mockHabits: Habit[] = [
