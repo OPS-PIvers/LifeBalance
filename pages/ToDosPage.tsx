@@ -17,7 +17,16 @@ import Input from '../components/ui/Input';
 import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
 
 const ToDosPage: React.FC = () => {
-  const { todos, addToDo, updateToDo, deleteToDo, completeToDo } = useTodos();
+  const {
+    todos,
+    addToDo,
+    updateToDo,
+    deleteToDo,
+    completeToDo,
+    hasMoreCompletedTodos,
+    isLoadingOlderTodos,
+    loadOlderCompletedTodos,
+  } = useTodos();
   const { members, currentUser } = useHouseholdCore();
 
   // View Mode State
@@ -638,7 +647,21 @@ const ToDosPage: React.FC = () => {
                 members={members}
             />
 
-            {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && (
+            {/* Completed to-dos are windowed to the last 30 days; load older on demand. */}
+            {hasMoreCompletedTodos && (
+                <div className="flex justify-center pt-2">
+                    <Button
+                        variant="secondary"
+                        onClick={loadOlderCompletedTodos}
+                        disabled={isLoadingOlderTodos}
+                        leftIcon={isLoadingOlderTodos ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
+                    >
+                        {isLoadingOlderTodos ? 'Loading…' : 'Load older completed tasks'}
+                    </Button>
+                </div>
+            )}
+
+            {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && !hasMoreCompletedTodos && (
                  <div className="text-center py-20 px-6 bg-white/50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
                      <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-500">
                          <History size={28} />

@@ -33,7 +33,7 @@ import { Button } from '@/components/ui/Button';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
-import { HouseholdMember, NotificationPreferences } from '@/types/schema';
+import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -59,7 +59,10 @@ const Settings: React.FC = () => {
     meals,
     shoppingList,
     calendarItems,
-    apiKeys
+    apiKeys,
+    hasMoreTransactions,
+    isLoadingOlderTransactions,
+    loadAllTransactions
   } = useHousehold();
   const navigate = useNavigate();
 
@@ -95,14 +98,6 @@ const Settings: React.FC = () => {
       toast.error('Failed to sign out');
     }
   };
-
-  if (!householdSettings) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-brand-900 flex items-center justify-center pb-24">
-        <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
-      </div>
-    );
-  }
 
   const handleAddMember = () => {
     setSelectedMember(null);
@@ -171,7 +166,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleExportJson = () => {
+  const doExportJson = (txList: Transaction[]) => {
     try {
       // Filter out sensitive data from members
       const safeMembers = members.map(m => {
@@ -190,7 +185,7 @@ const Settings: React.FC = () => {
         household: householdSettings,
         members: safeMembers,
         habits,
-        transactions,
+        transactions: txList,
         buckets,
         calendarItems,
         meals,
@@ -205,9 +200,9 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleExportCsv = () => {
+  const doExportCsv = (txList: Transaction[]) => {
     try {
-      if (!transactions || transactions.length === 0) {
+      if (txList.length === 0) {
         toast.error('No transactions to export');
         return;
       }
@@ -215,7 +210,7 @@ const Settings: React.FC = () => {
       // Flatten transactions for CSV
       // Note: Only exporting core fields to keep CSV simple.
       // Power users can use JSON export for full data including isRecurring, autoCategorized, etc.
-      const flatTransactions = transactions.map(tx => ({
+      const flatTransactions = txList.map(tx => ({
         Date: tx.date,
         Merchant: tx.merchant,
         Amount: tx.amount,
@@ -232,6 +227,28 @@ const Settings: React.FC = () => {
       toast.error('Failed to generate CSV');
     }
   };
+
+  // Exports must include the FULL transaction history, but the household context
+  // only keeps the recent window live. Pull every older transaction first (a
+  // no-op when nothing is windowed), then export the complete list it returns.
+  const requestExport = async (kind: 'json' | 'csv') => {
+    let txList = transactions;
+    if (hasMoreTransactions) {
+      toast.loading('Loading full transaction history…', { id: 'export-load' });
+      txList = await loadAllTransactions();
+      toast.dismiss('export-load');
+    }
+    if (kind === 'json') doExportJson(txList);
+    else doExportCsv(txList);
+  };
+
+  if (!householdSettings) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-brand-900 flex items-center justify-center pb-24">
+        <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-brand-900 pb-24 px-4 pt-6">
@@ -542,8 +559,9 @@ const Settings: React.FC = () => {
 
             <div className="space-y-3">
               <button
-                onClick={handleExportJson}
-                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group"
+                onClick={() => requestExport('json')}
+                disabled={isLoadingOlderTransactions}
+                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group disabled:opacity-60"
                 aria-label="Export full household data backup as JSON file"
               >
                 <div className="flex items-center gap-4">
@@ -559,8 +577,9 @@ const Settings: React.FC = () => {
               </button>
 
               <button
-                onClick={handleExportCsv}
-                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group"
+                onClick={() => requestExport('csv')}
+                disabled={isLoadingOlderTransactions}
+                className="w-full flex items-center justify-between p-4 bg-slate-50/50 rounded-xl hover:bg-white hover:shadow-md border border-transparent hover:border-slate-100 transition-all group disabled:opacity-60"
                 aria-label="Export transaction history as CSV file"
               >
                 <div className="flex items-center gap-4">

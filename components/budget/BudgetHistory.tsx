@@ -3,7 +3,7 @@ import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { BucketPeriodSnapshot } from '../../types/schema';
 import { format, parseISO } from 'date-fns';
 import { roundMoney } from '../../utils/money';
-import { ChevronDown, ChevronUp, History, Download } from 'lucide-react';
+import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react';
 import Card from '../ui/Card';
 import { Button } from '../ui/Button';
 import { generateCsvExport } from '../../utils/exportUtils';
@@ -21,7 +21,12 @@ interface PeriodGroup {
 }
 
 const BudgetHistory: React.FC = () => {
-  const { bucketHistory } = useFinance();
+  const {
+    bucketHistory,
+    hasMoreBucketHistory,
+    isLoadingOlderBucketHistory,
+    loadAllBucketHistory,
+  } = useFinance();
   const [expandedPeriodId, setExpandedPeriodId] = useState<string | null>(null);
 
   const historyGroups = useMemo(() => {
@@ -225,6 +230,21 @@ const BudgetHistory: React.FC = () => {
           </Card>
         );
       }))}
+
+      {/* Load older periods beyond the live window */}
+      {hasMoreBucketHistory && historyGroups.length > 0 && (
+        <div className="pt-2 flex justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadAllBucketHistory}
+            disabled={isLoadingOlderBucketHistory}
+            leftIcon={isLoadingOlderBucketHistory ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
+          >
+            {isLoadingOlderBucketHistory ? 'Loading…' : 'Load older periods'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

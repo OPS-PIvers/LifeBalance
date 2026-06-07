@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useMeals, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
@@ -40,11 +40,18 @@ const MealPlanTab: React.FC = () => {
     addMealPlanItem,
     updateMealPlanItem,
     deleteMealPlanItem,
+    ensureMealPlanWeek,
   } = useMeals();
   const { householdId } = useHouseholdCore();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // The meal-plan listener only keeps the current week ± 1 live; fetch any other
+  // week the user navigates to on demand.
+  useEffect(() => {
+    ensureMealPlanWeek(selectedDate);
+  }, [selectedDate, ensureMealPlanWeek]);
 
   // Per-meal action sheet (replaces the cluttered inline icon buttons)
   const [actionSheetItem, setActionSheetItem] = useState<MealPlanItem | null>(null);
