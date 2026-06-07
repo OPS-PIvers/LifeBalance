@@ -174,26 +174,30 @@ describe('habitLogic', () => {
         expect(result?.updatedHabit.completedDates).not.toContain(today);
       });
 
-      it('applies multiplier to incremental points', () => {
-        // Streak of 7 days (including today if we consider it completed)
-        // Ideally streak calculation looks at history.
-        // Let's mock a history of 6 days + today
-        const history = [];
-        for (let i=0; i<6; i++) { // 0 to 5 days ago
-             // Note: calculateStreak in the function uses the *passed* habit.completedDates
-             // before modification to calculate multiplier?
-             // Let's check source:
-             // const currentStreak = calculateStreak(habit.completedDates);
-             // const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
-             history.push(format(subDays(new Date(), i+1), 'yyyy-MM-dd'));
+      it('applies multiplier to incremental points — 6-day history gives 7-day new streak (2.0x)', () => {
+        // History: 6 consecutive days ending yesterday (days 1–6 ago).
+        // Today is NOT yet in completedDates when the toggle is called.
+        // After the fix, the multiplier is computed from the PROSPECTIVE streak that
+        // includes today → streak becomes 7 → 2.0x.
+        const history: string[] = [];
+        for (let i = 1; i <= 6; i++) {
+          history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
         }
 
         const habit = { ...baseHabit, completedDates: history, streakDays: 6 };
-        // Current streak based on history (yesterday back to 6 days ago) = 6
-        // So multiplier should be 1.5 (streak >= 3)
-        // Wait: < 7 is 1.5. >= 7 is 2.0.
-        // 6 days streak => 1.5x
+        const result = processToggleHabit(habit, 'up');
+        expect(result?.multiplier).toBe(2.0);
+        expect(result?.pointsChange).toBe(20); // 10 * 2.0
+      });
 
+      it('applies multiplier to incremental points — 2-day history gives 3-day new streak (1.5x)', () => {
+        // History: 2 consecutive days ending yesterday.
+        // Including today → streak = 3 → 1.5x.
+        const history = [
+          format(subDays(new Date(), 1), 'yyyy-MM-dd'),
+          format(subDays(new Date(), 2), 'yyyy-MM-dd'),
+        ];
+        const habit = { ...baseHabit, completedDates: history, streakDays: 2 };
         const result = processToggleHabit(habit, 'up');
         expect(result?.multiplier).toBe(1.5);
         expect(result?.pointsChange).toBe(15); // 10 * 1.5
@@ -250,6 +254,88 @@ describe('habitLogic', () => {
         expect(result?.updatedHabit.count).toBe(3);
         expect(result?.pointsChange).toBe(0);
         expect(result?.updatedHabit.completedDates).toContain(today);
+      });
+
+      describe('streak multiplier applied on correct day (off-by-one bug fix)', () => {
+        // Uses a threshold habit with targetCount=1, basePoints=100 so maths are easy.
+        const singleStepHabit: Habit = {
+          ...baseHabit,
+          scoringType: 'threshold',
+          targetCount: 1,
+          basePoints: 100,
+        };
+
+        it('day-1 completion (no prior history) gets 1.0x multiplier', () => {
+          const habit = { ...singleStepHabit, completedDates: [] };
+          const result = processToggleHabit(habit, 'up');
+          expect(result?.multiplier).toBe(1.0);
+          expect(result?.pointsChange).toBe(100);
+        });
+
+        it('day-2 completion (1 day history) gets 1.0x multiplier', () => {
+          const history = [format(subDays(new Date(), 1), 'yyyy-MM-dd')];
+          const habit = { ...singleStepHabit, completedDates: history };
+          const result = processToggleHabit(habit, 'up');
+          // new streak = 2 — below the 3-day threshold → still 1.0x
+          expect(result?.multiplier).toBe(1.0);
+          expect(result?.pointsChange).toBe(100);
+        });
+
+        it('day-3 completion (2-day history) gets 1.5x multiplier', () => {
+          const history = [
+            format(subDays(new Date(), 1), 'yyyy-MM-dd'),
+            format(subDays(new Date(), 2), 'yyyy-MM-dd'),
+          ];
+          const habit = { ...singleStepHabit, completedDates: history };
+          const result = processToggleHabit(habit, 'up');
+          // new streak = 3 → 1.5x (previously the bug made this return 1.0x)
+          expect(result?.multiplier).toBe(1.5);
+          expect(result?.pointsChange).toBe(150);
+        });
+
+        it('day-6 completion (5-day history) gets 1.5x multiplier', () => {
+          const history: string[] = [];
+          for (let i = 1; i <= 5; i++) {
+            history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
+          }
+          const habit = { ...singleStepHabit, completedDates: history };
+          const result = processToggleHabit(habit, 'up');
+          // new streak = 6 → still 1.5x
+          expect(result?.multiplier).toBe(1.5);
+          expect(result?.pointsChange).toBe(150);
+        });
+
+        it('day-7 completion (6-day history) gets 2.0x multiplier', () => {
+          const history: string[] = [];
+          for (let i = 1; i <= 6; i++) {
+            history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
+          }
+          const habit = { ...singleStepHabit, completedDates: history };
+          const result = processToggleHabit(habit, 'up');
+          // new streak = 7 → 2.0x (previously the bug made this return 1.5x)
+          expect(result?.multiplier).toBe(2.0);
+          expect(result?.pointsChange).toBe(200);
+        });
+
+        it('toggle-down from completed today uses OLD streak (no regression)', () => {
+          // 7-day streak: today + 6 days prior.
+          const history: string[] = [today];
+          for (let i = 1; i <= 6; i++) {
+            history.push(format(subDays(new Date(), i), 'yyyy-MM-dd'));
+          }
+          const habit = {
+            ...singleStepHabit,
+            count: 1,
+            totalCount: 1,
+            completedDates: history,
+            streakDays: 7,
+          };
+          const result = processToggleHabit(habit, 'down');
+          // Removing today → old streak was 7 → 2.0x removed
+          expect(result?.multiplier).toBe(2.0);
+          expect(result?.pointsChange).toBe(-200);
+          expect(result?.updatedHabit.completedDates).not.toContain(today);
+        });
       });
     });
   });
