@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSafeToSpend, findNextPaycheckDate } from './safeToSpendCalculator';
-import { Account, BudgetBucket, CalendarItem, Transaction } from '@/types/schema';
+import { Account, BudgetBucket, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { addDays, format, subDays } from 'date-fns';
 
 describe('findNextPaycheckDate', () => {
@@ -931,5 +931,47 @@ describe('calculateSafeToSpend', () => {
 
     // 5000 - 150 (pending, included because no period filter) = 4850
     expect(result).toBe(4850);
+  });
+
+  it('(f) a pending_review INCOME transaction does NOT reduce STS', () => {
+    // Income is money coming IN; a pending deposit must never be subtracted
+    // from the checking balance (regression guard for the income-exclusion fix).
+    const transactions: Transaction[] = [
+      {
+        id: 'income-tx',
+        amount: 2000,
+        merchant: 'Employer',
+        category: INCOME_CATEGORY,
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      },
+      {
+        id: 'expense-tx',
+        amount: 60,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      },
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      [],
+      [],
+      lastPaycheckDate,
+      transactions
+    );
+
+    // 5000 - 60 (pending expense only; the 2000 pending income is excluded) = 4940
+    expect(result).toBe(4940);
   });
 });

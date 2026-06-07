@@ -1,4 +1,4 @@
-import { Account, CalendarItem, BudgetBucket, Transaction } from '@/types/schema';
+import { Account, CalendarItem, BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { sumMoney, subtractMoney } from '@/utils/money';
@@ -188,10 +188,8 @@ export interface SafeToSpendBreakdown {
   /** Unpaid bills from this paycheck to the next (bucket-covered bills excluded). */
   unpaidBills: number;
   /**
-   * Sum of current-period pending_review transactions deducted from available funds.
-   * Only transactions with status === 'pending_review' are included. When
-   * currentPeriodId is set, only transactions whose payPeriodId matches are counted;
-   * otherwise all pending_review transactions are included.
+   * Sum of current-period pending_review *spend* deducted from available funds.
+   * See {@link sumPendingSpend} for the exact rule (income excluded; period-scoped).
    */
   pendingSpend: number;
   /** checkingBalance - unpaidBills - pendingSpend. */
@@ -199,6 +197,36 @@ export interface SafeToSpendBreakdown {
   /** Date of the next paycheck bounding the range, or null if none found. */
   nextPaycheckDate: string | null;
 }
+
+/**
+ * Sum the current-period pending (un-cleared) *spend*.
+ *
+ * - Only `pending_review` transactions count (verified spend is already
+ *   reflected in the manually-entered checking balance).
+ * - Income transactions (`category === INCOME_CATEGORY`) are excluded: they are
+ *   money coming IN, so subtracting them would wrongly lower safe-to-spend.
+ *   This mirrors how income is excluded from spend totals elsewhere
+ *   (e.g. BudgetBuckets, bucketSpentCalculator).
+ * - When `currentPeriodId` is set, only transactions in that pay period count;
+ *   otherwise all pending_review spend counts. (Matches bucketSpentCalculator.)
+ *
+ * Exported so display surfaces (e.g. SafeToSpendModal) can itemize the same
+ * value the canonical formula subtracts — one rule, one source of truth.
+ */
+export const sumPendingSpend = (
+  transactions: Transaction[],
+  currentPeriodId: string = ''
+): number =>
+  sumMoney(
+    transactions
+      .filter(tx => {
+        if (tx.status !== 'pending_review') return false;
+        if (tx.category === INCOME_CATEGORY) return false;
+        if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
+        return true;
+      })
+      .map(tx => tx.amount)
+  );
 
 /**
  * Breakdown variant using pre-expanded calendar items (memo-friendly).
@@ -222,17 +250,8 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
     accounts.filter(a => a.type === 'checking').map(a => a.balance)
   );
 
-  // 2. Pending spend: sum of current-period pending_review transactions.
-  //    When currentPeriodId is set, restrict to transactions in that period.
-  const pendingSpend = sumMoney(
-    transactions
-      .filter(tx => {
-        if (tx.status !== 'pending_review') return false;
-        if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
-        return true;
-      })
-      .map(tx => tx.amount)
-  );
+  // 2. Pending spend: current-period pending_review spend (income excluded).
+  const pendingSpend = sumPendingSpend(transactions, currentPeriodId);
 
   // 3. Without paycheck tracking, the full checking balance (minus pending) is available.
   if (!currentPeriodId) {

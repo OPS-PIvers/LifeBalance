@@ -15,18 +15,19 @@ const currency = (n: number) =>
  * (Checking − Unpaid bills) so the number is trustworthy, not magic.
  */
 export const SafeToSpendHero: React.FC = () => {
-  const { accounts, buckets, calendarItems, currentPeriodId, safeToSpendBreakdown: contextBreakdown } = useFinance();
+  const { accounts, buckets, calendarItems, currentPeriodId, transactions, safeToSpendBreakdown: contextBreakdown } = useFinance();
   const [expanded, setExpanded] = useState(false);
 
   // When the context provides a memoized breakdown (Firebase provider), use it directly
   // to avoid re-expanding calendar items every render. Fall back to local calculation
-  // in test mode where the mock provider does not supply it.
+  // in test mode where the mock provider does not supply it. Pass `transactions` so the
+  // fallback also folds in pending spend (otherwise pendingSpend would always be 0 here).
   const localBreakdown = useMemo(
     () =>
       contextBreakdown === undefined
-        ? calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId)
+        ? calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId, transactions)
         : null,
-    [contextBreakdown, accounts, calendarItems, buckets, currentPeriodId]
+    [contextBreakdown, accounts, calendarItems, buckets, currentPeriodId, transactions]
   );
 
   const breakdown = contextBreakdown ?? localBreakdown!;
