@@ -1,6 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
 import { ParsedTransaction } from '../../types/ui';
 import { BudgetBucket } from '../../types/schema';

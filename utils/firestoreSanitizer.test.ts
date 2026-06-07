@@ -8,7 +8,7 @@ describe('sanitizeFirestoreData', () => {
   });
 
   it('converts undefined values to null', () => {
-    const input = { a: 1, b: undefined, c: 'test' };
+    const input: Record<string, unknown> = { a: 1, b: undefined, c: 'test' };
     const output = sanitizeFirestoreData(input);
     expect(output).toEqual({ a: 1, b: null, c: 'test' });
   });
@@ -26,7 +26,7 @@ describe('sanitizeFirestoreData', () => {
   });
 
   it('handles nested objects', () => {
-    const input = { user: { name: ' test ', age: undefined } };
+    const input: Record<string, unknown> = { user: { name: ' test ', age: undefined } };
     const output = sanitizeFirestoreData(input);
     expect(output).toEqual({ user: { name: 'test', age: null } });
   });

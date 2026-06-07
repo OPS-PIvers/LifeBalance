@@ -21,7 +21,8 @@ import {
   QuickStockList,
   YearlyGoal,
   BucketPeriodSnapshot,
-  Household
+  Household,
+  FreezeBank
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -399,9 +400,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];
-  const primaryYearlyGoal = null;
+  const primaryYearlyGoal: YearlyGoal | null = null;
   const rewardsInventory = rewards;
-  const freezeBank = null;
+  const freezeBank: FreezeBank | null = null;
   const isGeneratingInsight = false;
   const householdSettings = {
     id: 'test-household-id',

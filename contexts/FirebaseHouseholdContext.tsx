@@ -953,6 +953,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const now = new Date();
       const today = format(now, 'yyyy-MM-dd');
       const currentPoints = householdSettings.points;
+      if (!currentPoints) return;
 
       // Calculate what points SHOULD be based on actual habit completions
       const correctDailyPoints = calculatePointsForDate(habits, today);

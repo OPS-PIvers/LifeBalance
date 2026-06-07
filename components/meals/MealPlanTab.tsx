@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
@@ -66,6 +66,9 @@ const MealPlanTab: React.FC = () => {
   const [editingPlanItemId, setEditingPlanItemId] = useState<string | null>(null);
   const [mealType, setMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('dinner');
   const [targetDate, setTargetDate] = useState<string | null>(null);
+
+  // O(1) meal lookup — avoids repeated O(n) meals.find() calls during render
+  const mealsById = useMemo(() => new Map(meals.map(m => [m.id, m])), [meals]);
 
   const handleOpenIngredientSelector = (name: string, ingredients: MealIngredient[], mealId?: string) => {
       setIngredientSelectorData({ name, ingredients, mealId });
@@ -189,7 +192,7 @@ const MealPlanTab: React.FC = () => {
 
     weekPlanItems.forEach(item => {
         if (!item.mealId) return;
-        const meal = meals.find(m => m.id === item.mealId);
+        const meal = mealsById.get(item.mealId);
         if (meal && meal.ingredients && meal.ingredients.length > 0) {
             meal.ingredients.forEach(ing => {
                 // Deduplicate by normalized name
@@ -327,7 +330,7 @@ const MealPlanTab: React.FC = () => {
       });
 
       setTargetDate(planItem.date);
-      setEditingMealId(planItem.mealId); // If it exists
+      setEditingMealId(planItem.mealId ?? null); // If it exists
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
@@ -368,7 +371,7 @@ const MealPlanTab: React.FC = () => {
       // 1. Handle Meal Library (Create or Update)
       if (mealId) {
           // Update existing meal definition
-           const existingMeal = meals.find(m => m.id === mealId);
+           const existingMeal = mealsById.get(mealId);
            await updateMeal({
                id: mealId,
                name: currentMeal.name!,
@@ -539,14 +542,14 @@ const MealPlanTab: React.FC = () => {
 
   // Action-sheet wrappers: run the existing handler, then close the sheet.
   const sheetView = (planItem: MealPlanItem) => {
-    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
+    const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : null;
     if (linkedMeal) setViewingMeal({ meal: linkedMeal, planItem });
     setActionSheetItem(null);
   };
   const sheetMoveTomorrow = (planItem: MealPlanItem) => { handleMoveToTomorrow(planItem); setActionSheetItem(null); };
   const sheetDuplicate = (planItem: MealPlanItem) => { handleDuplicatePlanItem(planItem); setActionSheetItem(null); };
   const sheetEdit = (planItem: MealPlanItem) => {
-    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : undefined;
+    const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : undefined;
     handleEditMealPlanItem(planItem, linkedMeal);
     setActionSheetItem(null);
   };
@@ -691,7 +694,7 @@ const MealPlanTab: React.FC = () => {
         {dayMeals.length > 0 ? (
             <div className="space-y-2.5">
                 {dayMeals.map((planItem) => {
-                    const linkedMeal = planItem.mealId ? meals.find(m => m.id === planItem.mealId) : null;
+                    const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : null;
                     const mealName = planItem.mealName || linkedMeal?.name || 'Untitled meal';
                     const isCooked = planItem.isCooked;
                     const typeMeta = MEAL_TYPE_META[planItem.type] || MEAL_TYPE_META.dinner;
@@ -775,7 +778,7 @@ const MealPlanTab: React.FC = () => {
       {/* Per-meal action sheet */}
       {actionSheetItem && (() => {
         const item = actionSheetItem;
-        const hasRecipe = !!(item.mealId && meals.find(m => m.id === item.mealId));
+        const hasRecipe = !!(item.mealId && mealsById.get(item.mealId));
         const actionClass = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left font-semibold transition-colors";
         return (
           <Drawer

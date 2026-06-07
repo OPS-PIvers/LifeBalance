@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useInsightActions } from './useInsightActions';
+import { CreateTodoPayload } from '../types/schema';
 import * as HouseholdContext from '../contexts/FirebaseHouseholdContext';
 import toast from 'react-hot-toast';
 
@@ -154,7 +155,7 @@ describe('useInsightActions', () => {
     const action = {
       type: 'create_todo' as const,
       label: 'New Task',
-      payload: null,
+      payload: null as unknown as CreateTodoPayload,
     };
 
     await act(async () => {

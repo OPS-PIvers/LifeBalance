@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '../../types/schema';

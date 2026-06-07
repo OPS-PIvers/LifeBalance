@@ -6,6 +6,12 @@ import { db } from "@/firebase.config";
 import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
 
+/**
+ * Single source of truth for the Gemini model name.
+ * This is a preview model — bump the string here when a stable release is available.
+ */
+export const GEMINI_MODEL = 'gemini-3-flash-preview';
+
 // Initialize Gemini Client
 // Uses Vite environment variable for the API key, falls back to process.env for testing
 const apiKey =
@@ -241,7 +247,7 @@ async function generateJsonContent<T>(
   promptOrParts: string | Part[],
   schema: Schema,
   _aiClient?: Pick<typeof ai, 'models'>,
-  modelName: string = 'gemini-3-flash-preview'
+  modelName: string = GEMINI_MODEL
 ): Promise<T> {
   validateApiKey();
 
@@ -932,7 +938,7 @@ export const analyzeHabitPoints = async (
         }
       },
       _aiClient,
-      'gemini-3-flash-preview' // Explicitly specify model
+      GEMINI_MODEL // Explicitly specify model
     );
 
     // 2. Validate and Post-process Results
@@ -1160,7 +1166,7 @@ If no items found, return {"items": []}`;
           required: ["items"]
         },
         _aiClient,
-        'gemini-3-flash-preview'
+        GEMINI_MODEL
       );
       return { ...result, detectedType: 'shopping', confidence: 1 };
     }
@@ -1205,7 +1211,7 @@ If no tasks found, return {"tasks": []}`;
           required: ["tasks"]
         },
         _aiClient,
-        'gemini-3-flash-preview'
+        GEMINI_MODEL
       );
       return { ...result, detectedType: 'todo', confidence: 1 };
     }
@@ -1247,7 +1253,7 @@ If no amount found, return { "error": "No amount found" }`;
           }
         },
         _aiClient,
-        'gemini-3-flash-preview'
+        GEMINI_MODEL
       );
       return { ...result, detectedType: 'expense', confidence: 1 };
     }
@@ -1313,7 +1319,7 @@ If no amount found, return { "error": "No amount found" }`;
         required: ["detectedType", "confidence"]
       },
       _aiClient,
-      'gemini-3-flash-preview'
+      GEMINI_MODEL
     );
 
   } catch (error) {
@@ -1410,7 +1416,7 @@ export const reorganizeHabits = async (
         required: ["habits", "reasoning"]
       },
       _aiClient,
-      'gemini-3-flash-preview'
+      GEMINI_MODEL
     );
 
   } catch (error) {
@@ -1475,7 +1481,7 @@ export const parseRecipe = async (
         required: ["name", "ingredients", "instructions", "tags"]
       },
       _aiClient,
-      'gemini-3-flash-preview'
+      GEMINI_MODEL
     );
   } catch (error) {
     console.error("Gemini Recipe Parse Error:", error);
@@ -1646,7 +1652,7 @@ export const generateWeeklyPlan = async (
         required: ["meals", "items"],
       },
       _aiClient,
-      'gemini-3-flash-preview'
+      GEMINI_MODEL
     );
 
     // Normalize the AI's store array into the WeeklyPlan record + order.

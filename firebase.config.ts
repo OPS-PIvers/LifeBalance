@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore';
 import { getMessaging, type Messaging } from 'firebase/messaging';
 
 // Fallback to mock config if env vars are missing (for Test Mode/CI)
@@ -48,7 +48,20 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Enable Firestore offline persistence (IndexedDB) with multi-tab support.
+// Falls back to plain getFirestore if IndexedDB is unavailable (SSR, private
+// browsing, some CI environments) so the app never hard-crashes.
+let db: Firestore;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+} catch (e) {
+  console.warn('Firestore persistence unavailable, falling back to default cache.', e);
+  db = getFirestore(app);
+}
+export { db };
 
 // Initialize Messaging with conditional check for browser environment
 // to prevent errors in SSR, tests, or unsupported contexts.

@@ -3,7 +3,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
     return {
       server: {
         port: 3000,
@@ -20,6 +20,11 @@ export default defineConfig(() => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      // In production builds, tree-shake noisy debug logging while keeping
+      // console.warn and console.error (they carry real diagnostics).
+      esbuild: command === 'build' ? {
+        pure: ['console.log', 'console.debug', 'console.info'],
+      } : {},
       build: {
         rollupOptions: {
           output: {

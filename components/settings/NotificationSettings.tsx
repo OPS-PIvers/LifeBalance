@@ -71,7 +71,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
   useEffect(() => {
     if (currentPreferences) {
-      setPreferences(prev => ({
+      setPreferences(_prev => ({
         ...currentPreferences,
         // Preserve existing timezone or fallback to browser's
         timezone: currentPreferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone

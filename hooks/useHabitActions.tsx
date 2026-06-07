@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   collection,
   doc,
@@ -162,8 +162,11 @@ export const useHabitActions = (
     const result = processToggleHabit(effectiveHabit, direction);
     if (!result) return;
 
-    // Update habit in Firestore
-    await updateDoc(doc(db, `households/${householdId}/habits`, id), {
+    // Atomically commit habit state + points in a single batch so both writes
+    // succeed together or neither does (prevents points/habit desync on crash).
+    const batch = writeBatch(db);
+
+    batch.update(doc(db, `households/${householdId}/habits`, id), {
       count: result.updatedHabit.count,
       totalCount: result.updatedHabit.totalCount,
       completedDates: result.updatedHabit.completedDates,
@@ -171,15 +174,19 @@ export const useHabitActions = (
       lastUpdated: serverTimestamp(),
     });
 
-    // Update household points (shared across all members)
+    // Include points update in the same batch (only when points actually change)
     if (result.pointsChange !== 0) {
-      await updateDoc(doc(db, `households/${householdId}`), {
+      batch.update(doc(db, `households/${householdId}`), {
         'points.daily': increment(result.pointsChange),
         'points.weekly': increment(result.pointsChange),
         'points.total': increment(result.pointsChange),
       });
+    }
 
-      // Toast feedback
+    await batch.commit();
+
+    // Toast feedback after the batch commits successfully
+    if (result.pointsChange !== 0) {
       const sign = result.pointsChange > 0 ? '+' : '';
       toast(
         <div className="flex items-center gap-2">
@@ -380,25 +387,37 @@ export const useHabitActions = (
       const submissionsSnap = await getDocs(submissionsQuery);
       const isLastForDate = submissionsSnap.size === 1;
 
-      // Step 3: Update habit's completedDates if removing last submission for date
-      const updates: Partial<Habit> = {
+      // Steps 3–5: Build a single batch so the submission delete, habit update,
+      // and points reversal all commit atomically.  A runTransaction cannot be
+      // used here because the isLastForDate check requires a collection query,
+      // and Firestore transactions only accept DocumentReference reads — not
+      // arbitrary queries.  Using a writeBatch still gives us atomicity for the
+      // writes; the query-then-batch pattern is the standard Firestore approach
+      // when the condition relies on an aggregation query.
+      const deleteBatch = writeBatch(db);
+
+      // Habit aggregate update (step 3)
+      const updatedCompletedDates = isLastForDate
+        ? habit.completedDates.filter(d => d !== submission.date)
+        : habit.completedDates;
+
+      const habitUpdates: Record<string, unknown> = {
         count: Math.max(0, habit.count - submission.count),
         totalCount: Math.max(0, habit.totalCount - submission.count),
-        lastUpdated: serverTimestamp() as unknown as string,
+        lastUpdated: serverTimestamp(),
       };
 
       if (isLastForDate) {
-        const updatedCompletedDates = habit.completedDates.filter(d => d !== submission.date);
-        updates.completedDates = updatedCompletedDates;
-        updates.streakDays = calculateStreak(updatedCompletedDates);
+        habitUpdates['completedDates'] = updatedCompletedDates;
+        habitUpdates['streakDays'] = calculateStreak(updatedCompletedDates);
       }
 
-      await updateDoc(doc(db, `households/${householdId}/habits`, habitId), updates);
+      deleteBatch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
 
-      // Step 4: Delete submission document
-      await deleteDoc(submissionRef);
+      // Submission delete (step 4)
+      deleteBatch.delete(submissionRef);
 
-      // Step 5: Reverse points
+      // Points reversal (step 5)
       const today = format(new Date(), 'yyyy-MM-dd');
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
@@ -414,7 +433,9 @@ export const useHabitActions = (
         pointUpdates['points.weekly'] = increment(-submission.pointsEarned);
       }
 
-      await updateDoc(doc(db, `households/${householdId}`), pointUpdates);
+      deleteBatch.update(doc(db, `households/${householdId}`), pointUpdates);
+
+      await deleteBatch.commit();
 
       toast.success('Submission deleted');
     } catch (error) {

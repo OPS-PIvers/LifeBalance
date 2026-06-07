@@ -20,6 +20,66 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
 import toast from 'react-hot-toast';
 
+interface FilterDropdownProps {
+  filterStore: string | null;
+  stores: { id: string; name: string }[];
+  onSelect: (name: string | null) => void;
+  onClose: () => void;
+}
+
+const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, onSelect, onClose }) => {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={dropdownRef}
+        role="listbox"
+        aria-label="Filter by store"
+        className="absolute top-full right-0 mt-2 w-48 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 dark:ring-white/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200"
+      >
+        <div className="max-h-60 scroll-contain-y">
+          <button
+            role="option"
+            aria-selected={!filterStore}
+            onClick={() => onSelect(null)}
+            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
+          >
+            All Items
+            {!filterStore && <Filter size={14} />}
+          </button>
+          {stores.map(store => (
+            <button
+              key={store.id}
+              role="option"
+              aria-selected={filterStore === store.name}
+              onClick={() => onSelect(store.name)}
+              className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
+            >
+              {store.name}
+              {filterStore === store.name && <Filter size={14} />}
+            </button>
+          ))}
+          {stores.length === 0 && (
+            <div className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No stores configured</div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
 const ShoppingListTab: React.FC = () => {
   const {
     shoppingList,
@@ -435,6 +495,7 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
+                    aria-label="Add item to shopping list"
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-brand-800 text-white rounded-xl hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors dark:bg-brand-600 dark:hover:bg-brand-500 dark:disabled:bg-slate-600"
                 >
                     <Plus size={20} />
@@ -466,6 +527,9 @@ const ShoppingListTab: React.FC = () => {
              <div className="relative flex-1">
                <button
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
+                  aria-expanded={isFilterOpen}
+                  aria-haspopup="listbox"
                   className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-xl shadow-sm text-xs font-medium transition-all ${
                     filterStore
                       ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-700/30 dark:border-brand-500/40 dark:text-brand-200'
@@ -477,39 +541,12 @@ const ShoppingListTab: React.FC = () => {
                </button>
 
                {isFilterOpen && (
-                 <>
-                   <div className="fixed inset-0 z-10" onClick={() => setIsFilterOpen(false)} />
-                   <div className="absolute top-full right-0 mt-2 w-48 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 dark:ring-white/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200">
-                     <div className="max-h-60 scroll-contain-y">
-                        <button
-                          onClick={() => {
-                            setFilterStore(null);
-                            setIsFilterOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
-                        >
-                          All Items
-                          {!filterStore && <Filter size={14} />}
-                        </button>
-                        {stores.map(store => (
-                          <button
-                            key={store.id}
-                            onClick={() => {
-                              setFilterStore(store.name);
-                              setIsFilterOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
-                          >
-                            {store.name}
-                            {filterStore === store.name && <Filter size={14} />}
-                          </button>
-                        ))}
-                        {stores.length === 0 && (
-                          <div className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No stores configured</div>
-                        )}
-                     </div>
-                   </div>
-                 </>
+                 <FilterDropdown
+                   filterStore={filterStore}
+                   stores={stores}
+                   onSelect={(name) => { setFilterStore(name); setIsFilterOpen(false); }}
+                   onClose={() => setIsFilterOpen(false)}
+                 />
                )}
              </div>
         </div>

@@ -128,6 +128,7 @@ export const processToggleHabit = (
   let newTotalCount = habit.totalCount;
   let newCompletedDates = [...habit.completedDates];
   let pointsChange = 0;
+  let multiplier = 1.0;
 
   // 1. Update Counts
   if (direction === 'up') {
@@ -143,8 +144,6 @@ export const processToggleHabit = (
   }
 
   // 2. Determine if Scorable (Points + Completion)
-  const currentStreak = calculateStreak(habit.completedDates);
-  const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
   const sign = habit.type === 'positive' ? 1 : -1;
 
   let isCompletedNow = false;
@@ -152,16 +151,27 @@ export const processToggleHabit = (
 
   // Logic Split by Scoring Type
   if (habit.scoringType === 'incremental') {
+    // Completion: Hit target (or 1 if 0)
+    const target = habit.targetCount > 0 ? habit.targetCount : 1;
+    isCompletedNow = newCount >= target;
+    wasCompletedBefore = habit.count >= target;
+
+    // For the multiplier on incremental habits, use the streak that will exist
+    // after this action: if toggling up and completing today for the first time,
+    // include today in the prospective dates so the new streak drives the multiplier.
+    const prospectiveDates =
+      direction === 'up' && isCompletedNow && !habit.completedDates.includes(today)
+        ? [...habit.completedDates, today]
+        : habit.completedDates;
+    const prospectiveStreak = calculateStreak(prospectiveDates);
+    multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive');
+
     // Incremental: Points on every action
     if (direction === 'up') {
       pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else {
       pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
-    // Completion: Hit target (or 1 if 0)
-    const target = habit.targetCount > 0 ? habit.targetCount : 1;
-    isCompletedNow = newCount >= target;
-    wasCompletedBefore = habit.count >= target;
   } else {
     // Threshold: Points only when target hit
     const target = habit.targetCount;
@@ -169,10 +179,20 @@ export const processToggleHabit = (
     wasCompletedBefore = habit.count >= target;
 
     if (isCompletedNow && !wasCompletedBefore) {
-      // Just hit target -> Award Points
+      // Just hit target -> Award Points using the NEW streak (including today).
+      // Today is about to be added to completedDates; computing the streak from
+      // the prospective list ensures day-3 earns 1.5x and day-7 earns 2.0x on
+      // the correct day rather than one day late.
+      const prospectiveDates = habit.completedDates.includes(today)
+        ? habit.completedDates
+        : [...habit.completedDates, today];
+      const prospectiveStreak = calculateStreak(prospectiveDates);
+      multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive');
       pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
-      // Just lost target -> Remove Points
+      // Just lost target -> Remove Points using the OLD streak (today still present).
+      const currentStreak = calculateStreak(habit.completedDates);
+      multiplier = getMultiplier(currentStreak, habit.type === 'positive');
       pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
   }

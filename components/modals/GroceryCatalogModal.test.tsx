@@ -25,7 +25,7 @@ const mockHousehold = {
       lastPurchased: new Date().toISOString()
     }
   ],
-  shoppingList: [],
+  shoppingList: [] as unknown[],
   addShoppingItem: vi.fn(),
   updateGroceryCatalogItem: vi.fn(),
   deleteGroceryCatalogItem: vi.fn()

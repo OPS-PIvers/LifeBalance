@@ -80,7 +80,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
                 }`}
               >
                 {member.photoURL ? (
-                  <img src={member.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                  <img src={member.photoURL} alt={member.displayName ?? 'Member'} className="w-5 h-5 rounded-full" />
                 ) : (
                   <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-700 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-300">
                     {member.displayName?.charAt(0) ?? 'U'}

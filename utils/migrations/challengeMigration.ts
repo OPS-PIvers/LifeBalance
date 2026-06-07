@@ -1,5 +1,4 @@
-/* eslint-disable */
-import { collection, query, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { Challenge } from '@/types/schema';
 

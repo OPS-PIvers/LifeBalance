@@ -8,19 +8,35 @@ LifeBalance is a React-based household management application combining finance 
 
 ## Development Commands
 
+This project uses **pnpm** (`packageManager: pnpm@9.15.0`) — always use `pnpm`, not `npm`. It is a pnpm workspace with two packages: the root app and `functions/` (Firebase Cloud Functions). See [pnpm-workspace.yaml](pnpm-workspace.yaml).
+
+> ⚠️ A stray `package-lock.json` exists alongside `pnpm-lock.yaml`; do not run `npm install` (it would desync dependencies from what CI resolves via pnpm).
+
 ```bash
-# Install dependencies
-npm install
+# Install dependencies (root + functions workspace)
+pnpm install --frozen-lockfile
 
 # Run development server (http://localhost:3000)
-npm run dev
+pnpm dev
 
 # Build for production
-npm run build
+pnpm run build
 
 # Preview production build
-npm run preview
+pnpm preview
+
+# Lint: type-check (tsc --noEmit) + eslint
+pnpm lint          # root app
+pnpm lint:all      # root + functions (recursive)
+pnpm lint:fix      # auto-fix eslint issues
+
+# Tests (Vitest)
+pnpm test          # run once
+pnpm test:watch    # watch mode
+pnpm test:coverage # with coverage
 ```
+
+**Before pushing, all changes must pass `pnpm lint` and `pnpm test`.** CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs lint (root + functions), tests, and a production build on every PR to `main`.
 
 ## Environment Setup
 
@@ -65,6 +81,8 @@ This context provides:
 
 All data is persisted in **Firestore** with real-time synchronization across devices using Firebase's `onSnapshot` listeners.
 
+Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offline persistence** (`persistentLocalCache` + multi-tab manager), with a safe fallback to the default in-memory cache where IndexedDB is unavailable (SSR, private browsing, CI). This enables offline reads and faster cold starts for the PWA.
+
 ### Safe-to-Spend Logic
 
 The core financial metric (`safeToSpend`) is calculated as:
@@ -74,9 +92,10 @@ Checking Balance - Unpaid Bills (this month) - Remaining Budget Bucket Limits - 
 
 **Critical implementation details:**
 - Only checking accounts count as available funds (not savings or credit)
-- Bills covered by buckets are excluded to avoid double-counting
+- Bills covered by buckets are excluded to avoid double-counting. A bill is matched to a bucket by exact `CalendarItem.bucketId` when set; otherwise it falls back to whole-word token matching of the bucket name against the bill title (bucket names shorter than 3 chars are skipped to avoid false matches)
 - Pending transactions reduce both checking balance and bucket liabilities
-- Located in [contexts/HouseholdContext.tsx:258-308](contexts/HouseholdContext.tsx#L258-L308)
+- Money is summed in integer cents (`utils/money.ts`) to avoid floating-point drift
+- Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx)
 
 ### Habit Tracking System
 
@@ -85,9 +104,13 @@ Habits support two scoring modes:
 1. **Threshold**: Points awarded only when `targetCount` is reached (e.g., "Read 30 mins" = 1 completion)
 2. **Incremental**: Points on every action (e.g., "Late night snack" = -10 pts each time)
 
-**Streak Multipliers:**
+**Streak Multipliers** (the multiplier reflects the streak *including* the current day's completion):
 - 3-6 days: 1.5x points
 - 7+ days: 2.0x points
+
+**Atomicity:** Toggling a habit updates the habit document and the household points in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
+
+**Dates:** Calendar dates are stored as `yyyy-MM-dd` strings in the user's **local** timezone. Use `getLocalDateString()` from [utils/dateHelpers.ts](utils/dateHelpers.ts) to derive "today" — never `new Date().toISOString().split('T')[0]` (that returns the UTC day, which is wrong in the evening for western timezones).
 
 **Note:** Weather-sensitive bonuses are temporarily disabled. See [WEATHER_IMPLEMENTATION.md](WEATHER_IMPLEMENTATION.md) for future implementation plan.
 
@@ -95,12 +118,13 @@ Habits auto-reset based on their `period` (daily/weekly).
 
 ### Routing
 
-Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes defined in [App.tsx:21-26](App.tsx#L21-L26).
+Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes are defined in [App.tsx](App.tsx); pages are `React.lazy`-loaded for code-splitting. Current routes: `/login`, `/setup` (public); `/` (Dashboard), `/lists`, `/budget`, `/habits`, `/meals`, `/shopping`, `/todos`, `/settings`, `/migrate-submissions` (protected via `ProtectedRoute` + `MainLayout`). Each protected route is wrapped in its own `ErrorBoundary` keyed on pathname, so a crash on one page doesn't take down the whole app.
 
 ### External Services
 
 **Gemini API** ([services/geminiService.ts](services/geminiService.ts)):
-- **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts (model: `gemini-3-flash-preview`)
+- The model is defined once in the exported `GEMINI_MODEL` constant — change it there, not inline at call sites.
+- **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts
   - Returns: merchant, amount, category, date
 - **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
   - Returns: array of transactions with dates, descriptions, amounts
@@ -111,37 +135,52 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 
 ### Styling
 
-**Tailwind CSS** via CDN (configured in [index.html](index.html)):
+**Tailwind CSS** compiled via PostCSS at build time (not CDN):
+- Config in [tailwind.config.js](tailwind.config.js); PostCSS pipeline in [postcss.config.js](postcss.config.js); directives + custom utilities in [index.css](index.css)
 - Custom theme colors: `brand-*`, `money-*`, `habit-*`
-- Custom fonts: Inter (sans), JetBrains Mono (mono)
+- Custom fonts: Inter (sans), JetBrains Mono (mono), loaded via Google Fonts in [index.html](index.html)
 - Mobile-first with safe-area-inset support
-- No separate Tailwind config file; configuration embedded in HTML `<script>` tag
+- `clsx` + `tailwind-merge` for conditional/merged class names
 
 ### Component Organization
 
 ```
 components/
+  ├── analytics/    # Charts/analytics widgets (recharts; lazy-loaded)
   ├── auth/         # Authentication components (ProtectedRoute, HouseholdInviteCard)
   ├── budget/       # Budget-specific UI components
+  ├── dashboard/    # Dashboard widgets (SafeToSpendHero, action queue, etc.)
   ├── habits/       # Habit tracking UI components
-  ├── layout/       # TopToolbar, BottomNav
+  ├── layout/       # MainLayout, TopToolbar, BottomNav, OfflineBanner
   ├── meals/        # Meal planning components (MealPlanTab, ShoppingListTab)
-  └── modals/       # Modal dialogs for forms
+  ├── modals/       # Modal dialogs for forms
+  ├── settings/     # Settings sub-components (NotificationSettings, ThemeToggle)
+  └── ui/           # Reusable primitives (Button, Input, Card, Drawer, Skeleton, etc.)
 
-pages/              # Route-level page components
-  ├── Dashboard.tsx      # Main overview with AI insights
-  ├── Budget.tsx         # Finance management
-  ├── Habits.tsx         # Habit tracker
-  ├── MealsPage.tsx      # Meal planning and shopping
-  ├── Settings.tsx       # App settings and preferences
-  ├── Login.tsx          # Authentication
-  ├── HouseholdSetup.tsx # Household creation/joining
-  └── PlaceholderPage.tsx
+pages/              # Route-level page components (lazy-loaded in App.tsx)
+  ├── Dashboard.tsx        # Main overview with AI insights
+  ├── Budget.tsx           # Finance management
+  ├── Habits.tsx           # Habit tracker
+  ├── MealsPage.tsx        # Meal planning
+  ├── ShoppingPage.tsx     # Shopping list
+  ├── ToDosPage.tsx        # Shared household to-dos
+  ├── ListsPage.tsx        # Generic lists
+  ├── Settings.tsx         # App settings and preferences
+  ├── Login.tsx            # Authentication
+  ├── HouseholdSetup.tsx   # Household creation/joining
+  └── MigrateSubmissions.tsx # One-off data migration tool
 
-contexts/           # React Context providers (AuthContext, FirebaseHouseholdContext)
-services/           # External API integrations (authService, geminiService, householdService)
-types/              # TypeScript type definitions
-utils/              # Business logic utilities (safeToSpendCalculator, habitLogic, etc.)
+contexts/           # React Context providers (AuthContext, FirebaseHouseholdContext,
+                    #   ThemeContext, and Mock* providers used by Test Mode)
+hooks/              # Custom hooks (useHabitActions, useFocusTrap, useReducedMotion,
+                    #   useMidnightScheduler, useMediaQuery, etc.)
+services/           # External API integrations (authService, geminiService,
+                    #   householdService, notificationService)
+types/              # TypeScript type definitions (schema.ts)
+utils/              # Business logic utilities (safeToSpendCalculator, habitLogic,
+                    #   money, dateHelpers, bucketSpentCalculator, migrations/, etc.)
+data/               # Static seed data (presetHabits, groceryCategories, etc.)
+functions/          # Firebase Cloud Functions (separate pnpm package; e.g. quickAdd)
 ```
 
 ### Path Aliases
@@ -153,6 +192,14 @@ import TopToolbar from '@/components/layout/TopToolbar';
 ```
 
 Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.config.ts).
+
+## Testing
+
+Tests use **Vitest** with **@testing-library/react** and a `jsdom` environment (config in [vite.config.ts](vite.config.ts), setup in [vitest.setup.ts](vitest.setup.ts)). Test files live next to the code they cover as `*.test.ts(x)`. Business logic in `utils/` (safe-to-spend, habit scoring, money math, date helpers) is the most heavily covered — add/extend tests there when changing that logic. Run with `pnpm test`.
+
+## TypeScript
+
+The project compiles in **strict mode** — [tsconfig.json](tsconfig.json) enables `strict: true` plus `noUnusedLocals` and `noUnusedParameters`. `pnpm lint` runs `tsc --noEmit` first, so type errors fail the build. Write fully-typed code (see the no-suppressions policy below); for an unused parameter required by a signature, prefix it with `_`.
 
 ## Key Data Models
 
@@ -261,7 +308,7 @@ Suppressions are **ONLY** acceptable for:
 
 **Instead of `/* eslint-disable */`:**
 1. Remove the suppression
-2. Run `npm run lint` to see actual errors
+2. Run `pnpm lint` to see actual errors
 3. Fix each error individually
 4. If truly needed, use granular `eslint-disable-next-line` with justification
 
@@ -291,9 +338,10 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Status of each suppression (acceptable vs. needs fixing)
 - Action items for eliminating technical debt
 
-**Current stats:**
-- 38 files with blanket `/* eslint-disable */` - **ALL NEED FIXING**
-- 20+ inline suppressions - **MOST NEED REVIEW**
+**Current stats** (run `grep -rl "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
+- ~6 files with blanket `/* eslint-disable */` - **ALL NEED FIXING**
+- ~29 files with some form of `eslint-disable` (mostly the legitimate React Context/Hook export pattern) - **REVIEW WHEN TOUCHED**
+- 0 `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`
 
 #### Enforcement
 
@@ -340,7 +388,7 @@ LifeBalance includes a **secure test mode** specifically designed for AI coding 
 ### Activating Test Mode
 
 **Requirements:**
-1. Must be running in development mode (`npm run dev`)
+1. Must be running in development mode (`pnpm dev`)
 2. Must have `VITE_ENABLE_TEST_MODE=true` in your `.env.local` file
 3. Navigate to: `http://localhost:3000/#/login?test=true`
 
@@ -382,7 +430,7 @@ All context methods are fully implemented with **in-memory persistence**:
 echo "VITE_ENABLE_TEST_MODE=true" >> .env.local
 
 # 2. Start dev server
-npm run dev
+pnpm dev
 
 # 3. Navigate to test mode URL
 # Browser: http://localhost:3000/#/login?test=true
@@ -428,7 +476,7 @@ window.location.reload();
 **Verification:**
 ```bash
 # Build for production
-npm run build
+pnpm run build
 
 # Check bundle - mock code should NOT be present
 grep -r "MockAuthProvider" dist/   # Should return nothing

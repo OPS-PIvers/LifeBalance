@@ -7,7 +7,7 @@ const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors ${
+    `flex flex-col items-center justify-center w-full min-h-[44px] space-y-1 transition-colors ${
       isActive
         ? 'text-brand-800 dark:text-brand-100'
         : 'text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300'
@@ -27,7 +27,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <LayoutDashboard className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Home</span>
+                  <span className="text-xs font-medium">Home</span>
                 </>
               )}
             </NavLink>
@@ -35,7 +35,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Activity className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Habits</span>
+                  <span className="text-xs font-medium">Habits</span>
                 </>
               )}
             </NavLink>
@@ -50,7 +50,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Wallet className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Budget</span>
+                  <span className="text-xs font-medium">Budget</span>
                 </>
               )}
             </NavLink>
@@ -58,7 +58,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <List className={iconClass(isActive)} />
-                  <span className="text-xxs font-medium">Lists</span>
+                  <span className="text-xs font-medium">Lists</span>
                 </>
               )}
             </NavLink>

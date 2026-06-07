@@ -310,7 +310,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              <p className="text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
              </p>
-             <button onClick={() => setExpandedId(null)}><X size={14} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"/></button>
+             <button onClick={() => setExpandedId(null)} aria-label="Collapse item"><X size={14} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"/></button>
           </div>
 
           {isCalendarQueueItem(item) ? (

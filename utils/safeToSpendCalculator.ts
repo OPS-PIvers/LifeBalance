@@ -35,6 +35,68 @@ function findNextPaycheckFromExpanded(
 }
 
 /**
+ * Minimum number of characters a bucket name must have for name-based matching
+ * to be attempted. Short names like "Co" or "Gas" produce too many false positives
+ * against unrelated bill titles (e.g. "Bob's Gasoline Station").
+ */
+const BUCKET_NAME_MIN_MATCH_LENGTH = 3;
+
+/**
+ * Splits a string into lowercase word tokens, stripping punctuation.
+ * e.g. "Bob's Gasoline Station" → ["bob", "s", "gasoline", "station"]
+ */
+function tokenize(text: string): string[] {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t.length > 0);
+}
+
+/**
+ * Determine whether a calendar expense item is covered by any budget bucket.
+ *
+ * Matching rules (applied in order):
+ *  1. EXACT ID MATCH: if the item carries a `bucketId`, compare it directly to
+ *     bucket IDs — this is precise and bypasses all name heuristics.
+ *  2. WHOLE-WORD NAME MATCH (fallback): the bucket name (normalised to lowercase,
+ *     punctuation stripped) must appear as one or more consecutive whole words
+ *     inside the bill title's token list.
+ *     - Bucket names shorter than BUCKET_NAME_MIN_MATCH_LENGTH characters are
+ *       skipped to avoid short tokens ("Co", "Gas") matching unrelated bills.
+ *     - Only the bill→bucket direction is checked (bucket name found inside bill
+ *       title). The reverse direction (bill title inside bucket name) is dropped
+ *       because it is almost always wrong and was the primary source of false
+ *       exclusions.
+ */
+function isBillCoveredByBucket(item: CalendarItem, buckets: BudgetBucket[]): boolean {
+  // Strategy 1: precise id-based match (no false positives possible)
+  if (item.bucketId !== undefined) {
+    return buckets.some(b => b.id === item.bucketId);
+  }
+
+  // Strategy 2: whole-word name match
+  const titleTokens = tokenize(item.title);
+
+  return buckets.some(bucket => {
+    const bucketNormalized = bucket.name.toLowerCase().trim();
+    if (bucketNormalized.length < BUCKET_NAME_MIN_MATCH_LENGTH) {
+      // Too short to match reliably — skip.
+      return false;
+    }
+
+    // Tokenize the bucket name so multi-word bucket names (e.g. "Natural Gas")
+    // are matched as a phrase inside the bill title tokens.
+    const bucketTokens = tokenize(bucketNormalized);
+    if (bucketTokens.length === 0) return false;
+
+    // Slide a window of bucketTokens.length over titleTokens and check equality.
+    const windowSize = bucketTokens.length;
+    for (let i = 0; i <= titleTokens.length - windowSize; i++) {
+      const windowMatches = bucketTokens.every((bt, j) => titleTokens[i + j] === bt);
+      if (windowMatches) return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Helper to calculate unpaid bills within a date range, excluding bucket-covered items.
  *
  * @param expandedItems - Pre-expanded calendar items
@@ -49,27 +111,20 @@ function calculateUnpaidBillsInRange(
   endDate: Date,
   buckets: BudgetBucket[]
 ): number {
-  // ⚡ Bolt Optimization: Pre-calculate lowercased bucket names
-  // Prevents calling toLowerCase() N * M times inside the loop
-  const normalizedBuckets = buckets.map(b => b.name.toLowerCase());
-
   const billsInRange = expandedItems.filter(item => {
     const itemDate = parseISO(item.date);
-    const itemTitleLower = item.title.toLowerCase();
 
-    // Exclude bills covered by buckets to avoid double-counting
-    // Optimized check using pre-calculated bucket names
-    const isCoveredByBucket = normalizedBuckets.some(bucketName =>
-      itemTitleLower.includes(bucketName) ||
-      bucketName.includes(itemTitleLower)
-    );
+    // Exclude bills covered by buckets to avoid double-counting.
+    // Uses precise id-based matching when available, with whole-word name
+    // matching as a fallback. See isBillCoveredByBucket for full rule details.
+    const coveredByBucket = isBillCoveredByBucket(item, buckets);
 
     return (
       item.type === 'expense' &&
       !item.isPaid &&
       isAfter(itemDate, startDate) && // AFTER start date (exclusive)
       (isBefore(itemDate, endDate) || itemDate.getTime() === endDate.getTime()) && // Up to range end (inclusive)
-      !isCoveredByBucket
+      !coveredByBucket
     );
   });
 
