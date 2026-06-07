@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos } from '../../contexts/FirebaseHouseholdContext';
 import { Activity, Receipt, CheckSquare } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -13,7 +13,8 @@ interface ActivityItem {
 }
 
 export const ActivityFeedWidget: React.FC = () => {
-  const { transactions, todos } = useHousehold();
+  const { transactions } = useFinance();
+  const { todos } = useTodos();
 
   const recentActivity = useMemo(() => {
     const transactionActivities: ActivityItem[] = transactions

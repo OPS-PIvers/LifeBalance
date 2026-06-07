@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { roundMoney, sumMoney } from '../../utils/money';
 import { PieChart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const CategorySpendWidget: React.FC = () => {
-  const { transactions } = useHousehold();
+  const { transactions } = useFinance();
 
   const categoryStats = useMemo(() => {
     const now = new Date();

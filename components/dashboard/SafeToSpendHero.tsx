@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Wallet, Receipt, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '../../utils/safeToSpendCalculator';
 import { cn } from '../../utils/cn';
 import { haptic } from '../../utils/haptics';
@@ -15,7 +15,7 @@ const currency = (n: number) =>
  * (Checking − Unpaid bills) so the number is trustworthy, not magic.
  */
 export const SafeToSpendHero: React.FC = () => {
-  const { accounts, buckets, calendarItems, currentPeriodId, safeToSpendBreakdown: contextBreakdown } = useHousehold();
+  const { accounts, buckets, calendarItems, currentPeriodId, safeToSpendBreakdown: contextBreakdown } = useFinance();
   const [expanded, setExpanded] = useState(false);
 
   // When the context provides a memoized breakdown (Firebase provider), use it directly

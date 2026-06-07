@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useHouseholdCore } from '../../contexts/FirebaseHouseholdContext';
 import { useInsightActions } from '../../hooks/useInsightActions';
 import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
 import { CreateChallengePayload } from '@/types/schema';
@@ -16,7 +16,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
     refreshInsight,
     isGeneratingInsight,
     insightsHistory,
-  } = useHousehold();
+  } = useHouseholdCore();
 
   const { handleAction } = useInsightActions();
 
