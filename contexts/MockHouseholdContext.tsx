@@ -464,6 +464,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     apiKeys: [], // iOS Shortcuts - empty in test mode
     pendingItemsCount: 0, // Voice commands - always 0 in test mode
 
+    // Listener windowing / pagination — Test Mode keeps everything in memory,
+    // so there is never anything "older" to load. The helpers are no-ops and the
+    // flags report a fully-loaded state so the UI affordances stay hidden.
+    transactionWindowStart: null,
+    isLoadingOlderTransactions: false,
+    hasMoreTransactions: false,
+    loadOlderTransactions: async () => {},
+    loadAllTransactions: async () => transactions,
+    isLoadingOlderBucketHistory: false,
+    hasMoreBucketHistory: false,
+    loadAllBucketHistory: async () => {},
+    hasMoreInsights: false,
+    loadAllInsights: async () => {},
+    isLoadingOlderTodos: false,
+    hasMoreCompletedTodos: false,
+    loadOlderCompletedTodos: async () => {},
+    ensureMealPlanWeek: async () => {},
+
     // Operations
     addAccount,
     deleteAccount,
