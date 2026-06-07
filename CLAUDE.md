@@ -87,16 +87,15 @@ Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offl
 
 The core financial metric (`safeToSpend`) is calculated as:
 ```
-Checking Balance - Unpaid Bills (this period)
+Checking Balance - Unpaid Bills (this paycheck → next) - Pending Spend (this period)
 ```
 
 **Critical implementation details:**
 - Only checking accounts count as available funds (not savings or credit)
-- **Bucket limits are NOT subtracted** from `safeToSpend`. Bucket balances are surfaced for reference in the UI (`SafeToSpendModal`) but do not reduce the headline number — the calculator only deducts unpaid bills. (Earlier docs described subtracting "remaining bucket limits"; that was never implemented.)
-- Bills covered by buckets are excluded to avoid double-counting. A bill is matched to a bucket by exact `CalendarItem.bucketId` when set; otherwise it falls back to whole-word token matching of the bucket name against the bill title (bucket names shorter than 3 chars are skipped to avoid false matches)
+- "Unpaid bills" are the expense calendar items between the current paycheck and the next one. Bills covered by buckets are excluded to avoid double-counting. A bill is matched to a bucket by exact `CalendarItem.bucketId` when set; otherwise it falls back to whole-word token matching of the bucket name against the bill title (bucket names shorter than 3 chars are skipped to avoid false matches). Note: budget-bucket *remaining limits* are **not** subtracted from `safeToSpend` — buckets only participate in bill-exclusion matching.
+- **Pending spend** = the sum of current-period `pending_review` transactions (matched by `payPeriodId === currentPeriodId`; when no period is tracked, all `pending_review` transactions count), **excluding income** (`category === INCOME_CATEGORY`). It is subtracted because checking balances are entered **manually** and do not yet reflect un-cleared spending. There is no double-count with the unpaid-bills term (bills are calendar items, pending is transactions) and bucket remaining limits are not part of the formula. The shared `sumPendingSpend()` helper is the single source of truth; surfaced as the `pendingSpend` field of `SafeToSpendBreakdown` and shown as a "Pending transactions" line in both `SafeToSpendHero` and `SafeToSpendModal`.
 - Money is summed in integer cents (`utils/money.ts`) to avoid floating-point drift
 - Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx). The context exposes a memoized `safeToSpendBreakdown` so widgets (e.g. `SafeToSpendHero`) consume it without re-expanding calendar items.
-- **Pending transactions are NOT currently folded into `safeToSpend`** — whether they should be depends on whether checking balances are entered manually or bank-synced. Tracked in [todo/03-safe-to-spend-pending.md](todo/03-safe-to-spend-pending.md).
 
 ### Habit Tracking System
 
@@ -147,6 +146,7 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 - Custom fonts: Inter (sans), JetBrains Mono (mono), loaded via Google Fonts in [index.html](index.html)
 - Mobile-first with safe-area-inset support
 - `clsx` + `tailwind-merge` for conditional/merged class names
+- Entrance animations (`animate-in`, `fade-in`, `slide-in-from-*`, `zoom-in-*`) are provided by the **`tailwindcss-animate`** plugin (registered in [tailwind.config.js](tailwind.config.js)). They are fully suppressed for `prefers-reduced-motion` users via a guard in [index.css](index.css) (`.animate-in/.animate-out { animation: none }`).
 
 ### Component Organization
 
@@ -154,7 +154,7 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 components/
   ├── analytics/    # Charts/analytics widgets (recharts; lazy-loaded)
   ├── auth/         # Authentication components (ProtectedRoute, HouseholdInviteCard)
-  ├── budget/       # Budget-specific UI components
+  ├── budget/       # Budget-specific UI components (TransactionMasterList is windowed with @tanstack/react-virtual)
   ├── dashboard/    # Dashboard widgets (SafeToSpendHero, action queue, etc.)
   ├── habits/       # Habit tracking UI components
   ├── layout/       # MainLayout, TopToolbar, BottomNav, OfflineBanner
