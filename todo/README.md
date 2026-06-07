@@ -26,6 +26,8 @@ a product/security decision.
   `TransactionMasterList` virtualized with `@tanstack/react-virtual` *(was todo #6)*; dead
   entrance-animation classes restored via `tailwindcss-animate` with reduced-motion gating
   *(was todo #8)*.
+- **PR #620** — fixed daily points recalculating to 0 after a midnight habit auto-reset
+  (auto-reset left `completedDates` populated, desyncing the daily total) *(was todo #10)*.
 - **This pass** — weekly habits now earn streak multipliers measured in consecutive weeks
   (2wk → 1.5×, 4wk → 2.0×) *(was todo #9)*; `MealsContext` split into `useMealPlan()` /
   `useShopping()` so shopping changes don't re-render the meal planner *(was todo #12)*; minor
@@ -39,14 +41,13 @@ a product/security decision.
 | 4 | **Notification scan** — stop hourly full-collection scans in scheduled functions | Needs a member-field migration + DST-correct timeslot + careful deploy ordering | [04-notification-scan.md](./04-notification-scan.md) |
 | 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + Firestore rules / custom-claims migration with lockout risk | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
 | 7 | **Import-path normalization** — relative imports → `@/` alias | ~266-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
-| 10 | **Daily points after midnight reset** — auto-reset leaves `completedDates`, so recalc can zero earned points | In flight in PR #620 | [10-daily-points-after-midnight-reset.md](./10-daily-points-after-midnight-reset.md) |
-| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully (coordinate with #10) | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
+| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
 
 Items 10–13 were scoped during the PR #619 optimization pass; #9, #12, and #13 shipped
-in the pass above and #10 is in flight (PR #620), leaving #10/#11 on the points path.
+in PR #621 and #10 shipped in PR #620, leaving only #11 on the points path.
 
 ## Kickoff prompts
 
