@@ -87,15 +87,15 @@ Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offl
 
 The core financial metric (`safeToSpend`) is calculated as:
 ```
-Checking Balance - Unpaid Bills (this month) - Remaining Budget Bucket Limits - Pending Transactions
+Checking Balance - Unpaid Bills (this period) - Remaining Budget Bucket Limits
 ```
 
 **Critical implementation details:**
 - Only checking accounts count as available funds (not savings or credit)
 - Bills covered by buckets are excluded to avoid double-counting. A bill is matched to a bucket by exact `CalendarItem.bucketId` when set; otherwise it falls back to whole-word token matching of the bucket name against the bill title (bucket names shorter than 3 chars are skipped to avoid false matches)
-- Pending transactions reduce both checking balance and bucket liabilities
 - Money is summed in integer cents (`utils/money.ts`) to avoid floating-point drift
-- Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx)
+- Pure calculation lives in [utils/safeToSpendCalculator.ts](utils/safeToSpendCalculator.ts) and is wired into the context in [contexts/FirebaseHouseholdContext.tsx](contexts/FirebaseHouseholdContext.tsx). The context exposes a memoized `safeToSpendBreakdown` so widgets (e.g. `SafeToSpendHero`) consume it without re-expanding calendar items.
+- **Pending transactions are NOT currently folded into `safeToSpend`** — whether they should be depends on whether checking balances are entered manually or bank-synced. Tracked in [todo/03-safe-to-spend-pending.md](todo/03-safe-to-spend-pending.md).
 
 ### Habit Tracking System
 
@@ -108,7 +108,9 @@ Habits support two scoring modes:
 - 3-6 days: 1.5x points
 - 7+ days: 2.0x points
 
-**Atomicity:** Toggling a habit updates the habit document and the household points in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
+**Atomicity:** Habit mutations that touch both a habit document and the household points — `toggleHabit`, `resetHabit`, `addHabitSubmission`, `updateHabitSubmission`, `deleteHabitSubmission` — commit in a single `writeBatch` so they can never diverge (see [hooks/useHabitActions.tsx](hooks/useHabitActions.tsx)). The same applies to bucket reallocation and paycheck approval in the context. Core scoring/streak logic is pure and unit-tested in [utils/habitLogic.ts](utils/habitLogic.ts).
+
+**Point recalculation:** `calculatePointsForDate`/`calculatePointsForDateRange` (used to re-sync daily/weekly/total points) reconstruct each completion day's streak via `streakEndingOn()` and apply the historical per-day multiplier — they do **not** apply the current streak to past days, so totals don't drift on recalculation.
 
 **Dates:** Calendar dates are stored as `yyyy-MM-dd` strings in the user's **local** timezone. Use `getLocalDateString()` from [utils/dateHelpers.ts](utils/dateHelpers.ts) to derive "today" — never `new Date().toISOString().split('T')[0]` (that returns the UTC day, which is wrong in the evening for western timezones).
 
@@ -123,7 +125,10 @@ Uses **HashRouter** (not BrowserRouter) to support deployment without server-sid
 ### External Services
 
 **Gemini API** ([services/geminiService.ts](services/geminiService.ts)):
-- The model is defined once in the exported `GEMINI_MODEL` constant — change it there, not inline at call sites.
+- The model is defined once in the exported `GEMINI_MODEL` constant (overridable via the optional `VITE_GEMINI_MODEL` env var) — change it there, not inline at call sites.
+- Calls go through a shared helper with a 30s timeout and bounded exponential-backoff retry on transient errors (429/503/network); non-transient errors are not retried.
+- The daily AI quota check-and-increment runs in a single Firestore `runTransaction` to avoid a check-then-increment race.
+- Plain TypeScript types are in [services/geminiService.types.ts](services/geminiService.types.ts) (re-exported from `geminiService`); import types from there in always-loaded modules so the `@google/genai` SDK stays out of the app boot path (the SDK functions are loaded via dynamic `import()`).
 - **Receipt Scanning**: `analyzeReceipt()` - OCR for expense receipts
   - Returns: merchant, amount, category, date
 - **Bank Statement Parsing**: `parseBankStatement()` - Extracts transaction lists from screenshots
@@ -155,7 +160,7 @@ components/
   ├── meals/        # Meal planning components (MealPlanTab, ShoppingListTab)
   ├── modals/       # Modal dialogs for forms
   ├── settings/     # Settings sub-components (NotificationSettings, ThemeToggle)
-  └── ui/           # Reusable primitives (Button, Input, Card, Drawer, Skeleton, etc.)
+  └── ui/           # Reusable primitives (Button, Input, Card, Drawer, Skeleton, ConfirmDialog, etc.)
 
 pages/              # Route-level page components (lazy-loaded in App.tsx)
   ├── Dashboard.tsx        # Main overview with AI insights
@@ -199,7 +204,7 @@ Tests use **Vitest** with **@testing-library/react** and a `jsdom` environment (
 
 ## TypeScript
 
-The project compiles in **strict mode** — [tsconfig.json](tsconfig.json) enables `strict: true` plus `noUnusedLocals` and `noUnusedParameters`. `pnpm lint` runs `tsc --noEmit` first, so type errors fail the build. Write fully-typed code (see the no-suppressions policy below); for an unused parameter required by a signature, prefix it with `_`.
+The project compiles in **strict mode** — [tsconfig.json](tsconfig.json) enables `strict: true` plus `noUncheckedIndexedAccess`, `noUnusedLocals`, and `noUnusedParameters`. `noUncheckedIndexedAccess` types indexed/array/`Map.get()` access as `T | undefined`; narrow with a guard, `??` default, or optional chaining (a non-null assertion `!` is acceptable only when provably safe, with a justifying comment in production code). `pnpm lint` runs `tsc --noEmit` first, so type errors fail the build. Write fully-typed code (see the no-suppressions policy below); for an unused parameter required by a signature, prefix it with `_`.
 
 ## Key Data Models
 
@@ -338,9 +343,9 @@ See [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) for:
 - Status of each suppression (acceptable vs. needs fixing)
 - Action items for eliminating technical debt
 
-**Current stats** (run `grep -rl "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
-- ~6 files with blanket `/* eslint-disable */` - **ALL NEED FIXING**
-- ~29 files with some form of `eslint-disable` (mostly the legitimate React Context/Hook export pattern) - **REVIEW WHEN TOUCHED**
+**Current stats** (run `grep -rln "eslint-disable" --include="*.ts" --include="*.tsx" . | grep -v node_modules` to refresh):
+- 0 blanket `/* eslint-disable */` files — all removed; only granular `eslint-disable-next-line` remain
+- The remaining granular disables are the legitimate `react-refresh/only-export-components` pattern on context/hook exports, plus a small set of pre-existing single-line `@typescript-eslint/no-explicit-any` / `react-hooks/set-state-in-effect` cases tracked in [LINT_SUPPRESSIONS.md](LINT_SUPPRESSIONS.md) - **REVIEW WHEN TOUCHED**
 - 0 `@ts-ignore` / `@ts-expect-error` / `@ts-nocheck`
 
 #### Enforcement
