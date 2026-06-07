@@ -561,13 +561,15 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   // Test Mode does not need render isolation, so every slice receives the same
   // composed value object. `HouseholdContextType` satisfies each slice type, so
-  // the granular hooks (`useFinance`, `useMeals`, …) and the `useHousehold`
-  // shim all resolve against this mock data identically to production.
+  // the granular hooks (`useFinance`, `useMealPlan`, `useShopping`, `useMeals`,
+  // …) and the `useHousehold` shim all resolve against this mock data
+  // identically to production.
   return (
     <HouseholdSliceProviders
       finance={contextValue}
       gamification={contextValue}
-      meals={contextValue}
+      mealPlan={contextValue}
+      shopping={contextValue}
       todos={contextValue}
       core={contextValue}
     >

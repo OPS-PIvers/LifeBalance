@@ -15,6 +15,7 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => {
     useFinance: fn,
     useHouseholdCore: fn,
     useMeals: fn,
+    useShopping: fn,
     useTodos: fn,
     useGamification: fn,
   };

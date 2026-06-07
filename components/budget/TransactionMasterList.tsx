@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useFinance, useHouseholdCore, useMeals } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useHouseholdCore, useShopping } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
 import EditTransactionModal from '../modals/EditTransactionModal';
@@ -111,7 +111,7 @@ const TransactionMasterList: React.FC = () => {
     transactionWindowStart,
   } = useFinance();
   const { householdId } = useHouseholdCore();
-  const { stores } = useMeals();
+  const { stores } = useShopping();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');

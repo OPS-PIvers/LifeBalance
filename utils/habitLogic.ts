@@ -1,5 +1,17 @@
 import { Habit } from '@/types/schema';
-import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from 'date-fns';
+import {
+  format,
+  subDays,
+  parseISO,
+  isSameDay,
+  isSameWeek,
+  isValid,
+  startOfISOWeek,
+  subWeeks,
+} from 'date-fns';
+
+/** Convenience alias so callers don't need to import the schema type directly. */
+type HabitPeriod = Habit['period'];
 
 /**
  * Check if a habit is stale (last updated in a previous period)
@@ -120,18 +132,155 @@ export const streakEndingOn = (completedDates: string[], date: string): number =
 };
 
 /**
- * Get the point multiplier based on streak and habit type
- * @param streak - Current streak count
+ * Calculate the current streak for a WEEKLY habit in consecutive ISO weeks.
+ *
+ * Mirrors `calculateStreak` but counts consecutive ISO weeks that contain at
+ * least one completion, ending at the most recent completion's week.  A full
+ * week with zero completions resets the streak.
+ *
+ * ISO weeks start on Monday.  All dates are interpreted in the user's local
+ * timezone (matching the `yyyy-MM-dd` strings stored in Firestore).
+ *
+ * @param dates - Array of completion dates in YYYY-MM-DD format
+ * @returns The current consecutive-week streak
+ */
+export const calculateWeeklyStreak = (dates: string[]): number => {
+  if (dates.length === 0) return 0;
+
+  // Deduplicate, then collect the Monday of each completion's ISO week.
+  const uniqueDates = Array.from(new Set(dates));
+  const weekStarts = Array.from(
+    new Set(
+      uniqueDates.map(d => format(startOfISOWeek(parseISO(d)), 'yyyy-MM-dd'))
+    )
+  ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()); // newest first
+
+  // The streak can only extend from the current week or the immediately past week.
+  const nowWeekStart = format(startOfISOWeek(new Date()), 'yyyy-MM-dd');
+  const prevWeekStart = format(subWeeks(startOfISOWeek(new Date()), 1), 'yyyy-MM-dd');
+
+  // If the most recent completion is not in the current or previous ISO week, no streak.
+  if (weekStarts[0] !== nowWeekStart && weekStarts[0] !== prevWeekStart) return 0;
+
+  let streak = 0;
+  // Walk backward: each step should be exactly one ISO week earlier.
+  let expectedWeek = weekStarts[0]!;
+  for (const weekStart of weekStarts) {
+    if (weekStart === expectedWeek) {
+      streak++;
+      expectedWeek = format(subWeeks(parseISO(expectedWeek), 1), 'yyyy-MM-dd');
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
+
+/**
+ * Count consecutive completed ISO weeks ending ON the week that contains `date`,
+ * ignoring any completion weeks that come after `date`'s ISO week.
+ *
+ * Weekly analogue of `streakEndingOn` — used for historical point recalculation
+ * so that past weeks earn the multiplier that actually applied then.
+ *
+ * Returns 0 if `date`'s ISO week contains no completion.
+ *
+ * @param completedDates - Array of completion dates in YYYY-MM-DD format
+ * @param date - Reference date (YYYY-MM-DD); we look at its ISO week and earlier
+ * @returns The consecutive-week streak ending on `date`'s ISO week
+ */
+export const streakEndingOnWeek = (completedDates: string[], date: string): number => {
+  const refWeekStart = startOfISOWeek(parseISO(date));
+
+  // Collect the Monday of every completion's ISO week, filtered to <= refWeekStart.
+  const weekStartStrings = Array.from(
+    new Set(
+      completedDates
+        .filter(d => {
+          const ws = startOfISOWeek(parseISO(d));
+          return ws <= refWeekStart;
+        })
+        .map(d => format(startOfISOWeek(parseISO(d)), 'yyyy-MM-dd'))
+    )
+  ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()); // newest first
+
+  const refWeekStartStr = format(refWeekStart, 'yyyy-MM-dd');
+
+  // If the reference week itself has no completion, streak is 0.
+  if (!weekStartStrings.includes(refWeekStartStr)) return 0;
+
+  let streak = 0;
+  let expectedWeek = refWeekStartStr;
+  for (const ws of weekStartStrings) {
+    if (ws === expectedWeek) {
+      streak++;
+      expectedWeek = format(subWeeks(parseISO(expectedWeek), 1), 'yyyy-MM-dd');
+    } else {
+      break;
+    }
+  }
+  return streak;
+};
+
+/**
+ * Period-aware streak helper: returns the current streak in the correct unit
+ * (days for daily habits, ISO weeks for weekly habits).
+ *
+ * Use this at call sites that operate on a specific habit so that weekly habits
+ * earn week-based streaks while daily habit behaviour is completely unchanged.
+ */
+export const streakForHabit = (
+  habit: Pick<Habit, 'period' | 'completedDates'>
+): number =>
+  habit.period === 'weekly'
+    ? calculateWeeklyStreak(habit.completedDates)
+    : calculateStreak(habit.completedDates);
+
+/**
+ * Period-aware historical streak helper: the streak (in days or weeks) that
+ * ended on the given `date` for this habit.
+ *
+ * Used in point recalculation so that past completions earn the multiplier that
+ * actually applied at the time, not today's streak.
+ */
+export const streakEndingOnForHabit = (
+  habit: Pick<Habit, 'period' | 'completedDates'>,
+  date: string
+): number =>
+  habit.period === 'weekly'
+    ? streakEndingOnWeek(habit.completedDates, date)
+    : streakEndingOn(habit.completedDates, date);
+
+/**
+ * Get the point multiplier based on streak, habit type, and period.
+ *
+ * Thresholds per period (positive habits only):
+ *   - daily:  3 consecutive days → 1.5×,  7 → 2.0×
+ *   - weekly: 2 consecutive weeks → 1.5×,  4 → 2.0×
+ *
+ * The `period` parameter defaults to `'daily'` so every existing call site that
+ * omits it retains byte-for-byte identical behaviour.
+ *
+ * @param streak - Current streak count (days for daily, weeks for weekly)
  * @param isPositive - Whether this is a positive habit
+ * @param period - Habit period ('daily' | 'weekly'), defaults to 'daily'
  * @returns The multiplier to apply to base points
  */
-export const getMultiplier = (streak: number, isPositive: boolean): number => {
-  let multiplier = 1.0;
-  if (isPositive) {
-    if (streak >= 7) multiplier = 2.0;
-    else if (streak >= 3) multiplier = 1.5;
+export const getMultiplier = (
+  streak: number,
+  isPositive: boolean,
+  period: HabitPeriod = 'daily',
+): number => {
+  if (!isPositive) return 1.0;
+  if (period === 'weekly') {
+    if (streak >= 4) return 2.0;
+    if (streak >= 2) return 1.5;
+    return 1.0;
   }
-  return multiplier;
+  // daily (default)
+  if (streak >= 7) return 2.0;
+  if (streak >= 3) return 1.5;
+  return 1.0;
 };
 
 export interface ToggleHabitResult {
@@ -179,6 +328,12 @@ export const processToggleHabit = (
   let isCompletedNow = false;
   let wasCompletedBefore = false;
 
+  // Helper: compute the streak for a set of dates using the period-correct algorithm.
+  const streakFor = (dates: string[]): number =>
+    habit.period === 'weekly'
+      ? calculateWeeklyStreak(dates)
+      : calculateStreak(dates);
+
   // Logic Split by Scoring Type
   if (habit.scoringType === 'incremental') {
     // Completion: Hit target (or 1 if 0)
@@ -193,8 +348,8 @@ export const processToggleHabit = (
       direction === 'up' && isCompletedNow && !habit.completedDates.includes(today)
         ? [...habit.completedDates, today]
         : habit.completedDates;
-    const prospectiveStreak = calculateStreak(prospectiveDates);
-    multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive');
+    const prospectiveStreak = streakFor(prospectiveDates);
+    multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
 
     // Incremental: Points on every action
     if (direction === 'up') {
@@ -211,18 +366,18 @@ export const processToggleHabit = (
     if (isCompletedNow && !wasCompletedBefore) {
       // Just hit target -> Award Points using the NEW streak (including today).
       // Today is about to be added to completedDates; computing the streak from
-      // the prospective list ensures day-3 earns 1.5x and day-7 earns 2.0x on
-      // the correct day rather than one day late.
+      // the prospective list ensures the correct multiplier threshold is reached
+      // on the right day rather than one day/week late.
       const prospectiveDates = habit.completedDates.includes(today)
         ? habit.completedDates
         : [...habit.completedDates, today];
-      const prospectiveStreak = calculateStreak(prospectiveDates);
-      multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive');
+      const prospectiveStreak = streakFor(prospectiveDates);
+      multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
       pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
       // Just lost target -> Remove Points using the OLD streak (today still present).
-      const currentStreak = calculateStreak(habit.completedDates);
-      multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+      const currentStreak = streakFor(habit.completedDates);
+      multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
       pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
   }
@@ -243,7 +398,7 @@ export const processToggleHabit = (
       count: newCount,
       totalCount: newTotalCount,
       completedDates: newCompletedDates,
-      streakDays: calculateStreak(newCompletedDates),
+      streakDays: streakFor(newCompletedDates),
       lastUpdated: new Date().toISOString(),
     },
     pointsChange,
@@ -260,8 +415,8 @@ export const calculateResetPoints = (habit: Habit): number => {
   if (habit.count === 0) return 0;
 
   let pointsToRemove = 0;
-  const currentStreak = calculateStreak(habit.completedDates);
-  const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+  const currentStreak = streakForHabit(habit);
+  const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
   const sign = habit.type === 'positive' ? 1 : -1;
 
   if (habit.scoringType === 'incremental') {
@@ -329,9 +484,10 @@ export const calculatePointsForDate = (habits: Habit[], targetDate: string): num
     // Use the streak that ended on the target date, not the habit's CURRENT
     // streak. Retro-applying the current multiplier to a past day over- or
     // under-counts its points on every recalc. For "today" this equals
-    // calculateStreak(completedDates), so the common path is unchanged.
-    const dateStreak = streakEndingOn(habit.completedDates, targetDate);
-    const multiplier = getMultiplier(dateStreak, habit.type === 'positive');
+    // calculateStreak/calculateWeeklyStreak(completedDates), so the common path
+    // is unchanged.
+    const dateStreak = streakEndingOnForHabit(habit, targetDate);
+    const multiplier = getMultiplier(dateStreak, habit.type === 'positive', habit.period);
     const sign = habit.type === 'positive' ? 1 : -1;
 
     if (habit.scoringType === 'incremental') {
@@ -379,8 +535,8 @@ export const calculatePointsForDateRange = (
     // Applying one current-streak multiplier to the whole range causes point
     // totals to drift up/down on every recalc as the streak grows or breaks.
     for (const date of completionsInRange) {
-      const dateStreak = streakEndingOn(habit.completedDates, date);
-      const multiplier = getMultiplier(dateStreak, isPositive);
+      const dateStreak = streakEndingOnForHabit(habit, date);
+      const multiplier = getMultiplier(dateStreak, isPositive, habit.period);
       const perDayPoints = Math.floor(habit.basePoints * multiplier);
 
       if (habit.scoringType === 'incremental') {

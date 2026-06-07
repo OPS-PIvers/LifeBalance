@@ -57,7 +57,7 @@ import {
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, calculateStreak, getHabitResetUpdate } from '@/utils/habitLogic';
+import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, streakForHabit, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -346,17 +346,23 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
 >;
 
-export type MealsContextValue = Pick<HouseholdContextType,
-  | 'meals' | 'shoppingList' | 'mealPlan' | 'groceryCatalog'
-  | 'stores' | 'groceryCategories' | 'quickStockLists' | 'ensureMealPlanWeek'
+export type MealPlanContextValue = Pick<HouseholdContextType,
+  | 'meals' | 'mealPlan' | 'ensureMealPlanWeek'
   | 'addMeal' | 'updateMeal' | 'deleteMeal'
+  | 'addMealPlanItem' | 'updateMealPlanItem' | 'deleteMealPlanItem'
+>;
+
+export type ShoppingContextValue = Pick<HouseholdContextType,
+  | 'shoppingList' | 'groceryCatalog' | 'stores' | 'groceryCategories' | 'quickStockLists'
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
   | 'addQuickStockList' | 'updateQuickStockList' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
-  | 'addMealPlanItem' | 'updateMealPlanItem' | 'deleteMealPlanItem'
 >;
+
+/** Backward-compatible union of both meal-plan and shopping slices. */
+export type MealsContextValue = MealPlanContextValue & ShoppingContextValue;
 
 export type TodosContextValue = Pick<HouseholdContextType,
   | 'todos' | 'addToDo' | 'updateToDo' | 'deleteToDo' | 'completeToDo'
@@ -374,7 +380,8 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
 const GamificationContext = createContext<GamificationContextValue | undefined>(undefined);
-const MealsContext = createContext<MealsContextValue | undefined>(undefined);
+const MealPlanContext = createContext<MealPlanContextValue | undefined>(undefined);
+const ShoppingContext = createContext<ShoppingContextValue | undefined>(undefined);
 const TodosContext = createContext<TodosContextValue | undefined>(undefined);
 const HouseholdCoreContext = createContext<HouseholdCoreContextValue | undefined>(undefined);
 
@@ -393,10 +400,35 @@ export const useGamification = (): GamificationContextValue => {
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const useMeals = (): MealsContextValue => {
-  const ctx = useContext(MealsContext);
-  if (!ctx) throw new Error('useMeals must be used within FirebaseHouseholdProvider');
+export const useMealPlan = (): MealPlanContextValue => {
+  const ctx = useContext(MealPlanContext);
+  if (!ctx) throw new Error('useMealPlan must be used within FirebaseHouseholdProvider');
   return ctx;
+};
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useShopping = (): ShoppingContextValue => {
+  const ctx = useContext(ShoppingContext);
+  if (!ctx) throw new Error('useShopping must be used within FirebaseHouseholdProvider');
+  return ctx;
+};
+
+/**
+ * Backward-compatible shim. Composes both meal-plan and shopping slices into
+ * the legacy combined shape so un-migrated consumers keep working unchanged.
+ *
+ * NOTE: because it subscribes to both meal-plan and shopping contexts, a
+ * component using this hook re-renders on any change in either slice. Migrate
+ * hot components to `useMealPlan()` or `useShopping()` to get render-isolation.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useMeals = (): MealsContextValue => {
+  const mealPlan = useMealPlan();
+  const shopping = useShopping();
+  return useMemo(
+    () => ({ ...mealPlan, ...shopping }),
+    [mealPlan, shopping]
+  );
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -417,43 +449,48 @@ export const useHouseholdCore = (): HouseholdCoreContextValue => {
  * Backward-compatible shim. Reads every slice and merges them into the legacy
  * shape so un-migrated consumers keep working unchanged.
  *
- * NOTE: because it subscribes to all five contexts, a component using this hook
+ * NOTE: because it subscribes to all contexts, a component using this hook
  * re-renders on any slice change. Migrate hot components to the granular hooks
- * above (`useFinance`, `useMeals`, …) to get the render-isolation win.
+ * above (`useFinance`, `useMealPlan`, `useShopping`, …) to get the
+ * render-isolation win.
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export const useHousehold = (): HouseholdContextType => {
   const finance = useFinance();
   const gamification = useGamification();
-  const meals = useMeals();
+  const mealPlan = useMealPlan();
+  const shopping = useShopping();
   const todos = useTodos();
   const core = useHouseholdCore();
   return useMemo(
-    () => ({ ...finance, ...gamification, ...meals, ...todos, ...core }),
-    [finance, gamification, meals, todos, core]
+    () => ({ ...finance, ...gamification, ...mealPlan, ...shopping, ...todos, ...core }),
+    [finance, gamification, mealPlan, shopping, todos, core]
   );
 };
 
 /**
- * Nests the five domain context providers. Shared by the real Firestore-backed
+ * Nests the domain context providers. Shared by the real Firestore-backed
  * provider and the Test Mode mock provider so both stay in lockstep.
  */
 export const HouseholdSliceProviders: React.FC<{
   finance: FinanceContextValue;
   gamification: GamificationContextValue;
-  meals: MealsContextValue;
+  mealPlan: MealPlanContextValue;
+  shopping: ShoppingContextValue;
   todos: TodosContextValue;
   core: HouseholdCoreContextValue;
   children: ReactNode;
-}> = ({ finance, gamification, meals, todos, core, children }) => (
+}> = ({ finance, gamification, mealPlan, shopping, todos, core, children }) => (
   <HouseholdCoreContext.Provider value={core}>
     <FinanceContext.Provider value={finance}>
       <GamificationContext.Provider value={gamification}>
-        <MealsContext.Provider value={meals}>
-          <TodosContext.Provider value={todos}>
-            {children}
-          </TodosContext.Provider>
-        </MealsContext.Provider>
+        <MealPlanContext.Provider value={mealPlan}>
+          <ShoppingContext.Provider value={shopping}>
+            <TodosContext.Provider value={todos}>
+              {children}
+            </TodosContext.Provider>
+          </ShoppingContext.Provider>
+        </MealPlanContext.Provider>
       </GamificationContext.Provider>
     </FinanceContext.Provider>
   </HouseholdCoreContext.Provider>
@@ -1042,19 +1079,27 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         }
       }
 
+      if (parsed.items.length === 0) return;
+
+      // Apply all adds/increments in a single atomic writeBatch (one round-trip
+      // instead of one updateDoc/addDoc per parsed item). Voice commands produce
+      // far fewer than the 500-op batch limit.
+      const batch = writeBatch(db);
       for (const item of parsed.items) {
         const key = normalize(item.item);
         const existingDocRef = existingByName.get(key);
 
         if (existingDocRef) {
           // Increment quantity on the matched existing item
-          await updateDoc(existingDocRef, {
+          batch.update(existingDocRef, {
             quantity: increment(item.quantity),
             lastUpdated: serverTimestamp()
           });
         } else {
-          // Add new item
-          const newDocRef = await addDoc(shoppingRef, {
+          // Add new item with a pre-allocated id so later parsed items with the
+          // same name dedupe against it (preserves the original behavior).
+          const newDocRef = doc(shoppingRef);
+          batch.set(newDocRef, {
             name: item.item,
             quantity: String(item.quantity),
             category: item.category,
@@ -1062,11 +1107,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             source: 'voice',
             createdAt: serverTimestamp()
           });
-          // Track it so later parsed items with the same name dedupe against it
-          // (preserves the original re-query-each-iteration behavior).
           existingByName.set(key, newDocRef);
         }
       }
+      await batch.commit();
     }
 
     // Helper: Handle todo items from parsed voice command
@@ -1456,13 +1500,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // --- PAY PERIOD TRACKING EFFECTS ---
 
-  // Run data migration if needed
+  // Run data migration if needed.
+  // Guarded with a run-once ref (mirroring the habit-migration effect below) so it
+  // isn't re-evaluated on every `householdSettings` write (points are written to the
+  // household doc on each habit toggle). Depends on `householdSettings?.startDate`
+  // (the only field its body reads) rather than the whole object, and no longer on
+  // `transactions` (its body only reads `buckets`).
+  const hasAttemptedBucketMigration = useRef(false);
   useEffect(() => {
     if (!householdId || !householdSettings?.startDate || !currentPeriodId) return;
     if (buckets.length === 0) return; // No data to migrate
+    if (hasAttemptedBucketMigration.current) return;
 
     const runMigrations = async () => {
       if (needsMigration(buckets)) {
+        hasAttemptedBucketMigration.current = true;
         console.log('[Migration] Starting pay period migration...');
         try {
           await migrateBucketsToPeriods(householdId, currentPeriodId);
@@ -1476,14 +1528,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     runMigrations();
 
-  }, [householdId, householdSettings, currentPeriodId, transactions, buckets]);
+  }, [householdId, householdSettings?.startDate, currentPeriodId, buckets]);
 
-  // Migrate from date-based periods to paycheck-based periods if needed
+  // Migrate from date-based periods to paycheck-based periods if needed.
+  // Run-once guarded for the same reason as the bucket migration above.
+  const hasAttemptedPaycheckMigration = useRef(false);
   useEffect(() => {
     if (!householdId || !householdSettings) return;
+    if (hasAttemptedPaycheckMigration.current) return;
 
     const runPaycheckMigration = async () => {
       if (needsPaycheckMigration(householdSettings)) {
+        hasAttemptedPaycheckMigration.current = true;
         console.log('[Migration] Starting paycheck period migration...');
         try {
           await migrateToPaycheckPeriods(
@@ -2701,8 +2757,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
     }
 
-    // Recalculate streak with patched date
-    const newStreak = calculateStreak(updatedCompletedDates);
+    // Recalculate streak with patched date (period-aware: weekly habits count weeks)
+    const newStreak = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
 
     // Create history entry
     const historyEntry: FreezeBankHistoryEntry = {
@@ -3542,18 +3598,28 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     useFreezeBankToken, rolloverFreezeBankTokens,
   ]);
 
-  const mealsValue = useMemo<MealsContextValue>(() => ({
+  const mealPlanValue = useMemo<MealPlanContextValue>(() => ({
     meals,
-    shoppingList,
     mealPlan,
-    groceryCatalog,
-    stores,
-    groceryCategories,
-    quickStockLists,
     ensureMealPlanWeek,
     addMeal,
     updateMeal,
     deleteMeal,
+    addMealPlanItem,
+    updateMealPlanItem,
+    deleteMealPlanItem,
+  }), [
+    meals, mealPlan, ensureMealPlanWeek,
+    addMeal, updateMeal, deleteMeal,
+    addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
+  ]);
+
+  const shoppingValue = useMemo<ShoppingContextValue>(() => ({
+    shoppingList,
+    groceryCatalog,
+    stores,
+    groceryCategories,
+    quickStockLists,
     addShoppingItem,
     addShoppingItems,
     updateShoppingItem,
@@ -3571,17 +3637,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addGroceryCatalogItem,
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem,
-    addMealPlanItem,
-    updateMealPlanItem,
-    deleteMealPlanItem,
   }), [
-    meals, shoppingList, mealPlan, groceryCatalog, stores, groceryCategories, quickStockLists, ensureMealPlanWeek,
-    addMeal, updateMeal, deleteMeal,
+    shoppingList, groceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
     addQuickStockList, updateQuickStockList, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
-    addMealPlanItem, updateMealPlanItem, deleteMealPlanItem,
   ]);
 
   const todosValue = useMemo<TodosContextValue>(() => ({
@@ -3626,7 +3687,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     <HouseholdSliceProviders
       finance={financeValue}
       gamification={gamificationValue}
-      meals={mealsValue}
+      mealPlan={mealPlanValue}
+      shopping={shoppingValue}
       todos={todosValue}
       core={coreValue}
     >

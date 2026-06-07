@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   isHabitStale,
   calculateStreak,
+  calculateWeeklyStreak,
+  streakEndingOnWeek,
+  streakForHabit,
   getMultiplier,
   processToggleHabit,
   streakEndingOn,
@@ -10,7 +13,7 @@ import {
   getHabitResetUpdate
 } from './habitLogic';
 import { Habit } from '@/types/schema';
-import { format, subDays, subWeeks } from 'date-fns';
+import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
 
 describe('habitLogic', () => {
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -604,6 +607,195 @@ describe('habitLogic', () => {
       const resetHabit: Habit = { ...habit, ...update };
       expect(calculatePointsForDateRange([resetHabit], yesterday, today)).toBe(10);
       expect(calculatePointsForDate([resetHabit], today)).toBe(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Weekly streak tests
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Returns a date string for a day N weeks ago, anchored to Monday of that
+   * ISO week so tests are deterministic regardless of which day of the week
+   * they are run on.
+   */
+  const mondayWeeksAgo = (n: number): string =>
+    format(startOfISOWeek(subWeeks(new Date(), n)), 'yyyy-MM-dd');
+
+  describe('calculateWeeklyStreak', () => {
+    it('returns 0 for empty dates', () => {
+      expect(calculateWeeklyStreak([])).toBe(0);
+    });
+
+    it('returns 1 for a single completion this week', () => {
+      // Use today (which is always within the current ISO week)
+      expect(calculateWeeklyStreak([today])).toBe(1);
+    });
+
+    it('returns 1 for a single completion last week (no current week)', () => {
+      expect(calculateWeeklyStreak([mondayWeeksAgo(1)])).toBe(1);
+    });
+
+    it('returns 0 when the most recent completion is more than 1 week old', () => {
+      expect(calculateWeeklyStreak([mondayWeeksAgo(2)])).toBe(0);
+    });
+
+    it('returns 2 for completions in current week and last week', () => {
+      expect(calculateWeeklyStreak([today, mondayWeeksAgo(1)])).toBe(2);
+    });
+
+    it('returns 4 for completions in four consecutive ISO weeks ending this week', () => {
+      const dates = [today, mondayWeeksAgo(1), mondayWeeksAgo(2), mondayWeeksAgo(3)];
+      expect(calculateWeeklyStreak(dates)).toBe(4);
+    });
+
+    it('resets when a week is skipped', () => {
+      // Weeks 0, 1, then a gap at 2, then 3 and 4.
+      const dates = [today, mondayWeeksAgo(1), mondayWeeksAgo(3), mondayWeeksAgo(4)];
+      expect(calculateWeeklyStreak(dates)).toBe(2);
+    });
+
+    it('deduplicates multiple completions within the same week', () => {
+      // Two entries both in the current ISO week should count as streak = 1.
+      const thisWeekMonday = mondayWeeksAgo(0);
+      const thisWeekTuesday = format(
+        new Date(new Date(thisWeekMonday).getTime() + 86400_000),
+        'yyyy-MM-dd'
+      );
+      expect(calculateWeeklyStreak([thisWeekMonday, thisWeekTuesday])).toBe(1);
+    });
+  });
+
+  describe('getMultiplier — weekly period thresholds', () => {
+    it('returns 1.0 for weekly streak < 2', () => {
+      expect(getMultiplier(1, true, 'weekly')).toBe(1.0);
+    });
+
+    it('returns 1.5 for weekly streak >= 2 and < 4', () => {
+      expect(getMultiplier(2, true, 'weekly')).toBe(1.5);
+      expect(getMultiplier(3, true, 'weekly')).toBe(1.5);
+    });
+
+    it('returns 2.0 for weekly streak >= 4', () => {
+      expect(getMultiplier(4, true, 'weekly')).toBe(2.0);
+      expect(getMultiplier(10, true, 'weekly')).toBe(2.0);
+    });
+
+    it('always returns 1.0 for non-positive weekly habits', () => {
+      expect(getMultiplier(10, false, 'weekly')).toBe(1.0);
+    });
+
+    it('daily thresholds are unchanged when period is omitted', () => {
+      expect(getMultiplier(3, true)).toBe(1.5);
+      expect(getMultiplier(7, true)).toBe(2.0);
+    });
+  });
+
+  describe('streakEndingOnWeek', () => {
+    it('returns 0 when the reference week has no completion', () => {
+      // Completion is 2 weeks ago; reference is 3 weeks ago — no completion there.
+      expect(streakEndingOnWeek([mondayWeeksAgo(2)], mondayWeeksAgo(3))).toBe(0);
+    });
+
+    it('returns 1 for a single completion in the reference week', () => {
+      expect(streakEndingOnWeek([mondayWeeksAgo(1)], mondayWeeksAgo(1))).toBe(1);
+    });
+
+    it('ignores completions in weeks after the reference week', () => {
+      // Completions at week 0 (current) and 1; streak as-of week 1 should be 1
+      // (week 2 is missing so we cannot extend further back).
+      const dates = [today, mondayWeeksAgo(1)];
+      expect(streakEndingOnWeek(dates, mondayWeeksAgo(1))).toBe(1);
+    });
+
+    it('counts consecutive weeks ending at the reference week', () => {
+      // Completions at weeks 0, 1, 2, 3. Streak ending at week 3 should be 1
+      // (only 1 completed week ≤ week3, which is week3 itself).
+      // Actually weeks 0-3 present: ending at week 3 that's a streak of 1 since
+      // week 4 is absent (no week 4 in our dates).
+      const dates = [today, mondayWeeksAgo(1), mondayWeeksAgo(2), mondayWeeksAgo(3)];
+      // Streak ending at week 3 = 1 (week4 missing → streak starts at week3).
+      expect(streakEndingOnWeek(dates, mondayWeeksAgo(3))).toBe(1);
+      // Streak ending at week 2 = 2 (weeks 3 and 2 are consecutive).
+      expect(streakEndingOnWeek(dates, mondayWeeksAgo(2))).toBe(2);
+      // Streak ending at week 1 = 3 (weeks 3, 2, 1).
+      expect(streakEndingOnWeek(dates, mondayWeeksAgo(1))).toBe(3);
+      // Streak ending at week 0 (this week) = 4.
+      expect(streakEndingOnWeek(dates, today)).toBe(4);
+    });
+  });
+
+  describe('streakForHabit — period dispatch', () => {
+    const weeklyBase: Habit = {
+      ...baseHabit,
+      period: 'weekly',
+    };
+
+    it('uses calculateWeeklyStreak for weekly habits', () => {
+      const habit: Habit = {
+        ...weeklyBase,
+        completedDates: [today, mondayWeeksAgo(1)],
+      };
+      expect(streakForHabit(habit)).toBe(2);
+    });
+
+    it('uses calculateStreak for daily habits (unchanged)', () => {
+      const habit: Habit = {
+        ...baseHabit,
+        completedDates: [today, yesterday],
+      };
+      expect(streakForHabit(habit)).toBe(2);
+    });
+  });
+
+  describe('processToggleHabit — weekly habit streak multipliers', () => {
+    const weeklyHabit: Habit = {
+      ...baseHabit,
+      period: 'weekly',
+      scoringType: 'threshold',
+      targetCount: 1,
+      basePoints: 100,
+    };
+
+    it('week-1 completion (no prior history) gets 1.0x', () => {
+      const result = processToggleHabit({ ...weeklyHabit, completedDates: [] }, 'up');
+      expect(result?.multiplier).toBe(1.0);
+      expect(result?.pointsChange).toBe(100);
+    });
+
+    it('week-2 completion (1 week history) gets 1.5x', () => {
+      const result = processToggleHabit(
+        { ...weeklyHabit, completedDates: [mondayWeeksAgo(1)] },
+        'up'
+      );
+      // prospective streak = 2 → 1.5x
+      expect(result?.multiplier).toBe(1.5);
+      expect(result?.pointsChange).toBe(150);
+    });
+
+    it('week-4 completion (3 weeks history) gets 2.0x', () => {
+      const result = processToggleHabit(
+        {
+          ...weeklyHabit,
+          completedDates: [mondayWeeksAgo(1), mondayWeeksAgo(2), mondayWeeksAgo(3)],
+        },
+        'up'
+      );
+      // prospective streak = 4 → 2.0x
+      expect(result?.multiplier).toBe(2.0);
+      expect(result?.pointsChange).toBe(200);
+    });
+
+    it('skipped week resets multiplier to 1.0x', () => {
+      // Only last week and 3 weeks ago — gap at 2 weeks ago → streak = 1 when
+      // this week is added.
+      const result = processToggleHabit(
+        { ...weeklyHabit, completedDates: [mondayWeeksAgo(1), mondayWeeksAgo(3)] },
+        'up'
+      );
+      // prospective streak = 2 (this week + last week consecutive)
+      expect(result?.multiplier).toBe(1.5);
+      expect(result?.pointsChange).toBe(150);
     });
   });
 });

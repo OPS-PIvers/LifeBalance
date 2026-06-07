@@ -24,7 +24,7 @@ import {
 import {
   processToggleHabit,
   calculateResetPoints,
-  calculateStreak,
+  streakForHabit,
   isHabitStale,
   getMultiplier
 } from '@/utils/habitLogic';
@@ -249,7 +249,7 @@ export const useHabitActions = (
     resetBatch.update(doc(db, `households/${householdId}/habits`, id), {
       count: 0,
       completedDates: newCompletedDates,
-      streakDays: calculateStreak(newCompletedDates),
+      streakDays: streakForHabit({ period: habit.period, completedDates: newCompletedDates }),
       lastUpdated: serverTimestamp(),
     });
 
@@ -279,9 +279,9 @@ export const useHabitActions = (
     const submissionTimestamp = timestamp || new Date().toISOString();
     const submissionDate = format(parseISO(submissionTimestamp), 'yyyy-MM-dd');
 
-    // Calculate points based on current state
-    const currentStreak = calculateStreak(habit.completedDates);
-    const multiplier = getMultiplier(currentStreak, habit.type === 'positive');
+    // Calculate points based on current state (period-aware streak + multiplier)
+    const currentStreak = streakForHabit(habit);
+    const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
 
     let pointsEarned = 0;
     if (habit.scoringType === 'incremental') {
@@ -328,7 +328,7 @@ export const useHabitActions = (
         count: habit.count + count,
         totalCount: habit.totalCount + count,
         completedDates: updatedCompletedDates,
-        streakDays: calculateStreak(updatedCompletedDates),
+        streakDays: streakForHabit({ period: habit.period, completedDates: updatedCompletedDates }),
         hasSubmissionTracking: true,
         lastUpdated: serverTimestamp(),
       });
@@ -429,7 +429,7 @@ export const useHabitActions = (
 
       if (isLastForDate) {
         habitUpdates['completedDates'] = updatedCompletedDates;
-        habitUpdates['streakDays'] = calculateStreak(updatedCompletedDates);
+        habitUpdates['streakDays'] = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
       }
 
       deleteBatch.update(doc(db, `households/${householdId}/habits`, habitId), habitUpdates);
