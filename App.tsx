@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
 
@@ -117,9 +118,10 @@ const App: React.FC = () => {
 
   return (
     <HashRouter>
+      <ThemeProvider>
       <AuthProviderComponent>
         <HouseholdProviderComponent>
-          <div className="min-h-screen bg-brand-50 font-sans text-brand-800">
+          <div className="min-h-screen bg-brand-50 dark:bg-brand-900 font-sans text-brand-800 dark:text-brand-100 transition-colors">
             {isTestMode && (
               <div className="bg-orange-600 text-white text-xs font-bold text-center px-2 py-1 fixed top-0 left-0 right-0 z-banner shadow-lg">
                 🧪 TEST MODE - MOCK DATA (Development Only)
@@ -246,6 +248,7 @@ const App: React.FC = () => {
           </div>
         </HouseholdProviderComponent>
       </AuthProviderComponent>
+      </ThemeProvider>
     </HashRouter>
   );
 };

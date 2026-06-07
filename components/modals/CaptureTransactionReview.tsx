@@ -33,12 +33,12 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-brand-500">
+        <p className="text-sm text-brand-500 dark:text-slate-400">
           {selectedCount} of {parsedTransactions.length} selected
         </p>
         <button
           onClick={onToggleAll}
-          className="text-xs font-bold text-brand-600 hover:text-brand-800"
+          className="text-xs font-bold text-brand-600 dark:text-slate-300 hover:text-brand-800 dark:hover:text-slate-100"
         >
           {allSelected ? 'Deselect All' : 'Select All'}
         </button>
@@ -49,7 +49,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
           <div
             key={tx.id}
             className={`p-3 rounded-xl border-2 transition-all ${
-              tx.selected ? 'border-brand-400 bg-brand-50' : 'border-brand-100 bg-white opacity-60'
+              tx.selected ? 'border-brand-400 dark:border-slate-600 bg-brand-50 dark:bg-slate-700/50' : 'border-brand-100 dark:border-slate-700 bg-white dark:bg-slate-800 opacity-60'
             }`}
           >
             <div className="flex items-start gap-3">
@@ -57,7 +57,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                 onClick={() => onToggleSelection(tx.id)}
                 aria-label={tx.selected ? "Deselect transaction" : "Select transaction"}
                 className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
-                  tx.selected ? 'bg-brand-800 text-white' : 'border-2 border-brand-300'
+                  tx.selected ? 'bg-brand-800 text-white' : 'border-2 border-brand-300 dark:border-slate-600'
                 }`}
               >
                 {tx.selected && <Check size={14} />}
@@ -65,12 +65,12 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-bold text-brand-700 truncate">{tx.merchant}</p>
-                  <span className="font-mono font-bold text-brand-800 shrink-0">
+                  <p className="font-bold text-brand-700 dark:text-slate-200 truncate">{tx.merchant}</p>
+                  <span className="font-mono font-bold text-brand-800 dark:text-slate-100 shrink-0">
                     ${tx.amount.toFixed(2)}
                   </span>
                 </div>
-                <p className="text-xs text-brand-400 mb-2">{tx.date}</p>
+                <p className="text-xs text-brand-400 dark:text-slate-400 mb-2">{tx.date}</p>
                 <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Category selection">
                   {dynamicCategories.slice(0, 4).map((cat) => (
                     <button
@@ -79,7 +79,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                       className={`px-2 py-1 rounded-lg text-xxs font-bold transition-colors ${
                         tx.category === cat
                           ? 'bg-brand-800 text-white'
-                          : 'bg-brand-100 text-brand-600 hover:bg-brand-200'
+                          : 'bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 hover:bg-brand-200 dark:hover:bg-slate-700'
                       }`}
                     >
                       {cat}
@@ -89,7 +89,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     <select
                       value={tx.category}
                       onChange={(e) => onUpdateTransaction(tx.id, { category: e.target.value, subBucketId: undefined })}
-                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 text-brand-600 border-none outline-none"
+                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 border-none outline-none"
                     >
                       {dynamicCategories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
@@ -144,9 +144,9 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
         ))}
       </div>
 
-      <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
-        <AlertCircle size={16} className="text-amber-600 shrink-0" />
-        <p className="text-xs text-amber-700">
+      <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/15 rounded-xl border border-amber-200 dark:border-amber-500/30">
+        <AlertCircle size={16} className="text-amber-600 dark:text-amber-300 shrink-0" />
+        <p className="text-xs text-amber-700 dark:text-amber-300">
           These will be added to your Action Queue for final review.
         </p>
       </div>

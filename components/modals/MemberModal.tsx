@@ -73,7 +73,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
         />
 
         <div>
-          <label className="text-xs font-bold text-brand-400 uppercase block mb-1">
+          <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase block mb-1">
             Role
           </label>
           <div className="flex gap-4">
@@ -84,9 +84,9 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 value="member"
                 checked={role === 'member'}
                 onChange={() => setRole('member')}
-                className="text-brand-600 focus:ring-brand-500"
+                className="text-brand-600 dark:text-slate-300 focus:ring-brand-500"
               />
-              <span className="text-gray-700">Member</span>
+              <span className="text-gray-700 dark:text-slate-200">Member</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -95,9 +95,9 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 value="admin"
                 checked={role === 'admin'}
                 onChange={() => setRole('admin')}
-                className="text-brand-600 focus:ring-brand-500"
+                className="text-brand-600 dark:text-slate-300 focus:ring-brand-500"
               />
-              <span className="text-gray-700">Admin</span>
+              <span className="text-gray-700 dark:text-slate-200">Admin</span>
             </label>
           </div>
         </div>
@@ -106,7 +106,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+            className="px-4 py-2 text-gray-600 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
           >
             Cancel
           </button>

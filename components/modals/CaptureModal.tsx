@@ -489,9 +489,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   ];
 
   const headerContent = (
-    <div className="flex flex-col border-b border-brand-100 bg-white">
+    <div className="flex flex-col border-b border-brand-100 dark:border-slate-700 bg-white dark:bg-slate-800">
       <div className="flex items-center justify-between px-6 py-4">
-        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800">
+        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800 dark:text-slate-100">
           {activeTab === 'transaction' && (
             view === 'menu' ? 'Add Transaction' :
             view === 'camera' ? 'Scan Receipt' :
@@ -543,8 +543,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
               {/* Processing View */}
               {view === 'processing' && (
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <Loader2 className="w-12 h-12 text-brand-600 animate-spin" />
-                  <p className="text-brand-500 font-medium">{processingMessage}</p>
+                  <Loader2 className="w-12 h-12 text-brand-600 dark:text-slate-300 animate-spin" />
+                  <p className="text-brand-500 dark:text-slate-400 font-medium">{processingMessage}</p>
                 </div>
               )}
 
@@ -576,7 +576,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                       aria-label="Capture photo"
                       className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-brand-500"
                     >
-                      <div className="w-12 h-12 bg-white rounded-full" />
+                      <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full" />
                     </button>
                   </div>
                 </div>

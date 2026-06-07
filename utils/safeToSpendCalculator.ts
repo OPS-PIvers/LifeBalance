@@ -113,42 +113,81 @@ export const calculateSafeToSpendFromExpanded = (
   allExpandedItems: CalendarItem[],
   buckets: BudgetBucket[],
   currentPeriodId: string = ''
-): number => {
+): number =>
+  // Delegate to the breakdown so the number and its itemization can never
+  // diverge — there is exactly one place the formula lives.
+  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId)
+    .safeToSpend;
+
+/**
+ * Itemized breakdown behind the safe-to-spend number, for display in the UI.
+ */
+export interface SafeToSpendBreakdown {
+  /** Sum of checking-account balances (the only funds counted as available). */
+  checkingBalance: number;
+  /** Unpaid bills from this paycheck to the next (bucket-covered bills excluded). */
+  unpaidBills: number;
+  /** checkingBalance - unpaidBills. */
+  safeToSpend: number;
+  /** Date of the next paycheck bounding the range, or null if none found. */
+  nextPaycheckDate: string | null;
+}
+
+/**
+ * Breakdown variant using pre-expanded calendar items (memo-friendly).
+ * This is the single source of truth for the safe-to-spend formula:
+ *   safeToSpend = checkingBalance - unpaidBills (this paycheck → next).
+ */
+export const calculateSafeToSpendBreakdownFromExpanded = (
+  accounts: Account[],
+  allExpandedItems: CalendarItem[],
+  buckets: BudgetBucket[],
+  currentPeriodId: string = ''
+): SafeToSpendBreakdown => {
   // 1. Available Checking Balance (Assets)
   // STRICT: Only Checking. No Savings, No Credit.
   const checkingBalance = accounts
     .filter(a => a.type === 'checking')
     .reduce((sum, a) => sum + a.balance, 0);
 
-  // 2. Determine the bill date range (Paycheck A to Paycheck B)
-  // If no paycheck tracking, return full checking balance
+  // 2. Without paycheck tracking, the full checking balance is available.
   if (!currentPeriodId) {
-    return checkingBalance;
+    return { checkingBalance, unpaidBills: 0, safeToSpend: checkingBalance, nextPaycheckDate: null };
   }
 
-  const paycheckA = parseISO(currentPeriodId); // lastPaycheckDate
-
-  // Find next paycheck (Paycheck B) from the already expanded list
+  // 3. Determine the bill date range (Paycheck A to Paycheck B)
+  const paycheckA = parseISO(currentPeriodId);
   const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
+  // Fallback: end of current month if no next paycheck found.
+  const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
 
-  let rangeEndDate: Date;
-  if (paycheckBDate) {
-    rangeEndDate = parseISO(paycheckBDate);
-  } else {
-    // Fallback: end of current month if no next paycheck found
-    rangeEndDate = endOfMonth(paycheckA);
+  // 4. Unpaid bills in range (AFTER paycheck A, up to and including range end).
+  const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate, buckets);
+
+  return {
+    checkingBalance,
+    unpaidBills,
+    safeToSpend: checkingBalance - unpaidBills,
+    nextPaycheckDate: paycheckBDate,
+  };
+};
+
+/**
+ * Breakdown variant that expands calendar items internally.
+ */
+export const calculateSafeToSpendBreakdown = (
+  accounts: Account[],
+  calendarItems: CalendarItem[],
+  buckets: BudgetBucket[],
+  currentPeriodId: string = ''
+): SafeToSpendBreakdown => {
+  if (!currentPeriodId) {
+    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], buckets, currentPeriodId);
   }
-
-  // 3. Calculate unpaid bills in the range (AFTER paycheck A, up to and including range end)
-  const unpaidBills = calculateUnpaidBillsInRange(
-    allExpandedItems,
-    paycheckA,
-    rangeEndDate,
-    buckets
-  );
-
-  // 4. Final calculation: Checking - Bills (NO bucket liabilities)
-  return checkingBalance - unpaidBills;
+  const paycheckA = parseISO(currentPeriodId);
+  const searchWindowEnd = addMonths(paycheckA, 2);
+  const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
+  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId);
 };
 
 /**

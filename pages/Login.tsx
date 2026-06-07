@@ -71,9 +71,9 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Logo/Brand */}
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-24 h-24 mb-4">
@@ -83,8 +83,8 @@ const Login: React.FC = () => {
                 className="w-full h-full object-contain rounded-2xl"
               />
             </div>
-            <h1 className="text-3xl font-bold text-brand-800 mb-2">LifeBalance</h1>
-            <p className="text-brand-500 text-sm">
+            <h1 className="text-3xl font-bold text-brand-800 dark:text-slate-100 mb-2">LifeBalance</h1>
+            <p className="text-brand-500 dark:text-slate-400 text-sm">
               Manage your household finances, habits, and goals
             </p>
           </div>
@@ -93,7 +93,7 @@ const Login: React.FC = () => {
           {accessDeniedEmail && (
             <div
               role="alert"
-              className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+              className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/15 p-4 text-sm text-amber-800 dark:text-amber-200"
             >
               <p className="font-semibold">Access restricted for this account</p>
               <p className="mt-1">
@@ -106,10 +106,10 @@ const Login: React.FC = () => {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-brand-200"></div>
+              <div className="w-full border-t border-brand-200 dark:border-slate-700"></div>
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-2 text-brand-400 font-medium">
+              <span className="bg-white dark:bg-slate-800 px-2 text-brand-400 dark:text-slate-400 font-medium">
                 {accessDeniedEmail ? 'Try a different account' : 'Sign in to continue'}
               </span>
             </div>
@@ -122,7 +122,7 @@ const Login: React.FC = () => {
             variant="secondary"
             size="lg"
             isLoading={loading}
-            className="w-full text-brand-800"
+            className="w-full text-brand-800 dark:text-slate-100"
             leftIcon={
               !loading && (
                 <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -154,14 +154,14 @@ const Login: React.FC = () => {
           </Button>
 
           {/* Footer */}
-          <p className="text-center text-xs text-brand-400 pt-4">
+          <p className="text-center text-xs text-brand-400 dark:text-slate-400 pt-4">
             By signing in, you agree to manage your household responsibly
           </p>
         </div>
 
         {/* Additional Info */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-brand-600">
+          <p className="text-sm text-brand-600 dark:text-slate-300">
             Track finances • Build habits • Earn rewards
           </p>
         </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { ArrowRightLeft, Plus, Edit, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '../../types/schema';
 import BucketFormModal from '../modals/BucketFormModal';
 import toast from 'react-hot-toast';
@@ -261,6 +261,27 @@ const BudgetBuckets: React.FC = () => {
         );
       })}
 
+      {/* Empty State */}
+      {buckets.length === 0 && !transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
+        <div className="flex flex-col items-center justify-center text-center py-12 px-6 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 ring-1 ring-black/5 shadow-glass rounded-3xl">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
+            <Wallet size={28} className="text-slate-400 dark:text-slate-500" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No budget buckets yet</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+            Create spending categories to track where your money goes each pay period.
+          </p>
+          <Button
+            variant="primary"
+            onClick={handleAddBucket}
+            className="mt-5"
+            leftIcon={<Plus size={18} />}
+          >
+            Create Bucket
+          </Button>
+        </div>
+      )}
+
       {/* Add Bucket Button */}
       <Button
         variant="dashed"
@@ -293,11 +314,11 @@ const BudgetBuckets: React.FC = () => {
         ariaLabelledBy="reallocate-title"
         className="p-6"
       >
-        <h3 id="reallocate-title" className="font-bold text-lg text-brand-800 mb-4 flex items-center gap-2">
+        <h3 id="reallocate-title" className="font-bold text-lg text-brand-800 dark:text-slate-100 mb-4 flex items-center gap-2">
           <ArrowRightLeft size={20} /> Fix Overspending
         </h3>
 
-        <div className="mb-4 text-sm text-brand-600 bg-brand-50 p-3 rounded-xl border border-brand-100">
+        <div className="mb-4 text-sm text-brand-600 dark:text-slate-300 bg-brand-50 dark:bg-slate-700/50 p-3 rounded-xl border border-brand-100 dark:border-slate-700">
           Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
         </div>
 
@@ -341,9 +362,9 @@ const BudgetBuckets: React.FC = () => {
 
           {/* Dynamic Balance Preview */}
           {reallocateModal?.sourceId && (
-            <div className="text-xs flex justify-between items-center text-brand-500 px-1">
+            <div className="text-xs flex justify-between items-center text-brand-500 dark:text-slate-400 px-1">
                 <span>Remaining in source:</span>
-                <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800'}`}>
+                <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800 dark:text-slate-200'}`}>
                   ${remainingAfterTransfer.toLocaleString()}
                 </span>
             </div>
@@ -390,7 +411,7 @@ const BudgetBuckets: React.FC = () => {
               >
                 Edit Transaction
               </Button>
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-gray-100 dark:bg-slate-700 my-2" />
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"

@@ -61,20 +61,20 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         aria-expanded={isOpen}
         aria-controls={contentId}
         className={cn(
-          "w-full flex items-center justify-between p-5 hover:bg-slate-50/50 transition-all duration-300 group text-left",
+          "w-full flex items-center justify-between p-5 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-all duration-300 group text-left",
           headerClassName
         )}
       >
         <div className="flex items-center gap-4">
           {icon && <div className="text-brand-500 group-hover:text-brand-600 transition-colors">{icon}</div>}
-          <h3 id={headerId} className="text-lg font-semibold tracking-tight text-slate-900 group-hover:text-brand-900 transition-colors">
+          <h3 id={headerId} className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100 group-hover:text-brand-900 dark:group-hover:text-brand-300 transition-colors">
             {title}
           </h3>
         </div>
         <ChevronDown
           className={cn(
-            "w-5 h-5 text-slate-400 transition-transform duration-300 ease-spring",
-            isOpen && "rotate-180 text-brand-500"
+            "w-5 h-5 text-slate-400 dark:text-slate-500 transition-transform duration-300 ease-spring",
+            isOpen && "rotate-180 text-brand-500 dark:text-brand-400"
           )}
         />
       </button>
@@ -88,7 +88,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         )}
       >
         <div className="overflow-hidden">
-          <div className={cn("p-5 pt-0 border-t border-slate-100/50", contentClassName)}>
+          <div className={cn("p-5 pt-0 border-t border-slate-100/50 dark:border-slate-700/70", contentClassName)}>
             <div className="pt-4">
               {children}
             </div>

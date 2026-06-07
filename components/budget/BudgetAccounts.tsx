@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical } from 'lucide-react';
+import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
 import { Account } from '../../types/schema';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
@@ -183,20 +183,20 @@ const BudgetAccounts: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, account.id, isLiabilityGroup)}
         onDragEnd={handleDragEnd}
-        className={`bg-white/80 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative overflow-hidden transition-all duration-200 ${
+        className={`bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-5 rounded-2xl ring-1 ring-black/5 shadow-glass relative overflow-hidden transition-all duration-200 ${
           isDragging ? 'opacity-50 scale-95' : ''
         } ${isDragOver ? 'border-brand-500 border-2' : 'border-transparent'}`}
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             {/* Drag Handle */}
-            <div className="cursor-grab active:cursor-grabbing text-brand-300 hover:text-brand-500 touch-none">
+            <div className="cursor-grab active:cursor-grabbing text-brand-300 dark:text-slate-600 hover:text-brand-500 dark:hover:text-slate-400 touch-none">
               <GripVertical size={18} />
             </div>
             <div>
-              <p className="font-bold text-brand-800">{account.name}</p>
+              <p className="font-bold text-brand-800 dark:text-slate-100">{account.name}</p>
               <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
-                isLiability ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'
+                isLiability ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300'
               }`}>
                 {account.type}
               </span>
@@ -206,7 +206,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="subtle"
                 size="icon-sm"
                 onClick={() => setIsGoalModalOpen(account.id)}
-                className="hover:text-habit-gold hover:bg-yellow-50 hidden sm:flex"
+                className="hover:text-habit-gold hover:bg-yellow-50 dark:hover:bg-yellow-500/15 hidden sm:flex"
                 aria-label={`Set savings goal for ${account.name}`}
               >
                 <Target size={14} />
@@ -220,7 +220,7 @@ const BudgetAccounts: React.FC = () => {
               variant="ghost-destructive"
               size="icon-sm"
               onClick={() => setDeletingId(account.id)}
-              className="text-brand-300 hidden sm:flex"
+              className="text-brand-300 dark:text-slate-600 hidden sm:flex"
               aria-label={`Delete ${account.name} account`}
             >
               <Trash2 size={14} />
@@ -232,7 +232,7 @@ const BudgetAccounts: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => setActionAccount(account)}
-                className="text-brand-300"
+                className="text-brand-300 dark:text-slate-500"
                 aria-label={`Options for ${account.name}`}
               >
                 <MoreVertical size={20} />
@@ -245,7 +245,7 @@ const BudgetAccounts: React.FC = () => {
                   type="number"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-24 bg-brand-50 border border-brand-200 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-24 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500 dark:text-slate-100"
                   autoFocus
                 />
                 <Button
@@ -274,7 +274,7 @@ const BudgetAccounts: React.FC = () => {
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
                   ${account.balance.toLocaleString()}
                 </p>
-                <p className="text-xxs text-brand-300 group-hover:text-brand-500 flex justify-end items-center gap-1 transition-colors">
+                <p className="text-xxs text-brand-300 dark:text-slate-500 group-hover:text-brand-500 dark:group-hover:text-slate-400 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
                 </p>
               </div>
@@ -285,11 +285,11 @@ const BudgetAccounts: React.FC = () => {
         {/* Savings Goal Bar */}
         {isSavings && account.monthlyGoal && (
           <div className="mt-2 ml-7">
-            <div className="flex justify-between text-xxs text-brand-400 mb-1">
+            <div className="flex justify-between text-xxs text-brand-400 dark:text-slate-500 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
             </div>
-            <div className="h-1.5 w-full bg-brand-100 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
               <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
             </div>
           </div>
@@ -322,8 +322,8 @@ const BudgetAccounts: React.FC = () => {
       {assetAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Assets</h3>
-            <div className="flex-1 h-px bg-brand-100"></div>
+            <h3 className="text-sm font-bold text-brand-600 dark:text-slate-300 uppercase tracking-wide">Assets</h3>
+            <div className="flex-1 h-px bg-brand-100 dark:bg-slate-700"></div>
             <span className="text-sm font-mono text-emerald-600">${assets.toLocaleString()}</span>
           </div>
           <div className="space-y-2">
@@ -336,8 +336,8 @@ const BudgetAccounts: React.FC = () => {
       {liabilityAccounts.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-brand-600 uppercase tracking-wide">Liabilities</h3>
-            <div className="flex-1 h-px bg-brand-100"></div>
+            <h3 className="text-sm font-bold text-brand-600 dark:text-slate-300 uppercase tracking-wide">Liabilities</h3>
+            <div className="flex-1 h-px bg-brand-100 dark:bg-slate-700"></div>
             <span className="text-sm font-mono text-rose-600">${debts.toLocaleString()}</span>
           </div>
           <div className="space-y-2">
@@ -348,8 +348,22 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Empty State */}
       {accounts.length === 0 && (
-        <div className="text-center py-8 text-brand-400">
-          <p>No accounts yet. Add your first account below.</p>
+        <div className="flex flex-col items-center justify-center text-center py-12 px-6 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl ring-1 ring-black/5 shadow-glass rounded-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
+            <Landmark size={28} className="text-slate-400 dark:text-slate-500" />
+          </div>
+          <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">No accounts yet</h3>
+          <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
+            Add your checking, savings, and credit accounts to track your net worth.
+          </p>
+          <Button
+            variant="primary"
+            onClick={() => setIsAddModalOpen(true)}
+            className="mt-5"
+            leftIcon={<Plus size={18} />}
+          >
+            Add Account
+          </Button>
         </div>
       )}
 
@@ -371,14 +385,14 @@ const BudgetAccounts: React.FC = () => {
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 id="add-account-title" className="font-bold text-lg text-brand-800">Add Account</h3>
+            <h3 id="add-account-title" className="font-bold text-lg text-brand-800 dark:text-slate-100">Add Account</h3>
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsAddModalOpen(false)}
               aria-label="Close"
             >
-              <X size={20} className="text-brand-400" />
+              <X size={20} className="text-brand-400 dark:text-slate-500" />
             </Button>
           </div>
 
@@ -421,17 +435,17 @@ const BudgetAccounts: React.FC = () => {
       >
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 id="set-goal-title" className="font-bold text-lg text-brand-800">Set Savings Goal</h3>
+            <h3 id="set-goal-title" className="font-bold text-lg text-brand-800 dark:text-slate-100">Set Savings Goal</h3>
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setIsGoalModalOpen(null)}
               aria-label="Close"
             >
-              <X size={20} className="text-brand-400" />
+              <X size={20} className="text-brand-400 dark:text-slate-500" />
             </Button>
           </div>
-          <p className="text-sm text-brand-500 mb-4">
+          <p className="text-sm text-brand-500 dark:text-slate-400 mb-4">
             What is your target balance for this account?
           </p>
           <Input
@@ -488,7 +502,7 @@ const BudgetAccounts: React.FC = () => {
                 </Button>
               )}
 
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-gray-100 dark:bg-slate-700 my-2" />
 
               {/* Delete Action */}
               <Button
@@ -527,19 +541,19 @@ const BudgetAccounts: React.FC = () => {
         >
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 id="delete-account-title" className="font-bold text-lg text-brand-800">Delete Account?</h3>
+              <h3 id="delete-account-title" className="font-bold text-lg text-brand-800 dark:text-slate-100">Delete Account?</h3>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => !isDeleting && setDeletingId(null)}
-                className="text-brand-400 hover:text-brand-600"
+                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300"
                 aria-label="Close"
                 disabled={isDeleting}
               >
                 <X size={20} />
               </Button>
             </div>
-            <p id="delete-account-desc" className="text-sm text-brand-500 mb-6">
+            <p id="delete-account-desc" className="text-sm text-brand-500 dark:text-slate-400 mb-6">
               Are you sure you want to delete this account? This action cannot be undone.
             </p>
             <div className="flex gap-3">

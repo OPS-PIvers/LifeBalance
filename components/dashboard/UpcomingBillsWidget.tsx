@@ -30,7 +30,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
       .map(bill => {
         const date = parseISO(bill.date);
         let dateLabel = format(date, 'MMM d');
-        let urgencyClass = 'text-slate-500';
+        let urgencyClass = 'text-slate-500 dark:text-slate-400';
 
         if (isSameDay(date, today)) {
           dateLabel = 'Today';
@@ -52,17 +52,17 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
   if (upcomingBills.length === 0) return null;
 
   return (
-    <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
+    <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <div className="p-1.5 bg-rose-100 text-rose-600 rounded-lg">
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <div className="p-1.5 bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300 rounded-lg">
              <CalendarClock size={14} />
           </div>
           Upcoming Bills
         </h2>
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 transition-colors"
+          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
         >
           Calendar <ArrowRight size={12} />
         </Link>
@@ -72,21 +72,21 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
         {upcomingBills.map(bill => (
             <div key={bill.id} className="flex items-center justify-between group">
               <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-sm transition-all">
+                 <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-sm transition-all dark:bg-slate-700/50 dark:border-slate-700 dark:text-slate-500 dark:group-hover:bg-slate-700">
                     {bill.displayDate}
                  </div>
                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-700 truncate max-w-[120px]">{bill.title}</p>
+                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{bill.title}</p>
                     <p className={`text-xs ${bill.urgencyClass}`}>{bill.dateLabel}</p>
                  </div>
               </div>
               <div className="flex items-center gap-3">
-                 <span className="font-mono font-bold text-slate-900 text-sm">
+                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
                     ${bill.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                  </span>
                  <button
                    onClick={() => onPay(bill.id)}
-                   className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 rounded-xl transition-colors"
+                   className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 rounded-xl transition-colors"
                    title="Pay Bill"
                    aria-label={`Pay ${bill.title}`}
                  >

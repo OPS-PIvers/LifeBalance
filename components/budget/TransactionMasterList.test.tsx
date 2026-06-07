@@ -154,7 +154,7 @@ describe('TransactionMasterList', () => {
       const searchInput = screen.getByPlaceholderText('Search merchant or amount...');
       fireEvent.change(searchInput, { target: { value: 'NonExistent' } });
 
-      expect(screen.getByText('No transactions found matching your filters.')).toBeInTheDocument();
+      expect(screen.getByText('No transactions found')).toBeInTheDocument();
       expect(screen.getByText('Clear all filters')).toBeInTheDocument();
     });
   });

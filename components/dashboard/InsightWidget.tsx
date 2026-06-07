@@ -3,6 +3,7 @@ import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { useInsightActions } from '../../hooks/useInsightActions';
 import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
 import { CreateChallengePayload } from '@/types/schema';
+import { Skeleton } from '../ui/Skeleton';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
@@ -40,18 +41,18 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
   };
 
   return (
-    <div className="bg-gradient-to-br from-indigo-50/80 to-white/80 backdrop-blur-md border border-indigo-100/50 shadow-sm rounded-3xl p-6">
+    <div className="bg-gradient-to-br from-indigo-50/80 to-white/80 dark:from-indigo-500/10 dark:to-slate-800/60 backdrop-blur-md border border-indigo-100/50 dark:border-indigo-500/20 shadow-sm rounded-3xl p-6">
       <div className="flex items-start gap-4">
-        <div className="p-2.5 bg-white/80 backdrop-blur-sm rounded-xl shadow-sm text-indigo-500 ring-1 ring-indigo-100">
+        <div className="p-2.5 bg-white/80 dark:bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-sm text-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-500/20">
           <Sparkles size={20} />
         </div>
         <div className="flex-1">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider">AI Insight</h3>
+            <h3 className="text-xs font-bold text-indigo-400 dark:text-indigo-300 uppercase tracking-wider">AI Insight</h3>
             <div className="flex gap-2">
               <button
                 onClick={onOpenArchive}
-                className="flex items-center gap-1.5 px-3 py-1 bg-white text-indigo-600 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-50"
+                className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-50 dark:hover:bg-slate-700"
               >
                 <History size={12} />
                 History
@@ -66,12 +67,22 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
               </button>
             </div>
           </div>
-          <p className="text-indigo-900 font-medium leading-relaxed mb-3">
-            &quot;{insight}&quot;
-          </p>
+          {isGeneratingInsight ? (
+            // "Generating" shimmer so a live AI call feels live.
+            <div className="mb-3 space-y-2" aria-live="polite" aria-busy="true">
+              <span className="sr-only">Generating insight…</span>
+              <Skeleton className="h-4 w-full bg-indigo-200/60 dark:bg-indigo-500/20" />
+              <Skeleton className="h-4 w-11/12 bg-indigo-200/60 dark:bg-indigo-500/20" />
+              <Skeleton className="h-4 w-2/3 bg-indigo-200/60 dark:bg-indigo-500/20" />
+            </div>
+          ) : (
+            <p className="text-indigo-900 dark:text-indigo-100 font-medium leading-relaxed mb-3">
+              &quot;{insight}&quot;
+            </p>
+          )}
 
           {/* Action Pills */}
-          {insightActions && insightActions.length > 0 && (
+          {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
             <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
               {insightActions.map((action, idx) => (
                 <button
@@ -83,7 +94,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
                       handleAction(action);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100 shadow-sm active:scale-95 transition-all"
+                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-300 dark:border-indigo-500/20 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all"
                 >
                   {getActionIcon(action.type)}
                   {action.label}

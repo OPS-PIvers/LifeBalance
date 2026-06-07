@@ -1,11 +1,9 @@
-/* eslint-disable */
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHousehold } from '../contexts/FirebaseHouseholdContext';
 import { Habit } from '../types/schema';
 import HabitCategoryList from '../components/habits/HabitCategoryList';
-import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
@@ -81,14 +79,14 @@ const Habits: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-28 pt-6">
+    <div className="min-h-screen bg-slate-50 dark:bg-brand-900 pb-28 pt-6">
       <Tabs defaultValue="track">
         {/* Page Title & Action */}
         <div className="px-4 mb-6 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Daily Habits</h1>
-              <p className="text-sm text-slate-500 leading-relaxed">Build your streak, earn rewards.</p>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Daily Habits</h1>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Build your streak, earn rewards.</p>
             </div>
             <div className="flex gap-2">
               <Button
@@ -179,15 +177,29 @@ const Habits: React.FC = () => {
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
             {categories.length === 0 && (
-              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400">
-                <p>No habits yet.</p>
-                <p className="text-xs mt-1">Tap "New" to start tracking.</p>
+              <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-800/40">
+                <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4 text-slate-400 dark:text-slate-500">
+                  <ListChecks size={28} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No habits yet</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+                  Start building your streak. Add a habit to begin earning points and rewards.
+                </p>
+                <Button
+                  onClick={() => setIsWizardOpen(true)}
+                  variant="primary"
+                  size="md"
+                  className="mt-5"
+                  leftIcon={<Sparkles size={16} />}
+                >
+                  Create your first habit
+                </Button>
               </div>
             )}
 
             {categories.map((category) => (
               <div key={category}>
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-2">
+                <h2 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 ml-2">
                   {category}
                 </h2>
                 <HabitCategoryList category={category} habits={groupedHabits[category]} />

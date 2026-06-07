@@ -16,7 +16,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-lg"
-      className="bg-brand-50"
+      className="bg-brand-50 dark:bg-slate-700/50"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white shrink-0">
@@ -41,12 +41,12 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
             return (
               <div 
                 key={reward.id}
-                className={`flex flex-col p-4 bg-white rounded-xl border border-brand-100 shadow-sm transition-all ${
+                className={`flex flex-col p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 shadow-sm transition-all ${
                   !canAfford ? 'opacity-60 grayscale-[0.5]' : 'hover:border-habit-gold/50'
                 }`}
               >
                 <div className="text-4xl mb-3 self-center">{reward.icon}</div>
-                <h3 className="font-bold text-brand-800 text-sm text-center mb-1">{reward.title}</h3>
+                <h3 className="font-bold text-brand-800 dark:text-slate-100 text-sm text-center mb-1">{reward.title}</h3>
                 <p className="text-xs font-bold text-habit-gold text-center mb-4">{reward.cost} pts</p>
                 
                 <button
@@ -57,7 +57,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
                   className={`mt-auto py-2 rounded-lg text-xs font-bold transition-transform active:scale-95 ${
                     canAfford 
                       ? 'bg-brand-800 text-white shadow-md hover:bg-brand-700' 
-                      : 'bg-brand-100 text-brand-400 cursor-not-allowed'
+                      : 'bg-brand-100 dark:bg-slate-700/50 text-brand-400 dark:text-slate-400 cursor-not-allowed'
                   }`}
                 >
                   {canAfford ? 'Redeem' : 'Locked'}

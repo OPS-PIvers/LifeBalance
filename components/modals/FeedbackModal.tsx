@@ -55,14 +55,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
     <Drawer isOpen={isOpen} onClose={onClose} title="Send Feedback">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700">
+          <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700 dark:text-slate-200">
             Describe the issue or suggestion
           </label>
           <textarea
             id="feedback-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full h-32 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+            className="w-full h-32 p-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
             placeholder="I found a bug when..."
             required
           />
@@ -71,7 +71,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+            className="px-4 py-2 text-gray-600 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
           >
             Cancel
           </button>

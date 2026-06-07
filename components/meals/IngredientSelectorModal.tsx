@@ -75,14 +75,14 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
       <div className="flex flex-col h-full max-h-[80vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-white dark:bg-slate-800 z-10">
           <div>
-            <h3 className="text-lg font-bold text-slate-900">Add Ingredients</h3>
-            <p className="text-xs text-slate-500 font-medium">{mealName}</p>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">Add Ingredients</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{mealName}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
             aria-label="Close"
           >
             <X size={20} />
@@ -92,8 +92,8 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
         {/* List */}
         <div className="flex-1 scroll-contain-y p-4 space-y-2">
             {ingredients.length === 0 ? (
-                <div className="text-center py-8 text-slate-500">
-                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-slate-600" />
                     <p>No ingredients found for this meal.</p>
                 </div>
             ) : (
@@ -117,31 +117,31 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             tabIndex={0}
                             className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/50 ${
                                 isSelected
-                                    ? 'bg-brand-50 border-brand-200 shadow-sm'
-                                    : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                    ? 'bg-brand-50 border-brand-200 shadow-sm dark:bg-brand-700/30 dark:border-brand-500/40'
+                                    : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-700/50'
                             }`}
                         >
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
                                 isSelected
                                     ? 'bg-brand-600 border-brand-600 text-white'
-                                    : 'bg-white border-slate-300'
+                                    : 'bg-white border-slate-300 dark:bg-slate-700 dark:border-slate-600'
                             }`}>
                                 {isSelected && <Check size={14} strokeWidth={3} />}
                             </div>
 
                             <div className="flex-1 min-w-0">
-                                <div className={`font-medium truncate ${isSelected ? 'text-brand-900' : 'text-slate-700'}`}>
+                                <div className={`font-medium truncate ${isSelected ? 'text-brand-900 dark:text-brand-200' : 'text-slate-700 dark:text-slate-200'}`}>
                                     {ing.name}
                                 </div>
                                 {ing.quantity && (
-                                    <div className="text-xs text-slate-500 mt-0.5">
+                                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                         Qty: {ing.quantity}
                                     </div>
                                 )}
                             </div>
 
                             {inList && (
-                                <span className="text-xxs font-bold px-2 py-1 bg-amber-50 text-amber-600 rounded-md border border-amber-100 whitespace-nowrap">
+                                <span className="text-xxs font-bold px-2 py-1 bg-amber-50 text-amber-600 rounded-md border border-amber-100 whitespace-nowrap dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20">
                                     In List
                                 </span>
                             )}
@@ -152,17 +152,17 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col gap-3">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 flex flex-col gap-3">
             <div className="flex justify-between items-center px-1">
                 {ingredients.length > 0 && (
                     <button
                         onClick={handleSelectAll}
-                        className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline"
+                        className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-300 dark:hover:text-brand-200"
                     >
                         {selectedIndices.size === ingredients.length ? 'Deselect All' : 'Select All'}
                     </button>
                 )}
-                <span className="text-xs text-slate-500 font-medium">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                     {selectedIndices.size} selected
                 </span>
             </div>

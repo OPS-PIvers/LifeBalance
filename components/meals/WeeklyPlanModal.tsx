@@ -175,28 +175,28 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       {/* Choose */}
       {mode === 'choose' && (
         <div className="space-y-3 pb-2">
-          <p className="text-sm text-slate-500 leading-relaxed">
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             Generate a full week of dinners and a shopping list with AI, or import a plan from your
             weekly-meals project.
           </p>
           <button
             onClick={() => setMode('generate')}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-violet-50 border border-violet-100 text-left hover:bg-violet-100 transition-colors"
+            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-violet-50 border border-violet-100 text-left hover:bg-violet-100 transition-colors dark:bg-violet-500/15 dark:border-violet-500/20 dark:hover:bg-violet-500/25"
           >
             <span className="w-10 h-10 rounded-xl bg-violet-600 text-white flex items-center justify-center shrink-0"><Sparkles className="w-5 h-5" /></span>
             <span>
-              <span className="block font-bold text-slate-900">Generate with AI</span>
-              <span className="block text-xs text-slate-500">3 balanced dinners + grocery list via Gemini</span>
+              <span className="block font-bold text-slate-900 dark:text-slate-100">Generate with AI</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">3 balanced dinners + grocery list via Gemini</span>
             </span>
           </button>
           <button
             onClick={() => setMode('import')}
-            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-left hover:bg-emerald-100 transition-colors"
+            className="w-full flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-left hover:bg-emerald-100 transition-colors dark:bg-emerald-500/15 dark:border-emerald-500/20 dark:hover:bg-emerald-500/25"
           >
             <span className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0"><FileJson className="w-5 h-5" /></span>
             <span>
-              <span className="block font-bold text-slate-900">Import week.json</span>
-              <span className="block text-xs text-slate-500">Paste a plan from weekly-meals</span>
+              <span className="block font-bold text-slate-900 dark:text-slate-100">Import week.json</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Paste a plan from weekly-meals</span>
             </span>
           </button>
         </div>
@@ -206,8 +206,8 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       {mode === 'generate' && (
         <div className="space-y-4 pb-2">
           <div>
-            <label htmlFor="plan-note" className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-              Anything to use up? <span className="font-medium normal-case text-slate-300">(optional)</span>
+            <label htmlFor="plan-note" className="block text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+              Anything to use up? <span className="font-medium normal-case text-slate-300 dark:text-slate-500">(optional)</span>
             </label>
             <textarea
               id="plan-note"
@@ -215,11 +215,11 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="e.g. use the ground beef in the freezer, keep it quick this week"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
             />
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors">Back</button>
+            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Back</button>
             <button
               onClick={handleGenerate}
               disabled={busy}
@@ -234,7 +234,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       {/* Import */}
       {mode === 'import' && (
         <div className="space-y-3 pb-2">
-          <p className="text-sm text-slate-500 leading-relaxed">
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
             Copy the week.json from your weekly-meals app, then tap paste — a code fence or
             extra text around it is fine.
           </p>
@@ -244,20 +244,20 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
           >
             <ClipboardPaste className="w-5 h-5" /> Paste from clipboard
           </button>
-          <div className="text-center text-xxs font-bold uppercase tracking-wider text-slate-300">or paste manually</div>
+          <div className="text-center text-xxs font-bold uppercase tracking-wider text-slate-300 dark:text-slate-500">or paste manually</div>
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             rows={6}
             placeholder='Paste week.json here…'
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none"
+            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
           />
           <div className="flex gap-3">
-            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors">Back</button>
+            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Back</button>
             <button
               onClick={handleImport}
               disabled={!importText.trim()}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 disabled:opacity-50 transition-all active:scale-95"
+              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 disabled:opacity-50 transition-all active:scale-95 dark:bg-slate-700 dark:hover:bg-slate-600"
             >
               <ChefHat className="w-5 h-5" /> Preview
             </button>
@@ -269,12 +269,12 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
       {mode === 'preview' && plan && (
         <div className="space-y-4">
           <MealGuide plan={plan} />
-          <div className="sticky bottom-0 bg-white pt-2 pb-1 flex gap-3 border-t border-slate-100">
-            <button onClick={reset} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors">Discard</button>
+          <div className="sticky bottom-0 bg-white dark:bg-slate-800 pt-2 pb-1 flex gap-3 border-t border-slate-100 dark:border-slate-700">
+            <button onClick={reset} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Discard</button>
             <button
               onClick={handleApply}
               disabled={busy}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 disabled:opacity-60 transition-all active:scale-95"
+              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 disabled:opacity-60 transition-all active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-500"
             >
               {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Adding…</> : <><CalendarPlus className="w-5 h-5" /> Add to my week</>}
             </button>

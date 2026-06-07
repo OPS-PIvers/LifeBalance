@@ -15,9 +15,12 @@ import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget
 import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
 import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
+import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton';
+import { SafeToSpendHero } from '../components/dashboard/SafeToSpendHero';
 
 const Dashboard: React.FC = () => {
   const {
+    isLoading,
     activeChallenge,
     currentUser,
     payCalendarItem,
@@ -55,18 +58,22 @@ const Dashboard: React.FC = () => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
 
+  if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
-    <div className="min-h-screen bg-brand-50 pb-32">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32">
       
       {/* Dashboard Header */}
       <div className="px-6 py-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Hi, {currentUser?.displayName || 'there'}</h1>
-          <p className="text-base text-slate-500 font-medium mt-1">Let&apos;s make today count.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Hi, {currentUser?.displayName || 'there'}</h1>
+          <p className="text-base text-slate-500 dark:text-slate-400 font-medium mt-1">Let&apos;s make today count.</p>
         </div>
-        <button 
+        <button
           onClick={() => setIsAnalyticsOpen(true)}
-          className="p-3 bg-white/80 backdrop-blur-xl border border-white/20 ring-1 ring-black/5 rounded-2xl shadow-sm text-slate-500 hover:text-slate-900 hover:bg-white active:scale-95 transition-all"
+          className="p-3 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 rounded-2xl shadow-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800 active:scale-95 transition-all"
           aria-label="Open Analytics"
         >
           <BarChart2 size={24} />
@@ -75,13 +82,16 @@ const Dashboard: React.FC = () => {
 
       <div className="px-4 space-y-8">
 
+        {/* Hero: Safe to Spend */}
+        <SafeToSpendHero />
+
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-white/90 backdrop-blur-xl border border-white/20 shadow-sm ring-1 ring-black/5 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/90 dark:bg-slate-800/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-sm ring-1 ring-black/5 dark:ring-white/5 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)] animate-pulse"></div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-slate-900">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -93,9 +103,9 @@ const Dashboard: React.FC = () => {
         )}
 
         {/* Widget A: Action Queue */}
-        <div className="bg-white/80 backdrop-blur-xl border border-white/20 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
+        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-premium ring-1 ring-black/5 dark:ring-white/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {actionQueue.length > 0 ? (
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm"></span>
               ) : (
@@ -131,8 +141,8 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-sm font-medium text-slate-400">✨ All caught up!</p>
-              <p className="text-xs text-slate-400 mt-1">Nothing needs your attention right now.</p>
+              <p className="text-sm font-medium text-slate-400 dark:text-slate-500">✨ All caught up!</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Nothing needs your attention right now.</p>
             </div>
           )}
         </div>
@@ -183,12 +193,12 @@ const Dashboard: React.FC = () => {
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-           <div className="bg-white/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 animate-in zoom-in-95">
-             <h3 className="font-bold text-lg text-slate-900 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+           <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-white/5 animate-in zoom-in-95">
+             <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">Confirm Payment</h3>
+             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
                Select which account to deduct this payment from.
              </p>
-             
+
              <div className="space-y-3 mb-6">
                {accounts.filter(a => a.type !== 'credit').map(acc => (
                  <button
@@ -197,17 +207,17 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-4 flex justify-between items-center bg-white hover:bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 shadow-sm hover:shadow-md transition-all group"
+                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm hover:shadow-md transition-all group"
                  >
-                   <span className="font-bold text-slate-700 text-sm group-hover:text-slate-900">{acc.name}</span>
-                   <span className="font-mono text-xs text-slate-400 group-hover:text-slate-600">${acc.balance.toLocaleString()}</span>
+                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm group-hover:text-slate-900 dark:group-hover:text-slate-100">{acc.name}</span>
+                   <span className="font-mono text-xs text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300">${acc.balance.toLocaleString()}</span>
                  </button>
                ))}
              </div>
-             
-             <button 
+
+             <button
                onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-slate-400 hover:text-slate-600 font-semibold transition-colors text-sm"
+               className="w-full py-3 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-semibold transition-colors text-sm"
              >
                Cancel
              </button>

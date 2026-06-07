@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface DrawerProps {
   isOpen: boolean;
@@ -35,6 +37,9 @@ export const Drawer: React.FC<DrawerProps> = ({
   disableClose = false
 }) => {
   const titleId = useId();
+  const reduceMotion = useReducedMotion();
+  // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
+  const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -68,7 +73,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2 }}
             className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-sm"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
@@ -77,10 +82,12 @@ export const Drawer: React.FC<DrawerProps> = ({
 
           {/* Drawer Content */}
           <motion.div
-            initial={{ y: '100%' }}
+            ref={contentRef}
+            tabIndex={-1}
+            initial={reduceMotion ? false : { y: '100%' }}
             animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            exit={reduceMotion ? { y: 0 } : { y: '100%' }}
+            transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
             className={twMerge(
               "fixed bottom-0 left-0 right-0 z-modal bg-white rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col outline-none",
               className

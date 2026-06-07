@@ -419,6 +419,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const bucketSpentMap = new Map();
 
   const contextValue: HouseholdContextType = {
+    // Mock data is available synchronously — never in a loading state.
+    isLoading: false,
     // Computed State
     safeToSpend,
     dailyPoints,

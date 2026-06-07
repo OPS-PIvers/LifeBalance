@@ -93,11 +93,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy="dev-console-title" maxWidth="max-w-4xl">
       <div className="flex flex-col h-[70vh]">
-        <div className="p-4 border-b border-slate-200/60 flex justify-between items-center">
+        <div className="p-4 border-b border-slate-200/60 dark:border-slate-700/60 flex justify-between items-center">
             <h2 id="dev-console-title" className="text-xl font-bold">Developer Console</h2>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-slate-100/50 rounded-full text-slate-500 hover:text-slate-700 transition-colors"
+              className="p-2 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
               aria-label="Close"
             >
               <X size={20} />
@@ -105,11 +105,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200/60 bg-slate-50/50">
+        <div className="flex border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-700/30">
           <button
             onClick={() => setActiveTab('testers')}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'testers' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
+              activeTab === 'testers' ? 'border-brand-600 text-brand-600 dark:text-slate-300 bg-white dark:bg-slate-800' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             Beta Testers
@@ -117,7 +117,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
           <button
             onClick={() => setActiveTab('ai_meter')}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'ai_meter' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
+              activeTab === 'ai_meter' ? 'border-brand-600 text-brand-600 dark:text-slate-300 bg-white dark:bg-slate-800' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             AI Usage Meter
@@ -125,7 +125,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
           <button
             onClick={() => setActiveTab('reports')}
             className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'reports' ? 'border-brand-600 text-brand-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'
+              activeTab === 'reports' ? 'border-brand-600 text-brand-600 dark:text-slate-300 bg-white dark:bg-slate-800' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
             Feedback Reports
@@ -133,16 +133,16 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Content */}
-        <div className="flex-1 scroll-contain-y p-6 bg-white">
+        <div className="flex-1 scroll-contain-y p-6 bg-white dark:bg-slate-800">
           {loading ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
+              <Loader2 className="w-8 h-8 text-brand-600 dark:text-slate-300 animate-spin" />
             </div>
           ) : (
             <>
               {activeTab === 'testers' && (
                 <div className="space-y-6">
-                  <div className="flex gap-2 p-4 bg-slate-50/50 rounded-xl border border-slate-200/60">
+                  <div className="flex gap-2 p-4 bg-slate-50/50 dark:bg-slate-700/30 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
                     <input
                       type="email"
                       placeholder="new@tester.com"
@@ -157,7 +157,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
 
                   <div className="border rounded-xl overflow-hidden">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-100/50 text-slate-600 font-medium">
+                      <thead className="bg-slate-100/50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300 font-medium">
                         <tr>
                           <th className="p-3">Email</th>
                           <th className="p-3">Status</th>
@@ -167,19 +167,19 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                       </thead>
                       <tbody className="divide-y divide-slate-100/50">
                         {testers.map(t => (
-                          <tr key={t.id} className="hover:bg-slate-50/50">
+                          <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                             <td className="p-3 font-medium">{t.email}</td>
                             <td className="p-3">
                               <Badge variant={t.status === 'active' ? 'success' : 'danger'} size="md">
                                 {t.status}
                               </Badge>
                             </td>
-                            <td className="p-3 text-slate-500">{new Date(t.addedAt).toLocaleDateString()}</td>
+                            <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(t.addedAt).toLocaleDateString()}</td>
                             <td className="p-3 flex gap-2">
-                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 hover:underline text-xs font-bold">
+                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 dark:text-blue-300 hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 hover:bg-red-50 p-1 rounded ml-2">
+                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded ml-2">
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -194,24 +194,24 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
               {activeTab === 'ai_meter' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                      <h3 className="text-sm font-medium text-blue-800">Total Active Households</h3>
-                      <p className="text-3xl font-bold text-blue-900">{households.length}</p>
+                    <div className="bg-blue-50 dark:bg-blue-500/15 p-4 rounded-xl border border-blue-100 dark:border-blue-500/30">
+                      <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">Total Active Households</h3>
+                      <p className="text-3xl font-bold text-blue-900 dark:text-blue-200">{households.length}</p>
                     </div>
                   </div>
 
                   <div className="border rounded-xl overflow-hidden">
-                    <div className="bg-slate-50/50 px-4 py-3 border-b font-medium text-slate-700">Household Usage (Daily)</div>
+                    <div className="bg-slate-50/50 dark:bg-slate-700/30 px-4 py-3 border-b font-medium text-slate-700 dark:text-slate-200">Household Usage (Daily)</div>
                     <div className="divide-y">
                         {households.map(h => {
                             const usage = h.aiUsage?.dailyCount || 0;
                             const percentage = Math.min((usage / 20) * 100, 100);
                             return (
-                                <div key={h.id} className="p-4 flex items-center justify-between hover:bg-slate-50/50">
+                                <div key={h.id} className="p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
                                     <div>
-                                        <p className="font-bold text-slate-800">{h.name}</p>
-                                        <p className="text-xs text-slate-400 font-mono">{h.id}</p>
-                                        <p className="text-xs text-slate-500">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
+                                        <p className="font-bold text-slate-800 dark:text-slate-100">{h.name}</p>
+                                        <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{h.id}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
                                     </div>
                                     <div className="flex items-center gap-4 w-1/2">
                                         <div className="flex-1 h-3 bg-slate-200/50 rounded-full overflow-hidden">
@@ -220,7 +220,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                                 style={{ width: `${percentage}%` }}
                                             />
                                         </div>
-                                        <span className={`text-sm font-mono font-bold w-12 text-right ${percentage > 90 ? 'text-red-600' : 'text-slate-600'}`}>
+                                        <span className={`text-sm font-mono font-bold w-12 text-right ${percentage > 90 ? 'text-red-600 dark:text-red-300' : 'text-slate-600 dark:text-slate-300'}`}>
                                             {usage}/20
                                         </span>
                                     </div>
@@ -235,31 +235,31 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
               {activeTab === 'reports' && (
                 <div className="space-y-4">
                     {reports.map(report => (
-                        <div key={report.id} className="p-4 rounded-xl border border-slate-200/60 hover:shadow-md transition-shadow">
+                        <div key={report.id} className="p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60 hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <span className="text-xs font-mono bg-slate-100/50 px-2 py-1 rounded text-slate-600 font-bold">{report.version}</span>
-                                    <span className="ml-2 text-xs text-slate-400">{new Date(report.timestamp).toLocaleString()}</span>
+                                    <span className="text-xs font-mono bg-slate-100/50 dark:bg-slate-700/30 px-2 py-1 rounded text-slate-600 dark:text-slate-300 font-bold">{report.version}</span>
+                                    <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
-                                <button onClick={() => copyReport(report)} className="text-brand-600 hover:bg-brand-50 p-1.5 rounded-lg" title="Copy JSON">
+                                <button onClick={() => copyReport(report)} className="text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 p-1.5 rounded-lg" title="Copy JSON">
                                     <Copy size={16} />
                                 </button>
                             </div>
-                            <p className="text-slate-800 whitespace-pre-wrap mb-3">{report.message}</p>
-                            <div className="pt-3 border-t border-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500 font-mono">
+                            <p className="text-slate-800 dark:text-slate-100 whitespace-pre-wrap mb-3">{report.message}</p>
+                            <div className="pt-3 border-t border-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
                                 <span>Route: {report.route}</span>
                                 <span>UID: {report.userId}</span>
                                 <span>HID: {report.householdId}</span>
                             </div>
                             {report.errorContext && (
-                                <div className="mt-2 bg-red-50 p-2 rounded text-xs text-red-700 font-mono overflow-x-auto border border-red-100">
+                                <div className="mt-2 bg-red-50 dark:bg-red-500/15 p-2 rounded text-xs text-red-700 dark:text-red-300 font-mono overflow-x-auto border border-red-100 dark:border-red-500/30">
                                     <strong>Error Context:</strong><br/>
                                     {report.errorContext}
                                 </div>
                             )}
                         </div>
                     ))}
-                    {reports.length === 0 && <div className="text-center py-12 text-slate-400">No feedback reports found.</div>}
+                    {reports.length === 0 && <div className="text-center py-12 text-slate-400 dark:text-slate-500">No feedback reports found.</div>}
                 </div>
               )}
             </>

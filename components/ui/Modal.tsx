@@ -1,6 +1,7 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -71,6 +72,9 @@ export const Modal: React.FC<ModalProps> = ({
   ariaLabelledBy,
   ariaDescribedBy,
 }) => {
+  // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
+  const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
+
   // Handle Escape key
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -117,10 +121,7 @@ export const Modal: React.FC<ModalProps> = ({
         paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
         paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
       } : undefined}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={ariaLabelledBy}
-      aria-describedby={ariaDescribedBy}
+      data-testid="modal-backdrop-wrapper"
       onClick={handleBackdropClick}
     >
       {/* Backdrop */}
@@ -134,8 +135,14 @@ export const Modal: React.FC<ModalProps> = ({
 
       {/* Content Container */}
       <div
+        ref={contentRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={ariaLabelledBy}
+        aria-describedby={ariaDescribedBy}
+        tabIndex={-1}
         className={twMerge(
-          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200",
+          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 outline-none",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
           maxWidth,

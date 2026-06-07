@@ -82,8 +82,10 @@ describe('Modal', () => {
       </Modal>
     );
 
-    // The wrapper (dialog role) handles the click and checks for target === currentTarget
-    fireEvent.click(screen.getByRole('dialog'));
+    // The backdrop wrapper handles the click and checks for target === currentTarget.
+    // (role="dialog" now lives on the content container, per a11y fix, so we query the
+    // wrapper by its test id instead of by role.)
+    fireEvent.click(screen.getByTestId('modal-backdrop-wrapper'));
     expect(onCloseMock).toHaveBeenCalledTimes(1);
   });
 
@@ -105,7 +107,7 @@ describe('Modal', () => {
       </Modal>
     );
 
-    fireEvent.click(screen.getByRole('dialog'));
+    fireEvent.click(screen.getByTestId('modal-backdrop-wrapper'));
     expect(onCloseMock).not.toHaveBeenCalled();
   });
 
