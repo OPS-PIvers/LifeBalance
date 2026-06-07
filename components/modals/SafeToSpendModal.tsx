@@ -1,10 +1,10 @@
 import React from 'react';
-import { Wallet, Receipt, CreditCard } from 'lucide-react';
+import { Wallet, Receipt, CreditCard, Clock } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { sumMoney, addMoney, subtractMoney } from '../../utils/money';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
-import { findNextPaycheckDate } from '../../utils/safeToSpendCalculator';
+import { findNextPaycheckDate, sumPendingSpend } from '../../utils/safeToSpendCalculator';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
 import { Drawer } from '../ui/Drawer';
@@ -72,6 +72,11 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
     totalUnpaidBills = sumMoney(unpaidBillsItems.map(i => i.amount));
   }
 
+  // 2b. Pending spend (un-cleared transactions in the current period). Computed
+  //     with the same helper the canonical formula uses, so this itemized line
+  //     reconciles with the safe-to-spend total below (income excluded).
+  const pendingSpend = sumPendingSpend(transactions, currentPeriodId);
+
   // 3. Buckets (for informational display only)
   const bucketBreakdown = buckets.map(b => {
     const spent = bucketSpentMap.get(b.id) || { verified: 0, pending: 0 };
@@ -131,6 +136,20 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                </div>
              )}
           </div>
+
+          {/* Reserved: Pending (un-cleared) transactions */}
+          {pendingSpend > 0 && (
+            <div className="flex items-center justify-between text-amber-600 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <Clock size={16} />
+                <div className="flex flex-col">
+                  <span className="font-bold text-sm">Pending Transactions</span>
+                  <span className="text-xxs text-brand-400 dark:text-slate-400">Spent but not yet cleared</span>
+                </div>
+              </div>
+              <span className="font-mono font-bold">-${pendingSpend.toLocaleString()}</span>
+            </div>
+          )}
 
           {/* Informational: Bucket Balances */}
           <div className="space-y-3">
@@ -199,7 +218,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
           </div>
           
           <p className="text-xxs text-center text-brand-400 dark:text-slate-400">
-            This is your available cash after accounting for bills due before your next paycheck. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
+            This is your available cash after accounting for bills due before your next paycheck and pending (un-cleared) transactions. Bucket balances are shown for reference and do not reduce your safe-to-spend amount.
           </p>
       </div>
     </Drawer>

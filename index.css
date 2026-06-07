@@ -69,4 +69,11 @@
   .skeleton::after {
     animation: none !important;
   }
+  /* Fully suppress tailwindcss-animate enter/exit animations so elements
+     are immediately visible and in their final position — no flash, no
+     mid-transition state — for users who prefer reduced motion. */
+  .animate-in,
+  .animate-out {
+    animation: none !important;
+  }
 }

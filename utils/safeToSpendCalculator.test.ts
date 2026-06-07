@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSafeToSpend, findNextPaycheckDate } from './safeToSpendCalculator';
-import { Account, BudgetBucket, CalendarItem } from '@/types/schema';
+import { Account, BudgetBucket, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { addDays, format, subDays } from 'date-fns';
 
 describe('findNextPaycheckDate', () => {
@@ -733,5 +733,245 @@ describe('calculateSafeToSpend', () => {
 
     // 1000 + 2000 = 3000
     expect(result).toBe(3000);
+  });
+
+  // --- Pending transaction tests ---
+
+  it('(a) a current-period pending_review transaction reduces STS by its amount', () => {
+    const billDate = formatIso(addDays(today, 5));
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Utility Bill',
+        amount: 100,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const transactions: Transaction[] = [
+      {
+        id: 'tx1',
+        amount: 75,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [],
+      lastPaycheckDate,
+      transactions
+    );
+
+    // 5000 - 100 (bill) - 75 (pending) = 4825
+    expect(result).toBe(4825);
+  });
+
+  it('(b) a verified transaction does NOT reduce STS (only pending_review does)', () => {
+    const billDate = formatIso(addDays(today, 5));
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Utility Bill',
+        amount: 100,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    const transactions: Transaction[] = [
+      {
+        id: 'tx1',
+        amount: 75,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: lastPaycheckDate,
+        status: 'verified',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [],
+      lastPaycheckDate,
+      transactions
+    );
+
+    // 5000 - 100 (bill) - 0 (verified tx not counted) = 4900
+    expect(result).toBe(4900);
+  });
+
+  it('(c) a pending_review transaction in a different payPeriodId is excluded when currentPeriodId is set', () => {
+    const otherPeriodId = formatIso(subDays(today, 14));
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      }
+    ];
+
+    const transactions: Transaction[] = [
+      {
+        id: 'tx1',
+        amount: 200,
+        merchant: 'Old Period Store',
+        category: 'Groceries',
+        date: otherPeriodId,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: otherPeriodId, // Different period — should be excluded
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      items,
+      [],
+      lastPaycheckDate,
+      transactions
+    );
+
+    // 5000 - 0 (no bills) - 0 (pending from different period excluded) = 5000
+    expect(result).toBe(5000);
+  });
+
+  it('(d) no transactions → result unchanged from before (regression guard)', () => {
+    const billDate = formatIso(addDays(today, 5));
+    const items: CalendarItem[] = [
+      {
+        id: 'p1',
+        title: 'Next Paycheck',
+        amount: 2000,
+        date: nextPaycheckDate,
+        type: 'income',
+        isPaid: false
+      },
+      {
+        id: 'b1',
+        title: 'Utility Bill',
+        amount: 300,
+        date: billDate,
+        type: 'expense',
+        isPaid: false
+      }
+    ];
+
+    // Call with no transactions arg (default) and with empty array — both should be identical
+    const resultNoArg = calculateSafeToSpend(mockAccounts, items, [], lastPaycheckDate);
+    const resultEmptyArr = calculateSafeToSpend(mockAccounts, items, [], lastPaycheckDate, []);
+
+    // 5000 - 300 = 4700
+    expect(resultNoArg).toBe(4700);
+    expect(resultEmptyArr).toBe(4700);
+  });
+
+  it('pending_review transaction included when no currentPeriodId (all-period mode)', () => {
+    // When currentPeriodId is empty, ALL pending_review transactions are counted
+    // regardless of their payPeriodId.
+    const transactions: Transaction[] = [
+      {
+        id: 'tx1',
+        amount: 150,
+        merchant: 'Restaurant',
+        category: 'Dining',
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      }
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      [],
+      [],
+      '', // no currentPeriodId
+      transactions
+    );
+
+    // 5000 - 150 (pending, included because no period filter) = 4850
+    expect(result).toBe(4850);
+  });
+
+  it('(f) a pending_review INCOME transaction does NOT reduce STS', () => {
+    // Income is money coming IN; a pending deposit must never be subtracted
+    // from the checking balance (regression guard for the income-exclusion fix).
+    const transactions: Transaction[] = [
+      {
+        id: 'income-tx',
+        amount: 2000,
+        merchant: 'Employer',
+        category: INCOME_CATEGORY,
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      },
+      {
+        id: 'expense-tx',
+        amount: 60,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: lastPaycheckDate,
+        status: 'pending_review',
+        isRecurring: false,
+        source: 'manual',
+        autoCategorized: false,
+        payPeriodId: lastPaycheckDate,
+      },
+    ];
+
+    const result = calculateSafeToSpend(
+      mockAccounts,
+      [],
+      [],
+      lastPaycheckDate,
+      transactions
+    );
+
+    // 5000 - 60 (pending expense only; the 2000 pending income is excluded) = 4940
+    expect(result).toBe(4940);
   });
 });
