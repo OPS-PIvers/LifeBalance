@@ -89,9 +89,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
 
   const confirmDeleteTester = async () => {
     if (!deleteTesterConfirmId) return;
-    await deleteDoc(doc(db, 'beta_testers', deleteTesterConfirmId));
-    setDeleteTesterConfirmId(null);
-    loadData();
+    try {
+      await deleteDoc(doc(db, 'beta_testers', deleteTesterConfirmId));
+    } catch (error) {
+      console.error('Failed to delete tester:', error);
+    } finally {
+      // Always reset state so the confirmation dialog can't get stuck open.
+      setDeleteTesterConfirmId(null);
+      loadData();
+    }
   };
 
   const copyReport = (report: FeedbackReport) => {

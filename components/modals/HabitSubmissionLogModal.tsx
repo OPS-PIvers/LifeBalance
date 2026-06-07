@@ -111,9 +111,15 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
   const confirmDeleteSubmission = async () => {
     if (!deleteSubmissionId) return;
-    await deleteHabitSubmission(habit.id, deleteSubmissionId);
-    setDeleteSubmissionId(null);
-    await loadSubmissions();
+    try {
+      await deleteHabitSubmission(habit.id, deleteSubmissionId);
+    } catch (error) {
+      console.error('Failed to delete submission:', error);
+    } finally {
+      // Always reset state so the confirmation dialog can't get stuck open.
+      setDeleteSubmissionId(null);
+      await loadSubmissions();
+    }
   };
 
   // Analytics calculations

@@ -59,39 +59,44 @@ const AI_DAILY_QUOTA = 100;
 /** How long (ms) to reuse a cached kill-switch value before re-fetching. */
 const KILL_SWITCH_CACHE_TTL_MS = 60_000;
 
-interface KillSwitchCache {
-  aiEnabled: boolean;
-  fetchedAt: number;
-}
-
-/** Module-scope cache; null means not yet fetched or expired. */
-let killSwitchCache: KillSwitchCache | null = null;
+/**
+ * Cache the in-flight promise (not just the resolved value) so that concurrent
+ * AI calls during a cold/expired cache window collapse onto a single Firestore
+ * read instead of each triggering their own (cache-stampede / request-collapse).
+ */
+let killSwitchPromise: Promise<boolean> | null = null;
+let killSwitchFetchedAt = 0;
 
 /**
  * Returns the current `aiEnabled` value from the global app config.
- * Results are cached for KILL_SWITCH_CACHE_TTL_MS (60 s) to avoid a
- * Firestore read on every single AI call. After the TTL expires the next
- * call re-fetches so operator changes take effect within ~60 s.
+ * The fetch promise is cached for KILL_SWITCH_CACHE_TTL_MS (60 s) to avoid a
+ * Firestore read on every single AI call. After the TTL expires the next call
+ * re-fetches so operator changes take effect within ~60 s.
  *
  * Fails open (returns true) if the config doc is missing or the read fails.
  */
-const getAiEnabled = async (): Promise<boolean> => {
+const getAiEnabled = (): Promise<boolean> => {
   const now = Date.now();
-  if (killSwitchCache !== null && now - killSwitchCache.fetchedAt < KILL_SWITCH_CACHE_TTL_MS) {
-    return killSwitchCache.aiEnabled;
+  if (killSwitchPromise !== null && now - killSwitchFetchedAt < KILL_SWITCH_CACHE_TTL_MS) {
+    return killSwitchPromise;
   }
 
-  try {
-    const { getDoc } = await import("firebase/firestore");
-    const globalConfigRef = doc(db, 'app_config', 'global');
-    const snap = await getDoc(globalConfigRef);
-    const aiEnabled = snap.exists() ? snap.data().aiEnabled !== false : true;
-    killSwitchCache = { aiEnabled, fetchedAt: now };
-    return aiEnabled;
-  } catch {
-    // Fail open: don't block AI if config is unreachable
-    return true;
-  }
+  killSwitchFetchedAt = now;
+  killSwitchPromise = (async (): Promise<boolean> => {
+    try {
+      const { getDoc } = await import("firebase/firestore");
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data().aiEnabled !== false : true;
+    } catch {
+      // Fail open: don't block AI if config is unreachable. Clear the cache so
+      // the next call retries rather than caching the fail-open result for 60 s.
+      killSwitchPromise = null;
+      return true;
+    }
+  })();
+
+  return killSwitchPromise;
 };
 
 /**

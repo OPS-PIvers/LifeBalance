@@ -245,7 +245,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                         onClick={() => onEditTransaction(tx)}
                         className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                         title="Edit transaction"
-                        aria-label={`Edit transaction: ${tx.merchant}`}
+                        aria-label={`Edit transaction: ${tx.merchant || 'Unnamed'}`}
                       >
                         <Edit size={14} />
                       </Button>
@@ -255,7 +255,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                         onClick={() => onDeleteTransaction(tx.id)}
                         className="text-slate-400 dark:text-slate-500 hover:text-money-neg"
                         title="Delete transaction"
-                        aria-label={`Delete transaction: ${tx.merchant}`}
+                        aria-label={`Delete transaction: ${tx.merchant || 'Unnamed'}`}
                       >
                         <Trash2 size={14} />
                       </Button>

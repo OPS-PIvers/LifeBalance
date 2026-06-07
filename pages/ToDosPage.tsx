@@ -1135,22 +1135,6 @@ const TodoRow = React.memo(function TodoRow({
       {cardInner}
     </SwipeableTodoRow>
   );
-}, (prev: TodoRowProps, next: TodoRowProps) => {
-  // Re-render only when something relevant to this row changed.
-  return (
-    prev.item === next.item &&
-    prev.color === next.color &&
-    prev.assignee === next.assignee &&
-    prev.isSelected === next.isSelected &&
-    prev.isSelectionMode === next.isSelectionMode &&
-    prev.onComplete === next.onComplete &&
-    prev.onEdit === next.onEdit &&
-    prev.onDelete === next.onDelete &&
-    prev.onDuplicate === next.onDuplicate &&
-    prev.onMoveToTomorrow === next.onMoveToTomorrow &&
-    prev.onMore === next.onMore &&
-    prev.onToggleSelection === next.onToggleSelection
-  );
 });
 
 interface SectionProps {
