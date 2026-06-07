@@ -1,5 +1,5 @@
 import React, { useState, ReactNode, useCallback } from 'react';
-import { FirebaseHouseholdContext, HouseholdContextType } from './FirebaseHouseholdContext';
+import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   Account,
@@ -541,9 +541,19 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     removeMember: noOp,
   };
 
+  // Test Mode does not need render isolation, so every slice receives the same
+  // composed value object. `HouseholdContextType` satisfies each slice type, so
+  // the granular hooks (`useFinance`, `useMeals`, …) and the `useHousehold`
+  // shim all resolve against this mock data identically to production.
   return (
-    <FirebaseHouseholdContext.Provider value={contextValue}>
+    <HouseholdSliceProviders
+      finance={contextValue}
+      gamification={contextValue}
+      meals={contextValue}
+      todos={contextValue}
+      core={contextValue}
+    >
       {children}
-    </FirebaseHouseholdContext.Provider>
+    </HouseholdSliceProviders>
   );
 };
