@@ -558,10 +558,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const bucketHistoryLoadedAllRef = useRef(false);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
-  // Tracks which household's first snapshot has resolved. Deriving isLoading from
-  // this (rather than a boolean flag) means switching households automatically
-  // re-shows skeletons until the new household loads — with no setState in an
-  // effect body (which the lint rules forbid).
+  // Tracks which household's first snapshot has resolved; isLoading is derived
+  // from it so switching households automatically re-shows skeletons until the
+  // new household loads. It is re-armed to null in the listener effect's reset
+  // block (alongside the rest of the household state) on every household change.
   const [loadedHouseholdId, setLoadedHouseholdId] = useState<string | null>(null);
 
   // Pay Period Tracking State
@@ -614,21 +614,60 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Real-time listeners
   useEffect(() => {
-    if (!householdId) return;
-
-    // Reset on-demand "older" caches whenever we (re)subscribe for a household,
-    // so switching households never leaks the previous household's paged data.
-    setOlderCompletedTodos([]);
-    completedTodoCursorRef.current = null;
-    setHasMoreCompletedTodos(true);
-    setIsLoadingOlderTodos(false);
+    // SECURITY/PRIVACY: clear every household-scoped slice up front — BEFORE the
+    // early return — so switching households or logging out can never leak a
+    // previous household's data. The provider is mounted at the app root and so
+    // stays alive across auth changes, meaning state would otherwise persist in
+    // memory (and could flash during a transition or be read by the next user
+    // who signs in without a full reload).
+    setAccounts([]);
+    setBuckets([]);
+    setRecentTransactions([]);
+    setOlderTransactions([]);
+    recentTransactionsRef.current = [];
+    setTransactionWindowStart(null);
+    setHasMoreTransactions(false);
+    setIsLoadingOlderTransactions(false);
+    txOlderCursorRef.current = null;
+    txWindowStartRef.current = null;
+    setCalendarItems([]);
+    setHabits([]);
+    setChallenges([]);
+    setRewards([]);
+    setMembers([]);
+    setCurrentUser(null);
+    setHouseholdSettings(null);
+    setFreezeBank(null);
+    setYearlyGoals([]);
+    setMeals([]);
+    setShoppingList([]);
+    setGroceryCatalog([]);
+    setMealPlanWindow([]);
     setMealPlanExtra([]);
     loadedMealPlanWeeksRef.current = new Set();
     mealPlanWindowRef.current = getMealPlanWindow(new Date());
-    setInsightsOlder([]);
-    insightsLoadedAllRef.current = false;
+    setActiveTodos([]);
+    setCompletedTodos([]);
+    setOlderCompletedTodos([]);
+    completedTodoCursorRef.current = null;
+    completedTodoWindowStartRef.current = null;
+    setHasMoreCompletedTodos(true);
+    setIsLoadingOlderTodos(false);
+    setBucketHistoryWindow([]);
     setBucketHistoryOlder([]);
     bucketHistoryLoadedAllRef.current = false;
+    setHasMoreBucketHistory(false);
+    setIsLoadingOlderBucketHistory(false);
+    setInsightsWindow([]);
+    setInsightsOlder([]);
+    insightsLoadedAllRef.current = false;
+    setHasMoreInsights(false);
+    setApiKeys([]);
+    setPendingItemsCount(0);
+    // Re-arms the isLoading skeleton until the new household's first snapshot lands.
+    setLoadedHouseholdId(null);
+
+    if (!householdId) return;
 
     const unsubscribers: (() => void)[] = [];
 
