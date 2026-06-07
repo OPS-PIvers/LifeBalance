@@ -1,4 +1,4 @@
-import { Account, CalendarItem, BudgetBucket } from '@/types/schema';
+import { Account, CalendarItem, BudgetBucket, Transaction } from '@/types/schema';
 import { endOfMonth, parseISO, isAfter, isBefore, addMonths } from 'date-fns';
 import { expandCalendarItems } from '@/utils/calendarRecurrence';
 import { sumMoney, subtractMoney } from '@/utils/money';
@@ -165,16 +165,18 @@ export function findNextPaycheckDate(
  * @param allExpandedItems - Pre-expanded calendar items (should cover at least 2 months from currentPeriodId)
  * @param buckets - All budget buckets
  * @param currentPeriodId - Last paycheck date (YYYY-MM-DD)
+ * @param transactions - Optional household transactions; pending_review ones are subtracted
  */
 export const calculateSafeToSpendFromExpanded = (
   accounts: Account[],
   allExpandedItems: CalendarItem[],
   buckets: BudgetBucket[],
-  currentPeriodId: string = ''
+  currentPeriodId: string = '',
+  transactions: Transaction[] = []
 ): number =>
   // Delegate to the breakdown so the number and its itemization can never
   // diverge — there is exactly one place the formula lives.
-  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId)
+  calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions)
     .safeToSpend;
 
 /**
@@ -185,7 +187,14 @@ export interface SafeToSpendBreakdown {
   checkingBalance: number;
   /** Unpaid bills from this paycheck to the next (bucket-covered bills excluded). */
   unpaidBills: number;
-  /** checkingBalance - unpaidBills. */
+  /**
+   * Sum of current-period pending_review transactions deducted from available funds.
+   * Only transactions with status === 'pending_review' are included. When
+   * currentPeriodId is set, only transactions whose payPeriodId matches are counted;
+   * otherwise all pending_review transactions are included.
+   */
+  pendingSpend: number;
+  /** checkingBalance - unpaidBills - pendingSpend. */
   safeToSpend: number;
   /** Date of the next paycheck bounding the range, or null if none found. */
   nextPaycheckDate: string | null;
@@ -194,13 +203,18 @@ export interface SafeToSpendBreakdown {
 /**
  * Breakdown variant using pre-expanded calendar items (memo-friendly).
  * This is the single source of truth for the safe-to-spend formula:
- *   safeToSpend = checkingBalance - unpaidBills (this paycheck → next).
+ *   safeToSpend = checkingBalance - unpaidBills (this paycheck → next) - pendingSpend.
+ *
+ * @param transactions - Optional list of household transactions. Only
+ *   `pending_review` transactions are counted; when currentPeriodId is set
+ *   only those whose payPeriodId matches are included.
  */
 export const calculateSafeToSpendBreakdownFromExpanded = (
   accounts: Account[],
   allExpandedItems: CalendarItem[],
   buckets: BudgetBucket[],
-  currentPeriodId: string = ''
+  currentPeriodId: string = '',
+  transactions: Transaction[] = []
 ): SafeToSpendBreakdown => {
   // 1. Available Checking Balance (Assets)
   // STRICT: Only Checking. No Savings, No Credit.
@@ -208,66 +222,90 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
     accounts.filter(a => a.type === 'checking').map(a => a.balance)
   );
 
-  // 2. Without paycheck tracking, the full checking balance is available.
+  // 2. Pending spend: sum of current-period pending_review transactions.
+  //    When currentPeriodId is set, restrict to transactions in that period.
+  const pendingSpend = sumMoney(
+    transactions
+      .filter(tx => {
+        if (tx.status !== 'pending_review') return false;
+        if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
+        return true;
+      })
+      .map(tx => tx.amount)
+  );
+
+  // 3. Without paycheck tracking, the full checking balance (minus pending) is available.
   if (!currentPeriodId) {
-    return { checkingBalance, unpaidBills: 0, safeToSpend: checkingBalance, nextPaycheckDate: null };
+    return {
+      checkingBalance,
+      unpaidBills: 0,
+      pendingSpend,
+      safeToSpend: subtractMoney(checkingBalance, pendingSpend),
+      nextPaycheckDate: null,
+    };
   }
 
-  // 3. Determine the bill date range (Paycheck A to Paycheck B)
+  // 4. Determine the bill date range (Paycheck A to Paycheck B)
   const paycheckA = parseISO(currentPeriodId);
   const paycheckBDate = findNextPaycheckFromExpanded(allExpandedItems, paycheckA);
   // Fallback: end of current month if no next paycheck found.
   const rangeEndDate = paycheckBDate ? parseISO(paycheckBDate) : endOfMonth(paycheckA);
 
-  // 4. Unpaid bills in range (AFTER paycheck A, up to and including range end).
+  // 5. Unpaid bills in range (AFTER paycheck A, up to and including range end).
   const unpaidBills = calculateUnpaidBillsInRange(allExpandedItems, paycheckA, rangeEndDate, buckets);
 
   return {
     checkingBalance,
     unpaidBills,
-    safeToSpend: subtractMoney(checkingBalance, unpaidBills),
+    pendingSpend,
+    safeToSpend: subtractMoney(subtractMoney(checkingBalance, unpaidBills), pendingSpend),
     nextPaycheckDate: paycheckBDate,
   };
 };
 
 /**
  * Breakdown variant that expands calendar items internally.
+ *
+ * @param transactions - Optional household transactions; pending_review ones are subtracted
  */
 export const calculateSafeToSpendBreakdown = (
   accounts: Account[],
   calendarItems: CalendarItem[],
   buckets: BudgetBucket[],
-  currentPeriodId: string = ''
+  currentPeriodId: string = '',
+  transactions: Transaction[] = []
 ): SafeToSpendBreakdown => {
   if (!currentPeriodId) {
-    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], buckets, currentPeriodId);
+    return calculateSafeToSpendBreakdownFromExpanded(accounts, [], buckets, currentPeriodId, transactions);
   }
   const paycheckA = parseISO(currentPeriodId);
   const searchWindowEnd = addMonths(paycheckA, 2);
   const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
-  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId);
+  return calculateSafeToSpendBreakdownFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions);
 };
 
 /**
  * Calculate the safe-to-spend amount based on checking balance and unpaid bills
  * between paychecks. This is the primary financial health metric for the household.
  *
- * Formula: Checking Balance - Unpaid Bills (from last paycheck to next paycheck)
+ * Formula: Checking Balance - Unpaid Bills (from last paycheck to next paycheck) - Pending Spend
  *
  * @param accounts - All household accounts
  * @param calendarItems - All calendar items (bills/income)
  * @param buckets - All budget buckets (for bill matching only)
  * @param currentPeriodId - Last paycheck date (YYYY-MM-DD), or empty string to return full checking balance
+ * @param transactions - Optional household transactions; pending_review ones are subtracted
  * @returns The safe-to-spend amount
  */
 export const calculateSafeToSpend = (
   accounts: Account[],
   calendarItems: CalendarItem[],
   buckets: BudgetBucket[],
-  currentPeriodId: string = ''
+  currentPeriodId: string = '',
+  transactions: Transaction[] = []
 ): number => {
   if (!currentPeriodId) {
-    return calculateSafeToSpendFromExpanded(accounts, [], buckets, currentPeriodId);
+    return calculateSafeToSpendFromExpanded(accounts, [], buckets, currentPeriodId, transactions);
   }
 
   const paycheckA = parseISO(currentPeriodId);
@@ -280,5 +318,5 @@ export const calculateSafeToSpend = (
   const searchWindowEnd = addMonths(paycheckA, 2);
   const allExpandedItems = expandCalendarItems(calendarItems, paycheckA, searchWindowEnd);
 
-  return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId);
+  return calculateSafeToSpendFromExpanded(accounts, allExpandedItems, buckets, currentPeriodId, transactions);
 };

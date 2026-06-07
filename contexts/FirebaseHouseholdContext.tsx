@@ -594,8 +594,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }, [calendarItems, currentPeriodId]);
 
   const safeToSpendBreakdown = useMemo(
-    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId),
-    [accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId]
+    () => calculateSafeToSpendBreakdownFromExpanded(accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId, transactions),
+    [accounts, expandedCalendarItemsForSafeToSpend, buckets, currentPeriodId, transactions]
   );
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = householdSettings?.points?.daily || 0;

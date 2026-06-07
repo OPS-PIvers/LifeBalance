@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, Wallet, Receipt, TrendingUp, TrendingDown } from 'lucide-react';
+import { ChevronDown, Wallet, Receipt, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '../../utils/safeToSpendCalculator';
@@ -91,6 +91,13 @@ export const SafeToSpendHero: React.FC = () => {
             label="Unpaid bills this period"
             value={`- ${currency(breakdown.unpaidBills)}`}
           />
+          {breakdown.pendingSpend > 0 && (
+            <Row
+              icon={<Clock size={14} />}
+              label="Pending transactions"
+              value={`- ${currency(breakdown.pendingSpend)}`}
+            />
+          )}
           <div className="flex items-center justify-between border-t border-white/20 pt-2 text-sm font-bold text-white">
             <span>Safe to spend</span>
             <span className="font-mono tabular-nums">{currency(breakdown.safeToSpend)}</span>

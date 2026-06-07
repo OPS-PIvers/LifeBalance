@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
@@ -92,6 +92,84 @@ vi.mock('lucide-react', () => ({
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
 }));
 
+// ---------------------------------------------------------------------------
+// jsdom layout mocks required by @tanstack/react-virtual
+//
+// The virtualizer reads offsetHeight from the scroll container element via
+// observeElementRect, and uses ResizeObserver to react to size changes.
+// jsdom returns 0 for all layout properties and lacks ResizeObserver.
+// We mock both here so the virtualizer can compute visible item ranges.
+//
+// SCROLL_CONTAINER_HEIGHT controls how many rows the virtualizer renders;
+// rows are estimated at 84px each (see component estimateSize).  600px gives
+// ~7 visible rows + 5 overscan = at most ~17 rows for small datasets, well
+// below 500 for the windowing test.
+// ---------------------------------------------------------------------------
+
+const SCROLL_CONTAINER_HEIGHT = 600;
+
+// ResizeObserver mock: immediately fires callback with observed element's
+// offsetHeight so the virtualizer's observeElementRect gets a non-zero rect.
+class MockResizeObserver {
+  private callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+  }
+
+  observe(target: Element): void {
+    // Report the mocked offsetHeight immediately so the virtualizer is seeded.
+    const height = (target as HTMLElement).offsetHeight;
+    this.callback(
+      [
+        {
+          target,
+          contentRect: new DOMRectReadOnly(0, 0, 0, height),
+          borderBoxSize: [{ inlineSize: 0, blockSize: height }],
+          contentBoxSize: [{ inlineSize: 0, blockSize: height }],
+          devicePixelContentBoxSize: [{ inlineSize: 0, blockSize: height }],
+        },
+      ],
+      this
+    );
+  }
+
+  unobserve(_target: Element): void {
+    // no-op
+  }
+
+  disconnect(): void {
+    // no-op
+  }
+}
+
+// Store the original descriptor so we can restore it in afterAll.
+const originalOffsetHeightDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'offsetHeight'
+);
+
+beforeAll(() => {
+  // Provide ResizeObserver in the jsdom global scope.
+  window.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+
+  // Make every element report SCROLL_CONTAINER_HEIGHT so the scroll container
+  // (which has style={{ height: '64vh' }}) is seen as having real height.
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get() {
+      return SCROLL_CONTAINER_HEIGHT;
+    },
+  });
+});
+
+afterAll(() => {
+  // Restore original descriptor to avoid leaking into other test suites.
+  if (originalOffsetHeightDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', originalOffsetHeightDescriptor);
+  }
+});
+
 describe('TransactionMasterList', () => {
   const mockDeleteTransaction = vi.fn();
   const mockUpdateTransaction = vi.fn();
@@ -134,17 +212,27 @@ describe('TransactionMasterList', () => {
     },
   ];
 
+  // Shared default mock value; individual tests may override via mockReturnValue.
+  const defaultMockValue = () => ({
+    transactions: mockTransactions,
+    deleteTransaction: mockDeleteTransaction,
+    updateTransaction: mockUpdateTransaction,
+    addTransaction: mockAddTransaction,
+    splitTransaction: mockSplitTransaction,
+    householdId: 'test-household',
+    stores: [],
+    hasMoreTransactions: false,
+    isLoadingOlderTransactions: false,
+    loadOlderTransactions: vi.fn(),
+    loadAllTransactions: vi.fn(),
+    transactionWindowStart: null,
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useHousehold).mockReturnValue({
-      transactions: mockTransactions,
-      deleteTransaction: mockDeleteTransaction,
-      updateTransaction: mockUpdateTransaction,
-      addTransaction: mockAddTransaction,
-      splitTransaction: mockSplitTransaction,
-      householdId: 'test-household',
-      stores: [],
-    } as unknown as ReturnType<typeof useHousehold>);
+    vi.mocked(useHousehold).mockReturnValue(
+      defaultMockValue() as unknown as ReturnType<typeof useHousehold>
+    );
 
     // Mock window.confirm
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
@@ -401,6 +489,56 @@ describe('TransactionMasterList', () => {
         ]),
         'transactions-export'
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Virtualizer windowing test
+  //
+  // With SCROLL_CONTAINER_HEIGHT = 600 and estimateSize = 84, the virtualizer
+  // should render at most ~ceil(600/84) + overscan(5) * 2 = ~21 rows.
+  // We feed 500 transactions and confirm the DOM contains far fewer than 500
+  // transaction rows, proving that windowing is active.
+  // ---------------------------------------------------------------------------
+
+  describe('Virtualizer windowing', () => {
+    it('renders only a bounded subset of rows for a large dataset (windowing is active)', () => {
+      // Build 500 unique transactions
+      const largeDataset = Array.from({ length: 500 }, (_, i) => ({
+        id: `tx-${i}`,
+        merchant: `Merchant ${i}`,
+        amount: 10 + (i % 100),
+        category: 'Food',
+        date: `2024-01-${String((i % 28) + 1).padStart(2, '0')}`,
+        source: 'manual' as const,
+        isRecurring: false,
+        status: 'verified' as const,
+        autoCategorized: false,
+      }));
+
+      vi.mocked(useHousehold).mockReturnValue({
+        ...defaultMockValue(),
+        transactions: largeDataset,
+      } as unknown as ReturnType<typeof useHousehold>);
+
+      render(<TransactionMasterList />);
+
+      // The scroll container must be present (list is not empty)
+      const scrollContainer = screen.getByTestId('virtual-scroll-container');
+      expect(scrollContainer).toBeInTheDocument();
+
+      // Count how many transaction merchant names are actually in the DOM.
+      // Each virtualized row renders a TransactionItem which renders the merchant name.
+      // With SCROLL_CONTAINER_HEIGHT=600 and estimateSize=84 the maximum number of
+      // rendered rows is roughly (600/84 + overscan*2) = ~21.  We use a generous
+      // ceiling of 100 to make the assertion resilient to overscan changes while
+      // still proving that far fewer than 500 rows are mounted.
+      const renderedMerchants = screen
+        .getAllByText(/^Merchant \d+$/)
+        .filter(el => el.closest('[data-testid="virtual-scroll-container"]'));
+
+      expect(renderedMerchants.length).toBeGreaterThan(0);
+      expect(renderedMerchants.length).toBeLessThan(100);
     });
   });
 });

@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFinance, useHouseholdCore, useMeals } from '../../contexts/FirebaseHouseholdContext';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '../../types/schema';
@@ -418,6 +419,20 @@ const TransactionMasterList: React.FC = () => {
     stores,
   };
 
+  // Scroll container ref for the virtualizer
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Virtualizer — dynamic measurement via the library's built-in measureElement
+  // which uses ResizeObserver borderBoxSize (when available) and falls back to
+  // offsetHeight. estimateSize gives a reasonable first-pass so the initial
+  // layout paint is close to correct; rows are remeasured once they mount.
+  const virtualizer = useVirtualizer({
+    count: filteredTransactions.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => 84,   // ~84px per row in practice (padding + content)
+    overscan: 5,
+    getItemKey: (index) => filteredTransactions[index]?.id ?? index,
+  });
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -589,55 +604,88 @@ const TransactionMasterList: React.FC = () => {
       )}
 
       {/* Transaction List */}
-      <div className="space-y-2 pb-24">
-        {filteredTransactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
-              <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
-            </div>
-            <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
-            <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
-              Nothing matches your current search and filters.
-            </p>
-            <Button
-              variant="link"
-              onClick={clearFilters}
-              className="mt-2 font-bold text-sm"
-            >
-              Clear all filters
-            </Button>
+      {filteredTransactions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-center py-12 px-6">
+          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
+            <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
           </div>
-        ) : (
-          filteredTransactions.map(tx => (
-            <TransactionItem
-              key={tx.id}
-              transaction={tx}
-              onEdit={handleEdit}
-              onDelete={handleDeleteClick}
-              onDuplicate={handleDuplicate}
-              onSplit={handleSplitClick}
-              onMore={handleMoreClick}
-              isSelectionMode={isSelectionMode}
-              isSelected={selectedIds.has(tx.id)}
-              onToggleSelection={toggleSelection}
-            />
-          ))
-        )}
+          <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
+          <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
+            Nothing matches your current search and filters.
+          </p>
+          <Button
+            variant="link"
+            onClick={clearFilters}
+            className="mt-2 font-bold text-sm"
+          >
+            Clear all filters
+          </Button>
+        </div>
+      ) : (
+        /*
+         * Bounded scroll container — the virtualizer needs a fixed-height
+         * element to scroll inside so it can window the list.  64vh leaves
+         * room for the header cards above and the bottom nav bar below.
+         * pb-24 is kept on the inner spacer so the last item clears the FAB.
+         */
+        <div
+          ref={scrollContainerRef}
+          data-testid="virtual-scroll-container"
+          className="overflow-y-auto"
+          style={{ height: '64vh' }}
+        >
+          {/* Spacer that grows to the total measured height of all items */}
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: 'relative' }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const tx = filteredTransactions[virtualRow.index];
+              if (!tx) return null;
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    paddingBottom: virtualRow.index === filteredTransactions.length - 1 ? '6rem' : '0.5rem',
+                  }}
+                >
+                  <TransactionItem
+                    transaction={tx}
+                    onEdit={handleEdit}
+                    onDelete={handleDeleteClick}
+                    onDuplicate={handleDuplicate}
+                    onSplit={handleSplitClick}
+                    onMore={handleMoreClick}
+                    isSelectionMode={isSelectionMode}
+                    isSelected={selectedIds.has(tx.id)}
+                    onToggleSelection={toggleSelection}
+                  />
+                </div>
+              );
+            })}
+          </div>
 
-        {/* Load older (cursor pagination beyond the live 90-day window) */}
-        {hasMoreTransactions && filteredTransactions.length > 0 && (
-          <div className="pt-2 flex justify-center">
-            <Button
-              variant="secondary"
-              onClick={loadOlderTransactions}
-              disabled={isLoadingOlderTransactions}
-              leftIcon={isLoadingOlderTransactions ? <Loader2 size={16} className="animate-spin" /> : undefined}
-            >
-              {isLoadingOlderTransactions ? 'Loading…' : 'Load older transactions'}
-            </Button>
-          </div>
-        )}
-      </div>
+          {/* Load older (cursor pagination beyond the live 90-day window) */}
+          {hasMoreTransactions && (
+            <div className="pt-2 pb-4 flex justify-center">
+              <Button
+                variant="secondary"
+                onClick={loadOlderTransactions}
+                disabled={isLoadingOlderTransactions}
+                leftIcon={isLoadingOlderTransactions ? <Loader2 size={16} className="animate-spin" /> : undefined}
+              >
+                {isLoadingOlderTransactions ? 'Loading…' : 'Load older transactions'}
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
