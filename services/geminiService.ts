@@ -184,10 +184,14 @@ async function withTimeoutAndRetry<T>(
       await new Promise<void>(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt - 1)));
     }
 
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Gemini request timed out after ${timeoutMs}ms`)), timeoutMs)
-      );
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error(`Gemini request timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      });
 
       return await Promise.race([fn(), timeoutPromise]);
     } catch (error) {
@@ -202,6 +206,10 @@ async function withTimeoutAndRetry<T>(
         // Last attempt exhausted — fall through to final throw.
         break;
       }
+    } finally {
+      // Always clear the timeout timer so a resolved/rejected fn() doesn't leak
+      // a pending timer (which would keep the event loop alive, notably in tests).
+      if (timeoutId) clearTimeout(timeoutId);
     }
   }
 
