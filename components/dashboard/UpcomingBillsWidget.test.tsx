@@ -2,14 +2,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { UpcomingBillsWidget } from './UpcomingBillsWidget';
 import { BrowserRouter } from 'react-router-dom';
-import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import { expandCalendarItems } from '@/utils/calendarRecurrence';
 
-vi.mock('../../utils/calendarRecurrence', () => ({
+vi.mock('@/utils/calendarRecurrence', () => ({
   expandCalendarItems: vi.fn(),
 }));
 
 // Mock dependencies
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // UpcomingBillsWidget reads useFinance; alias every hook to the same value.
   const value = () => ({
     calendarItems: [] as unknown[], // Mocked per test but default to empty

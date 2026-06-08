@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HabitHistoryCalendar from './HabitHistoryCalendar';
-import { Habit } from '../../types/schema';
+import { Habit } from '@/types/schema';
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
@@ -20,7 +20,7 @@ const mockContextValue = {
   habits: [] as Habit[],
 };
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // HabitHistoryCalendar reads useGamification; alias every hook to one fn.
   const value = vi.fn(() => mockContextValue);
   return {

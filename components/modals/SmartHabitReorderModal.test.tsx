@@ -15,7 +15,7 @@ vi.mock('@/services/geminiService', () => ({
 }));
 
 // Mock Modal to avoid Portal issues and simplify testing
-vi.mock('../ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ isOpen, children, onClose }: { isOpen: boolean; children: React.ReactNode; onClose: () => void }) => {
     if (!isOpen) return null;
     return (

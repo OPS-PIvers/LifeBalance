@@ -3,7 +3,7 @@ import { vi, describe, it, expect } from 'vitest';
 import AnalyticsModal from './AnalyticsModal';
 
 // Mock the household context slice hooks
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({
     transactions: [
       {

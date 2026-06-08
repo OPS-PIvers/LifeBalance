@@ -1,8 +1,8 @@
 import React, { useState, memo } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { BudgetBucket, Transaction } from '../../types/schema';
-import { Button } from '../ui/Button';
+import { BudgetBucket, Transaction } from '@/types/schema';
+import { Button } from '@/components/ui/Button';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;

@@ -11,8 +11,8 @@ import toast from 'react-hot-toast';
 import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/CustomHabitForm';
 import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
-import { Modal } from '../ui/Modal';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // UUID generator with fallback for non-secure contexts
 const generateId = (): string => {

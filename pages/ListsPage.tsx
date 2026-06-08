@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import ToDosPage from './ToDosPage';
-import MealPlanTab from '../components/meals/MealPlanTab';
-import ShoppingListTab from '../components/meals/ShoppingListTab';
+import MealPlanTab from '@/components/meals/MealPlanTab';
+import ShoppingListTab from '@/components/meals/ShoppingListTab';
 
 const VALID_TABS = ['todos', 'meals', 'shopping'] as const;
 type TabValue = typeof VALID_TABS[number];

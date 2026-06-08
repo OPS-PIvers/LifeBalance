@@ -1,8 +1,8 @@
 import React, { useEffect, useId, useRef, useState, useMemo } from 'react';
 import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { reorganizeHabits } from '@/services/geminiService';
 import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';

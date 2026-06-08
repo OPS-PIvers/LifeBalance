@@ -3,8 +3,8 @@ import {
   endOfDay, isBefore, parseISO, isSameDay, subMonths, addMonths,
   startOfToday, isToday, isTomorrow, isValid
 } from 'date-fns';
-import { Transaction, CalendarItem, ToDo } from '../types/schema';
-import { useFinance, useTodos, useExpandedCalendarItems } from '../contexts/FirebaseHouseholdContext';
+import { Transaction, CalendarItem, ToDo } from '@/types/schema';
+import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 
 // ToDoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.

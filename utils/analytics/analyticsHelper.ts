@@ -1,9 +1,9 @@
-import { Habit, Transaction } from '../../types/schema';
+import { Habit, Transaction } from '@/types/schema';
 import {
   format, subDays, eachDayOfInterval, parseISO,
   startOfWeek, subWeeks, subMonths
 } from 'date-fns';
-import { sumMoney, roundMoney } from '../money';
+import { sumMoney, roundMoney } from '@/utils/money';
 
 // Colors for Heatmap
 export const HEATMAP_COLORS = {

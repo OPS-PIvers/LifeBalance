@@ -1,5 +1,5 @@
 import React from 'react';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Plus, Sparkles } from 'lucide-react';
 
 interface EmptyChallengeWidgetProps {

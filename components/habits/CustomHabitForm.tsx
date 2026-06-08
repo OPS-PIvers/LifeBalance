@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { SegmentedControl } from '../ui/SegmentedControl';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Habit, EffortLevel } from '@/types/schema';
 import {
   EFFORT_POINTS,

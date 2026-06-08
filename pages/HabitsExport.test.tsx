@@ -2,15 +2,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import Habits from './Habits';
-import { generateCsvExport } from '../utils/exportUtils';
-import { Habit } from '../types/schema';
+import { generateCsvExport } from '@/utils/exportUtils';
+import { Habit } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('../utils/exportUtils', () => ({
+vi.mock('@/utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
 }));
 
@@ -22,11 +22,11 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Mock child components to simplify testing
-vi.mock('../components/habits/HabitCard', () => ({
+vi.mock('@/components/habits/HabitCard', () => ({
   default: ({ habit }: { habit: Habit }) => <div data-testid="habit-card">{habit.title}</div>,
 }));
 
-vi.mock('../components/modals/HabitCreatorWizard', () => ({
+vi.mock('@/components/modals/HabitCreatorWizard', () => ({
   default: () => <div data-testid="habit-wizard" />,
 }));
 
@@ -68,7 +68,7 @@ const mockUseHousehold = vi.fn(() => ({
   habits: mockHabits,
 }));
 
-vi.mock('../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // Habits page reads useGamification (habits) + useHouseholdCore (isLoading),
   // and its child components/modals read various slices. Alias every hook to the
   // same source so existing mockReturnValue(Once) setup keeps driving the tree.

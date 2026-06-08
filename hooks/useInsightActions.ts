@@ -1,4 +1,4 @@
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { InsightAction } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';

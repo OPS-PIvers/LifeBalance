@@ -1,7 +1,7 @@
 import React, { useState, useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import Card from './Card';
-import { cn } from '../../utils/cn';
+import { cn } from '@/utils/cn';
 
 export interface CollapsibleCardProps {
   id?: string;

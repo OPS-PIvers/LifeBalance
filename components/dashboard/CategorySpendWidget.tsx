@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
-import { roundMoney, sumMoney } from '../../utils/money';
+import { roundMoney, sumMoney } from '@/utils/money';
 import { PieChart, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 

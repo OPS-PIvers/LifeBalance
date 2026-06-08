@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingItem, Store as StoreType } from '../../types/schema';
+import { ShoppingItem, Store as StoreType } from '@/types/schema';
 import { Store } from 'lucide-react';
 
 interface ShoppingItemFormProps {

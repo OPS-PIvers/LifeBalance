@@ -1,6 +1,6 @@
-import { Transaction } from '../../types/schema';
+import { Transaction } from '@/types/schema';
 import { differenceInDays, parseISO, addDays, format, isAfter, startOfDay } from 'date-fns';
-import { sumMoney, roundMoney } from '../money';
+import { sumMoney, roundMoney } from '@/utils/money';
 
 export const calculateBurnDown = (
   transactions: Transaction[],

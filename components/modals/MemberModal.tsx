@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
 import { HouseholdMember, Role } from '@/types/schema';
-import { Drawer } from '../ui/Drawer';
-import Input from '../ui/Input';
+import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
 
 interface MemberModalProps {
   isOpen: boolean;

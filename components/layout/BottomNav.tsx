@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
-import CaptureModal from '../modals/CaptureModal';
+import CaptureModal from '@/components/modals/CaptureModal';
 
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);

@@ -1,15 +1,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Habit } from '../../types/schema';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
+import { Habit } from '@/types/schema';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import HabitFormModal from '../modals/HabitFormModal';
-import HabitSubmissionLogModal from '../modals/HabitSubmissionLogModal';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
-import { useMediaQuery } from '../../hooks/useMediaQuery';
+import HabitFormModal from '@/components/modals/HabitFormModal';
+import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays, format } from 'date-fns';
 import { haptic } from '@/utils/haptics';
 import StreakFlame from './StreakFlame';

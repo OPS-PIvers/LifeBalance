@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import type { MagicActionResponse } from '../../services/geminiService.types';
+import type { MagicActionResponse } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 
 interface CaptureMagicActionProps {
@@ -33,7 +33,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
         todayDate: format(new Date(), 'yyyy-MM-dd')
       };
 
-      const { parseMagicAction } = await import('../../services/geminiService');
+      const { parseMagicAction } = await import('@/services/geminiService');
       const result = await parseMagicAction(householdId, magicInput, context);
 
       onSuccess(result);

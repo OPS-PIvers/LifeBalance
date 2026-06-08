@@ -1,8 +1,8 @@
 import React from 'react';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Pencil } from 'lucide-react';
-import { calculateChallengeProgress } from '../../utils/challengeCalculator';
-import { getEffectiveTargetValue } from '../../utils/migrations/challengeMigration';
+import { calculateChallengeProgress } from '@/utils/challengeCalculator';
+import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
 
 interface ChallengeWidgetProps {
   onOpenModal: () => void;

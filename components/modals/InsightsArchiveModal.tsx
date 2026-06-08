@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
-import { useHouseholdCore } from '../../contexts/FirebaseHouseholdContext';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, isValid } from 'date-fns';
-import { Drawer } from '../ui/Drawer';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface InsightsArchiveModalProps {
   isOpen: boolean;

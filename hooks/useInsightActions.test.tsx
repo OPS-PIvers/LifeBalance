@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useInsightActions } from './useInsightActions';
-import { CreateTodoPayload } from '../types/schema';
-import * as HouseholdContext from '../contexts/FirebaseHouseholdContext';
+import { CreateTodoPayload } from '@/types/schema';
+import * as HouseholdContext from '@/contexts/FirebaseHouseholdContext';
 import toast from 'react-hot-toast';
 
 // Mock toast
@@ -24,7 +24,7 @@ const mockBuckets = [
 
 const mockCurrentUser = { uid: 'user123' };
 
-vi.mock('../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHousehold: vi.fn(),
 }));
 

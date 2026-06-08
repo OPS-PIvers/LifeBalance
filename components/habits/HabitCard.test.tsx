@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import HabitCard from './HabitCard';
-import { Habit } from '../../types/schema';
+import { Habit } from '@/types/schema';
 
 // Mock context
 const { mockHouseholdContext } = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const { mockHouseholdContext } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // HabitCard reads useGamification; alias every hook to the same value object.
   const value = () => mockHouseholdContext;
   return {
@@ -31,16 +31,16 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => {
 });
 
 // Mock child modals
-vi.mock('../modals/HabitFormModal', () => ({
+vi.mock('@/components/modals/HabitFormModal', () => ({
   default: () => <div data-testid="habit-form-modal" />
 }));
 
-vi.mock('../modals/HabitSubmissionLogModal', () => ({
+vi.mock('@/components/modals/HabitSubmissionLogModal', () => ({
   default: () => <div data-testid="habit-submission-log-modal" />
 }));
 
 // Mock Drawer
-vi.mock('../ui/Drawer', () => ({
+vi.mock('@/components/ui/Drawer', () => ({
   Drawer: ({ isOpen, children, title }: { isOpen: boolean; children: React.ReactNode; title: string }) => isOpen ? (
     <div data-testid="mobile-drawer">
       <h1>{title}</h1>

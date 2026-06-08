@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '@/utils/cn';
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Tailwind shape helpers are passed via className (w-, h-, rounded-). */

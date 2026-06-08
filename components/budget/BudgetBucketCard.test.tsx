@@ -1,7 +1,7 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BudgetBucketCard } from './BudgetBucketCard';
-import { BudgetBucket, Transaction } from '../../types/schema';
+import { BudgetBucket, Transaction } from '@/types/schema';
 import { vi, describe, it, expect } from 'vitest';
 
 describe('BudgetBucketCard', () => {

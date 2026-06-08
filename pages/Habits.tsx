@@ -1,18 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGamification, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
-import { Habit } from '../types/schema';
-import { Skeleton } from '../components/ui/Skeleton';
-import HabitCategoryList from '../components/habits/HabitCategoryList';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { Habit } from '@/types/schema';
+import { Skeleton } from '@/components/ui/Skeleton';
+import HabitCategoryList from '@/components/habits/HabitCategoryList';
 import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar, ListChecks } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import HabitCreatorWizard from '../components/modals/HabitCreatorWizard';
-import SmartHabitAdjustModal from '../components/modals/SmartHabitAdjustModal';
-import SmartHabitReorderModal from '../components/modals/SmartHabitReorderModal';
-import { HabitCoach } from '../components/habits/HabitCoach';
-import HabitHistoryCalendar from '../components/habits/HabitHistoryCalendar';
-import { generateCsvExport } from '../utils/exportUtils';
+import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
+import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
+import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
+import { HabitCoach } from '@/components/habits/HabitCoach';
+import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
+import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 

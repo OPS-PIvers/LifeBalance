@@ -1,5 +1,5 @@
 import React from 'react';
-import { Skeleton, SkeletonText } from '../ui/Skeleton';
+import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 
 /**
  * Loading placeholder for the Dashboard. Mirrors the real layout (header +

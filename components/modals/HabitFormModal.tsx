@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Habit } from '../../types/schema';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
-import { Drawer } from '../ui/Drawer';
+import { Habit } from '@/types/schema';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface HabitFormModalProps {
   isOpen: boolean;

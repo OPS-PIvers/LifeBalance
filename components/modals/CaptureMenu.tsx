@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
 import { Camera, Upload, Type, Shield } from 'lucide-react';
-import { Badge } from '../ui/Badge';
+import { Badge } from '@/components/ui/Badge';
 import { CaptureMagicAction } from './CaptureMagicAction';
-import type { MagicActionResponse } from '../../services/geminiService.types';
+import type { MagicActionResponse } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 
 interface CaptureMenuProps {

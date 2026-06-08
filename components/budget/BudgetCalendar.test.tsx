@@ -1,13 +1,13 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import BudgetCalendar from './BudgetCalendar';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 
 // Mock dependencies
 // BudgetCalendar reads useFinance + useTodos (and renders RecurringBillsModal,
 // which reads useFinance). Back every hook with one shared mock fn so existing
 // `useHousehold` mock setup drives all of them with the same value object.
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const fn = vi.fn();
   return {
     useHousehold: fn,

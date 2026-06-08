@@ -1,9 +1,9 @@
 import { memo } from 'react';
 import { History, FileText, ArrowUpRight, ArrowDownLeft, Edit, Trash2, CheckSquare, Copy, Scissors, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { Transaction, INCOME_CATEGORY } from '../../types/schema';
-import { Button } from '../ui/Button';
-import { Badge } from '../ui/Badge';
+import { Transaction, INCOME_CATEGORY } from '@/types/schema';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 
 // --- Helper Functions ---
 

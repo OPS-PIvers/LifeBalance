@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import { X } from 'lucide-react';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { Modal } from '@/components/ui/Modal';
 
 interface RewardsModalProps {
   isOpen: boolean;

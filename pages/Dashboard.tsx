@@ -1,24 +1,24 @@
 import React, { useState, Suspense } from 'react';
-import { useFinance, useGamification, useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
-const AnalyticsModal = React.lazy(() => import('../components/modals/AnalyticsModal'));
-const ChallengeHubModal = React.lazy(() => import('../components/modals/ChallengeHubModal'));
-const InsightsArchiveModal = React.lazy(() => import('../components/modals/InsightsArchiveModal'));
-import { useActionQueue } from '../hooks/useActionQueue';
-import { ActionQueueItemCard } from '../components/dashboard/ActionQueueItem';
-import { ChallengeWidget } from '../components/dashboard/ChallengeWidget';
-import { EmptyChallengeWidget } from '../components/dashboard/EmptyChallengeWidget';
-import { InsightWidget } from '../components/dashboard/InsightWidget';
-import { MoneyPulseWidget } from '../components/dashboard/MoneyPulseWidget';
-import { DailyHabitsWidget } from '../components/dashboard/DailyHabitsWidget';
-import { UpcomingBillsWidget } from '../components/dashboard/UpcomingBillsWidget';
-import { CategorySpendWidget } from '../components/dashboard/CategorySpendWidget';
-import { ActivityFeedWidget } from '../components/dashboard/ActivityFeedWidget';
+const AnalyticsModal = React.lazy(() => import('@/components/modals/AnalyticsModal'));
+const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
+const InsightsArchiveModal = React.lazy(() => import('@/components/modals/InsightsArchiveModal'));
+import { useActionQueue } from '@/hooks/useActionQueue';
+import { ActionQueueItemCard } from '@/components/dashboard/ActionQueueItem';
+import { ChallengeWidget } from '@/components/dashboard/ChallengeWidget';
+import { EmptyChallengeWidget } from '@/components/dashboard/EmptyChallengeWidget';
+import { InsightWidget } from '@/components/dashboard/InsightWidget';
+import { MoneyPulseWidget } from '@/components/dashboard/MoneyPulseWidget';
+import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
+import { UpcomingBillsWidget } from '@/components/dashboard/UpcomingBillsWidget';
+import { CategorySpendWidget } from '@/components/dashboard/CategorySpendWidget';
+import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
 import { CreateChallengePayload } from '@/types/schema';
-import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton';
-import { SafeToSpendHero } from '../components/dashboard/SafeToSpendHero';
+import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
+import { SafeToSpendHero } from '@/components/dashboard/SafeToSpendHero';
 
 const Dashboard: React.FC = () => {
   // Consume the narrowest context slices so a change in one domain (e.g. a

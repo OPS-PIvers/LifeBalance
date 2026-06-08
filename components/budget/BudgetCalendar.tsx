@@ -1,18 +1,18 @@
 
 import React, { useState, useMemo } from 'react';
-import { useFinance, useTodos } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
-import { CalendarItem } from '../../types/schema';
-import { useCalendarGrid } from '../../hooks/useCalendarGrid';
-import { expandCalendarItems, parseRecurringId, isRecurringId } from '../../utils/calendarRecurrence';
-import { generateCsvExport } from '../../utils/exportUtils';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
-import { Drawer } from '../ui/Drawer';
-import { SegmentedControl } from '../ui/SegmentedControl';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
+import { CalendarItem } from '@/types/schema';
+import { useCalendarGrid } from '@/hooks/useCalendarGrid';
+import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
+import { generateCsvExport } from '@/utils/exportUtils';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 

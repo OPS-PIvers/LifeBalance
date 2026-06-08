@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Modal } from '../ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 

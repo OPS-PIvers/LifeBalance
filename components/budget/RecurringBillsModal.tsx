@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { CalendarItem } from '../../types/schema';
-import { Button } from '../ui/Button';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { CalendarItem } from '@/types/schema';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Drawer } from '../ui/Drawer';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
+import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface RecurringBillsModalProps {
   isOpen: boolean;

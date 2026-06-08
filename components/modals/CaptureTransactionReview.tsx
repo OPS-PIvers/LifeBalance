@@ -1,8 +1,8 @@
 import React from 'react';
 import { Check, AlertCircle } from 'lucide-react';
-import { ParsedTransaction } from '../../types/ui';
-import { BudgetBucket, Store, Account } from '../../types/schema';
-import { CompactSelect } from '../ui/CompactSelect';
+import { ParsedTransaction } from '@/types/ui';
+import { BudgetBucket, Store, Account } from '@/types/schema';
+import { CompactSelect } from '@/components/ui/CompactSelect';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];

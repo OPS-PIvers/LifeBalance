@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
-import { YearlyGoal } from '../../types/schema';
+import { YearlyGoal } from '@/types/schema';
 
 // Mock contexts
 const mockCreateYearlyGoal = vi.fn();

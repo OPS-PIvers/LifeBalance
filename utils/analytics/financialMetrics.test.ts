@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { calculateBurnDown } from './financialMetrics';
-import { Transaction } from '../../types/schema';
+import { Transaction } from '@/types/schema';
 
 describe('calculateBurnDown', () => {
   const periodStart = '2023-10-01';

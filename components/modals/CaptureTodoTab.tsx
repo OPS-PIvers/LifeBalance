@@ -1,7 +1,7 @@
 import React, { useId } from 'react';
 import { Calendar, AlertCircle } from 'lucide-react';
-import { HouseholdMember } from '../../types/schema';
-import { useAutoFocus } from '../../hooks/useAutoFocus';
+import { HouseholdMember } from '@/types/schema';
+import { useAutoFocus } from '@/hooks/useAutoFocus';
 
 interface CaptureTodoTabProps {
   text: string;
