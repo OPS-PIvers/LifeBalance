@@ -4,7 +4,7 @@ import { ShoppingItem, QuickStockList } from '@/types/schema';
 import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
-import { OptimizableItem } from '@/services/geminiService';
+import type { OptimizableItem } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import GroceryCatalogModal from '@/components/modals/GroceryCatalogModal';
 import ShoppingSettingsModal from '@/components/meals/ShoppingSettingsModal';

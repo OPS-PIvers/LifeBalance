@@ -2,11 +2,12 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SmartHabitAdjustModal from './SmartHabitAdjustModal';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useGamification: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
 
 vi.mock('@/services/geminiService', () => ({
@@ -25,9 +26,11 @@ describe('SmartHabitAdjustModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as Mock).mockReturnValue({
+    (useGamification as Mock).mockReturnValue({
       habits: mockHabits,
       updateHabit: mockUpdateHabit,
+    });
+    (useHouseholdCore as Mock).mockReturnValue({
       householdId: 'test-household',
     });
   });

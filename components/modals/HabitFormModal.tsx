@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Habit } from '../../types/schema';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
 
 interface HabitFormModalProps {
@@ -12,7 +12,7 @@ interface HabitFormModalProps {
 const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
-  const { addHabit, updateHabit } = useHousehold();
+  const { addHabit, updateHabit } = useGamification();
 
   // Form State
   const [title, setTitle] = useState('');

@@ -1,8 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
-import { HabitPointAdjustmentSuggestion } from '@/services/geminiService';
+import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 
 interface SmartHabitAdjustModalProps {
@@ -11,7 +11,8 @@ interface SmartHabitAdjustModalProps {
 }
 
 const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, onClose }) => {
-  const { habits, updateHabit, householdId } = useHousehold();
+  const { habits, updateHabit } = useGamification();
+  const { householdId } = useHouseholdCore();
   const titleId = useId();
   const [suggestions, setSuggestions] = useState<HabitPointAdjustmentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);

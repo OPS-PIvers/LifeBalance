@@ -32,7 +32,7 @@ const mockHousehold = {
 };
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => mockHousehold
+  useShopping: () => mockHousehold
 }));
 
 // Mock Drawer to verify it's being used

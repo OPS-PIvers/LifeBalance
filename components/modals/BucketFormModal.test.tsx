@@ -1,12 +1,12 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import BucketFormModal from './BucketFormModal';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the context
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useFinance: vi.fn(),
 }));
 
 // Mock Lucide icons
@@ -24,7 +24,7 @@ describe('BucketFormModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    (useFinance as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       addBucket: mockAddBucket,
       updateBucket: mockUpdateBucket,
       deleteBucket: mockDeleteBucket,

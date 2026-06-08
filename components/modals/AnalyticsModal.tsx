@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useId } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { sumMoney } from '../../utils/money';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -65,7 +65,8 @@ const CHART_STYLES = {
 } as const;
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { habits, transactions, currentPeriodId, buckets, loadAllTransactions } = useHousehold();
+  const { transactions, currentPeriodId, buckets, loadAllTransactions } = useFinance();
+  const { habits } = useGamification();
   const titleId = useId();
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('pulse');
 

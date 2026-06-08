@@ -11,6 +11,20 @@
  */
 
 // ---------------------------------------------------------------------------
+// Receipt scanning
+// ---------------------------------------------------------------------------
+
+export interface ReceiptData {
+  merchant: string;
+  amount: number;
+  category: string;
+  date?: string; // Optional - may not be visible on all receipts
+  suggestedHabits?: string[];
+  subBucket?: string;
+  store?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Natural-language command parsing
 // ---------------------------------------------------------------------------
 

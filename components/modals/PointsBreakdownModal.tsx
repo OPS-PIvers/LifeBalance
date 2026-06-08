@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { streakForHabit, getMultiplier } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -23,7 +23,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   view,
   habits,
 }) => {
-  const { toggleHabit, updateHabit, householdId } = useHousehold();
+  const { toggleHabit, updateHabit } = useGamification();
+  const { householdId } = useHouseholdCore();
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
 
   // Derived state for the list

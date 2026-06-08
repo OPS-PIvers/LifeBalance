@@ -8,7 +8,7 @@ const mockCreateYearlyGoal = vi.fn();
 const mockUpdateYearlyGoal = vi.fn();
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+  useGamification: () => ({
     createYearlyGoal: mockCreateYearlyGoal,
     updateYearlyGoal: mockUpdateYearlyGoal,
   }),

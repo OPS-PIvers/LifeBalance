@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
@@ -26,7 +26,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     activeYearlyGoals,
     freezeBank,
     useFreezeBankToken: consumeFreezeBankToken,
-  } = useHousehold();
+  } = useGamification();
 
   const [activeTab, setActiveTab] = useState<TabType>('challenge');
   const [isYearlyGoalFormOpen, setIsYearlyGoalFormOpen] = useState(false);

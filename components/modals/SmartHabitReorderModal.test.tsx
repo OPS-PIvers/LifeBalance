@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import SmartHabitReorderModal from './SmartHabitReorderModal';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { reorganizeHabits } from '@/services/geminiService';
 
 // Mock dependencies
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useGamification: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
 
 vi.mock('@/services/geminiService', () => ({
@@ -36,9 +37,11 @@ describe('SmartHabitReorderModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (useHousehold as unknown as Mock).mockReturnValue({
+    (useGamification as unknown as Mock).mockReturnValue({
       habits: mockHabits,
       reorderHabits: mockReorderHabits,
+    });
+    (useHouseholdCore as unknown as Mock).mockReturnValue({
       householdId: 'house-123',
     });
   });

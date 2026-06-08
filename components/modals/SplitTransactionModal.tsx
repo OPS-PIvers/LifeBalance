@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '../../types/schema';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { sumMoney, subtractMoney } from '../../utils/money';
 import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
@@ -22,7 +22,7 @@ interface SplitItem {
 }
 
 const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { splitTransaction, buckets } = useHousehold();
+  const { splitTransaction, buckets } = useFinance();
   const [splits, setSplits] = useState<SplitItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 

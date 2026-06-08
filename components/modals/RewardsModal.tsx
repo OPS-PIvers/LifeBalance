@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 import { X } from 'lucide-react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
 
 interface RewardsModalProps {
@@ -9,7 +9,7 @@ interface RewardsModalProps {
 }
 
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
-  const { rewardsInventory, totalPoints, redeemReward } = useHousehold();
+  const { rewardsInventory, totalPoints, redeemReward } = useGamification();
   const titleId = useId();
 
   return (

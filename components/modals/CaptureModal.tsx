@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { ReceiptData, MagicActionResponse } from '../../services/geminiService';
+import type { ReceiptData, MagicActionResponse } from '../../services/geminiService.types';
 import { Transaction } from '../../types/schema';
 import { ParsedTransaction } from '../../types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';

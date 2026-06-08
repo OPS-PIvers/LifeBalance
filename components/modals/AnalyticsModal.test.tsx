@@ -2,20 +2,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import AnalyticsModal from './AnalyticsModal';
 
-// Mock the household context
+// Mock the household context slice hooks
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
-    habits: [
-      {
-        id: '1',
-        title: 'Drink Water',
-        category: 'Health',
-        basePoints: 10,
-        period: 'daily',
-        streakDays: 5,
-        completedDates: ['2023-01-01', '2023-01-02'],
-      }
-    ],
+  useFinance: () => ({
     transactions: [
       {
         id: 't1',
@@ -29,6 +18,19 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
     ],
     currentPeriodId: '2023-01-01',
     loadAllTransactions: vi.fn().mockResolvedValue([]),
+  }),
+  useGamification: () => ({
+    habits: [
+      {
+        id: '1',
+        title: 'Drink Water',
+        category: 'Health',
+        basePoints: 10,
+        period: 'daily',
+        streakDays: 5,
+        completedDates: ['2023-01-01', '2023-01-02'],
+      }
+    ],
   }),
 }));
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
@@ -18,7 +18,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   onClose,
   habit,
 }) => {
-  const { getHabitSubmissions, addHabitSubmission, updateHabitSubmission, deleteHabitSubmission } = useHousehold();
+  const { getHabitSubmissions, addHabitSubmission, updateHabitSubmission, deleteHabitSubmission } = useGamification();
 
   const [submissions, setSubmissions] = useState<HabitSubmission[]>([]);
   const [isLoading, setIsLoading] = useState(false);

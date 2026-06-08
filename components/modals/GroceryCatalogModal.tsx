@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { GroceryCatalogItem } from '@/types/schema';
 import { Search, Plus, Trash2, Edit2, ShoppingCart, Clock, MoreVertical } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,7 +19,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
     addShoppingItem,
     updateGroceryCatalogItem,
     deleteGroceryCatalogItem
-  } = useHousehold();
+  } = useShopping();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [editingItem, setEditingItem] = useState<GroceryCatalogItem | null>(null);
