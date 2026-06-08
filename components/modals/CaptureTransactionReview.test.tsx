@@ -1,8 +1,8 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
-import { ParsedTransaction } from '../../types/ui';
-import { BudgetBucket } from '../../types/schema';
+import { ParsedTransaction } from '@/types/ui';
+import { BudgetBucket } from '@/types/schema';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({

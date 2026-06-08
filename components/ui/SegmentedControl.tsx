@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { cn } from '../../utils/cn';
+import { cn } from '@/utils/cn';
 
 export interface SegmentedControlOption<T extends string> {
   value: T;

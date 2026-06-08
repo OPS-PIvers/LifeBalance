@@ -26,12 +26,12 @@ const mockUseHousehold = {
   accounts: [] as unknown[],
 };
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useHousehold: () => mockUseHousehold,
 }));
 
 // Mock child components to simplify testing
-vi.mock('../ui/Drawer', () => ({
+vi.mock('@/components/ui/Drawer', () => ({
   Drawer: ({ children, isOpen, header }: { children: React.ReactNode; isOpen: boolean; header: React.ReactNode }) => isOpen ? (
     <div data-testid="drawer">
       <div data-testid="drawer-header">{header}</div>

@@ -74,7 +74,7 @@ const mockUseHousehold = vi.fn(() => ({
   transactions: mockTransactions,
 }));
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // CategorySpendWidget reads useFinance; alias every hook to the same source.
   const value = () => mockUseHousehold();
   return {

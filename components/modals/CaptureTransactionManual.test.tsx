@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
-import { Transaction, Habit, BudgetBucket } from '../../types/schema';
+import { Transaction, Habit, BudgetBucket } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({
@@ -11,7 +11,7 @@ vi.mock('react-hot-toast', () => ({
   }
 }));
 
-vi.mock('../../utils/habitSuggestions', () => ({
+vi.mock('@/utils/habitSuggestions', () => ({
   suggestHabitsForTransaction: vi.fn().mockReturnValue([]),
 }));
 

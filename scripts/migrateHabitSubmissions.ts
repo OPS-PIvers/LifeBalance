@@ -17,8 +17,8 @@ import {
   updateDoc,
   query,
 } from 'firebase/firestore';
-import { calculateStreak, getMultiplier } from '../utils/habitLogic';
-import { Habit, HabitSubmission } from '../types/schema';
+import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
+import { Habit, HabitSubmission } from '@/types/schema';
 
 // Firebase config - uses same config as main app
 const firebaseConfig = {

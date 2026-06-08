@@ -3,14 +3,14 @@ import {
   X, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import type { ReceiptData, MagicActionResponse } from '../../services/geminiService.types';
-import { Transaction } from '../../types/schema';
-import { ParsedTransaction } from '../../types/ui';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
+import { Transaction } from '@/types/schema';
+import { ParsedTransaction } from '@/types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
-import { SegmentedControl, SegmentedControlOption } from '../ui/SegmentedControl';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { SegmentedControl, SegmentedControlOption } from '@/components/ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
 import { CaptureTodoTab } from './CaptureTodoTab';
 import { CaptureTransactionManual } from './CaptureTransactionManual';
@@ -239,7 +239,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setProcessingMessage('Scanning receipt...');
       try {
         if (!householdId) throw new Error("Household ID not found");
-        const { analyzeReceipt } = await import('../../services/geminiService');
+        const { analyzeReceipt } = await import('@/services/geminiService');
 
         const subBucketsMap: Record<string, string[]> = {};
         buckets.forEach(b => {
@@ -296,7 +296,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     setProcessingMessage('Extracting transactions...');
     try {
       if (!householdId) throw new Error("Household ID not found");
-      const { parseBankStatement, analyzeReceipt } = await import('../../services/geminiService');
+      const { parseBankStatement, analyzeReceipt } = await import('@/services/geminiService');
 
       const subBucketsMap: Record<string, string[]> = {};
       buckets.forEach(b => {

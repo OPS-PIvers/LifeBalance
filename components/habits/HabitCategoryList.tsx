@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { GripVertical } from 'lucide-react';
-import { Habit } from '../../types/schema';
+import { Habit } from '@/types/schema';
 import HabitCard from './HabitCard';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 
 interface HabitCategoryListProps {
   category: string;

@@ -1,9 +1,9 @@
 import React from 'react';
-import { useHouseholdCore } from '../../contexts/FirebaseHouseholdContext';
-import { useInsightActions } from '../../hooks/useInsightActions';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useInsightActions } from '@/hooks/useInsightActions';
 import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
 import { CreateChallengePayload } from '@/types/schema';
-import { Skeleton } from '../ui/Skeleton';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;

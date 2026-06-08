@@ -1,12 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetBuckets from './BudgetBuckets';
-import { useHousehold, type HouseholdContextType } from '../../contexts/FirebaseHouseholdContext';
+import { useHousehold, type HouseholdContextType } from '@/contexts/FirebaseHouseholdContext';
 
 // Mock the Household Context
 // BudgetBuckets reads useFinance. Back every hook with one shared mock fn so the
 // existing `useHousehold` mock setup drives all of them with the same value.
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const fn = vi.fn();
   return {
     useHousehold: fn,
@@ -42,16 +42,16 @@ vi.mock('lucide-react', () => ({
 }));
 
 // Mock child modals
-vi.mock('../modals/BucketFormModal', () => ({
+vi.mock('@/components/modals/BucketFormModal', () => ({
   default: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div data-testid="bucket-form-modal">Bucket Form Modal</div> : null
 }));
 
-vi.mock('../modals/EditTransactionModal', () => ({
+vi.mock('@/components/modals/EditTransactionModal', () => ({
   default: ({ isOpen }: { isOpen: boolean }) => isOpen ? <div data-testid="edit-transaction-modal">Edit Transaction Modal</div> : null
 }));
 
 // Mock shared UI Modal
-vi.mock('../ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ isOpen, children, ariaLabelledBy }: { isOpen: boolean; children: React.ReactNode; ariaLabelledBy?: string }) =>
     isOpen ? (
       <div role="dialog" aria-labelledby={ariaLabelledBy}>

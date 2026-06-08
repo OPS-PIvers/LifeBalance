@@ -1,12 +1,12 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { BucketPeriodSnapshot } from '../../types/schema';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { BucketPeriodSnapshot } from '@/types/schema';
 import { format, parseISO } from 'date-fns';
-import { roundMoney } from '../../utils/money';
+import { roundMoney } from '@/utils/money';
 import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react';
-import Card from '../ui/Card';
-import { Button } from '../ui/Button';
-import { generateCsvExport } from '../../utils/exportUtils';
+import Card from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 
 interface PeriodGroup {

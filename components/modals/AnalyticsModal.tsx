@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useId } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
-import { useFinance, useGamification } from '../../contexts/FirebaseHouseholdContext';
-import { sumMoney } from '../../utils/money';
+import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { sumMoney } from '@/utils/money';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer,
@@ -14,10 +14,10 @@ import {
   format, subDays, parseISO, startOfWeek, subWeeks, addDays
 } from 'date-fns';
 import { clsx } from 'clsx';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
-import { CustomTooltip } from '../analytics/CustomTooltip';
-import { calculateBurnDown } from '../../utils/analytics/financialMetrics';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { CustomTooltip } from '@/components/analytics/CustomTooltip';
+import { calculateBurnDown } from '@/utils/analytics/financialMetrics';
 import {
   calculatePulseData,
   calculateWeeklyComparison,
@@ -26,7 +26,7 @@ import {
   calculateCategoryTrend,
   HEATMAP_COLORS,
   CHART_COLORS
-} from '../../utils/analytics/analyticsHelper';
+} from '@/utils/analytics/analyticsHelper';
 
 interface AnalyticsModalProps {
   isOpen: boolean;

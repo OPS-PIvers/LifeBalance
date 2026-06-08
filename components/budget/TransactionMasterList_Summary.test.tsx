@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { INCOME_CATEGORY } from '../../types/schema';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { INCOME_CATEGORY } from '@/types/schema';
 
 // Mock dependencies
 // The component reads granular slices (useFinance/useHouseholdCore/useMeals).
 // Back every hook with one shared mock fn so existing `useHousehold` mock setup
 // drives all of them with the same value object.
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const fn = vi.fn();
   return {
     useHousehold: fn,
@@ -21,7 +21,7 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => {
   };
 });
 
-vi.mock('../../utils/exportUtils', () => ({
+vi.mock('@/utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
 }));
 
@@ -30,10 +30,10 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Mock Child Modals (simplified)
-vi.mock('../modals/EditTransactionModal', () => ({ default: (): null => null }));
-vi.mock('../modals/SplitTransactionModal', () => ({ default: (): null => null }));
-vi.mock('../modals/BatchCategorizeModal', () => ({ default: (): null => null }));
-vi.mock('../ui/Modal', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
+vi.mock('@/components/modals/EditTransactionModal', () => ({ default: (): null => null }));
+vi.mock('@/components/modals/SplitTransactionModal', () => ({ default: (): null => null }));
+vi.mock('@/components/modals/BatchCategorizeModal', () => ({ default: (): null => null }));
+vi.mock('@/components/ui/Modal', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({

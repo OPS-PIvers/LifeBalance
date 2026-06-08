@@ -6,10 +6,10 @@ import ListsPage from './ListsPage';
 vi.mock('./ToDosPage', () => ({
   default: () => <div data-testid="todos-page">ToDos Page Content</div>
 }));
-vi.mock('../components/meals/MealPlanTab', () => ({
+vi.mock('@/components/meals/MealPlanTab', () => ({
   default: () => <div data-testid="meals-page">Meals Page Content</div>
 }));
-vi.mock('../components/meals/ShoppingListTab', () => ({
+vi.mock('@/components/meals/ShoppingListTab', () => ({
   default: () => <div data-testid="shopping-page">Shopping Page Content</div>
 }));
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
-import { BudgetBucket, SubBucket } from '../../types/schema';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
-import Input from '../ui/Input';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { BudgetBucket, SubBucket } from '@/types/schema';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface BucketFormModalProps {
   isOpen: boolean;

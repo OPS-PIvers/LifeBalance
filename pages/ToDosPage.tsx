@@ -1,21 +1,21 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
-import { useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
-import { ToDo, HouseholdMember } from '../types/schema';
+import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { showDeleteConfirmation } from '../utils/toastHelpers';
-import { generateCsvExport } from '../utils/exportUtils';
-import { Modal } from '../components/ui/Modal';
-import { Drawer } from '../components/ui/Drawer';
-import { Button } from '../components/ui/Button';
-import { SegmentedControl } from '../components/ui/SegmentedControl';
-import Input from '../components/ui/Input';
-import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
-import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { showDeleteConfirmation } from '@/utils/toastHelpers';
+import { generateCsvExport } from '@/utils/exportUtils';
+import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import Input from '@/components/ui/Input';
+import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const ToDosPage: React.FC = () => {
   const {

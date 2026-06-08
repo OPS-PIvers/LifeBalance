@@ -3,7 +3,7 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import BudgetAccounts from './BudgetAccounts';
-import { Account } from '../../types/schema';
+import { Account } from '@/types/schema';
 
 // Mock dependencies
 const {
@@ -48,7 +48,7 @@ const mockAccounts: Account[] = [
   }
 ];
 
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   // BudgetAccounts reads useFinance; alias every hook to the same value so the
   // mock data resolves regardless of which slice hook the component uses.
   const value = () => ({
@@ -85,7 +85,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 // Mock Modal to avoid portal/fixed positioning issues in tests
-vi.mock('../ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ children, onClose, isOpen }: { children: React.ReactNode, onClose: () => void, isOpen: boolean }) => {
     if (!isOpen) return null;
     return (
@@ -98,7 +98,7 @@ vi.mock('../ui/Modal', () => ({
 }));
 
 // Mock Drawer
-vi.mock('../ui/Drawer', () => {
+vi.mock('@/components/ui/Drawer', () => {
   interface MockDrawerProps {
     children: React.ReactNode;
     isOpen: boolean;

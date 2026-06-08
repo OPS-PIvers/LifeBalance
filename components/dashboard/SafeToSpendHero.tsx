@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronDown, Wallet, Receipt, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { cn } from '../../utils/cn';
-import { haptic } from '../../utils/haptics';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { cn } from '@/utils/cn';
+import { haptic } from '@/utils/haptics';
 
 const currency = (n: number) =>
   `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import EditTransactionModal from './EditTransactionModal';
-import { Transaction } from '../../types/schema';
+import { Transaction } from '@/types/schema';
 
 // Hoist mocks to ensure they are available before imports
 const {
@@ -24,7 +24,7 @@ const {
 }));
 
 // Mock slice hooks used by EditTransactionModal
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: () => ({
     updateTransaction: mockUpdateTransaction,
     deleteTransaction: mockDeleteTransaction,
@@ -55,7 +55,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 // Mock Modal component
-vi.mock('../../components/ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ children, isOpen, onClose }: { children: React.ReactNode; isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
     return (

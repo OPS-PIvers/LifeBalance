@@ -1,13 +1,13 @@
 
 import React from 'react';
-import BudgetCalendar from '../components/budget/BudgetCalendar';
-import BudgetBuckets from '../components/budget/BudgetBuckets';
-import BudgetAccounts from '../components/budget/BudgetAccounts';
-import TransactionMasterList from '../components/budget/TransactionMasterList';
-import BudgetHistory from '../components/budget/BudgetHistory';
+import BudgetCalendar from '@/components/budget/BudgetCalendar';
+import BudgetBuckets from '@/components/budget/BudgetBuckets';
+import BudgetAccounts from '@/components/budget/BudgetAccounts';
+import TransactionMasterList from '@/components/budget/TransactionMasterList';
+import BudgetHistory from '@/components/budget/BudgetHistory';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
-import { Skeleton, SkeletonText } from '../components/ui/Skeleton';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 
 const BudgetSkeleton: React.FC = () => (
   <div className="min-h-screen bg-slate-50 dark:bg-brand-900 pb-28 pt-6" aria-busy="true" aria-live="polite">

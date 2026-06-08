@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
-import { isHabitStale } from '../../utils/habitLogic';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { isHabitStale } from '@/utils/habitLogic';
 import { format, startOfToday } from 'date-fns';
 import { Check, Flame, ArrowRight, LayoutList, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';

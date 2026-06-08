@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
-import { Transaction } from '../../types/schema';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { sumMoney, subtractMoney } from '../../utils/money';
-import { Drawer } from '../../components/ui/Drawer';
-import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
+import { Transaction } from '@/types/schema';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { sumMoney, subtractMoney } from '@/utils/money';
+import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import toast from 'react-hot-toast';
 
 interface SplitTransactionModalProps {

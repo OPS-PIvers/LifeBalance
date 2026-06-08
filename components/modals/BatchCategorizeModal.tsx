@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Drawer } from '../ui/Drawer';
+import { Drawer } from '@/components/ui/Drawer';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 

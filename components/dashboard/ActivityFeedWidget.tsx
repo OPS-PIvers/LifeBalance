@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useFinance, useTodos } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { Activity, Receipt, CheckSquare } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 

@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react';
 import { Wallet, Receipt, CreditCard, Clock } from 'lucide-react';
-import { useFinance, useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
-import { sumMoney, addMoney, subtractMoney } from '../../utils/money';
-import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
-import { findNextPaycheckDate, sumPendingSpend } from '../../utils/safeToSpendCalculator';
-import { CalendarItem } from '../../types/schema';
-import { Drawer } from '../ui/Drawer';
+import { sumMoney, addMoney, subtractMoney } from '@/utils/money';
+import { getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
+import { findNextPaycheckDate, sumPendingSpend } from '@/utils/safeToSpendCalculator';
+import { CalendarItem } from '@/types/schema';
+import { Drawer } from '@/components/ui/Drawer';
 
 interface SafeToSpendModalProps {
   isOpen: boolean;

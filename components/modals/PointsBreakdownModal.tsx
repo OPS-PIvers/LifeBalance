@@ -7,8 +7,8 @@ import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;

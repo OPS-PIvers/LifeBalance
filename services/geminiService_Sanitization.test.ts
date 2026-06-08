@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { Habit, Transaction } from '../types/schema';
+import { Habit, Transaction } from '@/types/schema';
 
 // Hoist the mock function
 const { generateContentMock } = vi.hoisted(() => {

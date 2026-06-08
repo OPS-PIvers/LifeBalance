@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
-import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '../contexts/FirebaseHouseholdContext';
+import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { format, addDays, startOfToday } from 'date-fns';
 
 // Mock dependencies
-vi.mock('../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: vi.fn(),
   useHouseholdCore: vi.fn(),
 }));
@@ -17,11 +17,11 @@ const setHouseholdMock = (value: Partial<TodosContextValue & HouseholdCoreContex
   vi.mocked(useHouseholdCore).mockReturnValue(value as HouseholdCoreContextValue);
 };
 
-vi.mock('../utils/exportUtils', () => ({
+vi.mock('@/utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
 }));
 
-vi.mock('../utils/toastHelpers', () => ({
+vi.mock('@/utils/toastHelpers', () => ({
   showDeleteConfirmation: vi.fn(),
 }));
 

@@ -36,6 +36,18 @@ export default tseslint.config(
       ...reactPlugin.configs.recommended.rules,
       ...reactPlugin.configs['jsx-runtime'].rules,
       'react/prop-types': 'off',
+      // Enforce the @/ alias over parent-relative imports (see todo #7).
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../*', '../**'],
+              message: 'Use the "@/" alias instead of parent-relative imports (e.g. "@/utils/cn").',
+            },
+          ],
+        },
+      ],
     },
     settings: {
       react: {

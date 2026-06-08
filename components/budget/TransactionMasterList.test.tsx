@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
-import { generateCsvExport } from '../../utils/exportUtils';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { generateCsvExport } from '@/utils/exportUtils';
 
 // Mock dependencies
 // The component reads granular slices (useFinance/useHouseholdCore/useMeals).
 // Back every hook with one shared mock fn so existing `useHousehold` mock setup
 // drives all of them with the same value object.
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const fn = vi.fn();
   return {
     useHousehold: fn,
@@ -21,7 +21,7 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => {
   };
 });
 
-vi.mock('../../utils/exportUtils', () => ({
+vi.mock('@/utils/exportUtils', () => ({
   generateCsvExport: vi.fn(),
 }));
 
@@ -30,7 +30,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 // Mock Child Modals
-vi.mock('../modals/EditTransactionModal', () => ({
+vi.mock('@/components/modals/EditTransactionModal', () => ({
   default: ({ isOpen, onClose, transaction }: { isOpen: boolean; onClose: () => void; transaction: { merchant: string } }) => isOpen ? (
     <div data-testid="edit-modal">
       Edit Modal for {transaction.merchant}
@@ -39,7 +39,7 @@ vi.mock('../modals/EditTransactionModal', () => ({
   ) : null
 }));
 
-vi.mock('../modals/SplitTransactionModal', () => ({
+vi.mock('@/components/modals/SplitTransactionModal', () => ({
   default: ({ isOpen, onClose, transaction }: { isOpen: boolean; onClose: () => void; transaction: { merchant: string } }) => isOpen ? (
     <div data-testid="split-modal">
       Split Modal for {transaction.merchant}
@@ -48,7 +48,7 @@ vi.mock('../modals/SplitTransactionModal', () => ({
   ) : null
 }));
 
-vi.mock('../modals/BatchCategorizeModal', () => ({
+vi.mock('@/components/modals/BatchCategorizeModal', () => ({
   default: ({ isOpen, onClose, onConfirm, count }: { isOpen: boolean; onClose: () => void; onConfirm: (category: string) => void; count: number }) => isOpen ? (
     <div data-testid="batch-categorize-modal">
       Batch Categorize {count} items
@@ -59,7 +59,7 @@ vi.mock('../modals/BatchCategorizeModal', () => ({
 }));
 
 // Mock generic Modal
-vi.mock('../ui/Modal', () => ({
+vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ isOpen, children, onClose }: { isOpen: boolean; children: React.ReactNode, onClose: () => void }) =>
     isOpen ? (
       <div data-testid="generic-modal">

@@ -1,17 +1,17 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
-import { sumMoney } from '../../utils/money';
-import { BudgetBucket, Transaction, INCOME_CATEGORY } from '../../types/schema';
-import BucketFormModal from '../modals/BucketFormModal';
+import { sumMoney } from '@/utils/money';
+import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
+import BucketFormModal from '@/components/modals/BucketFormModal';
 import toast from 'react-hot-toast';
-import EditTransactionModal from '../modals/EditTransactionModal';
-import { Modal } from '../ui/Modal';
-import { Drawer } from '../ui/Drawer';
-import { Button } from '../ui/Button';
-import { ConfirmDialog } from '../ui/ConfirmDialog';
-import Select from '../ui/Select';
+import EditTransactionModal from '@/components/modals/EditTransactionModal';
+import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import Select from '@/components/ui/Select';
 import { BudgetBucketCard } from './BudgetBucketCard';
 
 const UNBUDGETED_BUCKET: BudgetBucket = {

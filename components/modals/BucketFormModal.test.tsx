@@ -1,11 +1,11 @@
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import BucketFormModal from './BucketFormModal';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the context
-vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
+vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
 }));
 

@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { useGamification } from '../../contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { useCalendarGrid } from '../../hooks/useCalendarGrid';
-import { Habit } from '../../types/schema';
+import { Button } from '@/components/ui/Button';
+import { useCalendarGrid } from '@/hooks/useCalendarGrid';
+import { Habit } from '@/types/schema';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 

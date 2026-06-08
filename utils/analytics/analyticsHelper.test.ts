@@ -7,7 +7,7 @@ import {
   calculateNetFlowData,
   calculateCategoryTrend
 } from './analyticsHelper';
-import { Habit, Transaction } from '../../types/schema';
+import { Habit, Transaction } from '@/types/schema';
 
 describe('analyticsHelper', () => {
   beforeEach(() => {

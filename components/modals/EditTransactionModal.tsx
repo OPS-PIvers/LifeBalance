@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Trash2, Loader2, Copy } from 'lucide-react';
-import { Transaction } from '../../types/schema';
-import { useFinance, useShopping } from '../../contexts/FirebaseHouseholdContext';
-import { Drawer } from '../../components/ui/Drawer';
-import Input from '../../components/ui/Input';
-import Select from '../../components/ui/Select';
-import { getLocalDateString } from '../../utils/dateHelpers';
+import { Transaction } from '@/types/schema';
+import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
+import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 interface EditTransactionModalProps {

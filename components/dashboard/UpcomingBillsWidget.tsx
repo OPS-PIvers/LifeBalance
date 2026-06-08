@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
+import { useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
 import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';

@@ -1,12 +1,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import RecurringBillsModal from './RecurringBillsModal';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 
 // Mock dependencies
 // RecurringBillsModal reads useFinance. Back every hook with one shared mock fn
 // so the existing `useHousehold` mock setup drives all of them with one value.
-vi.mock('../../contexts/FirebaseHouseholdContext', () => {
+vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   const fn = vi.fn();
   return {
     useHousehold: fn,

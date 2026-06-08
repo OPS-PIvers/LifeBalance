@@ -1,14 +1,14 @@
 
 import React, { useState, useMemo } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
-import { Account } from '../../types/schema';
-import { sumMoney, subtractMoney } from '../../utils/money';
-import { Modal } from '../ui/Modal';
-import { Button } from '../ui/Button';
-import { Drawer } from '../ui/Drawer';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
+import { Account } from '@/types/schema';
+import { sumMoney, subtractMoney } from '@/utils/money';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useFinance();
