@@ -28,26 +28,34 @@ a product/security decision.
   *(was todo #8)*.
 - **PR #620** — fixed daily points recalculating to 0 after a midnight habit auto-reset
   (auto-reset left `completedDates` populated, desyncing the daily total) *(was todo #10)*.
-- **This pass** — weekly habits now earn streak multipliers measured in consecutive weeks
+- **PR #621** — weekly habits now earn streak multipliers measured in consecutive weeks
   (2wk → 1.5×, 4wk → 2.0×) *(was todo #9)*; `MealsContext` split into `useMealPlan()` /
   `useShopping()` so shopping changes don't re-render the meal planner *(was todo #12)*; minor
   deferrals — run-once guards on the bucket/paycheck migration effects + batched voice-command
   shopping writes *(was todo #13)*.
+- **PR #625** — correctness/atomicity/perf/a11y/quality pass: `syncHouseholdPoints` no longer
+  recomputes+re-writes on every habit toggle (ref-backed, login/midnight-driven) *(was todo #11)*;
+  quickAdd Cloud Functions made period-aware (weekly streaks) + atomic, with an injectable local
+  `today` for UTC safety; freeze-token patch now credits points; `addHabitSubmission` date-gating;
+  `payCalendarItem`/transaction/`PointsBreakdownModal` batching; shared `useExpandedCalendarItems`;
+  15 a11y fixes; `vendor-icons` chunk; `isSuperAdmin()` rule helper (custom-claim-or-UID).
 
 ## Remaining deferred items
 
 | # | Item | Why deferred | Doc |
 |---|------|--------------|-----|
 | 4 | **Notification scan** — stop hourly full-collection scans in scheduled functions | Needs a member-field migration + DST-correct timeslot + careful deploy ordering | [04-notification-scan.md](./04-notification-scan.md) |
-| 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + Firestore rules / custom-claims migration with lockout risk | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
+| 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + custom-claims migration with lockout risk. *Partially advanced in PR #625*: the Firestore rules now accept an `admin` custom claim via `isSuperAdmin()` (backward-compatible with the legacy UID) and `app_config/global` requires auth — remaining work is provisioning the claim and demoting the client `VITE_ADMIN_UID` checks. | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
 | 7 | **Import-path normalization** — relative imports → `@/` alias | ~266-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
-| 11 | **Points sync on every toggle** — `syncHouseholdPoints` recomputes + can re-write on each habit toggle | Points-critical corrective path; restructure carefully | [11-points-sync-on-every-toggle.md](./11-points-sync-on-every-toggle.md) |
+| 14 | **Unbounded calendar/meals/grocery listeners** — windowing + lazy-load | Recurring-template expansion + cookbook/catalog search must keep working; needs indexes + careful deploy | [14-unbounded-calendar-meals-grocery-listeners.md](./14-unbounded-calendar-meals-grocery-listeners.md) |
+| 15 | **Typed Firestore converters** — kill ~30 `d.data() as T` casts | Large surface area; do collection-by-collection with validation/tests | [15-typed-firestore-converters.md](./15-typed-firestore-converters.md) |
+| 16 | **Modal render-isolation** — narrow slices in ~18 modals + AI type imports | Repetitive, low per-file value; batch mechanically | [16-modal-render-isolation.md](./16-modal-render-isolation.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
 
 Items 10–13 were scoped during the PR #619 optimization pass; #9, #12, and #13 shipped
-in PR #621 and #10 shipped in PR #620, leaving only #11 on the points path.
+in PR #621, #10 in PR #620, and #11 in PR #625. Items #14–#16 were scoped during the PR #625 pass.
 
 ## Kickoff prompts
 
@@ -78,3 +86,28 @@ Copyable prompts to start each remaining item in a fresh session:
 > `../../*`) to prevent regressions. Behavior is unchanged (the alias resolves identically), so
 > rely on `tsc` + tests to confirm. Land it when few branches are in flight. `pnpm lint` + `pnpm
 > test` green.
+
+**#14 — Unbounded calendar/meals/grocery listeners**
+> Implement `todo/14-unbounded-calendar-meals-grocery-listeners.md` in the LifeBalance repo. Window
+> the still-unbounded `calendarItems`, `meals`, and `groceryCatalog` `onSnapshot` listeners in
+> `contexts/FirebaseHouseholdContext.tsx` (lines ~798/953/971). Start with the lowest-risk
+> `groceryCatalog` (`orderBy('purchaseCount','desc'), limit(200)` + on-demand search), then `meals`
+> (windowed live + lazy `loadAllMeals()` for the cookbook), then `calendarItems` (keep ALL recurring
+> templates; window only materialized instances). Add indexes to `firestore.indexes.json` and ship
+> them first. Preserve recurring-bill expansion and Safe-to-Spend exactly. `pnpm lint:all` + `pnpm
+> test` green; functions build clean.
+
+**#15 — Typed Firestore converters**
+> Implement `todo/15-typed-firestore-converters.md` in the LifeBalance repo. Introduce
+> `FirestoreDataConverter<T>` per major collection in a new `utils/firestoreConverters.ts`, attach
+> via `.withConverter()` at the collection refs in `contexts/FirebaseHouseholdContext.tsx`, and
+> remove the `d.data() as T` casts collection-by-collection (start with Habit + Transaction). Each
+> converter validates/defaults in `fromFirestore` and has unit tests for a valid and a legacy/partial
+> doc. No suppressions; runtime behavior unchanged; `pnpm lint` + `pnpm test` + build green.
+
+**#16 — Modal render-isolation**
+> Implement `todo/16-modal-render-isolation.md` in the LifeBalance repo. (a) Replace `useHousehold()`
+> with the narrowest slice hooks across the ~18 `components/modals/*.tsx` (verify fields per modal).
+> (b) Move `ReceiptData` into `services/geminiService.types.ts` and switch the listed always-loaded
+> components to `import type` from `.types`. Pure mechanical swaps — rely on `tsc` + existing tests.
+> `pnpm lint` + `pnpm test` + build green.
