@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { formatShoppingListForShare } from '@/utils/shoppingListFormatter';
@@ -170,7 +171,11 @@ const ShoppingListTab: React.FC = () => {
 
   // Input State
   const [newItemText, setNewItemText] = useState('');
-  const addInputRef = useRef<HTMLInputElement>(null);
+  // Focus the quick-add field on desktop only. On touch devices this would pop
+  // the iOS keyboard every time the tab/page mounts (this component is shared by
+  // the Lists "Shopping" tab, the Meals "Shopping List" tab, and the standalone
+  // Shopping page), shifting the view up — see the Capture drawer fix.
+  const addInputRef = useAutoFocus<HTMLInputElement>();
 
   // Modal States
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
@@ -492,7 +497,6 @@ const ShoppingListTab: React.FC = () => {
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
                     className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500"
-                    autoFocus
                 />
                 <button
                     type="submit"
