@@ -491,6 +491,9 @@ const MealPlanTab: React.FC = () => {
       setCurrentMeal(mealToFormState(meal));
       setEditingMealId(meal.id);
       setIsPreviousMealsModalOpen(false);
+      // Ensure the Add Meal modal is showing so the selected recipe is visible
+      // and can be saved to the plan (mirrors handleCloneMeal / handleAIRequest).
+      setIsAddModalOpen(true);
   };
 
   const handleCancel = () => {
