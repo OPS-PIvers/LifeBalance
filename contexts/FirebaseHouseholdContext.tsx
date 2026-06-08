@@ -66,6 +66,7 @@ import { migrateOrphanedHabits, needsHabitMigration } from '@/utils/migrations/h
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { canUseFreezeBankToken } from '@/utils/freezeBankValidator';
 import { useMidnightScheduler } from '@/hooks/useMidnightScheduler';
+import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -638,8 +639,6 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // and corrects any accumulated drift. See T1 in the optimization pass.
   const habitsRef = useRef<Habit[]>(habits);
   useEffect(() => { habitsRef.current = habits; }, [habits]);
-  const householdSettingsRef = useRef<Household | null>(householdSettings);
-  useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
   const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
@@ -1632,67 +1631,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runHabitMigration();
   }, [householdId, habits]);
 
-  // Sync daily/weekly/total points from actual habit completions. This corrects
-  // any drift between the per-toggle deltas (written atomically by useHabitActions,
-  // the source of truth between recalcs) and the canonical recomputation.
-  //
-  // T1: This deliberately reads `habits` / `householdSettings.points` via refs and
-  // takes a stable identity (deps: [householdId]) so it is NOT re-run by the very
-  // points write it produces. A habit toggle writes a correct delta and must NOT
-  // trigger an O(habits×dates) recompute; instead this runs on (a) login, once per
-  // household (the guarded effect below) and (b) the midnight/periodic scheduler.
-  // The internal short-circuit makes periodic runs no-ops when nothing has drifted.
-  const syncHouseholdPoints = useCallback(async () => {
+  // Persist the corrected points + reset markers for the corrective sync.
+  // Stable across renders (keyed on householdId) so it doesn't re-fire the sync.
+  const writeSyncedPoints = useCallback(async (update: PointsSyncUpdate) => {
     if (!householdId) return;
-    const currentSettings = householdSettingsRef.current;
-    const currentHabits = habitsRef.current;
-    const currentPoints = currentSettings?.points;
-    if (!currentPoints || currentHabits.length === 0) return;
-
-    const now = new Date();
-    const today = format(now, 'yyyy-MM-dd');
-
-    // Calculate what points SHOULD be based on actual habit completions
-    const correctDailyPoints = calculatePointsForDate(currentHabits, today);
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const correctWeeklyPoints = calculatePointsForDateRange(currentHabits, weekStartStr, today);
-
-    // Determine correct total points
-    // Check if all habit completions are within the current week
-    const allDatesThisWeek = currentHabits.every(habit =>
-      habit.completedDates.every(date => date >= weekStartStr)
-    );
-
-    let correctTotalPoints;
-    if (allDatesThisWeek && currentHabits.some(h => h.completedDates.length > 0)) {
-      // If all completions are this week, total should equal weekly
-      correctTotalPoints = correctWeeklyPoints;
-    } else {
-      // Otherwise, total should be at least as much as weekly (cumulative)
-      correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
-    }
-
-    // Check if ANY value needs fixing
-    const needsUpdate =
-      currentPoints.daily !== correctDailyPoints ||
-      currentPoints.weekly !== correctWeeklyPoints ||
-      currentPoints.total !== correctTotalPoints;
-
-    if (!needsUpdate) return;
-
-    console.log(`[PointsSync] Correcting points:
-        daily: ${currentPoints.daily} -> ${correctDailyPoints}
-        weekly: ${currentPoints.weekly} -> ${correctWeeklyPoints}
-        total: ${currentPoints.total} -> ${correctTotalPoints}`);
-
+    console.log(`[PointsSync] Correcting points -> daily: ${update.daily}, weekly: ${update.weekly}, total: ${update.total}`);
     try {
       await updateDoc(doc(db, `households/${householdId}`), {
-        'points.daily': correctDailyPoints,
-        'points.weekly': correctWeeklyPoints,
-        'points.total': correctTotalPoints,
-        'lastDailyPointsReset': today,
-        'lastWeeklyPointsReset': today,
+        'points.daily': update.daily,
+        'points.weekly': update.weekly,
+        'points.total': update.total,
+        'lastDailyPointsReset': update.today,
+        'lastWeeklyPointsReset': update.today,
       });
       console.log(`[PointsSync] Points corrected successfully`);
     } catch (error) {
@@ -1700,22 +1650,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
-  // Run the drift-correcting sync ONCE per household after data is available
-  // (login / household switch). The guard ref is reset when the household changes.
-  const pointsSyncedForHousehold = useRef<string | null>(null);
-  useEffect(() => {
-    if (!householdId || !householdSettings?.points || habits.length === 0) return;
-    if (pointsSyncedForHousehold.current === householdId) return;
-    pointsSyncedForHousehold.current = householdId;
-    syncHouseholdPoints();
-  }, [householdId, householdSettings?.points, habits.length, syncHouseholdPoints]);
-
-  // Also run the drift-correcting sync on the midnight/periodic scheduler so any
-  // drift that accumulates during a long-lived session is corrected without a
-  // page reload. The internal needsUpdate short-circuit keeps periodic ticks
-  // write-free when points already match. A small initial delay staggers it after
-  // checkPointsReset (which stamps reset markers on day/week rollover).
-  useMidnightScheduler(syncHouseholdPoints, !!householdId, { initialDelayMs: 200 });
+  // Sync daily/weekly/total points from actual habit completions. This corrects
+  // any drift between the per-toggle deltas (written atomically by useHabitActions,
+  // the source of truth between recalcs) and the canonical recomputation.
+  //
+  // The hook reads `habits`/`points` via refs and runs the recompute (a) once per
+  // household load and (b) on the midnight/periodic scheduler — never on the very
+  // points write it produces, so a habit toggle never triggers an O(habits×dates)
+  // recompute. The canonical recompute itself is the pure, unit-tested
+  // `computeHouseholdPointsSync`. See hooks/usePointsSync.ts.
+  usePointsSync({
+    householdId,
+    points: householdSettings?.points,
+    habits,
+    writePoints: writeSyncedPoints,
+  });
 
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
