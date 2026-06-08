@@ -3,9 +3,8 @@ import {
   endOfDay, isBefore, parseISO, isSameDay, subMonths, addMonths,
   startOfToday, isToday, isTomorrow, isValid
 } from 'date-fns';
-import { expandCalendarItems } from '../utils/calendarRecurrence';
 import { Transaction, CalendarItem, ToDo } from '../types/schema';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useFinance, useTodos, useExpandedCalendarItems } from '../contexts/FirebaseHouseholdContext';
 
 // ToDoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
@@ -40,19 +39,20 @@ export const isTodoQueueItem = (item: ActionQueueItem): item is ToDoActionQueueI
 };
 
 export const useActionQueue = () => {
-  const { transactions, calendarItems, todos } = useHousehold();
+  const { transactions } = useFinance();
+  const { todos } = useTodos();
 
   // Use startOfToday for stable date reference across renders for the same day
   // This prevents unnecessary re-calculations if the component re-renders
   const today = useMemo(() => startOfToday(), []);
   const endToday = useMemo(() => endOfDay(today), [today]);
 
-  // Expand recurring calendar items for a reasonable range (1 month past to 3 months future)
-  // This ensures we catch any due recurring items
-  const expandedCalendarItems = useMemo(
-    () => expandCalendarItems(calendarItems, subMonths(today, 1), addMonths(today, 3)),
-    [calendarItems, today]
-  );
+  // Expand recurring calendar items for a reasonable range (1 month past to 3
+  // months future) via the shared memoized helper, so this window's expansion is
+  // reused across renders instead of being recomputed inline on every render.
+  const windowStart = useMemo(() => subMonths(today, 1), [today]);
+  const windowEnd = useMemo(() => addMonths(today, 3), [today]);
+  const expandedCalendarItems = useExpandedCalendarItems(windowStart, windowEnd);
 
   // 1. Due Calendar Items (Past or Today, Unpaid)
   const dueCalendarItems: ActionQueueItem[] = useMemo(() => expandedCalendarItems.filter(item =>

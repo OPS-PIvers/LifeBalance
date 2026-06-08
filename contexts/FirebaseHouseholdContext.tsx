@@ -57,7 +57,7 @@ import {
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, streakForHabit, getHabitResetUpdate } from '@/utils/habitLogic';
+import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -392,6 +392,29 @@ export const useFinance = (): FinanceContextValue => {
   return ctx;
 };
 
+/**
+ * Memoized recurring-calendar expansion over an arbitrary [start, end] window.
+ *
+ * `expandCalendarItems` is moderately expensive (it walks every recurring item
+ * across the window), so widgets that each needed a different window previously
+ * recomputed it independently on every render. This hook centralises that work:
+ * it pulls `calendarItems` from the finance slice and memoizes the expansion
+ * keyed on the raw item list plus the window bounds, so a render that doesn't
+ * change any of those reuses the prior result. Each distinct window still gets
+ * its own expansion (the bounds are part of the cache key), keeping results
+ * byte-for-byte identical to the previous per-call-site behaviour.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useExpandedCalendarItems = (start: Date, end: Date): CalendarItem[] => {
+  const { calendarItems } = useFinance();
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  return useMemo(
+    () => expandCalendarItems(calendarItems, new Date(startMs), new Date(endMs)),
+    [calendarItems, startMs, endMs]
+  );
+};
+
 // eslint-disable-next-line react-refresh/only-export-components
 export const useGamification = (): GamificationContextValue => {
   const ctx = useContext(GamificationContext);
@@ -604,6 +627,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   // Pay Period Tracking State
   const [householdSettings, setHouseholdSettings] = useState<Household | null>(null);
+
+  // Refs mirroring the latest habits / household settings so the points
+  // recalculation can read fresh values WITHOUT keying its effect on them. Putting
+  // `habits` and `householdSettings.points` in the recalc effect's deps created a
+  // feedback loop: every habit toggle (which atomically writes the correct points
+  // delta) mutated both, re-triggering an O(habits×dates) recompute on each toggle.
+  // The per-toggle delta in useHabitActions remains the source of truth between
+  // recalcs; the recalc only runs on login + the midnight/periodic scheduler path
+  // and corrects any accumulated drift. See T1 in the optimization pass.
+  const habitsRef = useRef<Habit[]>(habits);
+  useEffect(() => { habitsRef.current = habits; }, [habits]);
+  const householdSettingsRef = useRef<Household | null>(householdSettings);
+  useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
   const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
@@ -1117,8 +1153,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     async function handleTodoItems(parsed: ParsedTodoList) {
       const todosRef = collection(db, `households/${householdId}/todos`);
 
+      if (parsed.tasks.length === 0) return;
+
+      // Apply all adds in a single atomic writeBatch (one round-trip instead of
+      // one addDoc per parsed task), mirroring handleShoppingItems above. Voice
+      // commands produce far fewer than the 500-op batch limit.
+      const batch = writeBatch(db);
       for (const item of parsed.tasks) {
-        await addDoc(todosRef, {
+        const newDocRef = doc(todosRef);
+        batch.set(newDocRef, {
           text: item.task,
           isCompleted: false,
           priority: item.priority || 'medium',
@@ -1129,6 +1172,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           createdBy: userRef.current?.uid || ''
         });
       }
+      await batch.commit();
     }
 
     // Helper: Handle expense from parsed voice command
@@ -1463,12 +1507,17 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     const updates: Record<string, number | string> = {};
 
+    // Read the latest habits via ref so this callback isn't re-created on every
+    // habit change (and so the periodic scheduler always recomputes against fresh
+    // data without re-subscribing).
+    const currentHabits = habitsRef.current;
+
     // Check if daily points need reset (new day since last reset)
     if (!isSameDay(now, lastDailyReset)) {
       // Recalculate daily points from habits completed today
       // This handles the case where habits were completed earlier today but the user
       // just logged in and this reset logic is running
-      const todayPoints = calculatePointsForDate(habits, today);
+      const todayPoints = calculatePointsForDate(currentHabits, today);
       updates['points.daily'] = todayPoints;
       updates['lastDailyPointsReset'] = today;
     }
@@ -1479,7 +1528,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // Calculate points from all days this week (Monday through today)
       const weekStart = startOfWeek(now, { weekStartsOn: 1 });
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-      const weeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
+      const weeklyPoints = calculatePointsForDateRange(currentHabits, weekStartStr, today);
       updates['points.weekly'] = weeklyPoints;
       updates['lastWeeklyPointsReset'] = today;
     }
@@ -1492,7 +1541,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         console.error('[checkPointsReset] Failed to reset points:', error);
       }
     }
-  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset, habits]);
+  }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset]);
 
   // Use the midnight scheduler hook for points resets
   // Add 100ms delay to stagger initialization and prevent race conditions with habit resets
@@ -1583,81 +1632,90 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     runHabitMigration();
   }, [householdId, habits]);
 
-  // Sync daily/weekly/total points from actual habit completions
-  // This ensures points accurately reflect completed habits, fixing any desync issues
-  // ALWAYS recalculates and updates if values don't match - no complex conditional logic
+  // Sync daily/weekly/total points from actual habit completions. This corrects
+  // any drift between the per-toggle deltas (written atomically by useHabitActions,
+  // the source of truth between recalcs) and the canonical recomputation.
+  //
+  // T1: This deliberately reads `habits` / `householdSettings.points` via refs and
+  // takes a stable identity (deps: [householdId]) so it is NOT re-run by the very
+  // points write it produces. A habit toggle writes a correct delta and must NOT
+  // trigger an O(habits×dates) recompute; instead this runs on (a) login, once per
+  // household (the guarded effect below) and (b) the midnight/periodic scheduler.
+  // The internal short-circuit makes periodic runs no-ops when nothing has drifted.
+  const syncHouseholdPoints = useCallback(async () => {
+    if (!householdId) return;
+    const currentSettings = householdSettingsRef.current;
+    const currentHabits = habitsRef.current;
+    const currentPoints = currentSettings?.points;
+    if (!currentPoints || currentHabits.length === 0) return;
+
+    const now = new Date();
+    const today = format(now, 'yyyy-MM-dd');
+
+    // Calculate what points SHOULD be based on actual habit completions
+    const correctDailyPoints = calculatePointsForDate(currentHabits, today);
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const correctWeeklyPoints = calculatePointsForDateRange(currentHabits, weekStartStr, today);
+
+    // Determine correct total points
+    // Check if all habit completions are within the current week
+    const allDatesThisWeek = currentHabits.every(habit =>
+      habit.completedDates.every(date => date >= weekStartStr)
+    );
+
+    let correctTotalPoints;
+    if (allDatesThisWeek && currentHabits.some(h => h.completedDates.length > 0)) {
+      // If all completions are this week, total should equal weekly
+      correctTotalPoints = correctWeeklyPoints;
+    } else {
+      // Otherwise, total should be at least as much as weekly (cumulative)
+      correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
+    }
+
+    // Check if ANY value needs fixing
+    const needsUpdate =
+      currentPoints.daily !== correctDailyPoints ||
+      currentPoints.weekly !== correctWeeklyPoints ||
+      currentPoints.total !== correctTotalPoints;
+
+    if (!needsUpdate) return;
+
+    console.log(`[PointsSync] Correcting points:
+        daily: ${currentPoints.daily} -> ${correctDailyPoints}
+        weekly: ${currentPoints.weekly} -> ${correctWeeklyPoints}
+        total: ${currentPoints.total} -> ${correctTotalPoints}`);
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        'points.daily': correctDailyPoints,
+        'points.weekly': correctWeeklyPoints,
+        'points.total': correctTotalPoints,
+        'lastDailyPointsReset': today,
+        'lastWeeklyPointsReset': today,
+      });
+      console.log(`[PointsSync] Points corrected successfully`);
+    } catch (error) {
+      console.error('[PointsSync] Failed to sync points:', error);
+    }
+  }, [householdId]);
+
+  // Run the drift-correcting sync ONCE per household after data is available
+  // (login / household switch). The guard ref is reset when the household changes.
+  const pointsSyncedForHousehold = useRef<string | null>(null);
   useEffect(() => {
     if (!householdId || !householdSettings?.points || habits.length === 0) return;
-
-    const syncHouseholdPoints = async () => {
-      const now = new Date();
-      const today = format(now, 'yyyy-MM-dd');
-      const currentPoints = householdSettings.points;
-      if (!currentPoints) return;
-
-      // Calculate what points SHOULD be based on actual habit completions
-      const correctDailyPoints = calculatePointsForDate(habits, today);
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-      const correctWeeklyPoints = calculatePointsForDateRange(habits, weekStartStr, today);
-
-      // Determine correct total points
-      // Check if all habit completions are within the current week
-      const allDatesThisWeek = habits.every(habit =>
-        habit.completedDates.every(date => date >= weekStartStr)
-      );
-
-      let correctTotalPoints;
-      if (allDatesThisWeek && habits.some(h => h.completedDates.length > 0)) {
-        // If all completions are this week, total should equal weekly
-        correctTotalPoints = correctWeeklyPoints;
-      } else {
-        // Otherwise, total should be at least as much as weekly (cumulative)
-        correctTotalPoints = Math.max(currentPoints.total, correctWeeklyPoints);
-      }
-
-      // Check if ANY value needs fixing
-      const needsUpdate =
-        currentPoints.daily !== correctDailyPoints ||
-        currentPoints.weekly !== correctWeeklyPoints ||
-        currentPoints.total !== correctTotalPoints;
-
-      // Short-circuit to avoid redundant writes: if the stored values already
-      // match the recomputed ones AND the reset markers are already stamped for
-      // today, there is nothing to do. Without this, every habit toggle (which
-      // mutates householdSettings.points) re-runs this effect and would otherwise
-      // re-stamp lastDaily/WeeklyPointsReset on each pass, creating churn.
-      const resetMarkersUpToDate =
-        lastDailyPointsReset === today &&
-        lastWeeklyPointsReset === today;
-
-      if (!needsUpdate && resetMarkersUpToDate) {
-        return;
-      }
-
-      if (needsUpdate) {
-        console.log(`[PointsSync] Correcting points:
-          daily: ${currentPoints.daily} -> ${correctDailyPoints}
-          weekly: ${currentPoints.weekly} -> ${correctWeeklyPoints}
-          total: ${currentPoints.total} -> ${correctTotalPoints}`);
-
-        try {
-          await updateDoc(doc(db, `households/${householdId}`), {
-            'points.daily': correctDailyPoints,
-            'points.weekly': correctWeeklyPoints,
-            'points.total': correctTotalPoints,
-            'lastDailyPointsReset': today,
-            'lastWeeklyPointsReset': today,
-          });
-          console.log(`[PointsSync] Points corrected successfully`);
-        } catch (error) {
-          console.error('[PointsSync] Failed to sync points:', error);
-        }
-      }
-    };
-
+    if (pointsSyncedForHousehold.current === householdId) return;
+    pointsSyncedForHousehold.current = householdId;
     syncHouseholdPoints();
-  }, [householdId, householdSettings?.points, habits, lastDailyPointsReset, lastWeeklyPointsReset]);
+  }, [householdId, householdSettings?.points, habits.length, syncHouseholdPoints]);
+
+  // Also run the drift-correcting sync on the midnight/periodic scheduler so any
+  // drift that accumulates during a long-lived session is corrected without a
+  // page reload. The internal needsUpdate short-circuit keeps periodic ticks
+  // write-free when points already match. A small initial delay staggers it after
+  // checkPointsReset (which stamps reset markers on day/week rollover).
+  useMidnightScheduler(syncHouseholdPoints, !!householdId, { initialDelayMs: 200 });
 
   // Refresh FCM token periodically to prevent token staleness
   // iOS/Safari is particularly sensitive to stale tokens and will stop receiving notifications
@@ -2081,15 +2139,43 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         specificDate = item.date;
       }
 
-      // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction
+      // NEW: If this is an income item (paycheck), trigger period reset BEFORE creating transaction.
+      // This runs as its own prior atomic op before the writeBatch below.
       if (item.type === 'income') {
         await handlePaycheckApproval(specificDate);
       }
 
+      // Auto-categorize before building the batch
+      let category = 'Bills';
+      if (item.type === 'expense') {
+        const matchedBucket = buckets.find(b => item.title.toLowerCase().includes(b.name.toLowerCase()));
+        if (matchedBucket) category = matchedBucket.name;
+      } else {
+        category = 'Income';
+      }
+
+      // Transaction dated to when the item was actually due/scheduled
+      // (specificDate), not "today" — so a bill due on the 10th but paid on the
+      // 15th records against the 10th and lands in the correct pay period.
+      const transactionDate = specificDate;
+      const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
+
+      // Account balance delta. Using increment() (a server-side delta) instead of
+      // writing an absolute balance computed from local state prevents lost
+      // updates when household members act concurrently.
+      const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
+
+      // Atomically commit the calendar item, account balance, and transaction in a
+      // single writeBatch so they can never partially apply (e.g. balance moves but
+      // the bill isn't marked paid). Pre-allocate the new transaction ref so it can
+      // participate in the batch.
+      const payBatch = writeBatch(db);
+
       // 1. Create or update the paid calendar item
       if (isRecurringInstance) {
         // Create a new paid instance record
-        await addDoc(collection(db, `households/${householdId}/calendarItems`), {
+        const newCalendarRef = doc(collection(db, `households/${householdId}/calendarItems`));
+        payBatch.set(newCalendarRef, {
           title: item.title,
           amount: item.amount,
           date: specificDate,
@@ -2101,37 +2187,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       } else {
         // Mark non-recurring item as paid
-        await updateDoc(doc(db, `households/${householdId}/calendarItems`, itemId), {
+        payBatch.update(doc(db, `households/${householdId}/calendarItems`, itemId), {
           isPaid: true,
         });
       }
 
-      // 2. Update account balance atomically. Using increment() (a server-side
-      // delta) instead of writing an absolute balance computed from local state
-      // prevents lost updates when household members act concurrently.
-      const balanceDelta = item.type === 'expense' ? -item.amount : item.amount;
-
-      await updateDoc(doc(db, `households/${householdId}/accounts`, accountId), {
+      // 2. Update account balance
+      payBatch.update(doc(db, `households/${householdId}/accounts`, accountId), {
         balance: increment(roundMoney(balanceDelta)),
         lastUpdated: serverTimestamp(),
       });
 
-      // 3. Auto-categorize
-      let category = 'Bills';
-      if (item.type === 'expense') {
-        const matchedBucket = buckets.find(b => item.title.toLowerCase().includes(b.name.toLowerCase()));
-        if (matchedBucket) category = matchedBucket.name;
-      } else {
-        category = 'Income';
-      }
-
-      // 4. Create transaction dated to when the item was actually due/scheduled
-      // (specificDate), not "today" — so a bill due on the 10th but paid on the
-      // 15th records against the 10th and lands in the correct pay period.
-      const transactionDate = specificDate;
-      const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
-
-      await addDoc(collection(db, `households/${householdId}/transactions`), {
+      // 3. Create transaction
+      const newTransactionRef = doc(collection(db, `households/${householdId}/transactions`));
+      payBatch.set(newTransactionRef, {
         amount: item.amount,
         merchant: item.title,
         category: category,
@@ -2144,6 +2213,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       });
+
+      await payBatch.commit();
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
 
@@ -2472,8 +2543,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
 
-      // Update transaction in Firestore
-      await updateDoc(doc(db, `households/${householdId}/transactions`, id), {
+      // Atomically commit the transaction update and the account balance delta in
+      // a single writeBatch so they can never partially apply.
+      const updateBatch = writeBatch(db);
+
+      updateBatch.update(doc(db, `households/${householdId}/transactions`, id), {
         ...sanitizedUpdates,
         payPeriodId,
       });
@@ -2482,12 +2556,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       if (amountDifference !== 0) {
         const checkingAcc = accounts.find(a => a.type === 'checking');
         if (checkingAcc) {
-          await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          updateBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
             balance: increment(roundMoney(-amountDifference)),
             lastUpdated: serverTimestamp(),
           });
         }
       }
+
+      await updateBatch.commit();
 
       toast.success('Transaction updated!');
     } catch (error) {
@@ -2507,18 +2583,23 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
-      // Restore checking account balance atomically (server-side delta avoids
-      // lost updates from concurrent edits / stale local state).
+      // Atomically restore the checking account balance and delete the
+      // transaction in a single writeBatch so they can never partially apply
+      // (server-side delta avoids lost updates from concurrent edits / stale
+      // local state).
+      const deleteBatch = writeBatch(db);
+
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
-        await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+        deleteBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
           balance: increment(roundMoney(transaction.amount)),
           lastUpdated: serverTimestamp(),
         });
       }
 
-      // Delete transaction from Firestore
-      await deleteDoc(doc(db, `households/${householdId}/transactions`, id));
+      deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
+
+      await deleteBatch.commit();
 
       toast.success('Transaction deleted');
     } catch (error) {
@@ -2760,6 +2841,21 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // Recalculate streak with patched date (period-aware: weekly habits count weeks)
     const newStreak = streakForHabit({ period: habit.period, completedDates: updatedCompletedDates });
 
+    // Compute the points the patched day itself earns, using the per-date model
+    // (utils/habitLogic): the multiplier is driven by the streak that ends on the
+    // patched day within the now-patched completion history, mirroring how
+    // calculatePointsForDateRange scores a past completed day (one completion,
+    // period-aware multiplier). Freeze tokens only apply to positive habits on a
+    // PAST day, so this never touches points.daily (today) — it credits
+    // points.total always and points.weekly when the patched day is in the
+    // current week. Without this the patched day's points were silently dropped.
+    const patchedDayStreak = streakEndingOnForHabit(
+      { period: habit.period, completedDates: updatedCompletedDates },
+      targetDate
+    );
+    const patchedMultiplier = getMultiplier(patchedDayStreak, true, habit.period);
+    const patchedDayPoints = Math.floor(habit.basePoints * patchedMultiplier);
+
     // Create history entry
     const historyEntry: FreezeBankHistoryEntry = {
       id: crypto.randomUUID(),
@@ -2787,9 +2883,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       completedDates: updatedCompletedDates,
       streakDays: newStreak,
     });
-    batch.update(doc(db, `households/${householdId}`), {
+
+    // Credit the patched day's points in the SAME batch as the token spend +
+    // habit patch, so points can never diverge from the patched completion.
+    const householdUpdates: Record<string, FieldValue | FreezeBank> = {
       freezeBank: updatedFreezeBank,
-    });
+    };
+    if (patchedDayPoints !== 0) {
+      const todayStr = getLocalDateString();
+      const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      // Lifetime total always gets the patched day's points.
+      householdUpdates['points.total'] = increment(patchedDayPoints);
+      // Weekly only when the patched (past) day falls within the current week.
+      // Daily is never touched: the validator guarantees targetDate is in the past.
+      if (targetDate >= weekStartStr && targetDate <= todayStr) {
+        householdUpdates['points.weekly'] = increment(patchedDayPoints);
+      }
+    }
+    batch.update(doc(db, `households/${householdId}`), householdUpdates);
     await batch.commit();
 
     toast.success(`❄️ Freeze token used! ${habit.title} patched for ${targetDate}`);

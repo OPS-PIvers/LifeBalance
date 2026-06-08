@@ -25,6 +25,7 @@ import {
   processToggleHabit,
   calculateResetPoints,
   streakForHabit,
+  streakEndingOnForHabit,
   isHabitStale,
   getMultiplier
 } from '@/utils/habitLogic';
@@ -279,9 +280,22 @@ export const useHabitActions = (
     const submissionTimestamp = timestamp || new Date().toISOString();
     const submissionDate = format(parseISO(submissionTimestamp), 'yyyy-MM-dd');
 
-    // Calculate points based on current state (period-aware streak + multiplier)
-    const currentStreak = streakForHabit(habit);
-    const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
+    // Build the post-submission completion history first so the multiplier can be
+    // driven by the PROSPECTIVE streak (the streak that exists once this day is
+    // counted), matching client toggle semantics rather than the pre-submission
+    // streak. For "today" this equals streakForHabit(updatedCompletedDates); for a
+    // back-dated submission it's the streak ending on that day.
+    const updatedCompletedDates = [...habit.completedDates];
+    if (!updatedCompletedDates.includes(submissionDate)) {
+      updatedCompletedDates.push(submissionDate);
+      updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    }
+
+    const prospectiveStreak = streakEndingOnForHabit(
+      { period: habit.period, completedDates: updatedCompletedDates },
+      submissionDate
+    );
+    const multiplier = getMultiplier(prospectiveStreak, habit.type === 'positive', habit.period);
 
     let pointsEarned = 0;
     if (habit.scoringType === 'incremental') {
@@ -303,18 +317,11 @@ export const useHabitActions = (
         date: submissionDate,
         count,
         pointsEarned,
-        streakDaysAtTime: currentStreak,
+        streakDaysAtTime: prospectiveStreak,
         multiplierApplied: multiplier,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString(),
       };
-
-      // Update habit's completedDates and count (maintain backwards compatibility)
-      const updatedCompletedDates = [...habit.completedDates];
-      if (!updatedCompletedDates.includes(submissionDate)) {
-        updatedCompletedDates.push(submissionDate);
-        updatedCompletedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-      }
 
       // Atomically commit the submission doc, habit state, and points in a single
       // batch so all three writes succeed together or none do (prevents
@@ -333,12 +340,25 @@ export const useHabitActions = (
         lastUpdated: serverTimestamp(),
       });
 
+      // Gate the period counters by the submission's date so a PAST-dated
+      // submission doesn't inflate today's daily / this week's weekly totals —
+      // mirroring deleteHabitSubmission / updateHabitSubmission. Total is always
+      // adjusted (lifetime).
       if (pointsEarned !== 0) {
-        addBatch.update(doc(db, `households/${householdId}`), {
-          'points.daily': increment(pointsEarned),
-          'points.weekly': increment(pointsEarned),
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+        const pointUpdates: Record<string, unknown> = {
           'points.total': increment(pointsEarned),
-        });
+        };
+        if (submissionDate === today) {
+          pointUpdates['points.daily'] = increment(pointsEarned);
+        }
+        if (submissionDate >= weekStart && submissionDate <= today) {
+          pointUpdates['points.weekly'] = increment(pointsEarned);
+        }
+
+        addBatch.update(doc(db, `households/${householdId}`), pointUpdates);
       }
 
       await addBatch.commit();

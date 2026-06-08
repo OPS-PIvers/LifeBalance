@@ -5,7 +5,7 @@ import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { streakForHabit, getMultiplier } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import toast from 'react-hot-toast';
-import { doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
@@ -180,8 +180,14 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     }
 
     try {
+        // Commit the habit date change and the household points adjustment in a
+        // SINGLE writeBatch so they can never partially apply (e.g. the date moves
+        // but points don't, leaving the displayed total out of sync). This matches
+        // the atomicity guarantee the context's habit mutations already provide.
+        const batch = writeBatch(db);
+
         // Update habit
-        await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+        batch.update(doc(db, `households/${householdId}/habits`, habit.id), {
             completedDates: newCompletedDates,
             streakDays: newStreak, // already computed from streakForHabit above
             lastUpdated: serverTimestamp()
@@ -205,8 +211,10 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                 updates['points.weekly'] = increment(pointsChange);
             }
 
-            await updateDoc(doc(db, `households/${householdId}`), updates);
+            batch.update(doc(db, `households/${householdId}`), updates);
         }
+
+        await batch.commit();
 
         toast.success(isCompleted ? 'Removed date' : 'Restored date');
     } catch (error) {

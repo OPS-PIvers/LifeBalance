@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { expandCalendarItems } from '../../utils/calendarRecurrence';
+import { useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
 import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -13,15 +12,13 @@ interface UpcomingBillsWidgetProps {
 }
 
 export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay }) => {
-  const { calendarItems } = useFinance();
+  // Stable window bounds (per day) feed the shared memoized expansion helper so
+  // the recurring-item expansion is reused across renders.
+  const today = useMemo(() => startOfToday(), []);
+  const twoWeeksOut = useMemo(() => addDays(today, UPCOMING_DAYS_WINDOW), [today]);
+  const expanded = useExpandedCalendarItems(today, twoWeeksOut);
 
   const upcomingBills = useMemo(() => {
-    const today = startOfToday();
-    const twoWeeksOut = addDays(today, UPCOMING_DAYS_WINDOW);
-
-    // Expand recurring items
-    const expanded = expandCalendarItems(calendarItems, today, twoWeeksOut);
-
     // Filter, sort, and transform
     return expanded
       .filter(item => item.type === 'expense' && !item.isPaid)
@@ -47,7 +44,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
           urgencyClass
         };
       });
-  }, [calendarItems]);
+  }, [expanded, today]);
 
   if (upcomingBills.length === 0) return null;
 
