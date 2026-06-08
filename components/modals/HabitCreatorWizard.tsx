@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useId } from 'react';
 import { X, Plus, ChevronRight } from 'lucide-react';
 import { Habit, EffortLevel } from '@/types/schema';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import {
   PresetHabit,
   EFFORT_POINTS,
@@ -68,7 +68,7 @@ const DEFAULT_FORM_DATA: CustomHabitFormData = {
 };
 
 const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose }) => {
-  const { habits, addHabit, updateHabit, deleteHabit } = useHousehold();
+  const { habits, addHabit, updateHabit, deleteHabit } = useGamification();
   const titleId = useId();
 
   // View state

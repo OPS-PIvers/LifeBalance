@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { HabitPatternInsight } from '@/services/geminiService';
+import type { HabitPatternInsight } from '@/services/geminiService.types';
 import { Sparkles, Trophy, TrendingUp, AlertCircle, RefreshCw, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
 

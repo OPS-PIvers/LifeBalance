@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Wallet, Receipt, CreditCard, Clock } from 'lucide-react';
-import { useHousehold, useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { sumMoney, addMoney, subtractMoney } from '../../utils/money';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
@@ -22,7 +22,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
     transactions,
     bucketSpentMap,
     currentPeriodId,
-  } = useHousehold();
+  } = useFinance();
 
   // Re-calculate the breakdown for display (logic mirrors safeToSpendCalculator)
 

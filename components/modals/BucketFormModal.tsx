@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Plus, X } from 'lucide-react';
 import { BudgetBucket, SubBucket } from '../../types/schema';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
 import { Button } from '../ui/Button';
 import Input from '../ui/Input';
@@ -21,7 +21,7 @@ const getColorName = (colorClass: string) => {
 };
 
 const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, editingBucket }) => {
-  const { addBucket, updateBucket, deleteBucket } = useHousehold();
+  const { addBucket, updateBucket, deleteBucket } = useFinance();
 
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');

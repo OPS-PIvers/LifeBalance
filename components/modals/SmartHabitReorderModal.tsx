@@ -1,9 +1,10 @@
 import React, { useEffect, useId, useRef, useState, useMemo } from 'react';
 import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { reorganizeHabits, HabitReorganizationPlan } from '@/services/geminiService';
+import { reorganizeHabits } from '@/services/geminiService';
+import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';
 
 interface SmartHabitReorderModalProps {
@@ -12,7 +13,8 @@ interface SmartHabitReorderModalProps {
 }
 
 const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen, onClose }) => {
-  const { habits, reorderHabits, householdId } = useHousehold();
+  const { habits, reorderHabits } = useGamification();
+  const { householdId } = useHouseholdCore();
   const titleId = useId();
   const [plan, setPlan] = useState<HabitReorganizationPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);

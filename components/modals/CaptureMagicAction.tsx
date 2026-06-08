@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Loader2, ArrowRight, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
-import { MagicActionResponse } from '../../services/geminiService';
+import type { MagicActionResponse } from '../../services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 
 interface CaptureMagicActionProps {

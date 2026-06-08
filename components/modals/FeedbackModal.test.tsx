@@ -10,7 +10,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+  useHouseholdCore: () => ({
     householdId: 'test-household-id'
   }),
 }));

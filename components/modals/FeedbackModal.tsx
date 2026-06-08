@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
 import { useAuth } from '@/contexts/AuthContext';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { db } from '@/firebase.config';
 import { collection, addDoc } from 'firebase/firestore';
 import { FeedbackReport } from '@/types/schema';
@@ -18,7 +18,7 @@ const APP_VERSION = '0.8.0-alpha';
 
 const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
   const { user } = useAuth();
-  const { householdId } = useHousehold();
+  const { householdId } = useHouseholdCore();
   const location = useLocation();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

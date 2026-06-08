@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '../../types/schema';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useFinance, useShopping } from '../../contexts/FirebaseHouseholdContext';
 import { Drawer } from '../../components/ui/Drawer';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
@@ -16,7 +16,8 @@ interface EditTransactionModalProps {
 }
 
 const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
-  const { updateTransaction, deleteTransaction, addTransaction, buckets, stores, accounts } = useHousehold();
+  const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
+  const { stores } = useShopping();
 
   const [amount, setAmount] = useState('');
   const [merchant, setMerchant] = useState('');

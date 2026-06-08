@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { YearlyGoal } from '@/types/schema';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '../ui/Drawer';
 
 interface YearlyGoalFormModalProps {
@@ -15,7 +15,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
   onClose,
   editingGoal,
 }) => {
-  const { createYearlyGoal, updateYearlyGoal } = useHousehold();
+  const { createYearlyGoal, updateYearlyGoal } = useGamification();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');

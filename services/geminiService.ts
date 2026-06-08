@@ -5,9 +5,11 @@ import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
 import { doc, runTransaction, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
+import type { ReceiptData } from './geminiService.types';
 
 // Re-export plain types so existing importers keep compiling unchanged.
 export type {
+  ReceiptData,
   ParsedShoppingList,
   ParsedTodoList,
   ParsedExpense,
@@ -314,16 +316,6 @@ Transactions (last 50): ${transactions}
 Habits: ${habits}
 
 Return a JSON object with 'text' and 'actions'.`;
-
-export interface ReceiptData {
-  merchant: string;
-  amount: number;
-  category: string;
-  date?: string; // Optional - may not be visible on all receipts
-  suggestedHabits?: string[];
-  subBucket?: string;
-  store?: string;
-}
 
 export interface BankTransactionData {
   merchant: string;

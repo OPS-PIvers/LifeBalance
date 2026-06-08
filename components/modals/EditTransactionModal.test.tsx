@@ -23,9 +23,9 @@ const {
   },
 }));
 
-// Mock useHousehold
+// Mock slice hooks used by EditTransactionModal
 vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => ({
+  useFinance: () => ({
     updateTransaction: mockUpdateTransaction,
     deleteTransaction: mockDeleteTransaction,
     addTransaction: mockAddTransaction,
@@ -33,8 +33,10 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => ({
       { id: '1', name: 'Groceries', limit: 500, color: 'green', isVariable: true, isCore: true },
       { id: '2', name: 'Utilities', limit: 200, color: 'blue', isVariable: false, isCore: true },
     ],
-    stores: [] as unknown[],
     accounts: [] as unknown[],
+  }),
+  useShopping: () => ({
+    stores: [] as unknown[],
   }),
 }));
 
