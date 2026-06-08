@@ -74,7 +74,6 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       telegramAlias: editingHabit?.telegramAlias,
     };
 
-    console.log('[HabitFormModal] Saving habit with scoringType:', scoringType, 'habitData:', habitData);
     setIsSaving(true);
     try {
       if (editingHabit) {
@@ -145,8 +144,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               ))}
             </div>
           </div>
-          <div>
-            <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">Type</label>
+          <div role="group" aria-label="Habit type">
+            <span className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">Type</span>
             <div className="flex bg-brand-50 dark:bg-slate-700/50 p-1 rounded-xl mt-1">
                <button
                  onClick={() => setType('positive')}

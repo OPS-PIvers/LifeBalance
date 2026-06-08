@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
@@ -12,6 +12,7 @@ interface SmartHabitAdjustModalProps {
 
 const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, onClose }) => {
   const { habits, updateHabit, householdId } = useHousehold();
+  const titleId = useId();
   const [suggestions, setSuggestions] = useState<HabitPointAdjustmentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +84,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-2xl"
+      ariaLabelledBy={titleId}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-purple-100 bg-purple-50 dark:bg-purple-500/15 shrink-0">
@@ -91,7 +93,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
             <Sparkles size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-purple-900 dark:text-purple-200">Smart Adjustments</h2>
+            <h2 id={titleId} className="text-lg font-bold text-purple-900 dark:text-purple-200">Smart Adjustments</h2>
             <p className="text-xs text-purple-600 dark:text-purple-300 font-medium">AI-powered optimization for your habits</p>
           </div>
         </div>

@@ -62,7 +62,15 @@ const HabitHistoryCalendar: React.FC = () => {
 
   // Calendar Grid Logic
   const { monthStart, days } = useCalendarGrid(currentDate);
-  const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const weekDays: { abbr: string; full: string }[] = [
+    { abbr: 'S', full: 'Sunday' },
+    { abbr: 'M', full: 'Monday' },
+    { abbr: 'T', full: 'Tuesday' },
+    { abbr: 'W', full: 'Wednesday' },
+    { abbr: 'T', full: 'Thursday' },
+    { abbr: 'F', full: 'Friday' },
+    { abbr: 'S', full: 'Saturday' },
+  ];
 
   // Map: DateString -> Completed Habits & Max Count
   const { dailyCompletions, maxDailyCompletions } = useMemo(() => {
@@ -117,9 +125,9 @@ const HabitHistoryCalendar: React.FC = () => {
 
         {/* Grid */}
         <div className="grid grid-cols-7 mb-2">
-          {weekDays.map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-slate-500 py-2">
-              {d}
+          {weekDays.map((day, i) => (
+            <div key={`${day.full}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-slate-500 py-2">
+              <abbr title={day.full} className="no-underline">{day.abbr}</abbr>
             </div>
           ))}
         </div>

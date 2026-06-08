@@ -334,7 +334,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                     {isSelected && <Check size={12} strokeWidth={3} />}
                     {habit.title}
                     {!isSelected && confidence === 'high' && (
-                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full animate-pulse" />
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full motion-safe:animate-pulse" />
                     )}
                   </button>
                 );

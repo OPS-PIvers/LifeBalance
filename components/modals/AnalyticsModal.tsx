@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useId } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { sumMoney } from '../../utils/money';
@@ -66,6 +66,7 @@ const CHART_STYLES = {
 
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const { habits, transactions, currentPeriodId, buckets, loadAllTransactions } = useHousehold();
+  const titleId = useId();
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('pulse');
 
   // The wallet charts span up to 6 months — load the full transaction history
@@ -193,11 +194,12 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-5xl"
+      ariaLabelledBy={titleId}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700 shrink-0 bg-white dark:bg-slate-800 z-10">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+          <h2 id={titleId} className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Activity className="text-brand-600 dark:text-slate-300" size={24} />
             Analytics & Insights
           </h2>

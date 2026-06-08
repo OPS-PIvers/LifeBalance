@@ -123,7 +123,7 @@ describe('Button', () => {
   it('applies icon-sm size classes', () => {
     render(<Button size="icon-sm">Icon SM</Button>);
     const button = screen.getByRole('button', { name: /icon sm/i });
-    expect(button).toHaveClass('p-1');
+    expect(button).toHaveClass('p-1.5');
   });
 
   // State & Icon tests

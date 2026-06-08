@@ -192,21 +192,23 @@ export const quickAddHabit = onRequest(
         return;
       }
 
-      // 8. Update Firestore
-      await habitRef.update({
+      // 8. Update the habit document and household points atomically so they
+      //    can never diverge if one write fails (mirrors the client's
+      //    writeBatch pattern in hooks/useHabitActions.tsx).
+      const batch = db.batch();
+      batch.update(habitRef, {
         ...result.updatedHabit,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       });
-
-      // 9. Update household points
       if (result.pointsChange !== 0) {
         const householdRef = db.doc(`households/${householdId}`);
-        await householdRef.update({
+        batch.update(householdRef, {
           "points.daily": admin.firestore.FieldValue.increment(result.pointsChange),
           "points.weekly": admin.firestore.FieldValue.increment(result.pointsChange),
           "points.total": admin.firestore.FieldValue.increment(result.pointsChange),
         });
       }
+      await batch.commit();
 
       // 10. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "habit", req.body, 200);

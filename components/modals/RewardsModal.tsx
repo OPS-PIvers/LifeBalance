@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
 import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
@@ -10,6 +10,7 @@ interface RewardsModalProps {
 
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, totalPoints, redeemReward } = useHousehold();
+  const titleId = useId();
 
   return (
     <Modal
@@ -17,11 +18,12 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       onClose={onClose}
       maxWidth="max-w-lg"
       className="bg-brand-50 dark:bg-slate-700/50"
+      ariaLabelledBy={titleId}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 bg-brand-800 text-white shrink-0">
         <div>
-          <h2 className="text-xl font-bold">Rewards Store</h2>
+          <h2 id={titleId} className="text-xl font-bold">Rewards Store</h2>
           <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
         </div>
         <button

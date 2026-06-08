@@ -38,7 +38,15 @@ const BudgetCalendar: React.FC = () => {
   const [frequency, setFrequency] = useState<'monthly' | 'bi-weekly' | 'weekly'>('monthly');
 
   const { monthStart, startDate, endDate, days } = useCalendarGrid(currentDate);
-  const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const weekDays: { abbr: string; full: string }[] = [
+    { abbr: 'S', full: 'Sunday' },
+    { abbr: 'M', full: 'Monday' },
+    { abbr: 'T', full: 'Tuesday' },
+    { abbr: 'W', full: 'Wednesday' },
+    { abbr: 'T', full: 'Thursday' },
+    { abbr: 'F', full: 'Friday' },
+    { abbr: 'S', full: 'Saturday' },
+  ];
 
   // Expand recurring calendar items for the visible date range
   const expandedCalendarItems = useMemo(
@@ -274,8 +282,8 @@ const BudgetCalendar: React.FC = () => {
         {/* Grid */}
         <div className="grid grid-cols-7 mb-4">
           {weekDays.map((d, i) => (
-            <div key={`${d}-${i}`} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">
-              {d}
+            <div key={`${d.full}-${i}`} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">
+              <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
             </div>
           ))}
         </div>

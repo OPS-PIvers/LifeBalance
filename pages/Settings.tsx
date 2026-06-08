@@ -179,9 +179,8 @@ const Settings: React.FC = () => {
     try {
       // Filter out sensitive data from members
       const safeMembers = members.map(m => {
-        // Destructure to remove sensitive fields
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { fcmTokens, email, telegramChatId, ...safeMember } = m;
+        // Destructure to remove sensitive fields (prefixed with _ to suppress unused-var warnings)
+        const { fcmTokens: _fcmTokens, email: _email, telegramChatId: _telegramChatId, ...safeMember } = m;
         return safeMember;
       });
 

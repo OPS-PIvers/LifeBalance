@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, memo } from 'react';
 import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, MoreVertical } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '../../types/schema';
@@ -64,25 +64,18 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   const percent = Math.min(100, (totalCommitted / bucket.limit) * 100);
   const isOverspent = totalCommitted > bucket.limit;
 
-  // Local state for limit editing to prevent parent re-renders on keystroke
-  // We initialize it directly from props so it has a valid value immediately
-  const [localLimit, setLocalLimit] = useState(bucket.limit.toString());
-
-  // To avoid the "setState in effect" warning while correctly syncing state:
-  // We use a pattern where we key the state initialization off the editing mode.
-  useEffect(() => {
-    if (isEditingLimit) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLocalLimit(bucket.limit.toString());
-    }
-  }, [isEditingLimit, bucket.limit]);
+  // Local state for limit editing to prevent parent re-renders on keystroke.
+  // Initialized from bucket.limit; reset to bucket.limit on cancel/invalid so there is no
+  // stale value if editing is opened again — no effect needed.
+  const [localLimit, setLocalLimit] = useState(() => bucket.limit.toString());
 
   const handleSaveLimit = () => {
     const val = parseFloat(localLimit);
     if (!isNaN(val)) {
       onSaveLimit(bucket.id, val);
     } else {
-      // If invalid, revert/cancel
+      // Invalid input: reset the field to the persisted limit before closing
+      setLocalLimit(bucket.limit.toString());
       onCancelEdit();
     }
   };
@@ -91,6 +84,8 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
     if (e.key === 'Enter') {
       handleSaveLimit();
     } else if (e.key === 'Escape') {
+      // Reset local input to persisted limit before closing
+      setLocalLimit(bucket.limit.toString());
       onCancelEdit();
     }
   };
@@ -199,7 +194,14 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div className="h-3 w-full bg-slate-100/80 dark:bg-slate-700/50 rounded-full overflow-hidden mb-4 ring-1 ring-black/5 shadow-inner">
+      <div
+        className="h-3 w-full bg-slate-100/80 dark:bg-slate-700/50 rounded-full overflow-hidden mb-4 ring-1 ring-black/5 shadow-inner"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(percent)}
+        aria-label={`${bucket.name} spending: ${Math.round(percent)}% of $${bucket.limit} limit`}
+      >
         <div
           className={`h-full rounded-full transition-all duration-500 relative ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}

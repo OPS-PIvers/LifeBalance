@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
 import { GripVertical } from 'lucide-react';
 import { Habit } from '../../types/schema';
@@ -11,33 +11,36 @@ interface HabitCategoryListProps {
 }
 
 const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits }) => {
-  // Local state for immediate reorder feedback
-  const [items, setItems] = useState(habits);
+  // Local state for immediate reorder feedback during drag only.
+  // While the user is dragging we show `dragItems`; once the drag ends we
+  // persist to Firestore and immediately go back to reading from props (the
+  // Firestore snapshot). This removes the need for a synchronising useEffect
+  // and avoids the cascading-render anti-pattern.
+  const [dragItems, setDragItems] = useState<Habit[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const { reorderHabits } = useGamification();
 
-  // Sync with props when not dragging (simple approach: sync when props change)
-  useEffect(() => {
-    setItems(habits);
-  }, [habits]);
+  // Use the optimistic local order while dragging; fall back to the
+  // Firestore-synced props otherwise.
+  const items = isDragging ? dragItems : habits;
 
   const handleReorder = (newOrder: Habit[]) => {
-    setItems(newOrder);
+    setIsDragging(true);
+    setDragItems(newOrder);
   };
 
   const handleSave = () => {
-    // Calculate new orders and save
-    // We use the current 'items' state
+    setIsDragging(false);
 
+    // Calculate new orders and save.
     // To preserve global ordering structure:
-    // 1. Get the list of 'order' values currently assigned to these habits (sorted)
-    // 2. Assign these values to the new habit arrangement in sequence
-    // This effectively swaps the habits into the existing 'slots' for this category
+    // 1. Get the list of 'order' values currently assigned to these habits (sorted).
+    // 2. Assign these values to the new habit arrangement in sequence.
+    // This effectively swaps the habits into the existing 'slots' for this category.
 
-    const existingOrders = items
-      .map(h => h.order ?? 999)
-      .sort((a, b) => a - b);
+    const existingOrders = dragItems.map(h => h.order ?? 999).sort((a, b) => a - b);
 
-    const updates = items.map((h, index) => ({
+    const updates = dragItems.map((h, index) => ({
       id: h.id,
       order: existingOrders[index] ?? index, // Fallback to index if orders ran out (unlikely)
       // We don't change category here, just order within category
@@ -53,12 +56,8 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
       className="space-y-3"
       aria-label={`Habit list for ${category}`}
     >
-      {items.map((habit) => (
-        <ReorderableHabitItem
-          key={habit.id}
-          habit={habit}
-          onSave={handleSave}
-        />
+      {items.map(habit => (
+        <ReorderableHabitItem key={habit.id} habit={habit} onSave={handleSave} />
       ))}
     </Reorder.Group>
   );
@@ -86,7 +85,7 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
         habit={habit}
         dragHandle={
           <div
-            onPointerDown={(e) => controls.start(e)}
+            onPointerDown={e => controls.start(e)}
             className="cursor-grab active:cursor-grabbing touch-none p-1 focus:outline-none focus:ring-2 focus:ring-brand-400 rounded"
             title="Drag to reorder"
             tabIndex={0}

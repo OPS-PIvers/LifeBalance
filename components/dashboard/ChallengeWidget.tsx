@@ -49,7 +49,14 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
         </p>
 
         {/* Progress Bar */}
-        <div className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2">
+        <div
+          className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(challengeProgress)}
+          aria-label={`Challenge progress: ${Math.round(challengeProgress)}% complete`}
+        >
           <div
             className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
             style={{ width: `${challengeProgress}%` }}

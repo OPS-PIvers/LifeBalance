@@ -15,6 +15,7 @@ import { Button } from '../components/ui/Button';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import Input from '../components/ui/Input';
 import BatchRescheduleModal from '../components/modals/BatchRescheduleModal';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 const ToDosPage: React.FC = () => {
   const {
@@ -28,6 +29,14 @@ const ToDosPage: React.FC = () => {
     loadOlderCompletedTodos,
   } = useTodos();
   const { members, currentUser } = useHouseholdCore();
+
+  // Page-level member lookup map — computed once here, passed to Section/CompletedSection
+  // so the O(n) map build does not repeat per-section (previously built 3× in render).
+  const memberMap = useMemo(() => {
+    const map = new Map<string, HouseholdMember>();
+    members.forEach(member => map.set(member.uid, member));
+    return map;
+  }, [members]);
 
   // View Mode State
   const [viewMode, setViewMode] = useState<'active' | 'completed'>('active');
@@ -534,6 +543,7 @@ const ToDosPage: React.FC = () => {
                 value={viewMode}
                 onChange={(val) => setViewMode(val as 'active' | 'completed')}
                 options={viewModeOptions}
+                name="View mode"
              />
         </div>
       </div>
@@ -552,7 +562,7 @@ const ToDosPage: React.FC = () => {
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
@@ -570,7 +580,7 @@ const ToDosPage: React.FC = () => {
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
@@ -588,7 +598,7 @@ const ToDosPage: React.FC = () => {
                 onDuplicate={handleDuplicate}
                 onMoveToTomorrow={handleMoveToTomorrow}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
                 isSelectionMode={isSelectionMode}
                 selectedIds={selectedIds}
                 onToggleSelection={toggleSelection}
@@ -617,7 +627,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
             />
             <CompletedSection
                 title="Completed Yesterday"
@@ -626,7 +636,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
             />
             <CompletedSection
                 title="This Week"
@@ -635,7 +645,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
             />
             <CompletedSection
                 title="Older History"
@@ -644,7 +654,7 @@ const ToDosPage: React.FC = () => {
                 onDelete={deleteToDo}
                 onDuplicate={handleDuplicate}
                 onMore={setActionTodo}
-                members={members}
+                memberMap={memberMap}
             />
 
             {/* Completed to-dos are windowed to the last 30 days; load older on demand. */}
@@ -820,42 +830,17 @@ const ToDosPage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* Batch Delete Confirmation Modal */}
-      {showBatchDeleteConfirm && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
-          disableBackdropClose={isBatchProcessing}
-        >
-          <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
-            <p className="text-brand-600 dark:text-slate-300">
-              Are you sure you want to delete <strong>{selectedIds.size}</strong> tasks?
-            </p>
-            <p className="text-sm text-money-neg dark:text-rose-400 font-bold">
-              This action cannot be undone.
-            </p>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowBatchDeleteConfirm(false)}
-                disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-brand-100 text-brand-600 font-bold rounded-xl hover:bg-brand-200 transition-colors disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleBatchDelete}
-                disabled={isBatchProcessing}
-                className="flex-1 py-3 bg-money-neg text-white font-bold rounded-xl hover:bg-red-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-                <span>Delete All</span>
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Batch Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
+        onConfirm={handleBatchDelete}
+        title="Batch Delete"
+        message={`Are you sure you want to delete ${selectedIds.size} task${selectedIds.size !== 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmLabel={isBatchProcessing ? 'Deleting…' : 'Delete All'}
+        confirmVariant="destructive"
+        isConfirming={isBatchProcessing}
+      />
 
       {/* Mobile Actions Drawer */}
       <Drawer
@@ -1011,7 +996,7 @@ const TodoRow = React.memo(function TodoRow({
               color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
               'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
             }`}
-            aria-label="Complete task"
+            aria-label={`Complete task: ${item.text}`}
           >
             <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
           </button>
@@ -1148,7 +1133,8 @@ interface SectionProps {
   onDuplicate: (todo: ToDo) => void;
   onMoveToTomorrow: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
-  members: HouseholdMember[];
+  /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
+  memberMap: ReadonlyMap<string, HouseholdMember>;
   isSelectionMode: boolean;
   /** Full selection set — Section only re-renders when its own items' membership changes. */
   selectedIds: ReadonlySet<string>;
@@ -1159,14 +1145,7 @@ interface SectionProps {
 // Uses a custom memo comparator: when `selectedIds` changes, re-render is skipped unless
 // at least one of this section's own items changed its selected/deselected state.
 // This prevents toggling an item in one section from re-rendering the other two sections.
-const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, members, isSelectionMode, selectedIds, onToggleSelection }: SectionProps) {
-
-  // Create member lookup Map for O(1) access instead of O(n) for each item
-  const memberMap = useMemo(() => {
-    const map = new Map<string, HouseholdMember>();
-    members.forEach(member => map.set(member.uid, member));
-    return map;
-  }, [members]);
+const Section = React.memo(function Section({ title, subtitle, items, color, onComplete, onEdit, onDelete, onDuplicate, onMoveToTomorrow, onMore, memberMap, isSelectionMode, selectedIds, onToggleSelection }: SectionProps) {
 
   if (items.length === 0) return null;
 
@@ -1213,7 +1192,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
   // Check non-set props with reference equality (callbacks are stable via useCallback).
   const sameOtherProps =
     prev.isSelectionMode === next.isSelectionMode &&
-    prev.members === next.members &&
+    prev.memberMap === next.memberMap &&
     prev.color === next.color &&
     prev.title === next.title &&
     prev.subtitle === next.subtitle &&
@@ -1279,20 +1258,16 @@ const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNo
 };
 
 // Sub-component for completed items
-const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, members }: {
+const CompletedSection = React.memo(function CompletedSection({ title, items, onUncomplete, onDelete, onDuplicate, onMore, memberMap }: {
   title: string;
   items: ToDo[];
   onUncomplete: (id: string) => void;
   onDelete: (id: string) => void;
   onDuplicate: (todo: ToDo) => void;
   onMore: (todo: ToDo) => void;
-  members: HouseholdMember[];
+  /** Pre-built member lookup map from page level — avoids rebuilding per-section. */
+  memberMap: ReadonlyMap<string, HouseholdMember>;
 }) {
-    const memberMap = useMemo(() => {
-        const map = new Map<string, HouseholdMember>();
-        members.forEach(member => map.set(member.uid, member));
-        return map;
-      }, [members]);
 
     if (items.length === 0) return null;
 

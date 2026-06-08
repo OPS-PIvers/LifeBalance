@@ -234,7 +234,7 @@ describe('ToDosPage', () => {
     it('completes a single task', async () => {
       setup();
       // Find the check button for the first task
-      const completeButtons = screen.getAllByLabelText('Complete task');
+      const completeButtons = screen.getAllByLabelText(/^Complete task:/i);
       fireEvent.click(completeButtons[0]!);
 
       await waitFor(() => {
