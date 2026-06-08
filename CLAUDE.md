@@ -84,6 +84,8 @@ All data is persisted in **Firestore** with real-time synchronization across dev
 
 Firestore is initialized in [firebase.config.ts](firebase.config.ts) with **offline persistence** (`persistentLocalCache` + multi-tab manager), with a safe fallback to the default in-memory cache where IndexedDB is unavailable (SSR, private browsing, CI). This enables offline reads and faster cold starts for the PWA.
 
+Collection refs in the context attach a **typed `FirestoreDataConverter<T>`** (one per major collection in [utils/firestoreConverters.ts](utils/firestoreConverters.ts)) via `.withConverter()`, so listeners/loaders return typed `T` instead of unchecked `d.data() as T` casts. `fromFirestore` injects the synthetic `id` (`uid` for members), normalizes legacy `Timestamp` fields to ISO strings, and drops the deprecated `BudgetBucket.spent`; `toFirestore` strips the synthetic id so it's never written back. Each converter is unit-tested (well-formed + partial/legacy doc).
+
 ### Safe-to-Spend Logic
 
 The core financial metric (`safeToSpend`) is calculated as:
@@ -202,7 +204,7 @@ import { Habit } from '@/types/schema';
 import TopToolbar from '@/components/layout/TopToolbar';
 ```
 
-Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.config.ts).
+Configured in both [tsconfig.json](tsconfig.json) and [vite.config.ts](vite.config.ts). **Always use `@/` for cross-directory imports** (only same-directory `./x` relative imports are allowed) — a `no-restricted-imports` ESLint rule bans parent-relative (`../…`) imports.
 
 ## Testing
 
