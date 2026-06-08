@@ -635,6 +635,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const bucketHistoryLoadedAllRef = useRef(false);
   const [apiKeys, setApiKeys] = useState<HouseholdApiKey[]>([]);
   const [pendingItemsCount, setPendingItemsCount] = useState<number>(0);
+  // Tracks pendingItems currently being processed so a snapshot that re-fires
+  // before the `processed: true` write settles can't double-process an item
+  // (which would create duplicate shopping items / todos / transactions).
+  const processingItemIdsRef = useRef<Set<string>>(new Set());
   // Tracks which household's first snapshot has resolved; isLoading is derived
   // from it so switching households automatically re-shows skeletons until the
   // new household loads. It is re-armed to null in the listener effect's reset
@@ -764,6 +768,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(accountsQuery, (snapshot) => {
         setAccounts(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[accounts] listener failed:', error);
+        toast.error('Lost connection to your accounts. Safe-to-Spend may be out of date.');
       })
     );
 
@@ -772,6 +779,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(bucketsQuery, (snapshot) => {
         setBuckets(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[buckets] listener failed:', error);
+        toast.error('Lost connection to your budget. Safe-to-Spend may be out of date.');
       })
     );
 
@@ -812,6 +822,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(habitsQuery, (snapshot) => {
         setHabits(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[habits] listener failed:', error);
       })
     );
 
@@ -820,6 +832,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(challengesQuery, (snapshot) => {
         setChallenges(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[challenges] listener failed:', error);
       })
     );
 
@@ -828,6 +842,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(yearlyGoalsQuery, (snapshot) => {
         setYearlyGoals(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[yearlyGoals] listener failed:', error);
       })
     );
 
@@ -836,6 +852,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(rewardsQuery, (snapshot) => {
         setRewards(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[rewards] listener failed:', error);
       })
     );
 
@@ -946,6 +964,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(mealsQuery, (snapshot) => {
         setMeals(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[meals] listener failed:', error);
       })
     );
 
@@ -954,6 +974,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(shoppingListQuery, (snapshot) => {
         setShoppingList(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[shoppingList] listener failed:', error);
       })
     );
 
@@ -962,6 +984,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(groceryCatalogQuery, (snapshot) => {
         setGroceryCatalog(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        console.error('[groceryCatalog] listener failed:', error);
       })
     );
 
@@ -1025,6 +1049,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           for (const docSnapshot of snapshot.docs) {
             const item = docSnapshot.data();
 
+            // Re-entry guard: skip items already being processed by an earlier,
+            // still in-flight snapshot pass so we never double-process them.
+            if (processingItemIdsRef.current.has(docSnapshot.id)) {
+              continue;
+            }
+            processingItemIdsRef.current.add(docSnapshot.id);
+
             try {
               // Get available categories for parsing
               const expenseCategories = bucketsRef.current.map(b => b.name);
@@ -1076,9 +1107,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               });
 
               toast.error(`Voice command failed: ${errorMessage}`);
+            } finally {
+              // Always clear the in-flight marker, whether the item processed
+              // successfully or errored (the doc is `processed: true` either way).
+              processingItemIdsRef.current.delete(docSnapshot.id);
             }
           }
         }
+      }, (error) => {
+        console.error('[pendingItems] listener failed:', error);
       })
     );
 
@@ -1439,22 +1476,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     const today = getLocalDateString();
 
-    // Batch update all habits that need reset with error handling
-    for (const habit of habitsToReset) {
-      try {
-        // Mirror the manual resetHabit path: zero count AND drop today from
-        // completedDates so a habit completed today-but-reset can't leave the
-        // (count === 0, today ∈ completedDates) state that desyncs the daily
-        // points recalc from weekly/total. See utils/habitLogic.getHabitResetUpdate.
-        // Use serverTimestamp() for consistency with the rest of the codebase.
-        await updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
+    // Reset all stale habits in parallel with per-item error isolation, so one
+    // failed write doesn't block the others (and N writes go out concurrently
+    // instead of serially).
+    //
+    // Mirror the manual resetHabit path: zero count AND drop today from
+    // completedDates so a habit completed today-but-reset can't leave the
+    // (count === 0, today ∈ completedDates) state that desyncs the daily
+    // points recalc from weekly/total. See utils/habitLogic.getHabitResetUpdate.
+    // Use serverTimestamp() for consistency with the rest of the codebase.
+    await Promise.allSettled(
+      habitsToReset.map(habit =>
+        updateDoc(doc(db, `households/${householdId}/habits`, habit.id), {
           ...getHabitResetUpdate(habit, today),
           lastUpdated: serverTimestamp(),
-        });
-      } catch (error) {
-        console.error(`[checkHabitResets] Failed to reset habit ${habit.id}:`, error);
-      }
-    }
+        }).catch(error => {
+          console.error(`[checkHabitResets] Failed to reset habit ${habit.id}:`, error);
+        })
+      )
+    );
   }, [householdId, habitResetData]);
 
   // Use the midnight scheduler hook for habit resets
@@ -1567,13 +1607,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     const runPaycheckMigration = async () => {
       if (needsPaycheckMigration(householdSettings)) {
+        // needsPaycheckMigration() doesn't narrow payPeriodSettings, so narrow it
+        // here explicitly rather than asserting non-null. If startDate is somehow
+        // absent the migration can't run, so skip it.
+        const pps = householdSettings.payPeriodSettings;
+        if (!pps?.startDate) {
+          console.warn('[Migration] Skipping paycheck migration: payPeriodSettings.startDate missing');
+          return;
+        }
         hasAttemptedPaycheckMigration.current = true;
         console.log('[Migration] Starting paycheck period migration...');
         try {
-          await migrateToPaycheckPeriods(
-            householdId,
-            householdSettings.payPeriodSettings!.startDate
-          );
+          await migrateToPaycheckPeriods(householdId, pps.startDate);
         } catch (error) {
           console.error('[Migration] Failed to migrate to paycheck periods:', error);
           toast.error('Migration failed. Please refresh the page.');
@@ -2848,6 +2893,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const rolloverAmount = Math.min(freezeBank.tokens, 1);
     const newBalance = Math.min(rolloverAmount + 2, 3);
     const tokensAdded = newBalance - freezeBank.tokens;
+
+    // Bank already full this month: no tokens to add. Still record the month
+    // guard (so we don't re-check every call) but skip the history entry and the
+    // misleading "0 tokens added!" toast.
+    if (tokensAdded === 0) {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        freezeBank: {
+          ...freezeBank,
+          lastRolloverDate: format(now, 'yyyy-MM-dd'),
+          lastRolloverMonth: currentMonth,
+        },
+      });
+      return;
+    }
 
     // Create history entry
     const historyEntry: FreezeBankHistoryEntry = {

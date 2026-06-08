@@ -1,4 +1,5 @@
 import { Habit } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   format,
   subDays,
@@ -79,15 +80,16 @@ export const isHabitStale = (habit: Pick<Habit, 'id' | 'period' | 'lastUpdated'>
 /**
  * Calculate the current streak for a habit based on completion dates
  * @param dates - Array of completion dates in YYYY-MM-DD format
+ * @param today - "Today" in YYYY-MM-DD (caller's local timezone). Injectable for
+ *                deterministic tests; defaults to the local date.
  * @returns The current streak count
  */
-export const calculateStreak = (dates: string[]): number => {
+export const calculateStreak = (dates: string[], today: string = getLocalDateString()): number => {
   if (dates.length === 0) return 0;
   // Deduplicate dates to handle multiple completions on the same day
   const uniqueDates = Array.from(new Set(dates));
   const sortedDates = uniqueDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  const yesterday = format(subDays(parseISO(today), 1), 'yyyy-MM-dd');
   let currentStreak = 0;
   let checkDate = sortedDates[0] === today ? today : yesterday;
   if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
@@ -143,9 +145,14 @@ export const streakEndingOn = (completedDates: string[], date: string): number =
  * timezone (matching the `yyyy-MM-dd` strings stored in Firestore).
  *
  * @param dates - Array of completion dates in YYYY-MM-DD format
+ * @param today - "Today" in YYYY-MM-DD (caller's local timezone). Injectable for
+ *                deterministic tests; defaults to the local date.
  * @returns The current consecutive-week streak
  */
-export const calculateWeeklyStreak = (dates: string[]): number => {
+export const calculateWeeklyStreak = (
+  dates: string[],
+  today: string = getLocalDateString()
+): number => {
   if (dates.length === 0) return 0;
 
   // Deduplicate, then collect the Monday of each completion's ISO week.
@@ -157,8 +164,9 @@ export const calculateWeeklyStreak = (dates: string[]): number => {
   ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()); // newest first
 
   // The streak can only extend from the current week or the immediately past week.
-  const nowWeekStart = format(startOfISOWeek(new Date()), 'yyyy-MM-dd');
-  const prevWeekStart = format(subWeeks(startOfISOWeek(new Date()), 1), 'yyyy-MM-dd');
+  const todayDate = parseISO(today);
+  const nowWeekStart = format(startOfISOWeek(todayDate), 'yyyy-MM-dd');
+  const prevWeekStart = format(subWeeks(startOfISOWeek(todayDate), 1), 'yyyy-MM-dd');
 
   // If the most recent completion is not in the current or previous ISO week, no streak.
   if (weekStarts[0] !== nowWeekStart && weekStarts[0] !== prevWeekStart) return 0;
@@ -447,20 +455,22 @@ export const calculateResetPoints = (habit: Habit): number => {
  * was on a prior day), so the filter is a no-op and historical completions —
  * and their weekly/total points — are preserved.
  *
- * @param habit - The habit being reset (only `completedDates` is read)
+ * @param habit - The habit being reset (`completedDates` and `period` are read)
  * @param today - Today's date in YYYY-MM-DD format (caller's local timezone)
  * @returns The fields to persist: zeroed count, today-stripped completedDates,
- *          and the recomputed streak
+ *          and the recomputed (period-aware) streak
  */
 export const getHabitResetUpdate = (
-  habit: Pick<Habit, 'completedDates'>,
+  habit: Pick<Habit, 'completedDates' | 'period'>,
   today: string
 ): { count: 0; completedDates: string[]; streakDays: number } => {
   const completedDates = habit.completedDates.filter(date => date !== today);
   return {
     count: 0,
     completedDates,
-    streakDays: calculateStreak(completedDates),
+    // Period-aware: daily habits get a day-based streak, weekly habits an
+    // ISO-week-based streak — so a weekly habit isn't reset to ~0 at midnight.
+    streakDays: streakForHabit({ period: habit.period, completedDates }),
   };
 };
 
@@ -542,11 +552,12 @@ export const calculatePointsForDateRange = (
 
       if (habit.scoringType === 'incremental') {
         // We don't store historical per-day counts, so each past day counts as a
-        // single completion. The one exception is "today" on a daily habit, where
-        // habit.count reflects the (possibly multiple) completions made today —
-        // preserving the multi-completion behavior daily recalc relies on.
-        const completionsOnDate =
-          date === today && habit.period === 'daily' ? habit.count : 1;
+        // single completion. The one exception is "today" (for both daily and
+        // weekly habits), where habit.count reflects the (possibly multiple)
+        // completions made today — preserving the multi-completion behavior the
+        // per-toggle batch already credited so the corrective sync doesn't erase
+        // earned points.
+        const completionsOnDate = date === today ? habit.count : 1;
         totalPoints += sign * completionsOnDate * perDayPoints;
       } else {
         // Threshold: each completed day in range earns the threshold points once.

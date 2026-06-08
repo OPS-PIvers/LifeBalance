@@ -102,6 +102,19 @@ describe('habitLogic', () => {
       }
       expect(calculateStreak(dates)).toBe(10);
     });
+
+    it('honors an explicit injected today for deterministic boundary behavior', () => {
+      // Fixed dates independent of the real clock. With injected today = Jan 3,
+      // the consecutive run Jan 1-3 is a streak of 3.
+      const fixed = ['2025-01-03', '2025-01-02', '2025-01-01'];
+      expect(calculateStreak(fixed, '2025-01-03')).toBe(3);
+      // If "today" is Jan 4, the most recent completion (Jan 3) is yesterday →
+      // streak still counts (ends yesterday) = 3.
+      expect(calculateStreak(fixed, '2025-01-04')).toBe(3);
+      // If "today" is Jan 5, the most recent completion (Jan 3) is 2 days ago →
+      // no current streak.
+      expect(calculateStreak(fixed, '2025-01-05')).toBe(0);
+    });
   });
 
   describe('getMultiplier', () => {
@@ -497,6 +510,55 @@ describe('habitLogic', () => {
       // Yesterday: 1 completion * 10 = 10. Today: 3 completions * 10 = 30. Total 40.
       expect(total).toBe(40);
     });
+
+    it('uses habit.count for today on a WEEKLY incremental habit, 1 for past days', () => {
+      // Weekly incremental habit toggled 3 times today, plus one completion in
+      // each of the 2 prior ISO weeks. Today's week is the 3rd consecutive ISO
+      // week (streak 3 → 1.5x for weekly), past weeks have their own streaks.
+      const weekStartStr = mondayWeeksAgo(0);
+      const habit: Habit = {
+        ...baseHabit,
+        period: 'weekly',
+        scoringType: 'incremental',
+        basePoints: 10,
+        count: 3, // 3 completions today
+        totalCount: 5,
+        completedDates: [today, mondayWeeksAgo(1), mondayWeeksAgo(2)],
+        streakDays: 3,
+      };
+
+      // Range = just this ISO week so only today's completion is in range.
+      const total = calculatePointsForDateRange([habit], weekStartStr, today);
+
+      // Today is the only in-range completion. Streak ending this week = 3 → 1.5x
+      // → perDay = floor(10 * 1.5) = 15. count=3 → 3 * 15 = 45.
+      // Before the fix this counted only 1 completion (15), erasing earned points.
+      expect(total).toBe(45);
+    });
+
+    it('counts past in-range weekly incremental days as 1 each', () => {
+      // Full 3-week range: each past week counts as a single completion, today
+      // uses habit.count.
+      const habit: Habit = {
+        ...baseHabit,
+        period: 'weekly',
+        scoringType: 'incremental',
+        basePoints: 10,
+        count: 3, // 3 completions today
+        totalCount: 5,
+        completedDates: [today, mondayWeeksAgo(1), mondayWeeksAgo(2)],
+        streakDays: 3,
+      };
+
+      const total = calculatePointsForDateRange([habit], mondayWeeksAgo(2), today);
+
+      // Per-week streaks ending at each completion's week:
+      //   2 weeks ago → streak 1 → 1.0x → 10, counts as 1 completion → 10
+      //   1 week ago  → streak 2 → 1.5x → 15, counts as 1 completion → 15
+      //   this week   → streak 3 → 1.5x → 15, count=3 → 45
+      // Total = 10 + 15 + 45 = 70.
+      expect(total).toBe(70);
+    });
   });
 
   describe('calculatePointsForDate — per-date streak reconstruction', () => {
@@ -609,6 +671,31 @@ describe('habitLogic', () => {
       expect(calculatePointsForDateRange([resetHabit], yesterday, today)).toBe(10);
       expect(calculatePointsForDate([resetHabit], today)).toBe(0);
     });
+
+    it('preserves the ISO-week streak for a weekly habit on reset', () => {
+      // Weekly habit completed in this week + the 2 prior ISO weeks (streak = 3).
+      // The midnight reset drops today's completion but the remaining ISO-week
+      // streak must be computed with the WEEKLY algorithm, not the daily one
+      // (which would have collapsed it to ~0).
+      const habit: Habit = {
+        ...baseHabit,
+        period: 'weekly',
+        scoringType: 'threshold',
+        targetCount: 1,
+        basePoints: 100,
+        count: 1,
+        totalCount: 3,
+        completedDates: [today, mondayWeeksAgo(1), mondayWeeksAgo(2)],
+        streakDays: 3,
+      };
+
+      const update = getHabitResetUpdate(habit, today);
+      expect(update.count).toBe(0);
+      expect(update.completedDates).not.toContain(today);
+      // Remaining completions are in last week + 2 weeks ago = 2 consecutive
+      // ISO weeks. A daily streak calc would have returned 0/1 here.
+      expect(update.streakDays).toBe(2);
+    });
   });
 
   // ---------------------------------------------------------------------------
@@ -664,6 +751,19 @@ describe('habitLogic', () => {
         'yyyy-MM-dd'
       );
       expect(calculateWeeklyStreak([thisWeekMonday, thisWeekTuesday])).toBe(1);
+    });
+
+    it('honors an explicit injected today for deterministic boundary behavior', () => {
+      // Fixed ISO weeks: Mondays 2025-01-06, 2024-12-30, 2024-12-23 (3 consecutive
+      // ISO weeks). Injecting today inside the most recent of those weeks yields a
+      // streak of 3, independent of the real clock.
+      const weeks = ['2025-01-06', '2024-12-30', '2024-12-23'];
+      expect(calculateWeeklyStreak(weeks, '2025-01-08')).toBe(3); // today in 01-06 week
+      // Injecting today in the week AFTER the latest completion → latest is the
+      // previous ISO week, streak still extends = 3.
+      expect(calculateWeeklyStreak(weeks, '2025-01-13')).toBe(3);
+      // Two ISO weeks after the latest completion → no current streak.
+      expect(calculateWeeklyStreak(weeks, '2025-01-20')).toBe(0);
     });
   });
 
