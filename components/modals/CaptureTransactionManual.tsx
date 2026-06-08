@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { Transaction, Habit, BudgetBucket, Store, Account } from '../../types/schema';
 import { suggestHabitsForTransaction } from '../../utils/habitSuggestions';
+import { useAutoFocus } from '../../hooks/useAutoFocus';
 import { Button } from '../ui/Button';
 
 interface CaptureTransactionManualProps {
@@ -59,6 +60,9 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || format(new Date(), 'yyyy-MM-dd'));
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Focus the amount field on desktop; never on touch (avoids iOS keyboard pop).
+  const amountInputRef = useAutoFocus<HTMLInputElement>();
 
   // Get current bucket and its sub-buckets
   const currentBucket = useMemo(() => buckets.find(b => b.name === category), [buckets, category]);
@@ -153,6 +157,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         <div className="relative">
           <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-brand-400 dark:text-slate-400">$</span>
           <input
+            ref={amountInputRef}
             type="number"
             value={amount}
             aria-label="Amount"
@@ -164,7 +169,6 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
               if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
             }}
             placeholder="0.00"
-            autoFocus
             step="0.01"
             min="0"
             className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-slate-100 placeholder:text-brand-200 outline-none text-center bg-transparent"

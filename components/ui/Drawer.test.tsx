@@ -166,4 +166,26 @@ describe('Drawer', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-labelledby', 'custom-id');
   });
+
+  it('sizes to content by default (no fixed-height detent class)', () => {
+    render(
+      <Drawer isOpen={true} onClose={onCloseMock}>
+        <div>Content</div>
+      </Drawer>
+    );
+    const content = screen.getByTestId('drawer-content');
+    expect(content.className).toContain('max-h-[90vh]');
+    // The fixed-height detent variant should be absent in the default 'auto' mode.
+    expect(content.className).not.toContain('supports-[height:100dvh]:h-[90dvh]');
+  });
+
+  it('applies a fixed tall detent when height="tall"', () => {
+    render(
+      <Drawer isOpen={true} onClose={onCloseMock} height="tall">
+        <div>Content</div>
+      </Drawer>
+    );
+    const content = screen.getByTestId('drawer-content');
+    expect(content.className).toContain('supports-[height:100dvh]:h-[90dvh]');
+  });
 });

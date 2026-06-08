@@ -1,6 +1,7 @@
 import React from 'react';
 import { Store, ChevronDown } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { useAutoFocus } from '@/hooks/useAutoFocus';
 
 interface CaptureShoppingTabProps {
   name: string;
@@ -25,18 +26,19 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
   setStore,
   onSubmit,
 }) => {
+  const nameInputRef = useAutoFocus<HTMLInputElement>();
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
         <label htmlFor="item-name" className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">Item Name</label>
         <input
+          ref={nameInputRef}
           id="item-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Milk, Eggs"
           className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
-          autoFocus
         />
       </div>
 
