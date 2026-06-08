@@ -26,8 +26,14 @@ const mockUseHousehold = {
   accounts: [] as unknown[],
 };
 
+// Each slice hook returns the shared superset object; destructuring in the
+// component picks the fields it needs from whichever slice it calls.
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: () => mockUseHousehold,
+  useFinance: () => mockUseHousehold,
+  useGamification: () => mockUseHousehold,
+  useHouseholdCore: () => mockUseHousehold,
+  useTodos: () => mockUseHousehold,
+  useShopping: () => mockUseHousehold,
 }));
 
 // Mock child components to simplify testing

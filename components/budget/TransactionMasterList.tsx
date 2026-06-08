@@ -743,9 +743,10 @@ const TransactionMasterList: React.FC = () => {
           isOpen={true}
           onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
           disableBackdropClose={isBatchProcessing}
+          ariaLabelledBy="batch-delete-title"
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
+            <h3 id="batch-delete-title" className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
             <p className="text-brand-600 dark:text-slate-300">
               Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
             </p>

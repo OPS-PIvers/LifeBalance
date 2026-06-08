@@ -72,7 +72,8 @@ const HabitHistoryCalendar: React.FC = () => {
     { abbr: 'S', full: 'Saturday' },
   ];
 
-  // Map: DateString -> Completed Habits & Max Count
+  // Map: DateString -> Completed Habits & Max Count. Memoized on `habits` so it
+  // only rebuilds when the habits array changes (i.e. on a Firestore snapshot).
   const { dailyCompletions, maxDailyCompletions } = useMemo(() => {
     const map = new Map<string, Habit[]>();
     let max = 0;

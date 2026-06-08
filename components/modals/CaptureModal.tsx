@@ -3,7 +3,7 @@ import {
   X, Loader2, Wallet, CheckSquare, ShoppingBag
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
 import { Transaction } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
@@ -47,11 +47,11 @@ const getLocalDateString = (): string => {
 };
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
-  const {
-    addTransaction, buckets, habits, transactions,
-    addToDo, members, currentUser,
-    addShoppingItem, householdId, stores, accounts
-  } = useHousehold();
+  const { addTransaction, buckets, transactions, accounts } = useFinance();
+  const { habits } = useGamification();
+  const { currentUser, members, householdId } = useHouseholdCore();
+  const { addToDo } = useTodos();
+  const { addShoppingItem, stores } = useShopping();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
 

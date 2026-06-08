@@ -65,17 +65,22 @@ const ToDosPage: React.FC = () => {
     }
   }, [isSelectionMode]);
 
-  // Update date at midnight
+  // Update date at midnight so todo categorization (immediate/upcoming/radar) stays accurate.
+  // NOTE: useMidnightScheduler (hooks/useMidnightScheduler.ts) is not used here because its
+  // contract also fires the callback immediately on mount and on a 5-min periodic interval,
+  // which differs from this page's intent of only updating at midnight. Replacing it would
+  // require passing `enabled` + a Promise-returning wrapper and accepting the extra immediate
+  // call — a behaviour change that is out of scope for this task.
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
-    
+
     const scheduleNextMidnight = () => {
       const now = new Date();
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(0, 0, 0, 0);
       const msUntilMidnight = tomorrow.getTime() - now.getTime();
-      
+
       timeoutId = setTimeout(() => {
         setCurrentDate(startOfToday());
         scheduleNextMidnight();
@@ -147,10 +152,16 @@ const ToDosPage: React.FC = () => {
     const completedWeek: ToDo[] = [];
     const completedOlder: ToDo[] = [];
 
+    // Pre-parse completion timestamps into a Map (mirrors the active-todos dateMap pattern)
+    // so parseISO is called once per todo rather than per-todo in the loop below.
+    const completedDateMap = new Map<string, Date>();
     completed.forEach(todo => {
-        // Fallback to createdAt or 'now' if completedAt is missing (shouldn't happen for new completions)
         const dateStr = todo.completedAt || todo.createdAt || new Date().toISOString();
-        const date = parseISO(dateStr);
+        completedDateMap.set(todo.id, parseISO(dateStr));
+    });
+
+    completed.forEach(todo => {
+        const date = completedDateMap.get(todo.id)!; // always set in the loop above
 
         if (isSameDay(date, currentDate)) {
             completedToday.push(todo);

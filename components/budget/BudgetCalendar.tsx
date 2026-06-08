@@ -280,9 +280,9 @@ const BudgetCalendar: React.FC = () => {
         </div>
 
         {/* Grid */}
-        <div className="grid grid-cols-7 mb-4">
+        <div className="grid grid-cols-7 mb-4" role="row">
           {weekDays.map((d, i) => (
-            <div key={`${d.full}-${i}`} className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">
+            <div key={`${d.full}-${i}`} role="columnheader" className="text-center text-xs font-bold text-slate-400 dark:text-slate-500 py-2">
               <abbr title={d.full} className="no-underline">{d.abbr}</abbr>
             </div>
           ))}
@@ -310,6 +310,7 @@ const BudgetCalendar: React.FC = () => {
                 role="button"
                 tabIndex={0}
                 aria-label={ariaLabel}
+                aria-pressed={isSelected}
                 onClick={() => setSelectedDate(day)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {

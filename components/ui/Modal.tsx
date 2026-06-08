@@ -44,6 +44,12 @@ export interface ModalProps {
    */
   ariaLabelledBy?: string;
   /**
+   * Accessible name for the dialog when there is no visible title element
+   * to reference with ariaLabelledBy. If both are provided, both attributes
+   * are rendered (aria-labelledby takes precedence per the spec).
+   */
+  ariaLabel?: string;
+  /**
    * ID of the element describing the modal.
    * Enhances accessibility.
    */
@@ -71,6 +77,7 @@ export const Modal: React.FC<ModalProps> = ({
   mobileSafePadding = true,
   disableBackdropClose = false,
   ariaLabelledBy,
+  ariaLabel,
   ariaDescribedBy,
 }) => {
   // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
@@ -140,6 +147,7 @@ export const Modal: React.FC<ModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={ariaLabelledBy}
+        aria-label={ariaLabel}
         aria-describedby={ariaDescribedBy}
         tabIndex={-1}
         className={twMerge(

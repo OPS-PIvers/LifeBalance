@@ -259,18 +259,11 @@ const BudgetAccounts: React.FC = () => {
                 </Button>
               </div>
             ) : (
-              <div
+              <button
+                type="button"
                 onClick={() => startEditing(account.id, account.balance)}
-                className="group cursor-pointer text-right"
-                role="button"
-                tabIndex={0}
+                className="group cursor-pointer text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 rounded-lg"
                 aria-label={`Edit balance for ${account.name}`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    startEditing(account.id, account.balance);
-                  }
-                }}
               >
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
                   ${account.balance.toLocaleString()}
@@ -278,7 +271,7 @@ const BudgetAccounts: React.FC = () => {
                 <p className="text-xxs text-brand-300 dark:text-slate-500 group-hover:text-brand-500 dark:group-hover:text-slate-400 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
                 </p>
-              </div>
+              </button>
             )}
           </div>
         </div>

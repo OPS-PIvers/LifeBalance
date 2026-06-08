@@ -70,7 +70,6 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
       id: editingBucket ? editingBucket.id : crypto.randomUUID(),
       name,
       limit: parseFloat(limit),
-      spent: editingBucket ? editingBucket.spent : 0,
       color,
       isVariable: true,
       isCore: true,
@@ -179,6 +178,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
               value={newSubBucketName}
               onChange={e => setNewSubBucketName(e.target.value)}
               placeholder="New sub-category..."
+              aria-label="New sub-category name"
               className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               onKeyDown={e => {
                 if (e.key === 'Enter') {

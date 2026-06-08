@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
@@ -32,6 +32,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const isDesktop = useMediaQuery('(min-width: 640px)');
   const firstMenuItemRef = useRef<HTMLButtonElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Move focus to the first menu item when the desktop menu opens
   useEffect(() => {
@@ -59,7 +60,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
 
   // Streak Repair Eligibility
-  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+  // Memoized so this date string is computed once per mount rather than on
+  // every render of every card (habits lists can be long).
+  const yesterday = useMemo(() => format(subDays(new Date(), 1), 'yyyy-MM-dd'), []);
   const isEligibleForRepair =
     isPositive &&
     habit.period === 'daily' &&
@@ -122,6 +125,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
       case 'Escape':
         e.preventDefault();
         setIsMenuOpen(false);
+        menuTriggerRef.current?.focus();
         break;
       case 'Enter':
       case ' ':
@@ -223,6 +227,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                 </div>
               )}
               <button
+                ref={menuTriggerRef}
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsMenuOpen(!isMenuOpen);
@@ -282,12 +287,13 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
         {/* Menu Dropdown (Desktop Only) */}
         {isMenuOpen && isDesktop && (
           <>
-            <div 
+            <div
               className="fixed inset-0"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMenuOpen(false);
-              }} 
+                menuTriggerRef.current?.focus();
+              }}
               aria-hidden="true"
               style={{ zIndex: 10 }}
             />

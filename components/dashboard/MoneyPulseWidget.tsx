@@ -45,12 +45,17 @@ export const MoneyPulseWidget: React.FC = () => {
     };
   }, [transactions]);
 
-  // 2. Get Recent Transactions
+  // 2. Get Recent Transactions — also precompute the relative-time strings here
+  // so they are not re-evaluated inside JSX on every parent re-render.
   const recentTransactions = useMemo(() => {
     return transactions
       .filter(t => t.category !== 'Income' && t.status !== 'pending_review')
       .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
-      .slice(0, 3);
+      .slice(0, 3)
+      .map(tx => ({
+        ...tx,
+        relativeDate: formatDistanceToNow(parseISO(tx.date), { addSuffix: true }),
+      }));
   }, [transactions]);
 
   if (transactions.length === 0) return null;
@@ -111,7 +116,7 @@ export const MoneyPulseWidget: React.FC = () => {
                  </div>
                  <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{tx.merchant}</p>
-                    <p className="text-xxs text-slate-400 dark:text-slate-500 font-medium">{formatDistanceToNow(parseISO(tx.date), { addSuffix: true })}</p>
+                    <p className="text-xxs text-slate-400 dark:text-slate-500 font-medium">{tx.relativeDate}</p>
                  </div>
               </div>
               <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">

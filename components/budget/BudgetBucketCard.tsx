@@ -153,9 +153,8 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   </Button>
                 </div>
               ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onStartEditingLimit(bucket.id);
@@ -171,7 +170,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   className="text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-sm"
                 >
                   ${bucket.limit}
-                </span>
+                </button>
               )}
             </div>
             {spent.pending > 0 && (

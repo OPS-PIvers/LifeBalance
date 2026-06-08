@@ -84,22 +84,25 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
   // Hero Metrics (Kept from original)
   const weeklyProgress = useMemo(() => {
+    if (activeTab !== 'pulse') return { current: 0, last: 0, change: 0 };
+
     const now = new Date();
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
     const lastWeekStart = subWeeks(currentWeekStart, 1);
-    const lastWeekEnd = subDays(currentWeekStart, 1);
+    // Pre-compute boundary strings once — avoids parseISO per date entry in the loop
+    const currentWeekStartStr = format(currentWeekStart, 'yyyy-MM-dd');
+    const lastWeekStartStr = format(lastWeekStart, 'yyyy-MM-dd');
+    const lastWeekEndStr = format(subDays(currentWeekStart, 1), 'yyyy-MM-dd');
 
     let currentWeekPoints = 0;
     let lastWeekPoints = 0;
 
     habits.forEach(habit => {
+      const habitPoints = habit.type === 'negative' ? -habit.basePoints : habit.basePoints;
       habit.completedDates?.forEach(dateStr => {
-        const date = parseISO(dateStr);
-        const habitPoints = habit.type === 'negative' ? -habit.basePoints : habit.basePoints;
-        
-        if (date >= currentWeekStart) {
+        if (dateStr >= currentWeekStartStr) {
           currentWeekPoints += habitPoints;
-        } else if (date >= lastWeekStart && date <= lastWeekEnd) {
+        } else if (dateStr >= lastWeekStartStr && dateStr <= lastWeekEndStr) {
           lastWeekPoints += habitPoints;
         }
       });
@@ -117,15 +120,18 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
       last: lastWeekPoints,
       change: Math.round(percentChange)
     };
-  }, [habits]);
+  }, [activeTab, habits]);
 
   const consistencyScore = useMemo(() => {
+    if (activeTab !== 'pulse') return 0;
+
     let totalExpected = 0;
     let totalCompleted = 0;
-    const thirtyDaysAgo = subDays(new Date(), 30);
+    // Pre-compute the cutoff string once — avoids parseISO per entry in the inner loop
+    const thirtyDaysAgoStr = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
     habits.forEach(habit => {
-      const recentCompletions = habit.completedDates?.filter(d => parseISO(d) >= thirtyDaysAgo).length || 0;
+      const recentCompletions = habit.completedDates?.filter(d => d >= thirtyDaysAgoStr).length || 0;
       if (habit.period === 'daily') {
         totalExpected += 30;
       } else {
@@ -136,7 +142,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
     if (totalExpected === 0) return 0;
     return Math.min(Math.round((totalCompleted / totalExpected) * 100), 100);
-  }, [habits]);
+  }, [activeTab, habits]);
 
   const streakStats = useMemo(() => {
     const activeStreaks = habits.filter(h => h.streakDays > 0);
@@ -144,20 +150,32 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   }, [habits]);
 
   // Chart A: Balance (Points vs Spending)
-  const pulseData = useMemo(() => calculatePulseData(habits, transactions, 14), [habits, transactions]);
+  const pulseData = useMemo(
+    () => activeTab === 'pulse' ? calculatePulseData(habits, transactions, 14) : [],
+    [activeTab, habits, transactions]
+  );
 
   // Chart B: Week-over-Week
-  const weeklyComparisonData = useMemo(() => calculateWeeklyComparison(habits), [habits]);
+  const weeklyComparisonData = useMemo(
+    () => activeTab === 'pulse' ? calculateWeeklyComparison(habits) : [],
+    [activeTab, habits]
+  );
 
   // ==========================================
   // VIEW 2: BEHAVIOR (HABITS)
   // ==========================================
 
   // Chart C: Consistency Radar
-  const radarData = useMemo(() => calculateHabitConsistency(habits), [habits]);
+  const radarData = useMemo(
+    () => activeTab === 'behavior' ? calculateHabitConsistency(habits) : [],
+    [activeTab, habits]
+  );
 
   // Chart D: Heatmap
-  const heatmapData = useMemo(() => calculateHeatmapData(habits), [habits]);
+  const heatmapData = useMemo(
+    () => activeTab === 'behavior' ? calculateHeatmapData(habits) : [],
+    [activeTab, habits]
+  );
 
   // ==========================================
   // VIEW 3: WALLET (FINANCE)
@@ -165,6 +183,8 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
 
   // Chart E: Burn Down
   const burnDownData = useMemo(() => {
+    if (activeTab !== 'wallet') return [];
+
     // Determine period. Default to last 30 days if no current period
     const start = currentPeriodId || format(subDays(new Date(), 30), 'yyyy-MM-dd');
     const end = format(addDays(parseISO(start), 30), 'yyyy-MM-dd'); // Default to 30 day window
@@ -179,10 +199,13 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
     }
 
     return calculateBurnDown(transactions, start, end, totalBudget);
-  }, [transactions, currentPeriodId, buckets]);
+  }, [activeTab, transactions, currentPeriodId, buckets]);
 
   // Chart F: Variable Expense Trend
-  const { data: trendData, categories: trendCategories } = useMemo(() => calculateCategoryTrend(transactions), [transactions]);
+  const { data: trendData, categories: trendCategories } = useMemo(
+    () => activeTab === 'wallet' ? calculateCategoryTrend(transactions) : { data: [], categories: [] },
+    [activeTab, transactions]
+  );
 
   const tabs: TabConfig[] = [
     { id: 'pulse', label: 'Pulse', icon: Activity },

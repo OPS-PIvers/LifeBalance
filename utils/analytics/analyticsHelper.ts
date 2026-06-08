@@ -104,13 +104,12 @@ export const calculateWeeklyComparison = (habits: Habit[]) => {
 
 export const calculateHabitConsistency = (habits: Habit[]) => {
   const categoryStats = new Map<string, number>();
-  const cutoffDate = subDays(new Date(), 90);
+  // Pre-compute the cutoff string once — avoids calling new Date() + parseISO per entry
+  const cutoffStr = format(subDays(new Date(), 90), 'yyyy-MM-dd');
 
   habits.forEach(habit => {
-    const recentCompletions = habit.completedDates?.filter(dateStr => {
-      const completionDate = parseISO(dateStr);
-      return completionDate >= cutoffDate;
-    }).length || 0;
+    // Compare ISO date strings directly (lexicographic order equals chronological)
+    const recentCompletions = habit.completedDates?.filter(dateStr => dateStr >= cutoffStr).length || 0;
 
     const points = recentCompletions * habit.basePoints;
     categoryStats.set(habit.category, (categoryStats.get(habit.category) || 0) + points);

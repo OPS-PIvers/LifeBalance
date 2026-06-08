@@ -137,6 +137,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     amount: '',
     date: ''
   });
+  const [editErrors, setEditErrors] = useState<{ amount?: string; merchant?: string }>({});
 
   // Memoize member lookup Map for O(1) access
   const memberMap = useMemo(() => {
@@ -184,6 +185,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
             amount: item.amount.toString(),
             date: item.date
         });
+        setEditErrors({});
         setIsEditing(true);
     }
   };
@@ -192,15 +194,24 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       if (!isTransactionQueueItem(item)) return;
 
       const amount = parseFloat(editForm.amount);
+      const errors: { amount?: string; merchant?: string } = {};
+
       if (isNaN(amount) || amount <= 0) {
-          toast.error("Please enter a valid amount");
-          return;
+          errors.amount = "Please enter a valid amount";
       }
       if (!editForm.merchant.trim()) {
-          toast.error("Merchant name is required");
+          errors.merchant = "Merchant name is required";
+      }
+
+      if (Object.keys(errors).length > 0) {
+          setEditErrors(errors);
+          // Also surface via toast for sighted users
+          const firstError = errors.amount ?? errors.merchant ?? '';
+          toast.error(firstError);
           return;
       }
 
+      setEditErrors({});
       try {
           await updateTransaction(item.id, {
               merchant: editForm.merchant,
@@ -447,6 +458,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     label="Merchant"
                     value={editForm.merchant}
                     onChange={e => setEditForm({...editForm, merchant: e.target.value})}
+                    error={editErrors.merchant}
                   />
                   <div className="flex gap-2">
                     <Input
@@ -456,6 +468,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                         value={editForm.amount}
                         onChange={e => setEditForm({...editForm, amount: e.target.value})}
                         icon={<span className="text-slate-400 dark:text-slate-500 font-bold">$</span>}
+                        error={editErrors.amount}
                     />
                     <Input
                         label="Date"

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LogOut, Settings, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface ProfileMenuProps {
@@ -14,7 +14,7 @@ interface ProfileMenuProps {
 
 const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef }) => {
   const { currentUser, logout } = useAuth();
-  const { household } = useHousehold();
+  const { household } = useHouseholdCore();
   // useFocusTrap manages focus-in on open, Tab trapping, and focus restoration on close.
   const menuRef = useFocusTrap<HTMLDivElement>(isOpen);
   const navigate = useNavigate();
@@ -103,15 +103,15 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
   return (
     <div
       ref={menuRef}
-      className="absolute top-14 right-4 z-dropdown w-64 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
+      className="absolute top-14 right-4 z-dropdown w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
       role="menu"
       aria-label="Profile Menu"
       onKeyDown={handleMenuKeyDown}
     >
       {/* User Info Header */}
-      <div className="bg-brand-50 p-4 border-b border-brand-100">
+      <div className="bg-brand-50 dark:bg-slate-700/50 p-4 border-b border-brand-100 dark:border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-brand-200 flex items-center justify-center text-brand-700 font-bold text-lg">
+          <div className="w-10 h-10 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 font-bold text-lg">
             {currentUser?.displayName ? (
               <span>{currentUser.displayName.charAt(0)}</span>
             ) : (
@@ -119,14 +119,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-brand-900 truncate">
+            <p className="font-semibold text-brand-900 dark:text-slate-100 truncate">
               {currentUser?.displayName || 'User'}
             </p>
-            <p className="text-xs text-brand-600 truncate">{currentUser?.email}</p>
+            <p className="text-xs text-brand-600 dark:text-slate-400 truncate">{currentUser?.email}</p>
           </div>
         </div>
         {household && (
-          <div className="mt-3 text-xs font-medium text-brand-500 bg-brand-100/50 py-1 px-2 rounded-md truncate">
+          <div className="mt-3 text-xs font-medium text-brand-500 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-600/50 py-1 px-2 rounded-md truncate">
             Household: {household.name}
           </div>
         )}
@@ -139,7 +139,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             navigate('/settings');
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-brand-700 rounded-lg transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
           role="menuitem"
           tabIndex={-1}
         >
@@ -147,11 +147,11 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           Settings
         </button>
 
-        <hr className="my-1 border-gray-100" />
+        <hr className="my-1 border-gray-100 dark:border-slate-700" />
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-left"
           role="menuitem"
           tabIndex={-1}
         >

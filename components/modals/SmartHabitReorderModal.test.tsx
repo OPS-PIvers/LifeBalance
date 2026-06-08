@@ -59,7 +59,11 @@ describe('SmartHabitReorderModal', () => {
 
     expect(screen.getByText('Analyzing your routine...')).toBeInTheDocument();
     expect(screen.getByText('Gemini is finding the best flow for your day.')).toBeInTheDocument();
-    expect(reorganizeHabits).toHaveBeenCalledWith('house-123', mockHabits);
+    // reorganizeHabits is now loaded via dynamic import(), so the call happens
+    // after the import promise resolves rather than synchronously on mount.
+    await waitFor(() => {
+      expect(reorganizeHabits).toHaveBeenCalledWith('house-123', mockHabits);
+    });
   });
 
   it('displays the plan when analysis succeeds', async () => {

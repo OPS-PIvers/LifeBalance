@@ -27,15 +27,13 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   const { householdId } = useHouseholdCore();
   const [editingHabitId, setEditingHabitId] = useState<string | null>(null);
 
+  // Stable date strings derived once per render cycle — avoids repeated new Date()/format
+  // calls inside the per-habit loop and the O(N) includes() scan on completedDates.
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const weekStartStr = useMemo(() => format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'), []);
+
   // Derived state for the list
   const contributions = useMemo(() => {
-    // Only calculate these once per render logic, but inside useMemo they are re-calculated on dep change.
-    // Copilot suggested moving them out, but they depend on "current time" effectively.
-    // For consistency, we keep them here.
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-
     // Filter and map habits based on view
     return habits
       .map(habit => {
@@ -44,11 +42,14 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         let relevantCount = 0;
         let relevantDates: string[] = [];
 
+        // O(1) membership lookup per date — avoids O(N) Array.includes() per habit
+        const completedSet = new Set(habit.completedDates);
+
         const currentStreak = streakForHabit(habit);
         const multiplier = getMultiplier(currentStreak, habit.type === 'positive', habit.period);
 
         if (view === 'daily') {
-          if (!habit.completedDates.includes(today)) return null;
+          if (!completedSet.has(todayStr)) return null;
           if (habit.count === 0) return null; // Should have count if completed today
 
           if (habit.scoringType === 'incremental') {
@@ -67,7 +68,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           }
         } else if (view === 'weekly') {
           // Find completions this week
-          relevantDates = habit.completedDates.filter(d => d >= weekStartStr && d <= today);
+          relevantDates = habit.completedDates.filter(d => d >= weekStartStr && d <= todayStr);
           if (relevantDates.length === 0) return null;
 
           if (habit.scoringType === 'incremental') {
@@ -76,7 +77,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
              // This is used for display purposes.
              let totalUnits = 0;
              for (const dateStr of relevantDates) {
-                if (dateStr === today) {
+                if (dateStr === todayStr) {
                     totalUnits += habit.count ?? 0;
                 } else {
                     // We don't store historical per-day counts; assume at least 1 unit.
@@ -112,7 +113,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
       })
       .filter((h): h is NonNullable<typeof h> => h !== null)
       .sort((a, b) => b.calculatedPoints - a.calculatedPoints);
-  }, [habits, view]);
+  }, [habits, view, todayStr, weekStartStr]);
 
   const getTitle = () => {
     switch (view) {

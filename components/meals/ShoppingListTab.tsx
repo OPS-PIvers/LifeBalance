@@ -254,8 +254,20 @@ const ShoppingListTab: React.FC = () => {
     }
   };
 
-  // Derive hasPendingItems to optimize render loop for disabled state
-  const hasPendingItems = shoppingList.some(i => !i.isPurchased);
+  // Memoized flags derived from shoppingList to avoid two O(N) scans on every render
+  const { hasPendingItems, hasPurchasedItems } = useMemo(() => {
+    let hasPendingItems = false;
+    let hasPurchasedItems = false;
+    for (const item of shoppingList) {
+      if (item.isPurchased) {
+        hasPurchasedItems = true;
+      } else {
+        hasPendingItems = true;
+      }
+      if (hasPendingItems && hasPurchasedItems) break;
+    }
+    return { hasPendingItems, hasPurchasedItems };
+  }, [shoppingList]);
 
   const handleReorder = (newOrder: ShoppingItem[]) => {
     setItems(newOrder);
@@ -571,7 +583,7 @@ const ShoppingListTab: React.FC = () => {
         )}
 
         {/* Clear Checked */}
-        {shoppingList.some(i => i.isPurchased) && (
+        {hasPurchasedItems && (
             <div className="flex justify-end">
                 <button
                     onClick={() => setIsClearCheckedConfirmOpen(true)}

@@ -3,7 +3,6 @@ import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } fr
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { reorganizeHabits } from '@/services/geminiService';
 import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';
 
@@ -32,6 +31,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
         setIsLoading(true);
         setError(null);
         try {
+          const { reorganizeHabits } = await import('@/services/geminiService');
           const result = await reorganizeHabits(householdId, habitsRef.current);
           setPlan(result);
         } catch (err) {

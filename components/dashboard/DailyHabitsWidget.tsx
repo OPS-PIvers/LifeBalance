@@ -23,7 +23,9 @@ export const DailyHabitsWidget: React.FC = () => {
       .filter(h => h.period === 'daily') // Show all daily habits (presets and custom)
       .map(habit => {
         const isStale = isHabitStale(habit);
-        const isCompleted = habit.completedDates.includes(today);
+        // Build a Set to get O(1) lookups instead of O(N) Array.includes per habit.
+        const completedSet = new Set(habit.completedDates);
+        const isCompleted = completedSet.has(today);
         const currentCount = isStale ? 0 : habit.count;
         const target = habit.targetCount || 1;
         const progress = Math.min(100, Math.round((currentCount / target) * 100));
@@ -156,8 +158,9 @@ export const DailyHabitsWidget: React.FC = () => {
                      {/* Streak */}
                      {habit.streakDays > 0 && (
                         <span className={`flex items-center gap-0.5 ${habit.streakDays >= 3 ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                           <Flame size={10} className={`${habit.streakDays >= 3 ? 'fill-orange-500' : ''} ${habit.streakDays >= 7 ? 'motion-safe:animate-pulse' : ''}`} />
-                           {habit.streakDays}
+                           <Flame aria-hidden="true" size={10} className={`${habit.streakDays >= 3 ? 'fill-orange-500' : ''} ${habit.streakDays >= 7 ? 'motion-safe:animate-pulse' : ''}`} />
+                           <span aria-hidden="true">{habit.streakDays}</span>
+                           <span className="sr-only">{habit.streakDays} day streak</span>
                         </span>
                      )}
                   </div>
