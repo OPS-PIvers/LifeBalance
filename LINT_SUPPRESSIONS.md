@@ -1,6 +1,6 @@
 # Lint and Type Error Suppressions Audit
 
-**Last Updated:** 2026-06-07
+**Last Updated:** 2026-06-08
 
 **WARNING:** This document tracks all ESLint and TypeScript error suppressions in the codebase. These suppressions are **technical debt** and should be eliminated whenever possible.
 
@@ -33,13 +33,15 @@ Legitimate (per policy — keep):
   `contexts/ThemeContext.tsx`, `contexts/FirebaseHouseholdContext.tsx` — standard React pattern.
 
 Candidates to eliminate when next editing these files:
-- `@typescript-eslint/no-explicit-any`: `components/analytics/CustomTooltip.tsx` (×2, recharts
-  payload typing), `hooks/useGroceryOptimizer.ts` (×2, dynamic AI response), `utils/firestoreSanitizer.ts`,
-  `contexts/MockAuthContext.tsx` — type the third-party/dynamic shapes with `unknown` + guards.
 - `react-hooks/set-state-in-effect`: `components/modals/BucketFormModal.tsx`,
   `components/meals/ShoppingListTab.tsx`, `components/budget/BudgetBucketCard.tsx` — restructure to
-  derive state instead of setting it in an effect.
-- `@typescript-eslint/no-unused-vars`: `pages/Settings.tsx` (intentional destructure-omit).
+  derive state instead of setting it in an effect. (`ShoppingListTab`'s drag-reorder sync is the
+  pragmatic exception — eliminating it requires a `Reorder.Group` refactor; see `todo/`.)
+
+Resolved during the 2026-06-08 optimization pass (no longer suppressed):
+- `@typescript-eslint/no-explicit-any` in `components/analytics/CustomTooltip.tsx` (×2, now `unknown`
+  + a `typeof === 'number'` guard), `hooks/useGroceryOptimizer.ts` (×2, now `Record<string, unknown>`),
+  and `utils/firestoreSanitizer.ts` (now `unknown`/`Record<string, unknown>`).
 
 These were out of scope for the optimization pass (granular, pre-existing, and in third-party/
 dynamic-data boundaries); they are tracked here so they're addressed as those files are touched.

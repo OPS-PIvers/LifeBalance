@@ -14,6 +14,18 @@ export default defineConfig(({ command }) => {
         globals: true,
         environment: 'jsdom',
         setupFiles: './vitest.setup.ts',
+        coverage: {
+          provider: 'v8',
+          include: ['**/*.{ts,tsx}'],
+          exclude: [
+            '**/*.test.*',
+            '**/*.d.ts',
+            'functions/**',
+            'dist/**',
+            '**/*.config.*',
+            'vitest.setup.ts',
+          ],
+        },
       },
       resolve: {
         alias: {
@@ -26,6 +38,7 @@ export default defineConfig(({ command }) => {
         pure: ['console.log', 'console.debug', 'console.info'],
       } : {},
       build: {
+        sourcemap: 'hidden',
         rollupOptions: {
           output: {
             manualChunks: {

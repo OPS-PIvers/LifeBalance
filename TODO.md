@@ -26,7 +26,6 @@ This document lists all known missing features, incomplete functionalities, and 
 
 ## 4. Cleanup & Technical Debt
 
-- [ ] **Remove Legacy Files**: Delete `components/modals/ChallengeFormModal.legacy.tsx` if it is truly unused.
 - [ ] **Decide on Weather Feature**: `WEATHER_IMPLEMENTATION.md` exists, but the feature is not implemented. Either implement it (High effort) or remove the `weatherSensitive` field from the schema and the doc (Cleanup).
 - [ ] **Optimize Context**: `FirebaseHouseholdContext` is very large. Consider splitting it into smaller contexts (e.g., `FinancialContext`, `HabitContext`) to prevent unnecessary re-renders.
 

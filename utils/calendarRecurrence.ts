@@ -203,8 +203,23 @@ export function expandCalendarItems(
     allInstances.push(...activeInstances);
   }
 
-  // Add non-recurring items and paid instances (deleted instances should not show)
-  allInstances.push(...nonRecurringItems, ...paidInstances);
+  // Add non-recurring items and paid instances that fall within the range.
+  // (Deleted instances are never included regardless.)
+  // We mirror the same inclusive-on-both-ends check used by generateRecurringInstances
+  // for non-recurring items so the returned list consistently honours [rangeStart, rangeEnd].
+  const start = startOfDay(rangeStart);
+  const end = startOfDay(rangeEnd);
+
+  const isInRange = (dateStr: string): boolean => {
+    const d = parseISO(dateStr);
+    return (isSameDay(d, start) || isAfter(d, start)) &&
+           (isSameDay(d, end) || isBefore(d, end));
+  };
+
+  allInstances.push(
+    ...nonRecurringItems.filter(item => isInRange(item.date)),
+    ...paidInstances.filter(item => isInRange(item.date)),
+  );
 
   return allInstances;
 }

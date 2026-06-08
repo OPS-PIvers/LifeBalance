@@ -1,4 +1,4 @@
-import { BudgetBucket, Transaction } from '@/types/schema';
+import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { sumMoney } from '@/utils/money';
 
 export interface BucketSpent {
@@ -54,6 +54,7 @@ export function calculateBucketSpent(
   // Sum up spending per bucket
   relevantTransactions.forEach(tx => {
     if (!tx.category) return; // Skip uncategorized transactions
+    if (tx.category === INCOME_CATEGORY) return; // Skip income transactions
 
     const bucketIds = bucketIdsByName.get(tx.category.toLowerCase());
 
