@@ -7,6 +7,7 @@ import {
   isSameWeek,
   isValid,
   startOfISOWeek,
+  startOfWeek,
   subWeeks,
 } from 'date-fns';
 
@@ -555,4 +556,74 @@ export const calculatePointsForDateRange = (
   }
 
   return totalPoints;
+};
+
+/** Shared shape of the household points triple. */
+export interface HouseholdPoints {
+  daily: number;
+  weekly: number;
+  total: number;
+}
+
+/** Result of recomputing the household points from habit completions. */
+export interface PointsSyncResult {
+  /** The points the household doc *should* hold given current completions. */
+  points: HouseholdPoints;
+  /** True when any of daily/weekly/total differs from the stored values. */
+  needsUpdate: boolean;
+}
+
+/**
+ * Pure recompute of the corrective household-points sync.
+ *
+ * Derives the canonical daily and weekly totals from actual habit completions,
+ * then decides the cumulative total:
+ *   - if every completion falls within the current week (and at least one
+ *     completion exists), the total equals the weekly total;
+ *   - otherwise the total is the larger of the stored total and the weekly
+ *     total, so an existing cumulative total is never clamped downward.
+ *
+ * Extracted from `FirebaseHouseholdContext`'s `syncHouseholdPoints` so the
+ * (otherwise inline, O(habits × completedDates)) recompute is unit-testable and
+ * shared by the `usePointsSync` hook. Behaviour is identical to the previous
+ * inline logic.
+ *
+ * @param habits - All habits to score
+ * @param currentPoints - The points currently stored on the household doc
+ * @param now - "Now" (injected for deterministic tests)
+ * @returns The corrected points plus whether they differ from `currentPoints`
+ */
+export const computeHouseholdPointsSync = (
+  habits: Habit[],
+  currentPoints: HouseholdPoints,
+  now: Date,
+): PointsSyncResult => {
+  const today = format(now, 'yyyy-MM-dd');
+  const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+  const correctDaily = calculatePointsForDate(habits, today);
+  const correctWeekly = calculatePointsForDateRange(habits, weekStartStr, today);
+
+  // If every completion is within the current week, the cumulative total equals
+  // the weekly total; otherwise keep the stored total (don't clamp it down).
+  const allDatesThisWeek = habits.every(habit =>
+    habit.completedDates.every(date => date >= weekStartStr)
+  );
+  const correctTotal =
+    allDatesThisWeek && habits.some(h => h.completedDates.length > 0)
+      ? correctWeekly
+      : Math.max(currentPoints.total, correctWeekly);
+
+  const points: HouseholdPoints = {
+    daily: correctDaily,
+    weekly: correctWeekly,
+    total: correctTotal,
+  };
+
+  const needsUpdate =
+    currentPoints.daily !== correctDaily ||
+    currentPoints.weekly !== correctWeekly ||
+    currentPoints.total !== correctTotal;
+
+  return { points, needsUpdate };
 };
