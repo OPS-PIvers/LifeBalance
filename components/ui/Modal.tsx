@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
@@ -111,7 +112,7 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div
       className={clsx(
         "fixed inset-0 z-modal flex p-4",
@@ -152,6 +153,7 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
