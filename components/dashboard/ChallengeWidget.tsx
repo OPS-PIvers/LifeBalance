@@ -1,27 +1,53 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Pencil } from 'lucide-react';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 interface ChallengeWidgetProps {
   onOpenModal: () => void;
 }
 
-export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal }) => {
+export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onOpenModal }) => {
   const { activeChallenge, habits, primaryYearlyGoal } = useGamification();
 
-  if (!activeChallenge) return null;
+  const linkedHabits = useMemo(
+    () => (activeChallenge ? habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id)) : []),
+    [activeChallenge, habits]
+  );
 
-  const linkedHabits = habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id));
-  const challengeProgressData = calculateChallengeProgress(activeChallenge, linkedHabits);
+  const challengeProgressData = useMemo(
+    () => (activeChallenge ? calculateChallengeProgress(activeChallenge, linkedHabits) : null),
+    [activeChallenge, linkedHabits]
+  );
+
+  // Compute today's day-of-month once (stable within a render pass; avoids
+  // creating a new Date on every JSX evaluation).
+  const todayDayOfMonth = useMemo(() => {
+    const today = getLocalDateString();
+    return parseInt(today.slice(8, 10), 10);
+  }, []);
+
+  if (!activeChallenge || !challengeProgressData) return null;
+
   const challengeTarget = getEffectiveTargetValue(activeChallenge);
   const challengeProgress = challengeProgressData.progress;
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onOpenModal();
+    }
+  };
+
   return (
-    <div
+    <button
+      type="button"
+      aria-label="Open Challenge Hub"
       onClick={onOpenModal}
-      className="bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+      onKeyDown={handleKeyDown}
+      className="w-full text-left bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
     >
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
@@ -32,7 +58,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
           <h2 className="font-bold text-lg">{activeChallenge.title}</h2>
           <div className="flex items-center gap-2">
             <span className="text-xs bg-white/10 px-2 py-1 rounded-lg font-medium">
-              Day {new Date().getDate()} of 30
+              Day {todayDayOfMonth} of 30
             </span>
             <Pencil size={14} className="text-brand-300 opacity-70" />
           </div>
@@ -97,6 +123,8 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = ({ onOpenModal })
           </div>
         )}
       </div>
-    </div>
+    </button>
   );
-};
+});
+
+ChallengeWidget.displayName = 'ChallengeWidget';

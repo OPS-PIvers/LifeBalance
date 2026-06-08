@@ -50,6 +50,7 @@ export const SafeToSpendHero: React.FC = () => {
         }}
         aria-expanded={expanded}
         aria-controls="sts-breakdown"
+        aria-label={expanded ? 'Hide Safe to Spend breakdown' : 'Show Safe to Spend breakdown'}
         className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
       >
         <div className="flex items-start justify-between">

@@ -25,19 +25,32 @@ const mockBuckets = [
 const mockCurrentUser = { uid: 'user123' };
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
-  useHousehold: vi.fn(),
+  useFinance: vi.fn(),
+  useGamification: vi.fn(),
+  useTodos: vi.fn(),
+  useHouseholdCore: vi.fn(),
 }));
+
+const setSliceMocks = (overrides: { addToDo?: Mock } = {}) => {
+  (HouseholdContext.useFinance as Mock).mockReturnValue({
+    updateBucketLimit: mockUpdateBucketLimit,
+    buckets: mockBuckets,
+  });
+  (HouseholdContext.useGamification as Mock).mockReturnValue({
+    addHabit: mockAddHabit,
+  });
+  (HouseholdContext.useTodos as Mock).mockReturnValue({
+    addToDo: overrides.addToDo ?? mockAddToDo,
+  });
+  (HouseholdContext.useHouseholdCore as Mock).mockReturnValue({
+    currentUser: mockCurrentUser,
+  });
+};
 
 describe('useInsightActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (HouseholdContext.useHousehold as Mock).mockReturnValue({
-      updateBucketLimit: mockUpdateBucketLimit,
-      addHabit: mockAddHabit,
-      addToDo: mockAddToDo,
-      buckets: mockBuckets,
-      currentUser: mockCurrentUser,
-    });
+    setSliceMocks();
   });
 
   it('should handle update_bucket action', async () => {
@@ -169,13 +182,7 @@ describe('useInsightActions', () => {
     // Suppress console.error for this test as we expect it
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    (HouseholdContext.useHousehold as Mock).mockReturnValue({
-      updateBucketLimit: mockUpdateBucketLimit,
-      addHabit: mockAddHabit,
-      addToDo: vi.fn().mockRejectedValue(new Error('Network error')),
-      buckets: mockBuckets,
-      currentUser: mockCurrentUser,
-    });
+    setSliceMocks({ addToDo: vi.fn().mockRejectedValue(new Error('Network error')) });
 
     const { result } = renderHook(() => useInsightActions());
 

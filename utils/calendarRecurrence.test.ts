@@ -225,6 +225,86 @@ describe('calendarRecurrence', () => {
       expect(jan8?.id).toBe('paid-1');
     });
 
+    it('excludes out-of-range non-recurring items and paid instances', () => {
+      // Non-recurring item inside the range
+      const inRangeItem: CalendarItem = {
+        ...baseItem,
+        id: 'in-range',
+        date: '2024-01-08',
+        isRecurring: false,
+      };
+
+      // Non-recurring item before the range start
+      const beforeRangeItem: CalendarItem = {
+        ...baseItem,
+        id: 'before-range',
+        date: '2023-12-31',
+        isRecurring: false,
+      };
+
+      // Non-recurring item after the range end
+      const afterRangeItem: CalendarItem = {
+        ...baseItem,
+        id: 'after-range',
+        date: '2024-01-16',
+        isRecurring: false,
+      };
+
+      // A recurring template
+      const recurringTemplate: CalendarItem = {
+        ...baseItem,
+        id: 'template-2',
+        date: '2024-01-01',
+        isRecurring: true,
+        frequency: 'weekly',
+      };
+
+      // Paid instance inside the range (replaces the Jan 1 generated instance)
+      const paidInRange: CalendarItem = {
+        ...baseItem,
+        id: 'paid-in-range',
+        date: '2024-01-01',
+        isPaid: true,
+        parentRecurringId: 'template-2',
+      };
+
+      // Paid instance outside the range — should be excluded
+      const paidOutOfRange: CalendarItem = {
+        ...baseItem,
+        id: 'paid-out-of-range',
+        date: '2023-12-25',
+        isPaid: true,
+        parentRecurringId: 'template-2',
+      };
+
+      const items = [
+        inRangeItem,
+        beforeRangeItem,
+        afterRangeItem,
+        recurringTemplate,
+        paidInRange,
+        paidOutOfRange,
+      ];
+
+      const rangeStart = new Date('2024-01-01');
+      const rangeEnd = new Date('2024-01-15');
+
+      const result = expandCalendarItems(items, rangeStart, rangeEnd);
+
+      const ids = result.map(i => i.id).sort();
+
+      // inRangeItem (non-recurring, inside range) must be present
+      expect(ids).toContain('in-range');
+
+      // paidInRange (paid instance replacing Jan 1 generated) must be present
+      expect(ids).toContain('paid-in-range');
+
+      // Items outside the range must be absent
+      expect(ids).not.toContain('before-range');
+      expect(ids).not.toContain('after-range');
+      expect(ids).not.toContain('paid-out-of-range');
+    });
+
     it('filters out deleted instances', () => {
       const recurringItem: CalendarItem = {
         ...baseItem,

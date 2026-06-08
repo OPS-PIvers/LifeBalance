@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -57,9 +57,10 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
 
   const [isRecurring, setIsRecurring] = useState(false);
-  const [transactionDate, setTransactionDate] = useState(() => initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+  const [transactionDate, setTransactionDate] = useState(() => initialData?.date || getLocalDateString());
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
 
   // Focus the amount field on desktop; never on touch (avoids iOS keyboard pop).
   const amountInputRef = useAutoFocus<HTMLInputElement>();
@@ -89,35 +90,46 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
 
   const handleManualSave = async () => {
     if (!amount || !merchant) {
-      toast.error("Please fill in required fields");
+      const msg = "Please fill in required fields";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
 
     // Validate merchant is not just whitespace
     const trimmedMerchant = merchant.trim();
     if (!trimmedMerchant) {
-      toast.error("Please enter a merchant name");
+      const msg = "Please enter a merchant name";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
 
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      toast.error("Please enter a valid amount");
+      const msg = "Please enter a valid amount";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
     if (!transactionDate) {
-      toast.error("Please select a date");
+      const msg = "Please select a date";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
     // Future dates are allowed - logic sets status to pending_review if future
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = getLocalDateString();
     const isFuture = transactionDate > today;
 
     if (!category || !dynamicCategories.includes(category)) {
-      toast.error("Please select a valid category");
+      const msg = "Please select a valid category";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
 
+    setFormError('');
     setIsSubmitting(true);
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
@@ -408,6 +420,12 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           Manual entries update your budget immediately without review.
         </p>
       </div>
+
+      {formError && (
+        <p role="alert" aria-live="assertive" className="text-sm font-medium text-rose-600 dark:text-rose-400">
+          {formError}
+        </p>
+      )}
 
       <Button
         onClick={handleManualSave}

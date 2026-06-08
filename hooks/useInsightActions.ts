@@ -1,16 +1,13 @@
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useHouseholdCore, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { InsightAction } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 
 export const useInsightActions = () => {
-  const {
-    updateBucketLimit,
-    addHabit,
-    addToDo,
-    buckets,
-    currentUser
-  } = useHousehold();
+  const { updateBucketLimit, buckets } = useFinance();
+  const { addHabit } = useGamification();
+  const { addToDo } = useTodos();
+  const { currentUser } = useHouseholdCore();
 
   const handleAction = async (action: InsightAction) => {
     try {

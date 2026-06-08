@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
 import RewardsModal from '@/components/modals/RewardsModal';
 import SafeToSpendModal from '@/components/modals/SafeToSpendModal';
@@ -9,7 +9,8 @@ import FeedbackModal from '@/components/modals/FeedbackModal';
 import ProfileMenu from './ProfileMenu';
 
 const TopToolbar: React.FC = () => {
-  const { safeToSpend, dailyPoints, weeklyPoints } = useHousehold();
+  const { safeToSpend } = useFinance();
+  const { dailyPoints, weeklyPoints } = useGamification();
   const { currentUser } = useAuth();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);

@@ -50,9 +50,15 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           className
         )}
         disabled={isLoading || disabled}
+        aria-busy={isLoading}
         {...props}
       >
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+        {isLoading && (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            <span className="sr-only">Loading…</span>
+          </>
+        )}
         {!isLoading && leftIcon}
         {children}
         {!isLoading && rightIcon}

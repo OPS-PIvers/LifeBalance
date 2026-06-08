@@ -52,6 +52,7 @@ const StreakFlame: React.FC<StreakFlameProps> = ({
       animate={animate}
       transition={animate ? transition : undefined}
       style={{ transformOrigin: 'center bottom' }}
+      aria-hidden="true"
     >
       <Flame size={size} className={className} fill={shouldFill ? 'currentColor' : 'none'} />
     </motion.span>

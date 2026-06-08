@@ -31,6 +31,7 @@ import {
 } from '@/utils/habitLogic';
 import toast from 'react-hot-toast';
 import { format, parseISO, startOfWeek } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 export const useHabitActions = (
   householdId: string | null,
@@ -240,7 +241,7 @@ export const useHabitActions = (
     }
 
     // Filter out today's date if present (handling both stale and non-stale cases)
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = getLocalDateString();
     const newCompletedDates = habit.completedDates.filter(d => d !== today);
 
     // Atomically commit habit state + points in a single batch so both writes
@@ -345,7 +346,7 @@ export const useHabitActions = (
       // mirroring deleteHabitSubmission / updateHabitSubmission. Total is always
       // adjusted (lifetime).
       if (pointsEarned !== 0) {
-        const today = format(new Date(), 'yyyy-MM-dd');
+        const today = getLocalDateString();
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
         const pointUpdates: Record<string, unknown> = {
@@ -458,7 +459,7 @@ export const useHabitActions = (
       deleteBatch.delete(submissionRef);
 
       // Points reversal (step 5)
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const today = getLocalDateString();
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
       const pointUpdates: Record<string, unknown> = {
@@ -543,7 +544,7 @@ export const useHabitActions = (
       // Step 5: Update household points
       if (pointsDelta !== 0) {
         const submissionDate = updates.date || originalSubmission.date;
-        const today = format(new Date(), 'yyyy-MM-dd');
+        const today = getLocalDateString();
         const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
         const pointUpdates: Record<string, unknown> = {

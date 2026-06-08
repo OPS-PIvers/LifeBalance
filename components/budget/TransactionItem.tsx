@@ -39,6 +39,15 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
+      role={isSelectionMode ? 'checkbox' : undefined}
+      aria-checked={isSelectionMode ? isSelected : undefined}
+      tabIndex={isSelectionMode ? 0 : undefined}
+      onKeyDown={isSelectionMode ? (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          onToggleSelection(tx.id);
+        }
+      } : undefined}
       className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-sm flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
           ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-300 ring-1 ring-slate-300 dark:ring-slate-600'
@@ -48,7 +57,11 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
       <div className="flex items-center gap-4 overflow-hidden">
         {/* Selection Checkbox */}
         {isSelectionMode && (
-          <div className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
+          <div
+            aria-label="Select transaction"
+            aria-hidden="true"
+            className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}
+          >
             {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded-md" />}
           </div>
         )}

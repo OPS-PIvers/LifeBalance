@@ -5,16 +5,14 @@ interface CustomTooltipPayloadEntry {
   value?: number | string;
   color?: string;
   fill?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload?: any;
+  payload?: unknown;
 }
 
 export interface CustomTooltipProps {
   active?: boolean;
   payload?: CustomTooltipPayloadEntry[];
   label?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  formatter?: (value: any) => React.ReactNode;
+  formatter?: (value: number) => React.ReactNode;
   suffix?: string;
 }
 
@@ -31,7 +29,7 @@ export const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, l
             />
             <span className="text-slate-300 font-medium">{entry.name}:</span>
             <span className="text-white font-bold font-mono">
-              {formatter ? formatter(entry.value) : entry.value}{suffix}
+              {formatter && typeof entry.value === 'number' ? formatter(entry.value) : entry.value}{suffix}
             </span>
           </div>
         ))}

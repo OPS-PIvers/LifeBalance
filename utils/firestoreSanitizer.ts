@@ -6,15 +6,10 @@
 export const MAX_FIRESTORE_STRING_LENGTH = 10000;
 
 /**
- * Recursively sanitizes an object for Firestore by removing undefined values,
- * trimming strings, and enforcing length limits to prevent abuse.
- * Firestore does not accept undefined values in documents.
- *
- * @param obj The object to sanitize
- * @returns A new object with undefined values removed, strings trimmed and truncated
+ * Internal recursive implementation; returns `unknown` to handle all value
+ * types (null, string, array, object, primitives) without a type lie.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const sanitizeFirestoreData = (obj: unknown): any => {
+const sanitizeValue = (obj: unknown): unknown => {
   if (obj === undefined) {
     return null;
   }
@@ -38,7 +33,7 @@ export const sanitizeFirestoreData = (obj: unknown): any => {
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeFirestoreData(item)).filter(item => item !== undefined);
+    return obj.map(item => sanitizeValue(item)).filter(item => item !== undefined);
   }
 
   if (typeof obj === 'object') {
@@ -62,7 +57,7 @@ export const sanitizeFirestoreData = (obj: unknown): any => {
     const newObj: Record<string, unknown> = {};
 
     Object.keys(record).forEach(key => {
-      const value = sanitizeFirestoreData(record[key]);
+      const value = sanitizeValue(record[key]);
       if (value !== undefined) {
         newObj[key] = value;
       }
@@ -72,3 +67,17 @@ export const sanitizeFirestoreData = (obj: unknown): any => {
 
   return obj;
 };
+
+/**
+ * Recursively sanitizes an object for Firestore by removing undefined values,
+ * trimming strings, and enforcing length limits to prevent abuse.
+ * Firestore does not accept undefined values in documents.
+ *
+ * Callers always pass plain objects; the return type is narrowed to
+ * `Record<string, unknown>` so the result can be spread into Firestore writes.
+ *
+ * @param obj The object to sanitize
+ * @returns A new object with undefined values removed, strings trimmed and truncated
+ */
+export const sanitizeFirestoreData = (obj: unknown): Record<string, unknown> =>
+  sanitizeValue(obj) as Record<string, unknown>;

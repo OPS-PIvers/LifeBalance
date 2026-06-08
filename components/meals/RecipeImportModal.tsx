@@ -2,8 +2,7 @@ import React, { useState, useId } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { FileText, Loader2, X, Sparkles } from 'lucide-react';
-import { parseRecipe } from '@/services/geminiService';
-import { Meal } from '@/types/schema';
+import type { Meal } from '@/types/schema';
 import toast from 'react-hot-toast';
 
 interface RecipeImportModalProps {
@@ -31,6 +30,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
 
     setIsParsing(true);
     try {
+      const { parseRecipe } = await import('@/services/geminiService');
       const result = await parseRecipe(householdId, text);
       onConfirm(result);
       onClose();

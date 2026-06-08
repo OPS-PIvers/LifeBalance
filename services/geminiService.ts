@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
-import { WeeklyPlan, WeeklyPlanConstraints } from "@/types/weeklyPlan";
+import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
 import { doc, runTransaction, collection, addDoc, serverTimestamp } from "firebase/firestore";
@@ -1747,11 +1747,11 @@ export const generateWeeklyPlan = async (
 
     // Normalize the AI's store array into the WeeklyPlan record + order.
     const storeArr = generated.stores ?? [];
-    const storesRecord: WeeklyPlan["stores"] = {};
+    const storesRecord: Record<string, WeeklyPlanStore> = {};
     const storeOrder: string[] = [];
     storeArr.forEach(s => {
       if (!s.key) return;
-      storesRecord![s.key] = { name: s.name, why: s.why };
+      storesRecord[s.key] = { name: s.name, why: s.why };
       storeOrder.push(s.key);
     });
 

@@ -1,4 +1,4 @@
-import React, { useState, Suspense } from 'react';
+import React, { useState, useCallback, Suspense } from 'react';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
@@ -43,10 +43,10 @@ const Dashboard: React.FC = () => {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [proposedChallenge, setProposedChallenge] = useState<CreateChallengePayload | null>(null);
 
-  const handleCreateChallenge = (payload: CreateChallengePayload) => {
+  const handleCreateChallenge = useCallback((payload: CreateChallengePayload) => {
     setProposedChallenge(payload);
     setIsChallengeModalOpen(true);
-  };
+  }, []);
 
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
@@ -192,8 +192,13 @@ const Dashboard: React.FC = () => {
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-           <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-white/5 animate-in zoom-in-95">
-             <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">Confirm Payment</h3>
+           <div
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="pay-bill-title"
+             className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-white/5 animate-in zoom-in-95"
+           >
+             <h3 id="pay-bill-title" className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">Confirm Payment</h3>
              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
                Select which account to deduct this payment from.
              </p>

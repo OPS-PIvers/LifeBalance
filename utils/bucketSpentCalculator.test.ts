@@ -69,6 +69,24 @@ describe('calculateBucketSpent', () => {
     expect(map.get('b2')).toEqual({ verified: 30, pending: 0 });
   });
 
+  it('excludes income transactions even when a bucket is named "Income"', () => {
+    // A bucket literally named "Income" must not accumulate income-category txns
+    // — those represent money coming in, not spending.
+    const buckets = [bucket('income-bucket', 'Income'), bucket('b2', 'Groceries')];
+    const transactions = [
+      tx('Income', 200, 'verified'),      // income txn — must be skipped
+      tx('Income', 100, 'pending_review'), // income pending — must be skipped
+      tx('Groceries', 30, 'verified'),     // normal spend — must be counted
+    ];
+
+    const map = calculateBucketSpent(buckets, transactions, '');
+
+    // Income bucket should remain at zero despite category name match
+    expect(map.get('income-bucket')).toEqual({ verified: 0, pending: 0 });
+    // Unrelated bucket is unaffected
+    expect(map.get('b2')).toEqual({ verified: 30, pending: 0 });
+  });
+
   it('filters by pay period when a period id is provided', () => {
     const buckets = [bucket('b1', 'Groceries')];
     const inPeriod = { ...tx('Groceries', 10, 'verified'), payPeriodId: '2026-06-01' } as Transaction;

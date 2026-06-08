@@ -3,6 +3,7 @@ import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, 
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -551,7 +552,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       type="date"
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
-                      max={format(new Date(), 'yyyy-MM-dd')}
+                      max={getLocalDateString()}
                       className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
                   </div>

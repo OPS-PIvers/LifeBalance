@@ -1,5 +1,5 @@
 import {onSchedule} from "firebase-functions/v2/scheduler";
-import {onDocumentUpdated} from "firebase-functions/v2/firestore";
+import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
@@ -239,7 +239,17 @@ export const sendactionqueuereminders = onSchedule(
             .where("isCompleted", "==", false)
             .get();
 
-          const todayString = new Date().toISOString().split("T")[0];
+          // Compute "today" in the member's local timezone so the comparison
+          // against locally-stored completeByDate strings is correct.
+          // Using new Date().toISOString().split("T")[0] would return the UTC
+          // date, which is wrong for non-UTC users (e.g., wrong day in evenings
+          // for US timezones). formatInTimeZone matches the pattern used by
+          // isTimeToSend above.
+          const todayString = formatInTimeZone(
+            new Date(),
+            prefs.timezone || "UTC",
+            "yyyy-MM-dd"
+          );
           const todayTodos = todosSnapshot.docs.filter(
             (doc) => doc.data().completeByDate === todayString
           );
@@ -306,7 +316,16 @@ export const sendstreakwarnings = onSchedule("every 1 hours", async () => {
           .where("period", "==", "daily")
           .get();
 
-        const today = new Date().toISOString().split("T")[0];
+        // Compute "today" in the member's local timezone so the check
+        // against locally-stored completedDates strings is correct.
+        // new Date().toISOString().split("T")[0] returns the UTC date,
+        // which is wrong for non-UTC users (e.g., a US user at 9pm would
+        // see the next day's date). formatInTimeZone matches isTimeToSend.
+        const today = formatInTimeZone(
+          new Date(),
+          prefs.timezone || "UTC",
+          "yyyy-MM-dd"
+        );
         const habitsAtRisk = habitsSnapshot.docs.filter((doc) => {
           const habit = doc.data();
           return (
@@ -380,9 +399,26 @@ export const sendbillreminders = onSchedule(
             .get();
 
           const daysAhead = prefs.billReminders.daysBeforeDue;
-          const targetDate = new Date();
-          targetDate.setDate(targetDate.getDate() + daysAhead);
-          const targetDateStr = targetDate.toISOString().split("T")[0];
+          // Compute the target date in the member's local timezone so the
+          // comparison against locally-stored bill date strings is correct.
+          // toISOString().split("T")[0] returns the UTC date, which is wrong
+          // for non-UTC users. We advance by daysAhead whole days relative to
+          // the member's local "today" using a UTC offset-free Date arithmetic
+          // on a date string derived via formatInTimeZone.
+          const localToday = formatInTimeZone(
+            new Date(),
+            prefs.timezone || "UTC",
+            "yyyy-MM-dd"
+          );
+          const [ly, lm, ld] = localToday.split("-").map(Number);
+          const targetDateObj = new Date(
+            Date.UTC(ly ?? 2000, (lm ?? 1) - 1, (ld ?? 1) + daysAhead)
+          );
+          const targetDateStr = formatInTimeZone(
+            targetDateObj,
+            "UTC",
+            "yyyy-MM-dd"
+          );
 
           const upcomingBills = calendarSnapshot.docs.filter(
             (doc) => doc.data().date === targetDateStr
@@ -419,24 +455,27 @@ export const sendbillreminders = onSchedule(
 );
 
 /**
- * Firestore trigger: Monitor safe-to-spend and send budget alerts
+ * Firestore trigger: Monitor account balance changes and send budget alerts.
+ * Fires on every write to the accounts subcollection (create/update/delete),
+ * which is where balances actually live — not on the household document.
+ * This avoids the previous behaviour of re-running on every household write
+ * (e.g., every points increment) which caused spurious $0.00 alerts.
  */
-export const sendbudgetalerts = onDocumentUpdated(
-  "households/{householdId}",
+export const sendbudgetalerts = onDocumentWritten(
+  "households/{householdId}/accounts/{accountId}",
   async (event) => {
-    const newData = event.data?.after.data();
-    if (!newData) return;
-
+    // Fires on any account create/update/delete. We always recompute the total
+    // checking balance from the accounts subcollection below, so deletions (which
+    // lower the balance and could cross the alert threshold) are handled correctly
+    // — no early return is needed.
     const householdId = event.params.householdId;
     const householdRef = db.collection("households").doc(householdId);
 
     // Fetch members from subcollection
     const membersSnapshot = await householdRef.collection("members").get();
 
-    // Calculate the checking balance from the accounts SUBCOLLECTION.
-    // Accounts are NOT stored on the household document, so reading
-    // `newData.accounts` always yielded an empty array (and a false $0.00
-    // "low balance" alert on every household write). Read the real data.
+    // Recompute total checking balance across all accounts in the subcollection
+    // so the alert threshold reflects the real current state.
     const accountsSnapshot = await householdRef.collection("accounts").get();
     const checkingBalance = accountsSnapshot.docs
       .map((accDoc) => accDoc.data())

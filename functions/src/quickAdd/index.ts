@@ -672,14 +672,34 @@ export const quickAddShoppingItem = onRequest(
 
       try {
         // 5. Fetch existing items once for duplicate checking
-        const existingItems = await db
-          .collection(`households/${householdId}/shoppingList`)
+        const shoppingListRef = db.collection(
+          `households/${householdId}/shoppingList`
+        );
+        const existingItems = await shoppingListRef
           .where("isPurchased", "==", false)
           .get();
 
-        const results = [];
+        const results: Array<{
+          itemId: string;
+          name: string;
+          quantity: number;
+          category?: string;
+          store?: string | null;
+          updated?: boolean;
+          created?: boolean;
+        }> = [];
 
-        // 6. Process each item
+        // 6. Plan all writes into a single WriteBatch so all items are
+        //    committed atomically in one round-trip instead of N sequential
+        //    awaits (matches the client's writeBatch pattern in
+        //    contexts/FirebaseHouseholdContext.tsx handleShoppingItems).
+        const batch = db.batch();
+
+        // Build a mutable map of normalized-name → resolved quantity so that
+        // within-batch duplicate detection works even when the same item name
+        // appears more than once in the request array.
+        const pendingQuantities = new Map<string, { ref: admin.firestore.DocumentReference; quantity: number }>();
+
         for (const itemObj of items) {
           const itemName = itemObj.item.trim();
           const itemQuantity = itemObj.quantity || 1;
@@ -687,6 +707,26 @@ export const quickAddShoppingItem = onRequest(
           const itemStore = itemObj.store || store || null;
 
           const normalizedItem = itemName.toLowerCase();
+
+          // Check if a previous iteration of this batch already touched this
+          // item (within-batch dedup before checking Firestore).
+          const pending = pendingQuantities.get(normalizedItem);
+          if (pending !== undefined) {
+            pending.quantity += itemQuantity;
+            // Update the already-queued batch operation in-place.
+            batch.update(pending.ref, {
+              quantity: pending.quantity,
+              lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            const result = results.find(
+              (r) => r.name.toLowerCase() === normalizedItem
+            );
+            if (result !== undefined) {
+              result.quantity = pending.quantity;
+            }
+            continue;
+          }
+
           const duplicate = existingItems.docs.find(
             (doc) => doc.data().name?.toLowerCase() === normalizedItem
           );
@@ -694,19 +734,22 @@ export const quickAddShoppingItem = onRequest(
           if (duplicate) {
             // Update quantity of existing item
             const currentQty = duplicate.data().quantity || 1;
-            await duplicate.ref.update({
-              quantity: currentQty + itemQuantity,
+            const newQty = currentQty + itemQuantity;
+            batch.update(duplicate.ref, {
+              quantity: newQty,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
             });
-
+            pendingQuantities.set(normalizedItem, { ref: duplicate.ref, quantity: newQty });
             results.push({
               itemId: duplicate.id,
               name: itemName,
-              quantity: currentQty + itemQuantity,
+              quantity: newQty,
               updated: true,
             });
           } else {
-            // Create new item
+            // Pre-allocate a new doc ref so we can return its id synchronously
+            // and still commit everything in a single batch.
+            const newRef = shoppingListRef.doc();
             const shoppingItemData = {
               name: itemName,
               quantity: itemQuantity,
@@ -716,13 +759,10 @@ export const quickAddShoppingItem = onRequest(
               createdAt: admin.firestore.FieldValue.serverTimestamp(),
               source: "shortcut",
             };
-
-            const itemRef = await db
-              .collection(`households/${householdId}/shoppingList`)
-              .add(shoppingItemData);
-
+            batch.set(newRef, shoppingItemData);
+            pendingQuantities.set(normalizedItem, { ref: newRef, quantity: itemQuantity });
             results.push({
-              itemId: itemRef.id,
+              itemId: newRef.id,
               name: itemName,
               quantity: itemQuantity,
               category: itemCategory,
@@ -731,6 +771,9 @@ export const quickAddShoppingItem = onRequest(
             });
           }
         }
+
+        // Commit all creates/updates in one round-trip.
+        await batch.commit();
 
         // 7. Log API call
         await logApiCall(householdId, apiKey.substring(0, 16), "shopping", req.body, 200);

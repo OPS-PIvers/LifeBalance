@@ -19,16 +19,18 @@ interface UseGroceryOptimizerConfig<T> {
  * Compares all enumerable properties using normalized string values.
  */
 const hasChanges = <T extends object>(original: T, updated: T): boolean => {
-  const keys = Object.keys(updated) as (keyof T)[];
+  const originalRecord = original as Record<string, unknown>;
+  const updatedRecord = updated as Record<string, unknown>;
+  // Union of both objects' keys so a field that was removed (present in original,
+  // absent in updated) is still detected as a change.
+  const keys = new Set([...Object.keys(originalRecord), ...Object.keys(updatedRecord)]);
 
   for (const key of keys) {
     // Skip id field as it never changes
     if (key === 'id') continue;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const origVal = normalizeValue(String((original as any)[key] ?? ''));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newVal = normalizeValue(String((updated as any)[key] ?? ''));
+    const origVal = normalizeValue(String(originalRecord[key] ?? ''));
+    const newVal = normalizeValue(String(updatedRecord[key] ?? ''));
 
     // If values differ and at least one is non-empty, there's a change
     if (origVal !== newVal) {

@@ -203,8 +203,22 @@ export function expandCalendarItems(
     allInstances.push(...activeInstances);
   }
 
-  // Add non-recurring items and paid instances (deleted instances should not show)
-  allInstances.push(...nonRecurringItems, ...paidInstances);
+  // Add non-recurring items and paid instances that fall within the range.
+  // (Deleted instances are never included regardless.)
+  // We mirror the same inclusive-on-both-ends check used by generateRecurringInstances
+  // for non-recurring items so the returned list consistently honours [rangeStart, rangeEnd].
+  // Compare as 'yyyy-MM-dd' strings: lexicographic order matches chronological
+  // order for this format, so this is faster and immune to timezone/DST shifts.
+  const startStr = format(rangeStart, 'yyyy-MM-dd');
+  const endStr = format(rangeEnd, 'yyyy-MM-dd');
+
+  const isInRange = (dateStr: string): boolean =>
+    dateStr >= startStr && dateStr <= endStr;
+
+  allInstances.push(
+    ...nonRecurringItems.filter(item => isInRange(item.date)),
+    ...paidInstances.filter(item => isInRange(item.date)),
+  );
 
   return allInstances;
 }

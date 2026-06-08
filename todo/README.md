@@ -51,6 +51,17 @@ a product/security decision.
 - **PR #629** — import-path normalization: 327 parent-relative imports (`../…`) across 97 files
   rewritten to the `@/` alias, with a `no-restricted-imports` ESLint guard preventing regressions.
   *(was todo #7)*
+- **PR #632** — five-dimension optimization pass in four file-disjoint waves: Cloud Functions
+  timezone-correct scheduled-notification dates + `sendbudgetalerts` moved onto the accounts
+  subcollection + batched `quickAddShoppingItem` + missing `todos` composite index; weekly
+  incremental points sync + period-aware `getHabitResetUpdate` + injectable `today` on the client
+  streak helpers; `pendingItems` re-entry guard + 10 listener error handlers + parallelized habit
+  resets; AnalyticsModal tab-gated memos + Set/precompute render-perf across dashboard/habits
+  widgets; `@google/genai` deferred off the Habits/Meals chunks (dynamic import); `TopToolbar`/
+  `CaptureModal`/`ProfileMenu`/`useInsightActions` migrated off the `useHousehold()` shim; a broad
+  a11y pass (keyboard-operable controls, dialog names, `aria-busy`/`aria-live`, dark-mode tokens);
+  removed `no-explicit-any` suppressions; `format(new Date())` → `getLocalDateString()` sweep.
+  Scoped items #17–#19 below during this pass.
 
 ## Remaining deferred items
 
@@ -59,6 +70,9 @@ a product/security decision.
 | 4 | **Notification scan** — stop hourly full-collection scans in scheduled functions | Needs a member-field migration + DST-correct timeslot + careful deploy ordering | [04-notification-scan.md](./04-notification-scan.md) |
 | 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + custom-claims migration with lockout risk. *Partially advanced in PR #625*: the Firestore rules now accept an `admin` custom claim via `isSuperAdmin()` (backward-compatible with the legacy UID) and `app_config/global` requires auth — remaining work is provisioning the claim and demoting the client `VITE_ADMIN_UID` checks. | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
 | 14 | **Unbounded calendar/meals/grocery listeners** — windowing + lazy-load | Recurring-template expansion + cookbook/catalog search must keep working; needs indexes + careful deploy | [14-unbounded-calendar-meals-grocery-listeners.md](./14-unbounded-calendar-meals-grocery-listeners.md) |
+| 17 | **ShoppingListTab drag-reorder** — remove the last `set-state-in-effect` suppression | Needs a `Reorder.Group` flow refactor (derive order, persist optimistically) rather than a one-line fix | [17-shoppinglist-reorder-set-state-in-effect.md](./17-shoppinglist-reorder-set-state-in-effect.md) |
+| 18 | **BudgetCalendar duplicate `expandCalendarItems`** — window-keyed expansion cache | Perf hygiene (not a bug); needs a bounded cache with exact invalidation | [18-budgetcalendar-duplicate-expansion.md](./18-budgetcalendar-duplicate-expansion.md) |
+| 19 | **`quickAddHabit` name lookup** — replace the full-collection scan | Needs a `titleLower` field + back-fill migration shipped before the query change | [19-quickaddhabit-name-lookup-scan.md](./19-quickaddhabit-name-lookup-scan.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
@@ -104,3 +118,26 @@ Copyable prompts to start each remaining item in a fresh session:
 > templates; window only materialized instances). Add indexes to `firestore.indexes.json` and ship
 > them first. Preserve recurring-bill expansion and Safe-to-Spend exactly. `pnpm lint:all` + `pnpm
 > test` green; functions build clean.
+
+**#17 — ShoppingListTab drag-reorder suppression**
+> Implement `todo/17-shoppinglist-reorder-set-state-in-effect.md` in the LifeBalance repo. Remove the
+> last `react-hooks/set-state-in-effect` eslint-disable in `components/meals/ShoppingListTab.tsx` by
+> making the rendered order a `useMemo` over `shoppingList` + `filterStore` (no mirrored `useState`),
+> driving `Reorder.Group` from the derived array and persisting via `reorderShoppingItems` on drop.
+> Keep drag smoothness and store-filtered reordering correct. No suppressions; add a reorder→persist
+> test; `pnpm lint` + `pnpm test` green.
+
+**#18 — BudgetCalendar duplicate calendar expansion**
+> Implement `todo/18-budgetcalendar-duplicate-expansion.md` in the LifeBalance repo. Add a bounded,
+> window-keyed memoizer so `expandCalendarItems` runs at most once per distinct `(start, end)` across
+> `BudgetCalendar`, `useExpandedCalendarItems`, and the Safe-to-Spend context memo for a given
+> `calendarItems` snapshot. Keep items/totals identical and invalidation exact. Add a reuse test;
+> `pnpm lint` + `pnpm test` green.
+
+**#19 — quickAddHabit name-lookup scan**
+> Implement `todo/19-quickaddhabit-name-lookup-scan.md` in the LifeBalance repo. Add a denormalized
+> `titleLower` to habit docs (maintained by every title writer), back-fill it via a one-off
+> migration shipped first, then replace the full-collection scan in the `habitName` branch of
+> `functions/src/quickAdd/index.ts` with a `where('titleLower','==',…) limit(1)` exact-match query
+> that falls back to the existing fuzzy scan on a miss. No suppressions; `pnpm lint:all` + `pnpm test`
+> green; functions build clean.
