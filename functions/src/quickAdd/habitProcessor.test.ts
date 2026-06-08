@@ -263,6 +263,44 @@ describe("streakForPeriod", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Injectable `today` — timezone safety (Cloud Functions run in UTC)
+// ---------------------------------------------------------------------------
+
+describe("injectable today (timezone safety)", () => {
+  it("calculateStreak anchors 'today'/'yesterday' to the supplied local date", () => {
+    // A completion dated 2024-03-15, evaluated as if the local date is the same
+    // day, is a live 1-day streak — regardless of the server's UTC clock.
+    expect(calculateStreak(["2024-03-15"], "2024-03-15")).toBe(1);
+    // Evaluated as if local "today" is the next day, the streak is still alive
+    // (completion was "yesterday").
+    expect(calculateStreak(["2024-03-15"], "2024-03-16")).toBe(1);
+    // Two local days later, the streak has lapsed.
+    expect(calculateStreak(["2024-03-15"], "2024-03-17")).toBe(0);
+  });
+
+  it("calculateWeeklyStreak anchors the current ISO week to the supplied date", () => {
+    // 2024-03-11 is a Monday (ISO week start). A completion that week, evaluated
+    // with a local 'today' in the same ISO week, is a 1-week streak.
+    expect(calculateWeeklyStreak(["2024-03-11"], "2024-03-13")).toBe(1);
+    // Evaluated two ISO weeks later, the streak has lapsed.
+    expect(calculateWeeklyStreak(["2024-03-11"], "2024-03-25")).toBe(0);
+  });
+
+  it("processToggleHabit uses the supplied local date for the completion day", () => {
+    const habit: Habit = {
+      ...baseHabit,
+      completedDates: [],
+      count: 0,
+      streakDays: 0,
+    };
+    const result = processToggleHabit(habit, "up", "2024-03-15");
+    expect(result).not.toBeNull();
+    // The completion is recorded on the supplied local date, not the UTC date.
+    expect(result?.updatedHabit.completedDates).toContain("2024-03-15");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // processToggleHabit — daily multiplier boundaries
 // ---------------------------------------------------------------------------
 

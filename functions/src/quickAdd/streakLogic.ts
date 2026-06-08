@@ -32,7 +32,10 @@ export type HabitPeriod = "daily" | "weekly";
  * @param dates - Array of completion dates in YYYY-MM-DD format
  * @returns The current consecutive-day streak
  */
-export function calculateStreak(dates: string[]): number {
+export function calculateStreak(
+  dates: string[],
+  today: string = format(new Date(), "yyyy-MM-dd")
+): number {
   if (dates.length === 0) return 0;
 
   const uniqueDates = Array.from(new Set(dates));
@@ -40,8 +43,7 @@ export function calculateStreak(dates: string[]): number {
     (a, b) => new Date(b).getTime() - new Date(a).getTime()
   );
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const yesterday = format(subDays(parseISO(today), 1), "yyyy-MM-dd");
 
   if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
 
@@ -76,7 +78,10 @@ export function calculateStreak(dates: string[]): number {
  * @param dates - Array of completion dates in YYYY-MM-DD format
  * @returns The current consecutive-week streak
  */
-export function calculateWeeklyStreak(dates: string[]): number {
+export function calculateWeeklyStreak(
+  dates: string[],
+  today: string = format(new Date(), "yyyy-MM-dd")
+): number {
   if (dates.length === 0) return 0;
 
   // Deduplicate, then collect the Monday of each completion's ISO week.
@@ -88,9 +93,9 @@ export function calculateWeeklyStreak(dates: string[]): number {
   ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()); // newest first
 
   // The streak can only extend from the current week or the immediately past week.
-  const nowWeekStart = format(startOfISOWeek(new Date()), "yyyy-MM-dd");
+  const nowWeekStart = format(startOfISOWeek(parseISO(today)), "yyyy-MM-dd");
   const prevWeekStart = format(
-    subWeeks(startOfISOWeek(new Date()), 1),
+    subWeeks(startOfISOWeek(parseISO(today)), 1),
     "yyyy-MM-dd"
   );
 
@@ -125,11 +130,12 @@ export function calculateWeeklyStreak(dates: string[]): number {
  */
 export function streakForPeriod(
   dates: string[],
-  period: HabitPeriod
+  period: HabitPeriod,
+  today: string = format(new Date(), "yyyy-MM-dd")
 ): number {
   return period === "weekly"
-    ? calculateWeeklyStreak(dates)
-    : calculateStreak(dates);
+    ? calculateWeeklyStreak(dates, today)
+    : calculateStreak(dates, today);
 }
 
 // ---------------------------------------------------------------------------

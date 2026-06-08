@@ -80,9 +80,13 @@ export function isHabitStale(
  */
 export function processToggleHabit(
   habit: Habit,
-  direction: "up" | "down"
+  direction: "up" | "down",
+  // The caller's LOCAL date (yyyy-MM-dd). Cloud Functions run in UTC, so when a
+  // local date is available (e.g. from the Shortcut payload) it must be passed
+  // in to avoid recording completions on the wrong day for non-UTC users.
+  // Defaults to the server's date to preserve prior behavior.
+  today: string = format(new Date(), "yyyy-MM-dd")
 ): ToggleHabitResult | null {
-  const today = format(new Date(), "yyyy-MM-dd");
 
   let newCount = habit.count;
   let newTotalCount = habit.totalCount;
@@ -109,7 +113,7 @@ export function processToggleHabit(
   const prospectiveDates = habit.completedDates.includes(today)
     ? habit.completedDates
     : [...habit.completedDates, today];
-  const completionStreak = streakForPeriod(prospectiveDates, habit.period);
+  const completionStreak = streakForPeriod(prospectiveDates, habit.period, today);
   const multiplier = getMultiplier(
     completionStreak,
     habit.type === "positive",
@@ -159,7 +163,7 @@ export function processToggleHabit(
       count: newCount,
       totalCount: newTotalCount,
       completedDates: newCompletedDates,
-      streakDays: streakForPeriod(newCompletedDates, habit.period),
+      streakDays: streakForPeriod(newCompletedDates, habit.period, today),
       lastUpdated: new Date().toISOString(),
     },
     pointsChange,

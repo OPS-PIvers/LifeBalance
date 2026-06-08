@@ -424,7 +424,25 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
       />
     </>
   );
-});
+}, (prev, next) =>
+  // Field-by-field comparison: the context provider rebuilds every habit
+  // object on each Firestore snapshot, so a shallow prop compare would
+  // re-render every card on any habit change. Challenge/freeze-bank state is
+  // read from context (useGamification), not props, so those updates already
+  // re-render this card through the context subscription regardless of memo.
+  prev.dragHandle === next.dragHandle &&
+  prev.habit.id === next.habit.id &&
+  prev.habit.title === next.habit.title &&
+  prev.habit.count === next.habit.count &&
+  prev.habit.streakDays === next.habit.streakDays &&
+  prev.habit.lastUpdated === next.habit.lastUpdated &&
+  prev.habit.category === next.habit.category &&
+  prev.habit.type === next.habit.type &&
+  prev.habit.scoringType === next.habit.scoringType &&
+  prev.habit.period === next.habit.period &&
+  prev.habit.basePoints === next.habit.basePoints &&
+  prev.habit.targetCount === next.habit.targetCount
+);
 
 HabitCard.displayName = 'HabitCard';
 

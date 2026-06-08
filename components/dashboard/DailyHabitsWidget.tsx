@@ -11,9 +11,11 @@ const DEFAULT_ORDER_FALLBACK = 999;
 export const DailyHabitsWidget: React.FC = () => {
   const { habits, toggleHabit } = useGamification();
 
-  // Stable string — startOfToday() only changes at midnight; useMemo with []
-  // ensures the value is computed once per mount rather than every render.
-  const today = useMemo(() => format(startOfToday(), 'yyyy-MM-dd'), []);
+  // Computed on every render (date formatting is cheap) so the value stays
+  // correct across a midnight rollover even if the dashboard is left open.
+  // The string value is stable day-to-day, so the dailyHabits useMemo below
+  // (which depends on it) only recomputes when the date actually changes.
+  const today = format(startOfToday(), 'yyyy-MM-dd');
 
   // Filter and Sort Habits
   const dailyHabits = useMemo(() => {

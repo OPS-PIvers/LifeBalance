@@ -65,17 +65,27 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   const isOverspent = totalCommitted > bucket.limit;
 
   // Local state for limit editing to prevent parent re-renders on keystroke.
-  // Initialized from bucket.limit; reset to bucket.limit on cancel/invalid so there is no
-  // stale value if editing is opened again — no effect needed.
   const [localLimit, setLocalLimit] = useState(() => bucket.limit.toString());
+
+  // Reset the draft value whenever an edit session starts/ends or the persisted
+  // limit changes — the standard "adjust state during render" pattern (no
+  // effect). This also covers the case where the PARENT cancels editing
+  // (e.g. backdrop click) without going through this component's handlers, so
+  // reopening never shows a stale unsaved value.
+  const [prevIsEditing, setPrevIsEditing] = useState(isEditingLimit);
+  const [prevLimit, setPrevLimit] = useState(bucket.limit);
+  if (isEditingLimit !== prevIsEditing || bucket.limit !== prevLimit) {
+    setPrevIsEditing(isEditingLimit);
+    setPrevLimit(bucket.limit);
+    setLocalLimit(bucket.limit.toString());
+  }
 
   const handleSaveLimit = () => {
     const val = parseFloat(localLimit);
     if (!isNaN(val)) {
       onSaveLimit(bucket.id, val);
     } else {
-      // Invalid input: reset the field to the persisted limit before closing
-      setLocalLimit(bucket.limit.toString());
+      // Invalid input: discard the draft (reset handled on reopen) and close.
       onCancelEdit();
     }
   };
@@ -84,8 +94,6 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
     if (e.key === 'Enter') {
       handleSaveLimit();
     } else if (e.key === 'Escape') {
-      // Reset local input to persisted limit before closing
-      setLocalLimit(bucket.limit.toString());
       onCancelEdit();
     }
   };
