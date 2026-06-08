@@ -34,7 +34,8 @@ export default defineConfig(({ command }) => {
               'vendor-ai': ['@google/genai'],
               'vendor-charts': ['recharts'],
               'vendor-motion': ['framer-motion'],
-              'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'lucide-react', 'react-hot-toast']
+              'vendor-icons': ['lucide-react'],
+              'vendor-utils': ['date-fns', 'clsx', 'tailwind-merge', 'react-hot-toast']
             }
           }
         }

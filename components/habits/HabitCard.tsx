@@ -167,7 +167,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
             
             {/* Progress Ring for Threshold */}
             {isThreshold && (
-              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-0.5" viewBox="0 0 36 36">
+              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-0.5" viewBox="0 0 36 36" aria-hidden="true">
                  {/* Background Track */}
                  <path
                    className={isActive && !isCompleted ? "text-brand-800/10 dark:text-white/10" : "text-white/20"}
@@ -230,7 +230,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                 }}
                 className="p-1 text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-slate-400 pointer-events-auto"
                 aria-label="Habit options menu"
-                aria-haspopup="true"
+                aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
               >
                 <MoreVertical size={16} />
@@ -306,7 +306,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleEdit();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === 0 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
@@ -320,7 +320,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleViewLog();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === 1 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
@@ -333,10 +333,10 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   onClick={(e) => {
                     e.stopPropagation();
                     consumeFreezeBankToken(habit.id, yesterday);
-          setIsMenuOpen(false);
+                    setIsMenuOpen(false);
                   }}
                   className={cn(
-                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 flex items-center gap-2 focus:outline-none",
+                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                     focusedMenuIndex === 2 && "bg-indigo-50 dark:bg-indigo-500/15"
                   )}
                   role="menuitem"
@@ -351,7 +351,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleDelete();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 flex items-center gap-2 focus:outline-none",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50 dark:bg-rose-500/15"
                 )}
                 role="menuitem"
@@ -425,11 +425,23 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
     </>
   );
 }, (prev, next) =>
+  // Field-by-field comparison: the context provider rebuilds every habit
+  // object on each Firestore snapshot, so a shallow prop compare would
+  // re-render every card on any habit change. Challenge/freeze-bank state is
+  // read from context (useGamification), not props, so those updates already
+  // re-render this card through the context subscription regardless of memo.
+  prev.dragHandle === next.dragHandle &&
   prev.habit.id === next.habit.id &&
+  prev.habit.title === next.habit.title &&
   prev.habit.count === next.habit.count &&
   prev.habit.streakDays === next.habit.streakDays &&
   prev.habit.lastUpdated === next.habit.lastUpdated &&
-  prev.dragHandle === next.dragHandle
+  prev.habit.category === next.habit.category &&
+  prev.habit.type === next.habit.type &&
+  prev.habit.scoringType === next.habit.scoringType &&
+  prev.habit.period === next.habit.period &&
+  prev.habit.basePoints === next.habit.basePoints &&
+  prev.habit.targetCount === next.habit.targetCount
 );
 
 HabitCard.displayName = 'HabitCard';

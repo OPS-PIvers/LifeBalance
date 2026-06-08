@@ -114,12 +114,21 @@ export const quickAddHabit = onRequest(
     }
 
     // 4. Parse request body
-    const { habitId, habitName, direction = "up" } = req.body || {};
+    const { habitId, habitName, direction = "up", today: rawToday } = req.body || {};
 
     if (!habitId && !habitName) {
       errorResponse(res, 400, "Either habitId or habitName is required", "BAD_REQUEST");
       return;
     }
+
+    // Optional caller-local date (yyyy-MM-dd). Functions run in UTC, so when the
+    // client (e.g. an iOS Shortcut) supplies its local date we use it for streak
+    // math to avoid off-by-one-day errors for non-UTC users. Falls back to the
+    // server date inside processToggleHabit when omitted/invalid.
+    const today =
+      typeof rawToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday)
+        ? rawToday
+        : undefined;
 
     // Security: Input validation
     if (habitId && (typeof habitId !== "string" || habitId.length > 100)) {
@@ -184,7 +193,9 @@ export const quickAddHabit = onRequest(
       }
 
       // 7. Process the toggle
-      const result = processToggleHabit(habit, direction);
+      const result = today
+        ? processToggleHabit(habit, direction, today)
+        : processToggleHabit(habit, direction);
 
       if (!result) {
         errorResponse(res, 400, "Cannot decrement habit below 0", "BAD_REQUEST");
@@ -192,21 +203,23 @@ export const quickAddHabit = onRequest(
         return;
       }
 
-      // 8. Update Firestore
-      await habitRef.update({
+      // 8. Update the habit document and household points atomically so they
+      //    can never diverge if one write fails (mirrors the client's
+      //    writeBatch pattern in hooks/useHabitActions.tsx).
+      const batch = db.batch();
+      batch.update(habitRef, {
         ...result.updatedHabit,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       });
-
-      // 9. Update household points
       if (result.pointsChange !== 0) {
         const householdRef = db.doc(`households/${householdId}`);
-        await householdRef.update({
+        batch.update(householdRef, {
           "points.daily": admin.firestore.FieldValue.increment(result.pointsChange),
           "points.weekly": admin.firestore.FieldValue.increment(result.pointsChange),
           "points.total": admin.firestore.FieldValue.increment(result.pointsChange),
         });
       }
+      await batch.commit();
 
       // 10. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "habit", req.body, 200);

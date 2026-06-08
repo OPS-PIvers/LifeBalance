@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { User } from 'firebase/auth';
+import { User, IdTokenResult } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 
 // Mock user implementation for testing
@@ -34,16 +34,15 @@ const createMockUser = (): User => {
     // Required methods
     delete: async () => Promise.resolve(),
     getIdToken: async () => Promise.resolve('mock-id-token'),
-    getIdTokenResult: async () => Promise.resolve({
+    getIdTokenResult: async () => Promise.resolve<IdTokenResult>({
       token: 'mock-id-token',
       expirationTime: new Date(Date.now() + 3600000).toISOString(),
       authTime: now,
       issuedAtTime: now,
       signInProvider: 'google.com',
       signInSecondFactor: null,
-      claims: { email: 'test@example.com' }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any),
+      claims: { email: 'test@example.com' },
+    }),
     reload: async () => Promise.resolve(),
     toJSON: () => ({ uid: 'test-user-id', email: 'test@example.com' }),
   } as User;

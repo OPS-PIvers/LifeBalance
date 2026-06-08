@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Wallet, Receipt, CreditCard, Clock } from 'lucide-react';
-import { useHousehold } from '../../contexts/FirebaseHouseholdContext';
+import { useHousehold, useExpandedCalendarItems } from '../../contexts/FirebaseHouseholdContext';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { sumMoney, addMoney, subtractMoney } from '../../utils/money';
 import { getTransactionsForBucket } from '../../utils/bucketSpentCalculator';
 import { findNextPaycheckDate, sumPendingSpend } from '../../utils/safeToSpendCalculator';
-import { expandCalendarItems } from '../../utils/calendarRecurrence';
 import { CalendarItem } from '../../types/schema';
 import { Drawer } from '../ui/Drawer';
 
@@ -32,30 +31,30 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
   const totalChecking = sumMoney(checkingAccounts.map(a => a.balance));
 
   // 2. Bills (paycheck-based date range)
-  let unpaidBillsItems: CalendarItem[] = [];
-  let totalUnpaidBills = 0;
-  let rangeLabel = '';
-
-  if (!currentPeriodId) {
-    // No paycheck tracking enabled
-    rangeLabel = 'No paycheck tracking';
-  } else {
-    const paycheckA = parseISO(currentPeriodId);
-    const paycheckBDate = findNextPaycheckDate(calendarItems, currentPeriodId);
-
-    let rangeEndDate: Date;
-    if (paycheckBDate) {
-      rangeEndDate = parseISO(paycheckBDate);
-      rangeLabel = `Until next paycheck (${format(rangeEndDate, 'MMM d')})`;
-    } else {
-      rangeEndDate = endOfMonth(paycheckA);
-      rangeLabel = `Until end of month (${format(rangeEndDate, 'MMM d')})`;
+  // Compute the expansion window up front so the shared (unconditional) memoized
+  // expansion hook can be called per the rules of hooks. When no paycheck is
+  // tracked we use a zero-width window (start === end) which yields no items.
+  const { paycheckA, rangeEndDate, rangeLabel } = useMemo(() => {
+    if (!currentPeriodId) {
+      const epoch = new Date(0);
+      return { paycheckA: epoch, rangeEndDate: epoch, rangeLabel: 'No paycheck tracking' };
     }
+    const start = parseISO(currentPeriodId);
+    const paycheckBDate = findNextPaycheckDate(calendarItems, currentPeriodId);
+    if (paycheckBDate) {
+      const end = parseISO(paycheckBDate);
+      return { paycheckA: start, rangeEndDate: end, rangeLabel: `Until next paycheck (${format(end, 'MMM d')})` };
+    }
+    const end = endOfMonth(start);
+    return { paycheckA: start, rangeEndDate: end, rangeLabel: `Until end of month (${format(end, 'MMM d')})` };
+  }, [currentPeriodId, calendarItems]);
 
-    // Expand recurring items to show all instances
-    const expandedItems = expandCalendarItems(calendarItems, paycheckA, rangeEndDate);
+  // Expand recurring items to show all instances via the shared memoized helper.
+  const expandedItems = useExpandedCalendarItems(paycheckA, rangeEndDate);
 
-    unpaidBillsItems = expandedItems.filter(item => {
+  const unpaidBillsItems: CalendarItem[] = useMemo(() => {
+    if (!currentPeriodId) return [];
+    return expandedItems.filter(item => {
       const itemDate = parseISO(item.date);
       const isCoveredByBucket = buckets.some(b =>
         item.title.toLowerCase().includes(b.name.toLowerCase()) ||
@@ -69,8 +68,9 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
         !isCoveredByBucket
       );
     });
-    totalUnpaidBills = sumMoney(unpaidBillsItems.map(i => i.amount));
-  }
+  }, [currentPeriodId, expandedItems, buckets, paycheckA, rangeEndDate]);
+
+  const totalUnpaidBills = sumMoney(unpaidBillsItems.map(i => i.amount));
 
   // 2b. Pending spend (un-cleared transactions in the current period). Computed
   //     with the same helper the canonical formula uses, so this itemized line

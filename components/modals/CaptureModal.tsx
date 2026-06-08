@@ -517,6 +517,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
             options={tabOptions}
             value={activeTab}
             onChange={setActiveTab}
+            name="Capture type"
           />
         </div>
       )}

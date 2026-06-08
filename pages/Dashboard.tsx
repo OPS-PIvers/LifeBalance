@@ -1,5 +1,5 @@
 import React, { useState, Suspense } from 'react';
-import { useHousehold } from '../contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useTodos, useHouseholdCore } from '../contexts/FirebaseHouseholdContext';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
@@ -21,27 +21,22 @@ import { DashboardSkeleton } from '../components/dashboard/DashboardSkeleton';
 import { SafeToSpendHero } from '../components/dashboard/SafeToSpendHero';
 
 const Dashboard: React.FC = () => {
+  // Consume the narrowest context slices so a change in one domain (e.g. a
+  // shopping toggle) doesn't re-render the whole Dashboard.
+  const { isLoading, currentUser, members, pendingItemsCount } = useHouseholdCore();
   const {
-    isLoading,
-    activeChallenge,
-    currentUser,
-    payCalendarItem,
     accounts,
-    pendingItemsCount,
-    // Destructure required props for ActionQueueItemCard
     buckets,
-    habits,
     transactions,
-    members,
+    payCalendarItem,
+    deferCalendarItem,
+    deleteCalendarItem,
     updateTransactionCategory,
     updateTransaction,
     deleteTransaction,
-    updateToDo,
-    deleteToDo,
-    completeToDo,
-    deferCalendarItem,
-    deleteCalendarItem,
-  } = useHousehold();
+  } = useFinance();
+  const { activeChallenge, habits } = useGamification();
+  const { updateToDo, deleteToDo, completeToDo } = useTodos();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);

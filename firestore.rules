@@ -20,6 +20,17 @@ service cloud.firestore {
              get(/databases/$(database)/documents/households/$(householdId)/members/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Helper function: Check if the caller is the app super-admin.
+    // Prefer the `admin` custom claim (set via the Admin SDK and rotatable
+    // without a rules redeploy); the hardcoded UID is a backward-compatible
+    // fallback retained only until the claim is provisioned in production.
+    // TODO: remove the UID fallback once the `admin` custom claim is set.
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+             (request.auth.token.get('admin', false) == true ||
+              request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2");
+    }
+
     // 🛡️ SENTINEL SECURITY HELPERS: Data Validation
     function isValidString(text, max) {
       return text is string && text.size() > 0 && text.size() <= max;
@@ -49,11 +60,11 @@ service cloud.firestore {
       // Only members can read the household document.
       // OPTIMIZATION: Check memberUids array on the document itself to avoid an extra read cost (exists() call).
       // This aligns with the list rule below.
-      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
+      allow get: if (isAuthenticated() && request.auth.uid in resource.data.memberUids) || isSuperAdmin();
 
       // Allow listing only if user is a member (prevents enumeration of all households)
       // Admin can list all households for the AI Meter
-      allow list: if (request.auth.uid in resource.data.memberUids) || request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2";
+      allow list: if (request.auth.uid in resource.data.memberUids) || isSuperAdmin();
 
       // 🛡️ SENTINEL FIX: Validate household name on creation
       allow create: if isAuthenticated() &&
@@ -708,8 +719,10 @@ service cloud.firestore {
 
     // Global App Config (Kill Switch)
     match /app_config/global {
-      allow read: if true;
-      allow write: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
+      // Only read by authenticated AI callers — no need to expose operational
+      // state to anonymous clients.
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
     }
 
     // Beta Testers
@@ -718,21 +731,21 @@ service cloud.firestore {
       // Only allow reading if the document belongs to the user (via email match) or if user is Admin.
       allow read: if isAuthenticated() && (
         resource.data.email == request.auth.token.email ||
-        request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"
+        isSuperAdmin()
       );
-      allow write: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
+      allow write: if isSuperAdmin();
     }
 
     // Feedback Reports
     match /feedback/{reportId} {
       allow create: if isAuthenticated();
-      allow read, delete: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
+      allow read, delete: if isSuperAdmin();
     }
 
     // AI Usage Logs
     match /logs/ai_usage/requests/{requestId} {
       allow create: if isAuthenticated();
-      allow read: if request.auth.uid == "nmYdn3QPsNQEvniJEXW9M3lmV5e2"; // TODO: Replace with actual Admin UID
+      allow read: if isSuperAdmin();
     }
   }
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Calendar, AlertCircle } from 'lucide-react';
 import { HouseholdMember } from '../../types/schema';
 import { useAutoFocus } from '../../hooks/useAutoFocus';
@@ -24,16 +24,18 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
   members,
   onSubmit,
 }) => {
+  const taskInputId = useId();
+  const dueDateInputId = useId();
   const taskInputRef = useAutoFocus<HTMLInputElement>();
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
-        <label htmlFor="task-input" className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <label htmlFor={taskInputId} className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Task
         </label>
         <input
           ref={taskInputRef}
-          id="task-input"
+          id={taskInputId}
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -43,12 +45,12 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
       </div>
 
       <div>
-        <label htmlFor="due-date-input" className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <label htmlFor={dueDateInputId} className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
           Due Date
         </label>
         <div className="relative w-full">
           <input
-            id="due-date-input"
+            id={dueDateInputId}
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
@@ -75,6 +77,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
                 key={member.uid}
                 type="button"
                 onClick={() => setAssignee(member.uid)}
+                aria-pressed={assignee === member.uid}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
                   assignee === member.uid
                     ? 'bg-brand-800 text-white border-brand-800 shadow-md'

@@ -11,6 +11,10 @@ const DEFAULT_ORDER_FALLBACK = 999;
 export const DailyHabitsWidget: React.FC = () => {
   const { habits, toggleHabit } = useGamification();
 
+  // Computed on every render (date formatting is cheap) so the value stays
+  // correct across a midnight rollover even if the dashboard is left open.
+  // The string value is stable day-to-day, so the dailyHabits useMemo below
+  // (which depends on it) only recomputes when the date actually changes.
   const today = format(startOfToday(), 'yyyy-MM-dd');
 
   // Filter and Sort Habits
@@ -82,9 +86,9 @@ export const DailyHabitsWidget: React.FC = () => {
             </div>
          </div>
 
-         {/* Circular Progress (CSS based) */}
+         {/* Circular Progress (CSS based) — aria-hidden because the % is shown as text */}
          <div className="relative w-12 h-12 flex items-center justify-center">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
               <path
                 className="text-slate-100 dark:text-slate-700"
                 d="M18 2.0845
@@ -152,7 +156,7 @@ export const DailyHabitsWidget: React.FC = () => {
                      {/* Streak */}
                      {habit.streakDays > 0 && (
                         <span className={`flex items-center gap-0.5 ${habit.streakDays >= 3 ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                           <Flame size={10} className={`${habit.streakDays >= 3 ? 'fill-orange-500' : ''} ${habit.streakDays >= 7 ? 'animate-pulse' : ''}`} />
+                           <Flame size={10} className={`${habit.streakDays >= 3 ? 'fill-orange-500' : ''} ${habit.streakDays >= 7 ? 'motion-safe:animate-pulse' : ''}`} />
                            {habit.streakDays}
                         </span>
                      )}

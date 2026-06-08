@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useId, useRef, useState, useMemo } from 'react';
 import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import { Modal } from '../ui/Modal';
@@ -13,6 +13,7 @@ interface SmartHabitReorderModalProps {
 
 const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen, onClose }) => {
   const { habits, reorderHabits, householdId } = useHousehold();
+  const titleId = useId();
   const [plan, setPlan] = useState<HabitReorganizationPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +96,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       isOpen={isOpen}
       onClose={onClose}
       maxWidth="max-w-2xl"
+      ariaLabelledBy={titleId}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-indigo-100 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/15 shrink-0">
@@ -103,7 +105,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
             <ListOrdered size={20} />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-indigo-900 dark:text-indigo-200">Smart Reorder</h2>
+            <h2 id={titleId} className="text-lg font-bold text-indigo-900 dark:text-indigo-200">Smart Reorder</h2>
             <p className="text-xs text-indigo-600 dark:text-indigo-300 font-medium">AI-powered organization</p>
           </div>
         </div>

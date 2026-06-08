@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { ChevronDown, Wallet, Receipt, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useFinance } from '../../contexts/FirebaseHouseholdContext';
-import { calculateSafeToSpendBreakdown } from '../../utils/safeToSpendCalculator';
 import { cn } from '../../utils/cn';
 import { haptic } from '../../utils/haptics';
 
@@ -15,22 +14,19 @@ const currency = (n: number) =>
  * (Checking − Unpaid bills) so the number is trustworthy, not magic.
  */
 export const SafeToSpendHero: React.FC = () => {
-  const { accounts, buckets, calendarItems, currentPeriodId, transactions, safeToSpendBreakdown: contextBreakdown } = useFinance();
+  const { safeToSpendBreakdown: breakdown } = useFinance();
   const [expanded, setExpanded] = useState(false);
 
-  // When the context provides a memoized breakdown (Firebase provider), use it directly
-  // to avoid re-expanding calendar items every render. Fall back to local calculation
-  // in test mode where the mock provider does not supply it. Pass `transactions` so the
-  // fallback also folds in pending spend (otherwise pendingSpend would always be 0 here).
-  const localBreakdown = useMemo(
-    () =>
-      contextBreakdown === undefined
-        ? calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId, transactions)
-        : null,
-    [contextBreakdown, accounts, calendarItems, buckets, currentPeriodId, transactions]
-  );
-
-  const breakdown = contextBreakdown ?? localBreakdown!;
+  // Render a loading skeleton while the context hasn't produced a breakdown yet.
+  if (breakdown === undefined) {
+    return (
+      <div className="relative overflow-hidden rounded-3xl p-6 shadow-premium ring-1 bg-gradient-to-br from-slate-300 to-slate-400 ring-slate-300/30 animate-pulse">
+        <div className="h-6 w-32 rounded-lg bg-white/30 mb-3" />
+        <div className="h-10 w-48 rounded-xl bg-white/40 mb-2" />
+        <div className="h-4 w-40 rounded-lg bg-white/25" />
+      </div>
+    );
+  }
 
   // Headline and itemization both come from `breakdown`, so the big number can
   // never contradict the rows beneath it.
@@ -49,7 +45,7 @@ export const SafeToSpendHero: React.FC = () => {
       <button
         type="button"
         onClick={() => {
-          setExpanded((v) => !v);
+          setExpanded(v => !v);
           haptic('light');
         }}
         aria-expanded={expanded}
@@ -77,15 +73,15 @@ export const SafeToSpendHero: React.FC = () => {
 
         <div className="mt-4 flex items-center gap-1 text-xs font-bold text-white/80">
           {expanded ? 'Hide breakdown' : 'How is this calculated?'}
-          <ChevronDown
-            size={14}
-            className={cn('transition-transform', expanded && 'rotate-180')}
-          />
+          <ChevronDown size={14} className={cn('transition-transform', expanded && 'rotate-180')} />
         </div>
       </button>
 
       {expanded && (
-        <div id="sts-breakdown" className="mt-4 space-y-2 border-t border-white/20 pt-4 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div
+          id="sts-breakdown"
+          className="mt-4 space-y-2 border-t border-white/20 pt-4 animate-in fade-in slide-in-from-top-2 duration-200"
+        >
           <Row icon={<Wallet size={14} />} label="Checking balance" value={currency(breakdown.checkingBalance)} />
           <Row
             icon={<Receipt size={14} />}

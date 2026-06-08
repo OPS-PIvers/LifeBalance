@@ -3,7 +3,8 @@
  * Ported from utils/habitLogic.ts for use in Cloud Functions
  */
 
-import { format, subDays, parseISO, isSameDay, isSameWeek, isValid } from "date-fns";
+import { format, parseISO, isSameDay, isSameWeek, isValid } from "date-fns";
+import { streakForPeriod, getMultiplier } from "./streakLogic";
 
 export interface Habit {
   id: string;
@@ -75,56 +76,17 @@ export function isHabitStale(
 }
 
 /**
- * Calculate the current streak for a habit based on completion dates
- */
-export function calculateStreak(dates: string[]): number {
-  if (dates.length === 0) return 0;
-
-  const uniqueDates = Array.from(new Set(dates));
-  const sortedDates = uniqueDates.sort(
-    (a, b) => new Date(b).getTime() - new Date(a).getTime()
-  );
-
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
-
-  let currentStreak = 0;
-  let checkDate = sortedDates[0] === today ? today : yesterday;
-
-  if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
-
-  for (const dateStr of sortedDates) {
-    if (dateStr === checkDate) {
-      currentStreak++;
-      checkDate = format(subDays(parseISO(checkDate), 1), "yyyy-MM-dd");
-    } else {
-      break;
-    }
-  }
-
-  return currentStreak;
-}
-
-/**
- * Get the point multiplier based on streak and habit type
- */
-export function getMultiplier(streak: number, isPositive: boolean): number {
-  let multiplier = 1.0;
-  if (isPositive) {
-    if (streak >= 7) multiplier = 2.0;
-    else if (streak >= 3) multiplier = 1.5;
-  }
-  return multiplier;
-}
-
-/**
  * Process a habit toggle and calculate resulting state changes
  */
 export function processToggleHabit(
   habit: Habit,
-  direction: "up" | "down"
+  direction: "up" | "down",
+  // The caller's LOCAL date (yyyy-MM-dd). Cloud Functions run in UTC, so when a
+  // local date is available (e.g. from the Shortcut payload) it must be passed
+  // in to avoid recording completions on the wrong day for non-UTC users.
+  // Defaults to the server's date to preserve prior behavior.
+  today: string = format(new Date(), "yyyy-MM-dd")
 ): ToggleHabitResult | null {
-  const today = format(new Date(), "yyyy-MM-dd");
 
   let newCount = habit.count;
   let newTotalCount = habit.totalCount;
@@ -144,8 +106,19 @@ export function processToggleHabit(
   }
 
   // 2. Calculate Points
-  const currentStreak = calculateStreak(habit.completedDates);
-  const multiplier = getMultiplier(currentStreak, habit.type === "positive");
+  // The multiplier must reflect the streak INCLUDING the current completion
+  // (the "prospective" streak), matching the client (utils/habitLogic.ts).
+  // We dispatch by period so weekly habits use the ISO-week streak rather than
+  // the day-based one (which would reset on every ~7-day gap).
+  const prospectiveDates = habit.completedDates.includes(today)
+    ? habit.completedDates
+    : [...habit.completedDates, today];
+  const completionStreak = streakForPeriod(prospectiveDates, habit.period, today);
+  const multiplier = getMultiplier(
+    completionStreak,
+    habit.type === "positive",
+    habit.period
+  );
 
   let isCompletedNow = false;
   let wasCompletedBefore = false;
@@ -190,7 +163,7 @@ export function processToggleHabit(
       count: newCount,
       totalCount: newTotalCount,
       completedDates: newCompletedDates,
-      streakDays: calculateStreak(newCompletedDates),
+      streakDays: streakForPeriod(newCompletedDates, habit.period, today),
       lastUpdated: new Date().toISOString(),
     },
     pointsChange,

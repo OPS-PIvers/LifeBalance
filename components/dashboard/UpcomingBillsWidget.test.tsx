@@ -4,6 +4,10 @@ import { UpcomingBillsWidget } from './UpcomingBillsWidget';
 import { BrowserRouter } from 'react-router-dom';
 import { expandCalendarItems } from '../../utils/calendarRecurrence';
 
+vi.mock('../../utils/calendarRecurrence', () => ({
+  expandCalendarItems: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock('../../contexts/FirebaseHouseholdContext', () => {
   // UpcomingBillsWidget reads useFinance; alias every hook to the same value.
@@ -17,12 +21,11 @@ vi.mock('../../contexts/FirebaseHouseholdContext', () => {
     useHouseholdCore: value,
     useMeals: value,
     useTodos: value,
+    // The widget now consumes the shared memoized expansion hook; delegate to the
+    // mocked expandCalendarItems so tests keep driving output via its return value.
+    useExpandedCalendarItems: (start: Date, end: Date) => expandCalendarItems([], start, end),
   };
 });
-
-vi.mock('../../utils/calendarRecurrence', () => ({
-  expandCalendarItems: vi.fn(),
-}));
 
 describe('UpcomingBillsWidget', () => {
   const mockOnPay = vi.fn();
