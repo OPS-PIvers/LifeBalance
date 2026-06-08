@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motio
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
@@ -97,7 +98,7 @@ const ToDosPage: React.FC = () => {
 
   // Form State
   const [text, setText] = useState('');
-  const [completeByDate, setCompleteByDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
 
   // Categorize To-Dos (Active)
@@ -209,7 +210,7 @@ const ToDosPage: React.FC = () => {
   // Open modal for adding
   const openAddModal = useCallback(() => {
     setText('');
-    setCompleteByDate(format(new Date(), 'yyyy-MM-dd'));
+    setCompleteByDate(getLocalDateString());
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setEditingId(null);
@@ -229,7 +230,7 @@ const ToDosPage: React.FC = () => {
       try {
           await addToDo({
               text: todo.text,
-              completeByDate: format(new Date(), 'yyyy-MM-dd'), // Default to today for the copy
+              completeByDate: getLocalDateString(), // Default to today for the copy
               assignedTo: todo.assignedTo,
               isCompleted: false,
           });

@@ -4,6 +4,7 @@ import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { streakForHabit, getMultiplier } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/firebase.config';
@@ -29,7 +30,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
   // Stable date strings derived once per render cycle — avoids repeated new Date()/format
   // calls inside the per-habit loop and the O(N) includes() scan on completedDates.
-  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
+  const todayStr = useMemo(() => getLocalDateString(), []);
   const weekStartStr = useMemo(() => format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'), []);
 
   // Derived state for the list
@@ -202,7 +203,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
             };
 
             // If modified date is today
-            const today = format(new Date(), 'yyyy-MM-dd');
+            const today = getLocalDateString();
             if (dateStr === today) {
                 updates['points.daily'] = increment(pointsChange);
             }

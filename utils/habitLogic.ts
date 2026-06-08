@@ -310,7 +310,7 @@ export const processToggleHabit = (
   habit: Habit,
   direction: 'up' | 'down'
 ): ToggleHabitResult | null => {
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = getLocalDateString();
 
   let newCount = habit.count;
   let newTotalCount = habit.totalCount;
@@ -529,7 +529,7 @@ export const calculatePointsForDateRange = (
   endDate: string
 ): number => {
   let totalPoints = 0;
-  const today = format(new Date(), 'yyyy-MM-dd');
+  const today = getLocalDateString();
 
   for (const habit of habits) {
     // Find all completion dates within the range

@@ -941,7 +941,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
               setFreezeBank({
                 tokens: 2,
                 maxTokens: 3,
-                lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
+                lastRolloverDate: getLocalDateString(),
                 lastRolloverMonth: format(new Date(), 'yyyy-MM'),
                 history: []
               });

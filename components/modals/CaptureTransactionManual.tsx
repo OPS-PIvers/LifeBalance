@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { format } from 'date-fns';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -57,7 +57,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
 
   const [isRecurring, setIsRecurring] = useState(false);
-  const [transactionDate, setTransactionDate] = useState(() => initialData?.date || format(new Date(), 'yyyy-MM-dd'));
+  const [transactionDate, setTransactionDate] = useState(() => initialData?.date || getLocalDateString());
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
@@ -119,7 +119,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       return;
     }
     // Future dates are allowed - logic sets status to pending_review if future
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const today = getLocalDateString();
     const isFuture = transactionDate > today;
 
     if (!category || !dynamicCategories.includes(category)) {
