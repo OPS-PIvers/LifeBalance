@@ -531,6 +531,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       header={headerContent}
       ariaLabelledBy="capture-drawer-title"
       noPadding={true}
+      height="tall"
       disableClose={view === 'processing'}
     >
       {/* Body Content */}

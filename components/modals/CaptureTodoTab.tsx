@@ -1,6 +1,7 @@
 import React, { useId } from 'react';
 import { Calendar, AlertCircle } from 'lucide-react';
 import { HouseholdMember } from '../../types/schema';
+import { useAutoFocus } from '../../hooks/useAutoFocus';
 
 interface CaptureTodoTabProps {
   text: string;
@@ -25,7 +26,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
 }) => {
   const taskInputId = useId();
   const dueDateInputId = useId();
-
+  const taskInputRef = useAutoFocus<HTMLInputElement>();
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
@@ -33,13 +34,13 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
           Task
         </label>
         <input
+          ref={taskInputRef}
           id={taskInputId}
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter task description"
           className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
-          autoFocus
         />
       </div>
 

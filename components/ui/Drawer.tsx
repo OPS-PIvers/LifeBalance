@@ -22,6 +22,16 @@ interface DrawerProps {
   ariaLabel?: string;
   /** Prevent closing via backdrop, escape, or swipe */
   disableClose?: boolean;
+  /**
+   * Height behavior of the sheet.
+   * - `'auto'` (default): sizes to content, capped at 90% of the viewport.
+   *   Best for short, single-purpose drawers (confirmations, quick actions).
+   * - `'tall'`: a fixed tall detent (~90% of the viewport). Best for
+   *   multi-tab / multi-step drawers (e.g. Capture) so the frame stays stable
+   *   and the body scrolls internally instead of the sheet resizing as its
+   *   content changes between tabs or steps.
+   */
+  height?: 'auto' | 'tall';
 }
 
 export const Drawer: React.FC<DrawerProps> = ({
@@ -34,7 +44,8 @@ export const Drawer: React.FC<DrawerProps> = ({
   noPadding = false,
   ariaLabelledBy,
   ariaLabel,
-  disableClose = false
+  disableClose = false,
+  height = 'auto'
 }) => {
   const titleId = useId();
   const reduceMotion = useReducedMotion();
@@ -89,7 +100,13 @@ export const Drawer: React.FC<DrawerProps> = ({
             exit={reduceMotion ? { y: 0 } : { y: '100%' }}
             transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
             className={twMerge(
-              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] flex flex-col outline-none",
+              // `dvh` tracks the *visible* viewport, so the sheet (and its CTA)
+              // isn't hidden behind the iOS software keyboard. `vh` is kept as a
+              // fallback for browsers without dvh support.
+              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col outline-none",
+              // Fixed detent: stable frame that scrolls internally instead of
+              // resizing as content changes between tabs/steps.
+              height === 'tall' && "h-[90vh] supports-[height:100dvh]:h-[90dvh]",
               className
             )}
             drag="y"
