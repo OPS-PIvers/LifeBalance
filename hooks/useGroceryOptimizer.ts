@@ -21,7 +21,9 @@ interface UseGroceryOptimizerConfig<T> {
 const hasChanges = <T extends object>(original: T, updated: T): boolean => {
   const originalRecord = original as Record<string, unknown>;
   const updatedRecord = updated as Record<string, unknown>;
-  const keys = Object.keys(updatedRecord);
+  // Union of both objects' keys so a field that was removed (present in original,
+  // absent in updated) is still detected as a change.
+  const keys = new Set([...Object.keys(originalRecord), ...Object.keys(updatedRecord)]);
 
   for (const key of keys) {
     // Skip id field as it never changes

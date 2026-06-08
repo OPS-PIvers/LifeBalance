@@ -464,9 +464,10 @@ export const sendbillreminders = onSchedule(
 export const sendbudgetalerts = onDocumentWritten(
   "households/{householdId}/accounts/{accountId}",
   async (event) => {
-    // Guard against deletes: if the account was removed there is no new data.
-    if (!event.data?.after.exists) return;
-
+    // Fires on any account create/update/delete. We always recompute the total
+    // checking balance from the accounts subcollection below, so deletions (which
+    // lower the balance and could cross the alert threshold) are handled correctly
+    // — no early return is needed.
     const householdId = event.params.householdId;
     const householdRef = db.collection("households").doc(householdId);
 

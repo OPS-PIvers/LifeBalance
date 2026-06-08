@@ -207,14 +207,13 @@ export function expandCalendarItems(
   // (Deleted instances are never included regardless.)
   // We mirror the same inclusive-on-both-ends check used by generateRecurringInstances
   // for non-recurring items so the returned list consistently honours [rangeStart, rangeEnd].
-  const start = startOfDay(rangeStart);
-  const end = startOfDay(rangeEnd);
+  // Compare as 'yyyy-MM-dd' strings: lexicographic order matches chronological
+  // order for this format, so this is faster and immune to timezone/DST shifts.
+  const startStr = format(rangeStart, 'yyyy-MM-dd');
+  const endStr = format(rangeEnd, 'yyyy-MM-dd');
 
-  const isInRange = (dateStr: string): boolean => {
-    const d = parseISO(dateStr);
-    return (isSameDay(d, start) || isAfter(d, start)) &&
-           (isSameDay(d, end) || isBefore(d, end));
-  };
+  const isInRange = (dateStr: string): boolean =>
+    dateStr >= startStr && dateStr <= endStr;
 
   allInstances.push(
     ...nonRecurringItems.filter(item => isInRange(item.date)),

@@ -718,7 +718,9 @@ export const quickAddShoppingItem = onRequest(
               quantity: pending.quantity,
               lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
             });
-            const result = results.find((r) => r.name === itemName);
+            const result = results.find(
+              (r) => r.name.toLowerCase() === normalizedItem
+            );
             if (result !== undefined) {
               result.quantity = pending.quantity;
             }
