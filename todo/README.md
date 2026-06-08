@@ -39,6 +39,18 @@ a product/security decision.
   `today` for UTC safety; freeze-token patch now credits points; `addHabitSubmission` date-gating;
   `payCalendarItem`/transaction/`PointsBreakdownModal` batching; shared `useExpandedCalendarItems`;
   15 a11y fixes; `vendor-icons` chunk; `isSuperAdmin()` rule helper (custom-claim-or-UID).
+- **PR #624** — mobile drawer fix: tab-switch no longer pops the iOS keyboard (touch-aware
+  `useAutoFocus` replaces bare `autoFocus`); Drawer uses `dvh` (CTA stays above the keyboard) and a
+  `height="tall"` detent so multi-tab drawers don't resize between tabs.
+- **PR #627** — modal render-isolation: 17 modals migrated off the `useHousehold()` shim to narrow
+  domain slices; AI types (`ReceiptData`, …) moved to `geminiService.types` and imported via
+  `import type` to keep the `@google/genai` SDK off the boot path. *(was todo #16)*
+- **PR #628** — typed Firestore converters: `utils/firestoreConverters.ts` (`FirestoreDataConverter<T>`
+  per collection) attached via `.withConverter()` in the context, removing the unchecked
+  `d.data() as T` casts; behaviour-preserving, 67 converter tests. *(was todo #15)*
+- **PR #629** — import-path normalization: 327 parent-relative imports (`../…`) across 97 files
+  rewritten to the `@/` alias, with a `no-restricted-imports` ESLint guard preventing regressions.
+  *(was todo #7)*
 
 ## Remaining deferred items
 
@@ -46,16 +58,20 @@ a product/security decision.
 |---|------|--------------|-----|
 | 4 | **Notification scan** — stop hourly full-collection scans in scheduled functions | Needs a member-field migration + DST-correct timeslot + careful deploy ordering | [04-notification-scan.md](./04-notification-scan.md) |
 | 5 | **Admin gate server-side** — move beta/admin gating off the client bundle | Security/auth design + custom-claims migration with lockout risk. *Partially advanced in PR #625*: the Firestore rules now accept an `admin` custom claim via `isSuperAdmin()` (backward-compatible with the legacy UID) and `app_config/global` requires auth — remaining work is provisioning the claim and demoting the client `VITE_ADMIN_UID` checks. | [05-admin-gate-serverside.md](./05-admin-gate-serverside.md) |
-| 7 | **Import-path normalization** — relative imports → `@/` alias | ~266-file mechanical churn; own PR to keep review clean | [07-import-path-normalization.md](./07-import-path-normalization.md) |
 | 14 | **Unbounded calendar/meals/grocery listeners** — windowing + lazy-load | Recurring-template expansion + cookbook/catalog search must keep working; needs indexes + careful deploy | [14-unbounded-calendar-meals-grocery-listeners.md](./14-unbounded-calendar-meals-grocery-listeners.md) |
-| 15 | **Typed Firestore converters** — kill ~30 `d.data() as T` casts | Large surface area; do collection-by-collection with validation/tests | [15-typed-firestore-converters.md](./15-typed-firestore-converters.md) |
-| 16 | **Modal render-isolation** — narrow slices in ~18 modals + AI type imports | Repetitive, low per-file value; batch mechanically | [16-modal-render-isolation.md](./16-modal-render-isolation.md) |
 
 Each doc is self-contained: problem statement, current-state references, proposed approach,
 risks, and acceptance criteria. Tackle them in separate PRs.
 
+These three remaining items (#4, #5, #14) are **backend/ops** changes whose deploy steps need
+human verification that the hosting-auto-deploy pipeline can't provide on its own — a Firestore
+index finishing its build (#14), a one-off data backfill running (#4), and custom-claim
+provisioning without locking admins out (#5). Run each in a dedicated session and verify the
+manual deploy step before declaring done.
+
 Items 10–13 were scoped during the PR #619 optimization pass; #9, #12, and #13 shipped
-in PR #621, #10 in PR #620, and #11 in PR #625. Items #14–#16 were scoped during the PR #625 pass.
+in PR #621, #10 in PR #620, and #11 in PR #625. Items #14–#16 were scoped during the PR #625 pass;
+#16/#15/#7 shipped in PR #627/#628/#629.
 
 ## Kickoff prompts
 
@@ -79,14 +95,6 @@ Copyable prompts to start each remaining item in a fresh session:
 > claim-propagation for already-signed-in users. Remove `VITE_ADMIN_UID` from `deploy.yml` once
 > nothing reads it. No suppressions; lint + tests + build green.
 
-**#7 — Import-path normalization**
-> Implement `todo/07-import-path-normalization.md` in the LifeBalance repo. Codemod the ~266
-> parent-traversing relative imports (`../../…`) to the `@/` alias across all `.ts`/`.tsx` files
-> (keep same-dir `./x` as-is), then add an ESLint guard (`no-restricted-imports` patterns banning
-> `../../*`) to prevent regressions. Behavior is unchanged (the alias resolves identically), so
-> rely on `tsc` + tests to confirm. Land it when few branches are in flight. `pnpm lint` + `pnpm
-> test` green.
-
 **#14 — Unbounded calendar/meals/grocery listeners**
 > Implement `todo/14-unbounded-calendar-meals-grocery-listeners.md` in the LifeBalance repo. Window
 > the still-unbounded `calendarItems`, `meals`, and `groceryCatalog` `onSnapshot` listeners in
@@ -96,18 +104,3 @@ Copyable prompts to start each remaining item in a fresh session:
 > templates; window only materialized instances). Add indexes to `firestore.indexes.json` and ship
 > them first. Preserve recurring-bill expansion and Safe-to-Spend exactly. `pnpm lint:all` + `pnpm
 > test` green; functions build clean.
-
-**#15 — Typed Firestore converters**
-> Implement `todo/15-typed-firestore-converters.md` in the LifeBalance repo. Introduce
-> `FirestoreDataConverter<T>` per major collection in a new `utils/firestoreConverters.ts`, attach
-> via `.withConverter()` at the collection refs in `contexts/FirebaseHouseholdContext.tsx`, and
-> remove the `d.data() as T` casts collection-by-collection (start with Habit + Transaction). Each
-> converter validates/defaults in `fromFirestore` and has unit tests for a valid and a legacy/partial
-> doc. No suppressions; runtime behavior unchanged; `pnpm lint` + `pnpm test` + build green.
-
-**#16 — Modal render-isolation**
-> Implement `todo/16-modal-render-isolation.md` in the LifeBalance repo. (a) Replace `useHousehold()`
-> with the narrowest slice hooks across the ~18 `components/modals/*.tsx` (verify fields per modal).
-> (b) Move `ReceiptData` into `services/geminiService.types.ts` and switch the listed always-loaded
-> components to `import type` from `.types`. Pure mechanical swaps — rely on `tsc` + existing tests.
-> `pnpm lint` + `pnpm test` + build green.
