@@ -26,6 +26,26 @@ import {
   type QueryDocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
+import {
+  accountConverter,
+  budgetBucketConverter,
+  bucketPeriodSnapshotConverter,
+  calendarItemConverter,
+  habitConverter,
+  challengeConverter,
+  yearlyGoalConverter,
+  rewardItemConverter,
+  householdMemberConverter,
+  mealConverter,
+  shoppingItemConverter,
+  groceryCatalogItemConverter,
+  mealPlanItemConverter,
+  pendingItemConverter,
+  householdApiKeyConverter,
+  insightConverter,
+  transactionConverter,
+  todoConverter,
+} from '@/utils/firestoreConverters';
 import { db } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -47,7 +67,6 @@ import {
   ShoppingItem,
   MealPlanItem,
   ToDo,
-  PendingItem,
   Insight,
   GroceryCatalogItem,
   Store,
@@ -98,27 +117,23 @@ function mergeById<T extends { id: string }>(primary: T[], secondary: T[]): T[] 
   return [...primary, ...secondary.filter(s => !seen.has(s.id))];
 }
 
-/** Map a transaction document, normalising the `createdAt` Timestamp to an ISO string. */
-function mapTransactionDoc(d: QueryDocumentSnapshot<DocumentData>): Transaction {
-  const data = d.data();
-  return {
-    ...data,
-    id: d.id,
-    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-  } as Transaction;
+/**
+ * Map a typed transaction snapshot to a Transaction.
+ * The converter attached via .withConverter(transactionConverter) already handles
+ * id injection and Timestamp normalisation; this shim delegates to it so all
+ * call sites (windowed listener + pagination helpers) share one code path.
+ */
+function mapTransactionDoc(d: QueryDocumentSnapshot<Transaction>): Transaction {
+  return d.data();
 }
 
-/** Map a to-do document, normalising `createdAt`/`completedAt` Timestamps to ISO strings. */
-function mapTodoDoc(d: QueryDocumentSnapshot<DocumentData>): ToDo {
-  const data = d.data();
-  return {
-    ...data,
-    id: d.id,
-    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-    completedAt: data.completedAt
-      ? (data.completedAt instanceof Timestamp ? data.completedAt.toDate().toISOString() : data.completedAt)
-      : undefined,
-  } as ToDo;
+/**
+ * Map a typed to-do snapshot to a ToDo.
+ * The converter attached via .withConverter(todoConverter) already handles
+ * id injection and Timestamp normalisation.
+ */
+function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
+  return d.data();
 }
 
 export interface HouseholdContextType {
@@ -745,40 +760,31 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const unsubscribers: (() => void)[] = [];
 
     // Accounts listener
-    const accountsQuery = query(collection(db, `households/${householdId}/accounts`));
+    const accountsQuery = query(collection(db, `households/${householdId}/accounts`).withConverter(accountConverter));
     unsubscribers.push(
       onSnapshot(accountsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            ...d,
-            id: doc.id,
-            lastUpdated: d.lastUpdated instanceof Timestamp ? d.lastUpdated.toDate().toISOString() : d.lastUpdated,
-          } as Account;
-        });
-        setAccounts(data);
+        setAccounts(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Buckets listener
-    const bucketsQuery = query(collection(db, `households/${householdId}/buckets`));
+    const bucketsQuery = query(collection(db, `households/${householdId}/buckets`).withConverter(budgetBucketConverter));
     unsubscribers.push(
       onSnapshot(bucketsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BudgetBucket));
-        setBuckets(data);
+        setBuckets(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Bucket History listener — live window of the most recent N periods.
     // Older snapshots are fetched on demand via loadAllBucketHistory().
     const historyQuery = query(
-      collection(db, `households/${householdId}/bucketHistory`),
+      collection(db, `households/${householdId}/bucketHistory`).withConverter(bucketPeriodSnapshotConverter),
       orderBy('periodStartDate', 'desc'),
       limit(BUCKET_HISTORY_LIMIT)
     );
     unsubscribers.push(
       onSnapshot(historyQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot));
+        const data = snapshot.docs.map(doc => doc.data());
         setBucketHistoryWindow(data);
         // A full page means there are (probably) older periods to load. Don't
         // flip this back on once the caller has already loaded everything.
@@ -794,63 +800,50 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // track the current pay period without re-subscribing every other listener.)
 
     // Calendar listener
-    const calQuery = query(collection(db, `households/${householdId}/calendarItems`));
+    const calQuery = query(collection(db, `households/${householdId}/calendarItems`).withConverter(calendarItemConverter));
     unsubscribers.push(
       onSnapshot(calQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CalendarItem));
-        setCalendarItems(data);
+        setCalendarItems(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Habits listener
-    const habitsQuery = query(collection(db, `households/${householdId}/habits`));
+    const habitsQuery = query(collection(db, `households/${householdId}/habits`).withConverter(habitConverter));
     unsubscribers.push(
       onSnapshot(habitsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            ...d,
-            id: doc.id,
-            scoringType: d.scoringType || 'threshold',
-            lastUpdated: d.lastUpdated instanceof Timestamp ? d.lastUpdated.toDate().toISOString() : d.lastUpdated,
-          } as Habit;
-        });
-        setHabits(data);
+        setHabits(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Challenges listener
-    const challengesQuery = query(collection(db, `households/${householdId}/challenges`));
+    const challengesQuery = query(collection(db, `households/${householdId}/challenges`).withConverter(challengeConverter));
     unsubscribers.push(
       onSnapshot(challengesQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Challenge));
-        setChallenges(data);
+        setChallenges(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Yearly Goals listener
-    const yearlyGoalsQuery = query(collection(db, `households/${householdId}/yearlyGoals`));
+    const yearlyGoalsQuery = query(collection(db, `households/${householdId}/yearlyGoals`).withConverter(yearlyGoalConverter));
     unsubscribers.push(
       onSnapshot(yearlyGoalsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as YearlyGoal));
-        setYearlyGoals(data);
+        setYearlyGoals(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Rewards listener
-    const rewardsQuery = query(collection(db, `households/${householdId}/rewards`));
+    const rewardsQuery = query(collection(db, `households/${householdId}/rewards`).withConverter(rewardItemConverter));
     unsubscribers.push(
       onSnapshot(rewardsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as RewardItem));
-        setRewards(data);
+        setRewards(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Members listener
-    const membersQuery = query(collection(db, `households/${householdId}/members`));
+    const membersQuery = query(collection(db, `households/${householdId}/members`).withConverter(householdMemberConverter));
     unsubscribers.push(
       onSnapshot(membersQuery, async (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), uid: doc.id } as HouseholdMember));
+        const data = snapshot.docs.map(doc => doc.data());
         setMembers(data);
 
         // Set current user (read latest user from the ref, not effect closure)
@@ -949,29 +942,26 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     );
 
     // Meals listener
-    const mealsQuery = query(collection(db, `households/${householdId}/meals`));
+    const mealsQuery = query(collection(db, `households/${householdId}/meals`).withConverter(mealConverter));
     unsubscribers.push(
       onSnapshot(mealsQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Meal));
-        setMeals(data);
+        setMeals(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Shopping List listener
-    const shoppingListQuery = query(collection(db, `households/${householdId}/shoppingList`));
+    const shoppingListQuery = query(collection(db, `households/${householdId}/shoppingList`).withConverter(shoppingItemConverter));
     unsubscribers.push(
       onSnapshot(shoppingListQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ShoppingItem));
-        setShoppingList(data);
+        setShoppingList(snapshot.docs.map(doc => doc.data()));
       })
     );
 
     // Grocery Catalog listener
-    const groceryCatalogQuery = query(collection(db, `households/${householdId}/groceryCatalog`));
+    const groceryCatalogQuery = query(collection(db, `households/${householdId}/groceryCatalog`).withConverter(groceryCatalogItemConverter));
     unsubscribers.push(
       onSnapshot(groceryCatalogQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as GroceryCatalogItem));
-        setGroceryCatalog(data);
+        setGroceryCatalog(snapshot.docs.map(doc => doc.data()));
       })
     );
 
@@ -979,14 +969,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // navigates to outside this range are fetched on demand via ensureMealPlanWeek().
     const mealPlanRange = mealPlanWindowRef.current;
     const mealPlanQuery = query(
-      collection(db, `households/${householdId}/mealPlan`),
+      collection(db, `households/${householdId}/mealPlan`).withConverter(mealPlanItemConverter),
       where('date', '>=', mealPlanRange.start),
       where('date', '<=', mealPlanRange.end)
     );
     unsubscribers.push(
       onSnapshot(mealPlanQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
-        setMealPlanWindow(data);
+        setMealPlanWindow(snapshot.docs.map(doc => doc.data()));
       }, (error) => {
         console.error('Error listening to mealPlan:', error);
       })
@@ -995,7 +984,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // To-Do listeners — all active items are live; completed items are limited to
     // the last 30 days (older completions load on demand via loadOlderCompletedTodos()).
     const activeTodosQuery = query(
-      collection(db, `households/${householdId}/todos`),
+      collection(db, `households/${householdId}/todos`).withConverter(todoConverter),
       where('isCompleted', '==', false)
     );
     unsubscribers.push(
@@ -1009,7 +998,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const completedWindowStart = getCompletedTodoWindowStart();
     completedTodoWindowStartRef.current = completedWindowStart;
     const completedTodosQuery = query(
-      collection(db, `households/${householdId}/todos`),
+      collection(db, `households/${householdId}/todos`).withConverter(todoConverter),
       where('isCompleted', '==', true),
       where('completedAt', '>=', Timestamp.fromDate(completedWindowStart)),
       orderBy('completedAt', 'desc')
@@ -1024,7 +1013,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     // Pending Items listener (for natural language voice commands)
     const pendingItemsQuery = query(
-      collection(db, `households/${householdId}/pendingItems`),
+      collection(db, `households/${householdId}/pendingItems`).withConverter(pendingItemConverter),
       where('processed', '==', false)
     );
     unsubscribers.push(
@@ -1034,7 +1023,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         if (snapshot.size > 0) {
           // Auto-process pending items
           for (const docSnapshot of snapshot.docs) {
-            const item = { ...docSnapshot.data(), id: docSnapshot.id } as PendingItem;
+            const item = docSnapshot.data();
 
             try {
               // Get available categories for parsing
@@ -1197,19 +1186,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     // API Keys listener (for iOS Shortcuts)
-    const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`));
+    const apiKeysQuery = query(collection(db, `households/${householdId}/apiKeys`).withConverter(householdApiKeyConverter));
     unsubscribers.push(
       onSnapshot(apiKeysQuery, (snapshot) => {
-        const data = snapshot.docs.map(doc => {
-          const d = doc.data();
-          return {
-            ...d,
-            id: doc.id,
-            createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate().toISOString() : d.createdAt,
-            lastUsedAt: d.lastUsedAt instanceof Timestamp ? d.lastUsedAt.toDate().toISOString() : d.lastUsedAt,
-          } as HouseholdApiKey;
-        });
-        setApiKeys(data);
+        setApiKeys(snapshot.docs.map(doc => doc.data()));
       }, (error) => {
         // Silently ignore permission errors for non-admin users
         if (error.code !== 'permission-denied') {
@@ -1222,7 +1202,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // The full archive is fetched on demand via loadAllInsights().
     // Index (generatedAt DESC) is declared in firestore.indexes.json.
     const insightsQuery = query(
-      collection(db, `households/${householdId}/insights`),
+      collection(db, `households/${householdId}/insights`).withConverter(insightConverter),
       orderBy('generatedAt', 'desc'),
       limit(INSIGHTS_LIMIT)
     );
@@ -1230,7 +1210,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       onSnapshot(
         insightsQuery,
         (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight));
+          const data = snapshot.docs.map(doc => doc.data());
           setInsightsWindow(data);
           if (!insightsLoadedAllRef.current) {
             setHasMoreInsights(snapshot.size >= INSIGHTS_LIMIT);
@@ -1274,7 +1254,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setTransactionWindowStart(windowStart);
     setHasMoreTransactions(windowStart !== null);
 
-    const txCollection = collection(db, `households/${householdId}/transactions`);
+    const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
     const txQuery = windowStart
       ? query(txCollection, where('date', '>=', windowStart), orderBy('date', 'desc'))
       : query(txCollection);
@@ -1299,7 +1279,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || windowStart === null) return;
     setIsLoadingOlderTransactions(true);
     try {
-      const txCollection = collection(db, `households/${householdId}/transactions`);
+      const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
       const cursor = txOlderCursorRef.current;
       const olderQuery = cursor
         ? query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc'), startAfter(cursor), limit(TRANSACTION_PAGE_SIZE))
@@ -1325,7 +1305,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || windowStart === null) return recentTransactionsRef.current;
     setIsLoadingOlderTransactions(true);
     try {
-      const txCollection = collection(db, `households/${householdId}/transactions`);
+      const txCollection = collection(db, `households/${householdId}/transactions`).withConverter(transactionConverter);
       const snap = await getDocs(query(txCollection, where('date', '<', windowStart), orderBy('date', 'desc')));
       const older = snap.docs.map(mapTransactionDoc);
       txOlderCursorRef.current = snap.docs.length ? snap.docs[snap.docs.length - 1] ?? null : null;
@@ -1346,11 +1326,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setIsLoadingOlderBucketHistory(true);
     try {
       const snap = await getDocs(query(
-        collection(db, `households/${householdId}/bucketHistory`),
+        collection(db, `households/${householdId}/bucketHistory`).withConverter(bucketPeriodSnapshotConverter),
         orderBy('periodStartDate', 'desc')
       ));
       bucketHistoryLoadedAllRef.current = true;
-      setBucketHistoryOlder(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as BucketPeriodSnapshot)));
+      setBucketHistoryOlder(snap.docs.map(doc => doc.data()));
       setHasMoreBucketHistory(false);
     } catch (error) {
       console.error('[loadAllBucketHistory] Failed:', error);
@@ -1364,11 +1344,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     try {
       const snap = await getDocs(query(
-        collection(db, `households/${householdId}/insights`),
+        collection(db, `households/${householdId}/insights`).withConverter(insightConverter),
         orderBy('generatedAt', 'desc')
       ));
       insightsLoadedAllRef.current = true;
-      setInsightsOlder(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Insight)));
+      setInsightsOlder(snap.docs.map(doc => doc.data()));
       setHasMoreInsights(false);
     } catch (error) {
       console.error('[loadAllInsights] Failed:', error);
@@ -1380,7 +1360,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || !windowStart) return;
     setIsLoadingOlderTodos(true);
     try {
-      const todosCol = collection(db, `households/${householdId}/todos`);
+      const todosCol = collection(db, `households/${householdId}/todos`).withConverter(todoConverter);
       const cursor = completedTodoCursorRef.current;
       const olderQuery = cursor
         ? query(todosCol, where('isCompleted', '==', true), orderBy('completedAt', 'desc'), startAfter(cursor), limit(TODO_COMPLETED_PAGE_SIZE))
@@ -1410,11 +1390,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (start >= live.start && end <= live.end) return;
     try {
       const snap = await getDocs(query(
-        collection(db, `households/${householdId}/mealPlan`),
+        collection(db, `households/${householdId}/mealPlan`).withConverter(mealPlanItemConverter),
         where('date', '>=', start),
         where('date', '<=', end)
       ));
-      const page = snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as MealPlanItem));
+      const page = snap.docs.map(doc => doc.data());
       loadedMealPlanWeeksRef.current.add(start);
       setMealPlanExtra(prev => [...prev.filter(i => i.date < start || i.date > end), ...page]);
     } catch (error) {
@@ -1846,7 +1826,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           totalPending: spent.pending,
           transactionCount: bucketTransactions.length,
           createdAt: new Date().toISOString(),
-        } as BucketPeriodSnapshot);
+        });
 
         // Update bucket's current period
         const bucketRef = doc(db, `households/${householdId}/buckets`, bucket.id);
@@ -2913,7 +2893,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // Spread memberData first, then override points to ensure new members start at 0
         ...memberData,
         points: { daily: 0, weekly: 0, total: 0 },
-      } as HouseholdMember;
+      };
 
       // Write the member doc and the household memberUids array in a SINGLE
       // batch so they can't desync (a member doc without a matching memberUids
