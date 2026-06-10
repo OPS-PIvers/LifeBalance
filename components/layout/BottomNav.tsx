@@ -1,10 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
-import CaptureModal from '@/components/modals/CaptureModal';
+import { LazyMount } from '@/components/ui/LazyMount';
+import { preloadOnIdle } from '@/utils/preloadOnIdle';
+
+// Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
+// the boot bundle; preloaded on idle below so the first FAB tap is instant.
+const loadCaptureModal = () => import('@/components/modals/CaptureModal');
+const CaptureModal = React.lazy(loadCaptureModal);
 
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center justify-center w-full min-h-[44px] space-y-1 transition-colors ${
@@ -78,7 +86,9 @@ const BottomNav: React.FC = () => {
       </nav>
 
       {/* Capture Modal Overlay */}
-      <CaptureModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <LazyMount when={isModalOpen}>
+        <CaptureModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      </LazyMount>
     </>
   );
 };
