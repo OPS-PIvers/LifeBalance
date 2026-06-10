@@ -21,6 +21,12 @@ const mockConfig = {
 // partition third-party storage (iOS Safari, installed PWAs) lose the helper's
 // sessionStorage mid-flow, failing sign-in with "missing initial state".
 // See https://firebase.google.com/docs/auth/web/redirect-best-practices
+//
+// Deliberately an explicit suffix allowlist rather than "any production
+// host": on a non-Firebase-Hosting deploy the /__/auth/* helper wouldn't
+// exist on the page's own host, and using it as authDomain would break
+// sign-in entirely. If a custom domain is ever connected to Firebase
+// Hosting, add its suffix here (Hosting serves the helper there too).
 const isFirebaseHostingOrigin =
   typeof window !== 'undefined' &&
   (window.location.hostname.endsWith('.web.app') ||

@@ -4,6 +4,7 @@ import {
   getRedirectResult,
   signOut as firebaseSignOut,
   User,
+  type UserCredential,
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { auth, googleProvider } from '@/firebase.config';
@@ -56,10 +57,16 @@ export const signInWithGoogle = async (): Promise<User | null> => {
  * sign-in; this exists to surface redirect-flow errors (which would otherwise
  * be silently dropped) to the caller.
  */
+// getRedirectResult consumes the pending redirect state, so concurrent calls
+// (e.g. the doubled effect mount under React StrictMode in dev) must share a
+// single promise instead of racing each other.
+let redirectResultPromise: Promise<UserCredential | null> | null = null;
+
 export const completeRedirectSignIn = async (): Promise<void> => {
   // Resolves with null when there is no pending redirect, so this is a cheap
   // no-op on normal app loads.
-  await getRedirectResult(auth);
+  redirectResultPromise ??= getRedirectResult(auth);
+  await redirectResultPromise;
 };
 
 /**
