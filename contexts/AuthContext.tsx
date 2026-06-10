@@ -3,7 +3,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '@/firebase.config';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getUserHousehold } from '@/services/householdService';
-import { signOut as authServiceSignOut } from '@/services/authService';
+import { signOut as authServiceSignOut, completeRedirectSignIn } from '@/services/authService';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -30,6 +30,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [accessDeniedEmail, setAccessDeniedEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    // Complete a pending redirect sign-in (PWA / popup-blocked flow). The user
+    // arrives via onAuthStateChanged below; this call only surfaces errors that
+    // the redirect flow would otherwise drop silently.
+    completeRedirectSignIn().catch((error) => {
+      console.error('Redirect sign-in failed:', error);
+      toast.error('Sign-in failed. Please try again.');
+    });
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
