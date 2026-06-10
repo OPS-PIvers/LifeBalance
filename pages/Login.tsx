@@ -54,7 +54,12 @@ const Login: React.FC = () => {
     // account chooser always appears and the user can pick a different account.
     clearAccessError();
     try {
-      await signInWithGoogle();
+      const signedInUser = await signInWithGoogle();
+      if (signedInUser === null) {
+        // Redirect flow (installed PWA or blocked popup): the page is
+        // navigating to the provider, so keep the button in its loading state.
+        return;
+      }
       // No success toast here: signInWithGoogle resolves as soon as Firebase
       // authenticates, but the Private Alpha guard in AuthContext runs
       // asynchronously afterwards and may still deny access. The real outcome
@@ -63,11 +68,10 @@ const Login: React.FC = () => {
       console.error('Sign-in error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign in';
       toast.error(errorMessage);
-    } finally {
-      // Always re-enable the button. On success we navigate away; on denial
-      // the user stays on /login and must be able to try another account.
-      setLoading(false);
     }
+    // Re-enable the button. On success we navigate away; on denial the user
+    // stays on /login and must be able to try another account.
+    setLoading(false);
   };
 
   return (
