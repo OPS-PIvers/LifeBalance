@@ -1,6 +1,11 @@
 // Service Worker for LifeBalance PWA with Firebase Cloud Messaging
-// Cache version is timestamp-based to ensure automatic invalidation on new deployments
-const CACHE_VERSION = new Date().toISOString();
+// NOTE: the cache name must be a static string. A previous timestamp-based
+// version (`new Date().toISOString()`) was re-evaluated every time the
+// browser restarted the (frequently terminated) worker, so each cold start
+// wrote to a brand-new cache and storage churned without ever being a cache
+// hit target. Hashed build assets are content-addressed and safe to keep
+// across deploys; bump this version only when the caching strategy changes.
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = 'lifebalance-' + CACHE_VERSION;
 
 // Firebase Cloud Messaging integration
@@ -206,6 +211,22 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Cap on cached immutable assets. Hashed filenames change every deploy, so
+// without a bound the static-named cache would grow by roughly one bundle per
+// release. Oldest (insertion-order) entries are evicted first; anything still
+// in use gets re-cached on next fetch.
+const MAX_ASSET_ENTRIES = 150;
+
+async function trimAssetCache() {
+  const cache = await caches.open(CACHE_NAME);
+  const keys = await cache.keys();
+  const assetKeys = keys.filter((req) => new URL(req.url).pathname.startsWith('/assets/'));
+  const excess = assetKeys.length - MAX_ASSET_ENTRIES;
+  for (let i = 0; i < excess; i++) {
+    await cache.delete(assetKeys[i]);
+  }
+}
+
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activate - cleaning old caches');
@@ -220,7 +241,7 @@ self.addEventListener('activate', (event) => {
             return caches.delete(name);
           })
       );
-    }).then(() => {
+    }).then(() => trimAssetCache()).then(() => {
       // Take control of all clients immediately
       return self.clients.claim();
     })
@@ -257,8 +278,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For assets with hash in filename (immutable), cache-first
-  if (url.pathname.match(/\.[a-f0-9]{8}\.(js|css)$/)) {
+  // Vite emits content-hashed, immutable files under /assets/ (e.g.
+  // `index-mAUxcOUH.js`), so they can be served cache-first. (An earlier
+  // `\.[a-f0-9]{8}\.(js|css)$` pattern expected webpack-style names and never
+  // matched, which made every repeat visit re-download the whole bundle.)
+  if (url.origin === self.location.origin && url.pathname.startsWith('/assets/')) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
         if (cached) return cached;

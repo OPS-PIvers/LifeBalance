@@ -1,12 +1,20 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
-import RewardsModal from '@/components/modals/RewardsModal';
-import SafeToSpendModal from '@/components/modals/SafeToSpendModal';
-import FeedbackModal from '@/components/modals/FeedbackModal';
+import { LazyMount } from '@/components/ui/LazyMount';
+import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
+
+// Lazy-loaded so these drawers (and framer-motion via Drawer) stay out of the
+// boot bundle; preloaded on idle below so the first tap is still instant.
+const loadRewardsModal = () => import('@/components/modals/RewardsModal');
+const loadSafeToSpendModal = () => import('@/components/modals/SafeToSpendModal');
+const loadFeedbackModal = () => import('@/components/modals/FeedbackModal');
+const RewardsModal = React.lazy(loadRewardsModal);
+const SafeToSpendModal = React.lazy(loadSafeToSpendModal);
+const FeedbackModal = React.lazy(loadFeedbackModal);
 
 const TopToolbar: React.FC = () => {
   const { safeToSpend } = useFinance();
@@ -17,6 +25,14 @@ const TopToolbar: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(
+    () =>
+      preloadOnIdle(() =>
+        Promise.all([loadRewardsModal(), loadSafeToSpendModal(), loadFeedbackModal()])
+      ),
+    []
+  );
 
   const isPositive = safeToSpend >= 0;
 
@@ -110,9 +126,15 @@ const TopToolbar: React.FC = () => {
         <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} anchorRef={profileButtonRef} />
       </div>
 
-      <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
-      <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
-      <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      <LazyMount when={isRewardsOpen}>
+        <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
+      </LazyMount>
+      <LazyMount when={isSafeSpendOpen}>
+        <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
+      </LazyMount>
+      <LazyMount when={isFeedbackOpen}>
+        <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
+      </LazyMount>
     </>
   );
 };

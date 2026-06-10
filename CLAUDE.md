@@ -129,6 +129,10 @@ Habits auto-reset based on their `period` (daily/weekly).
 
 Uses **HashRouter** (not BrowserRouter) to support deployment without server-side routing configuration. Routes are defined in [App.tsx](App.tsx); pages are `React.lazy`-loaded for code-splitting. Current routes: `/login`, `/setup` (public); `/` (Dashboard), `/lists`, `/budget`, `/habits`, `/meals`, `/shopping`, `/todos`, `/settings`, `/migrate-submissions` (protected via `ProtectedRoute` + `MainLayout`). Each protected route is wrapped in its own `ErrorBoundary` keyed on pathname, so a crash on one page doesn't take down the whole app.
 
+### Code-Splitting & Boot Bundle
+
+Pages are `React.lazy`-loaded (see Routing). The always-mounted toolbar/nav modals — `CaptureModal`, `RewardsModal`, `SafeToSpendModal`, `FeedbackModal` — are also lazy: they render inside [`LazyMount`](components/ui/LazyMount.tsx) (mounts on first open, stays mounted so the Drawer exit animation plays) and are warmed during browser idle via [`preloadOnIdle`](utils/preloadOnIdle.ts). This keeps `Drawer`/`framer-motion` out of the boot bundle, so don't statically import any `Drawer`-based modal from `MainLayout`, `TopToolbar`, or `BottomNav`. Vendor chunking is the **function form** of `manualChunks` in [vite.config.ts](vite.config.ts) on purpose — the object form misses package subpaths (`react-dom/client`, `react/jsx-runtime`) and Rollup's virtual CJS-interop modules, which previously bloated the index chunk and dragged framer-motion into boot (see the comment there before changing it). The service worker ([public/sw.js](public/sw.js)) serves hashed `/assets/` files cache-first from a statically named cache; bump its `CACHE_VERSION` only when the caching strategy itself changes (hashed assets are content-addressed, so deploys don't need a bump).
+
 ### External Services
 
 **Gemini API** ([services/geminiService.ts](services/geminiService.ts)):
