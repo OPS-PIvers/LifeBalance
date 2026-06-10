@@ -218,12 +218,20 @@ self.addEventListener('install', (event) => {
 const MAX_ASSET_ENTRIES = 150;
 
 async function trimAssetCache() {
-  const cache = await caches.open(CACHE_NAME);
-  const keys = await cache.keys();
-  const assetKeys = keys.filter((req) => new URL(req.url).pathname.startsWith('/assets/'));
-  const excess = assetKeys.length - MAX_ASSET_ENTRIES;
-  for (let i = 0; i < excess; i++) {
-    await cache.delete(assetKeys[i]);
+  // Best-effort: a trim failure (quota/disk I/O) must never block activation.
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const keys = await cache.keys();
+    const assetKeys = keys.filter((req) => {
+      const url = new URL(req.url, self.location.origin);
+      return url.origin === self.location.origin && url.pathname.startsWith('/assets/');
+    });
+    const excess = assetKeys.length - MAX_ASSET_ENTRIES;
+    if (excess > 0) {
+      await Promise.all(assetKeys.slice(0, excess).map((req) => cache.delete(req)));
+    }
+  } catch (err) {
+    console.error('[SW] Failed to trim asset cache:', err);
   }
 }
 
