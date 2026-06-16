@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { Habit } from '@/types/schema';
 
+// These tests `await import('./geminiService')`, pulling in a heavy module graph
+// (Gemini SDK mock + firebase). Under the full-repo parallel run the first such
+// import per file can exceed the 5s default, so raise the per-test timeout.
+vi.setConfig({ testTimeout: 30000 });
+
+// A small but structurally-valid base64 image data URL (1x1 transparent PNG).
+// The service now validates image input (validateBase64Image), so test fixtures
+// must be well-formed base64 rather than arbitrary placeholder strings.
+const VALID_TEST_IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {
   return { generateContentMock: vi.fn() };
@@ -12,7 +23,8 @@ vi.mock('@/firebase.config', () => ({
 }));
 
 vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(),
+  // doc(...).withConverter(...) is used by the quota reads (finding 6.1).
+  doc: vi.fn(() => ({ withConverter: vi.fn().mockReturnThis() })),
   getDoc: vi.fn().mockResolvedValue({
     exists: () => true,
     data: () => ({ aiEnabled: true, aiUsage: { dailyCount: 0, lastResetDate: new Date().toISOString().split('T')[0] } })
@@ -90,8 +102,7 @@ describe('geminiService', () => {
       });
 
       // Pass mock client to bypass "Test Mode" check
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClient = { models: { generateContent: generateContentMock } } as any;
+      const mockClient = { models: { generateContent: generateContentMock } } as unknown as Parameters<typeof reorganizeHabits>[2];
       const result = await reorganizeHabits('household-1', mockHabits, mockClient);
 
       expect(result).toEqual(mockResponse);
@@ -403,7 +414,7 @@ describe('geminiService', () => {
         text: JSON.stringify(mockResponse)
     });
 
-    await analyzeReceipt('test-id', 'base64-img');
+    await analyzeReceipt('test-id', VALID_TEST_IMAGE);
 
     // Verify the prompt sent to Gemini contains the date
     // We access the first argument of the first call, which is the model options/config object
@@ -434,7 +445,7 @@ describe('geminiService', () => {
         text: JSON.stringify(mockResponse)
     });
 
-    await parseBankStatement('test-id', 'base64-img');
+    await parseBankStatement('test-id', VALID_TEST_IMAGE);
 
     const callArgs = generateContentMock.mock.calls[0]![0];
     const promptText = callArgs.contents.parts[1].text;

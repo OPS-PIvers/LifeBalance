@@ -99,7 +99,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   };
 
   return (
-    <div className="bg-white/90 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass-card border border-white/20 dark:border-white/5 relative group overflow-hidden transition-all duration-300 hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)]">
+    <div className="bg-white/90 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass-card border border-white/20 dark:border-white/5 relative group overflow-hidden transition-all duration-300 hover:shadow-premium">
       {/* Header - Clickable for toggle */}
       <div
         className="flex items-center justify-between mb-4 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 outline-none rounded-xl"

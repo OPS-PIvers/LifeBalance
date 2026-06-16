@@ -1,0 +1,727 @@
+/**
+ * HTTP-layer tests for the quickAdd Cloud Function endpoints.
+ *
+ * These are picked up by the ROOT Vitest runner (vite.config.ts has no `include`
+ * restriction for `test`), exactly like habitProcessor.test.ts. Unlike that file,
+ * `index.ts` imports firebase-admin and firebase-functions at module load, so we
+ * mock both:
+ *   - `onRequest(opts, handler)` is mocked to return the raw handler so we can
+ *     call it directly as `(req, res) => Promise<void>`.
+ *   - `firebase-admin` exposes a single shared, reconfigurable mock Firestore that
+ *     both `index.ts` and `apiKeyValidation.ts` bind to at module load.
+ *
+ * `validateApiKey` / `checkRateLimit` / `logApiCall` are the REAL functions from
+ * apiKeyValidation.ts — they run against the mock db, so we drive their branches
+ * by configuring the db method return values per test.
+ */
+
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// ---------------------------------------------------------------------------
+// firebase-functions mocks
+// ---------------------------------------------------------------------------
+
+vi.mock("firebase-functions/v2/https", () => ({
+  onRequest: (_opts: unknown, handler: unknown) => handler,
+}));
+
+vi.mock("firebase-functions/logger", () => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}));
+
+// ---------------------------------------------------------------------------
+// firebase-admin mock — single shared, reconfigurable Firestore
+// ---------------------------------------------------------------------------
+
+interface MockDb {
+  collectionGroup: ReturnType<typeof vi.fn>;
+  doc: ReturnType<typeof vi.fn>;
+  collection: ReturnType<typeof vi.fn>;
+  batch: ReturnType<typeof vi.fn>;
+  runTransaction: ReturnType<typeof vi.fn>;
+}
+
+const adminMock = vi.hoisted(() => {
+  const db: MockDb = {
+    collectionGroup: vi.fn(),
+    doc: vi.fn(),
+    collection: vi.fn(),
+    batch: vi.fn(),
+    runTransaction: vi.fn(),
+  };
+  return { db };
+});
+
+vi.mock("firebase-admin", () => {
+  const FieldValue = {
+    serverTimestamp: () => "TS",
+    increment: (n: number) => ({ __inc: n }),
+  };
+  const firestore = Object.assign(() => adminMock.db, { FieldValue });
+  return { firestore };
+});
+
+// Import AFTER mocks are registered. Functions use relative imports.
+import {
+  quickAddHabit,
+  quickAddExpense,
+  quickAddShoppingItem,
+  quickAddNaturalLanguage,
+  quickAddReceipt,
+} from "./index";
+
+// ---------------------------------------------------------------------------
+// Test helpers
+// ---------------------------------------------------------------------------
+
+type Handler = (req: unknown, res: unknown) => Promise<void>;
+
+interface FakeRes {
+  statusCode: number;
+  body: unknown;
+  headers: Record<string, string>;
+  status(code: number): { json(b: unknown): void; send(b: string): void };
+  set(k: string, v: string): void;
+}
+
+function makeRes(): FakeRes {
+  const res: FakeRes = {
+    statusCode: 0,
+    body: undefined,
+    headers: {},
+    status(code: number) {
+      res.statusCode = code;
+      return {
+        json: (b: unknown) => {
+          res.body = b;
+        },
+        send: (b: string) => {
+          res.body = b;
+        },
+      };
+    },
+    set(k: string, v: string) {
+      res.headers[k] = v;
+    },
+  };
+  return res;
+}
+
+interface ReqOpts {
+  method?: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+function makeReq(opts: ReqOpts = {}): unknown {
+  return {
+    method: opts.method ?? "POST",
+    headers: opts.headers ?? { authorization: VALID_AUTH },
+    body: opts.body ?? {},
+  };
+}
+
+// A well-formed key: lb_{6 alnum}_{32 hex}
+const VALID_KEY = "lb_abcdef_0123456789abcdef0123456789abcdef";
+const VALID_AUTH = `Bearer ${VALID_KEY}`;
+
+const ALL_PERMS = {
+  habits: true,
+  expenses: true,
+  shoppingList: true,
+  receiptScanning: true,
+};
+
+// Cast through unknown to satisfy the handler's (req, res) signature in tests.
+function asHandler(fn: unknown): Handler {
+  return fn as Handler;
+}
+
+// ---------------------------------------------------------------------------
+// Mock configuration helpers
+// ---------------------------------------------------------------------------
+
+const HOUSEHOLD_ID = "hh1";
+
+/** Configure validateApiKey's collectionGroup query to return a valid active key. */
+function configureValidKey(
+  permissions: Record<string, boolean> = ALL_PERMS
+): void {
+  const keyDoc = {
+    id: "key1",
+    data: () => ({ permissions, createdBy: "user1", status: "active" }),
+    ref: {
+      parent: { parent: { id: HOUSEHOLD_ID } },
+      update: vi.fn(() => Promise.resolve()),
+    },
+  };
+  const snapshot = { empty: false, docs: [keyDoc] };
+  adminMock.db.collectionGroup.mockReturnValue({
+    where: () => ({
+      where: () => ({
+        limit: () => ({
+          get: () => Promise.resolve(snapshot),
+        }),
+      }),
+    }),
+  });
+}
+
+/** Configure the collectionGroup query to return an empty snapshot (revoked/missing key). */
+function configureEmptyKey(): void {
+  const snapshot = { empty: true, docs: [] };
+  adminMock.db.collectionGroup.mockReturnValue({
+    where: () => ({
+      where: () => ({
+        limit: () => ({
+          get: () => Promise.resolve(snapshot),
+        }),
+      }),
+    }),
+  });
+}
+
+/**
+ * Configure checkRateLimit's runTransaction to allow (default) or reject (429).
+ * Allowed: txn.get() returns an empty doc (first request).
+ * Rejected: txn.get() returns a doc with count >= the per-type limit.
+ */
+function configureRateLimit(allowed: boolean): void {
+  adminMock.db.runTransaction.mockImplementation(
+    async (cb: (txn: unknown) => Promise<unknown>) => {
+      const txn = {
+        get: () =>
+          Promise.resolve({
+            data: () =>
+              allowed
+                ? undefined
+                : { count: 100000, windowStart: Date.now() },
+          }),
+        set: vi.fn(),
+        update: vi.fn(),
+      };
+      return cb(txn);
+    }
+  );
+}
+
+/** logApiCall writes to db.collection('logs/api_calls/requests').add(...). */
+const logAddMock = vi.fn(() => Promise.resolve({ id: "log1" }));
+
+/**
+ * Generic db.collection() router. Returns an object whose `.add`, `.where`,
+ * and `.doc` are configurable via the per-test overrides map keyed by path.
+ */
+interface CollectionOverride {
+  add?: ReturnType<typeof vi.fn>;
+  whereGetDocs?: unknown[];
+}
+
+let collectionOverrides: Record<string, CollectionOverride> = {};
+
+function configureCollections(): void {
+  adminMock.db.collection.mockImplementation((path: string) => {
+    if (path === "logs/api_calls/requests") {
+      return { add: logAddMock };
+    }
+    const override = collectionOverrides[path] ?? {};
+    const add = override.add ?? vi.fn(() => Promise.resolve({ id: "new1" }));
+    const docs = override.whereGetDocs ?? [];
+    return {
+      add,
+      doc: () => ({ id: "preallocated1" }),
+      where: () => ({
+        get: () => Promise.resolve({ docs }),
+      }),
+    };
+  });
+}
+
+/** db.doc() router for arbitrary paths. */
+interface DocOverride {
+  get?: ReturnType<typeof vi.fn>;
+  update?: ReturnType<typeof vi.fn>;
+}
+let docOverrides: Record<string, DocOverride> = {};
+
+function configureDocs(): void {
+  adminMock.db.doc.mockImplementation((path: string) => {
+    const override = docOverrides[path] ?? {};
+    return {
+      id: path.split("/").pop() ?? path,
+      get:
+        override.get ??
+        vi.fn(() => Promise.resolve({ exists: false, data: () => undefined })),
+      update: override.update ?? vi.fn(() => Promise.resolve()),
+    };
+  });
+}
+
+/** db.batch() returns a recording batch. */
+let lastBatch: {
+  update: ReturnType<typeof vi.fn>;
+  set: ReturnType<typeof vi.fn>;
+  commit: ReturnType<typeof vi.fn>;
+};
+
+function configureBatch(): void {
+  adminMock.db.batch.mockImplementation(() => {
+    lastBatch = {
+      update: vi.fn(),
+      set: vi.fn(),
+      commit: vi.fn(() => Promise.resolve()),
+    };
+    return lastBatch;
+  });
+}
+
+// A non-stale daily habit fixture (lastUpdated = now → isHabitStale false).
+function nonStaleHabitData(): Record<string, unknown> {
+  return {
+    title: "Read",
+    category: "Health",
+    type: "positive",
+    basePoints: 10,
+    scoringType: "threshold",
+    period: "daily",
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reset / defaults
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  collectionOverrides = {};
+  docOverrides = {};
+  configureValidKey();
+  configureRateLimit(true);
+  configureCollections();
+  configureDocs();
+  configureBatch();
+});
+
+// ===========================================================================
+// COMMON HTTP-layer behavior (quickAddHabit representative + spot checks)
+// ===========================================================================
+
+describe("quickAdd common HTTP-layer behavior", () => {
+  it("OPTIONS preflight returns 204", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ method: "OPTIONS" }), res);
+    expect(res.statusCode).toBe(204);
+  });
+
+  it("non-POST (GET) returns 405 METHOD_NOT_ALLOWED", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ method: "GET" }), res);
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toMatchObject({ error: { code: "METHOD_NOT_ALLOWED" } });
+  });
+
+  it("missing Authorization header returns 401 UNAUTHORIZED", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ headers: {} }), res);
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: "UNAUTHORIZED" } });
+  });
+
+  it("invalid key format returns 401 (validateApiKey rejects)", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ headers: { authorization: "Bearer garbage" } }),
+      res
+    );
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: "UNAUTHORIZED" } });
+  });
+
+  it("well-formed key not found / revoked returns 401", async () => {
+    configureEmptyKey();
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toMatchObject({ error: { code: "UNAUTHORIZED" } });
+  });
+
+  it("valid key without habits permission returns 403 FORBIDDEN", async () => {
+    configureValidKey({ ...ALL_PERMS, habits: false });
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("rate limit exceeded returns 429 RATE_LIMITED and sets Retry-After", async () => {
+    configureRateLimit(false);
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+    expect(res.statusCode).toBe(429);
+    expect(res.body).toMatchObject({ error: { code: "RATE_LIMITED" } });
+    expect(res.headers["Retry-After"]).toBeDefined();
+  });
+
+  it("expense endpoint also rejects non-POST with 405", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(makeReq({ method: "GET" }), res);
+    expect(res.statusCode).toBe(405);
+  });
+
+  it("shopping endpoint also handles OPTIONS with 204", async () => {
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(makeReq({ method: "OPTIONS" }), res);
+    expect(res.statusCode).toBe(204);
+  });
+});
+
+// ===========================================================================
+// quickAddHabit — validation + happy path
+// ===========================================================================
+
+describe("quickAddHabit validation & happy path", () => {
+  it("neither habitId nor habitName returns 400 BAD_REQUEST", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: {} }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("habitId with invalid characters returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "bad/id" } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("habitName too long (>100) returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ body: { habitName: "x".repeat(101) } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("invalid direction returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddHabit)(
+      makeReq({ body: { habitId: "h1", direction: "sideways" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("habit not found returns 404 NOT_FOUND", async () => {
+    docOverrides[`households/${HOUSEHOLD_ID}/habits/h1`] = {
+      get: vi.fn(() => Promise.resolve({ exists: false })),
+    };
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  it("happy path toggles habit up, commits batch, updates habit + household points", async () => {
+    docOverrides[`households/${HOUSEHOLD_ID}/habits/h1`] = {
+      get: vi.fn(() =>
+        Promise.resolve({ exists: true, id: "h1", data: () => nonStaleHabitData() })
+      ),
+      update: vi.fn(() => Promise.resolve()),
+    };
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true });
+    // Batch committed once.
+    expect(lastBatch.commit).toHaveBeenCalledTimes(1);
+    // Two updates: the habit ref and the household ref (pointsChange = +10 != 0).
+    expect(lastBatch.update).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ===========================================================================
+// quickAddExpense
+// ===========================================================================
+
+describe("quickAddExpense", () => {
+  it("missing amount returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("NaN amount returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: "not a number", merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("currency string '$50.00' is parsed to 50 and a transaction is added", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: "$50.00", merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { amount: 50 } });
+    expect(add).toHaveBeenCalledTimes(1);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(50);
+    expect(txData.status).toBe("pending_review");
+    expect(txData.source).toBe("shortcut");
+  });
+
+  it("accounting notation '(50.00)' is stored as abs 50", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: "(50.00)", merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ data: { amount: 50 } });
+  });
+
+  it("zero-dollar hold returns 200 skipped:true and does NOT add a transaction", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 0, merchant: "Gas" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, skipped: true });
+    expect(add).not.toHaveBeenCalled();
+    // logApiCall still fires for the skipped event.
+    expect(logAddMock).toHaveBeenCalled();
+  });
+
+  it("missing merchant returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(makeReq({ body: { amount: 50 } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("invalid date format returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 50, merchant: "Coffee", date: "2020/01/01" } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("without expenses permission returns 403", async () => {
+    configureValidKey({ ...ALL_PERMS, expenses: false });
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 50, merchant: "Coffee" } }),
+      res
+    );
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+});
+
+// ===========================================================================
+// quickAddShoppingItem
+// ===========================================================================
+
+describe("quickAddShoppingItem", () => {
+  it("single item happy path (no duplicate) returns 200 and creates item", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "s1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/shoppingList`] = {
+      add,
+      whereGetDocs: [],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(
+      makeReq({ body: { item: "Milk" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { name: "Milk" } });
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  it("empty items array returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(
+      makeReq({ body: { items: [] } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("more than 20 items returns 400", async () => {
+    const items = Array.from({ length: 21 }, (_, i) => ({ item: `i${i}` }));
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(makeReq({ body: { items } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("batch item missing 'item' field returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(
+      makeReq({ body: { items: [{ quantity: 2 }] } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("without shoppingList permission returns 403", async () => {
+    configureValidKey({ ...ALL_PERMS, shoppingList: false });
+    const res = makeRes();
+    await asHandler(quickAddShoppingItem)(
+      makeReq({ body: { item: "Milk" } }),
+      res
+    );
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+});
+
+// ===========================================================================
+// quickAddNaturalLanguage
+// ===========================================================================
+
+describe("quickAddNaturalLanguage", () => {
+  it("missing text returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(makeReq({ body: {} }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("empty text after trim returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(
+      makeReq({ body: { text: "   " } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("text too long (>500) returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(
+      makeReq({ body: { text: "x".repeat(501) } }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("expense-y text with expenses permission queues a pendingItem (type expense)", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "p1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/pendingItems`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(
+      makeReq({ body: { text: "I spent $20 on lunch" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { type: "expense" } });
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  it("expense-y text WITHOUT expenses permission returns 403", async () => {
+    // Keep shoppingList true so the initial "at least one permission" gate passes,
+    // then the per-type expense check fails.
+    configureValidKey({
+      habits: true,
+      expenses: false,
+      shoppingList: true,
+      receiptScanning: false,
+    });
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(
+      makeReq({ body: { text: "I spent $20 on lunch" } }),
+      res
+    );
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("shopping text with shoppingList permission returns 200 type shopping", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "p2" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/pendingItems`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddNaturalLanguage)(
+      makeReq({ body: { text: "add milk to shopping list" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, data: { type: "shopping" } });
+  });
+});
+
+// ===========================================================================
+// quickAddReceipt
+// ===========================================================================
+
+describe("quickAddReceipt", () => {
+  it("without receiptScanning permission returns 403", async () => {
+    configureValidKey({ ...ALL_PERMS, receiptScanning: false });
+    const res = makeRes();
+    await asHandler(quickAddReceipt)(
+      makeReq({ body: { image: "abc" } }),
+      res
+    );
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ error: { code: "FORBIDDEN" } });
+  });
+
+  it("no image returns 400", async () => {
+    const res = makeRes();
+    await asHandler(quickAddReceipt)(makeReq({ body: {} }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ error: { code: "BAD_REQUEST" } });
+  });
+
+  it("valid image returns 501 NOT_IMPLEMENTED (placeholder endpoint)", async () => {
+    const res = makeRes();
+    await asHandler(quickAddReceipt)(
+      makeReq({ body: { image: "small-base64-string" } }),
+      res
+    );
+    expect(res.statusCode).toBe(501);
+    expect(res.body).toMatchObject({ error: { code: "NOT_IMPLEMENTED" } });
+  });
+});

@@ -38,3 +38,6 @@ coverage/
 # npm lockfiles (this is a pnpm workspace — pnpm-lock.yaml is canonical)
 package-lock.json
 functions/package-lock.json
+
+# Claude Code harness scaffolding (agent worktrees are temporary + auto-cleaned)
+.claude/worktrees/

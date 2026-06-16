@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import TransactionMasterList from './TransactionMasterList';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
@@ -231,12 +231,26 @@ describe('TransactionMasterList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Freeze the clock so date-dependent behavior (e.g. the duplicate handler's
+    // "today" via getLocalDateString) is deterministic across CI runs that may
+    // cross a midnight/month boundary. Fake timers with shouldAdvanceTime keep
+    // RAF/microtask-based timers (used by the @tanstack/react-virtual
+    // virtualizer and waitFor) progressing so component tests still settle.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-06-16T12:00:00Z'));
+
     vi.mocked(useHousehold).mockReturnValue(
       defaultMockValue() as unknown as ReturnType<typeof useHousehold>
     );
 
     // Mock window.confirm
     vi.spyOn(window, 'confirm').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    // Restores real timers and the real system clock.
+    vi.useRealTimers();
   });
 
   describe('Accessibility', () => {
@@ -362,6 +376,12 @@ describe('TransactionMasterList', () => {
     });
 
     it('duplicates a transaction', async () => {
+      // The component sets the duplicate's date via getLocalDateString() (local
+      // time). Derive the expected date the same way under the frozen clock so
+      // the comparison stays deterministic and timezone-robust.
+      const now = new Date();
+      const expectedToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
       render(<TransactionMasterList />);
 
       const duplicateButtons = screen.getAllByLabelText(/Duplicate transaction from/);
@@ -376,7 +396,7 @@ describe('TransactionMasterList', () => {
           isRecurring: false,
           status: 'verified',
           autoCategorized: false,
-          date: new Date().toISOString().split('T')[0]
+          date: expectedToday
         }));
       });
     });

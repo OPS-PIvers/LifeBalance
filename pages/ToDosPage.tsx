@@ -790,7 +790,7 @@ const ToDosPage: React.FC = () => {
             value={completeByDate}
             onChange={(e) => setCompleteByDate(e.target.value)}
             icon={<Calendar size={18} />}
-            style={{ WebkitAppearance: 'none' }}
+            className="appearance-none"
           />
 
           <fieldset>

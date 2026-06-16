@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { CategorySpendWidget } from './CategorySpendWidget';
-import { format } from 'date-fns';
+
+// Fixed "today" so both the module-level fixtures and the widget's
+// startOfMonth(new Date()) current-month filter resolve to the same month
+// (June 2026), making the suite deterministic across midnight/month boundaries.
+const TODAY = '2026-06-16';
 
 // Mock dependencies
 vi.mock('react-router-dom', () => ({
@@ -15,7 +19,7 @@ const mockTransactions = [
     id: '1',
     amount: 100,
     category: 'Groceries',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: TODAY,
     status: 'verified',
     merchant: 'Safeway',
     isRecurring: false,
@@ -26,7 +30,7 @@ const mockTransactions = [
     id: '2',
     amount: 50,
     category: 'Dining',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: TODAY,
     status: 'verified',
     merchant: 'McDonalds',
     isRecurring: false,
@@ -37,7 +41,7 @@ const mockTransactions = [
     id: '3',
     amount: 200,
     category: 'Groceries',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: TODAY,
     status: 'verified',
     merchant: 'Whole Foods',
     isRecurring: false,
@@ -61,7 +65,7 @@ const mockTransactions = [
     id: '5',
     amount: 1000,
     category: 'Income',
-    date: format(new Date(), 'yyyy-MM-dd'),
+    date: TODAY,
     status: 'verified',
     merchant: 'Employer',
     isRecurring: true,
@@ -88,6 +92,17 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
 });
 
 describe('CategorySpendWidget', () => {
+  beforeEach(() => {
+    // Freeze "now" to June 2026 so the widget's startOfMonth/endOfMonth
+    // current-month window matches the TODAY-dated fixtures deterministically.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-06-16T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('aggregates spending by category for the current month', () => {
     render(<CategorySpendWidget />);
 

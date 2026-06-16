@@ -24,9 +24,14 @@ jobs:
         run: pnpm lint
       - name: Lint Functions
         run: pnpm --filter functions run lint
-      - name: Run Tests
-        # Runs 'vitest run' via package.json script
-        run: pnpm test
+      - name: Run Tests + Coverage Gate
+        # Runs 'vitest run --coverage'. This both executes the full suite and
+        # enforces the coverage thresholds for utils/** configured in
+        # vite.config.ts (test.coverage.thresholds). A drop below the floor
+        # fails CI, so coverage of the critical business logic can only ratchet
+        # up. Replaces the previous plain 'pnpm test' step (coverage runs the
+        # tests too, so we don't run the suite twice).
+        run: pnpm test:coverage
       - name: Build Root (Dry Run)
         run: pnpm run build
         env:

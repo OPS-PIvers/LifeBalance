@@ -229,6 +229,10 @@ const App: React.FC = () => {
               </Routes>
             </Suspense>
 
+            {/* react-hot-toast announces each toast via its own per-toast aria-live
+                region (default role="status", aria-live="polite"), so no outer
+                wrapper is needed — an extra region with aria-atomic would re-announce
+                every active toast on each new one. */}
             <Toaster
               position="top-center"
               containerClassName="z-toast"
