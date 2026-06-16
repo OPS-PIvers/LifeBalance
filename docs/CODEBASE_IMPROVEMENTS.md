@@ -15,6 +15,38 @@ improvement. Findings are grouped by theme, prioritized by impact, and cite
 
 ---
 
+## Implementation Status — 2026-06-16 (branch `claude/docs-optimizations-mggqzi`)
+
+A parallel implementation pass closed out the backlog below. Test suite grew from
+**781 → 959** tests (93 files); `pnpm lint`, `pnpm test`, the new coverage gate, and
+`pnpm run build` are all green.
+
+| Item | Status |
+|------|--------|
+| 1.1 Validate AI JSON before cast | ✅ Shipped — per-type hand-written guards + `GeminiValidationError` in `generateJsonContent<T>` (`services/geminiValidation.ts`) |
+| 1.2 Image data validation | ✅ Shipped — `validateBase64Image()` rejects bad images before quota spend |
+| 1.3 Dedupe error-handling/sanitization | ✅ Shipped — `withErrorHandling()` + `sanitizeList()` |
+| 1.4 Quota-refund recoverability | ✅ Shipped — rich logging + best-effort `logs/ai_usage/refund_failures` audit |
+| 2 Infra test coverage | ✅ Shipped — new tests for `useMidnightScheduler`, `useActionQueue`, `useGroceryOptimizer`, `authService`, `householdService`, `apiKeyService`, the `quickAdd` HTTP endpoint, and context batch-write atomicity; flaky `new Date()` fixtures pinned with fake timers |
+| 3.1 Super-admin UID backdoor | ⚠️ Documented gated removal in `docs/DEPLOY_CHECKLIST.md` — left live because the `admin` custom claim is not yet provisioned (removing now would lock out admins) |
+| 3.2 Gemini key restrictions | ⚠️ Documented in `docs/DEPLOY_CHECKLIST.md` (ops action, no code change) |
+| 3.3 `CalendarItem.bucketId` rejected by rules | ✅ Shipped — added to create/update allow-lists + validated; `accounts.lastUpdated` accepts `timestamp \| string` |
+| 4.1 Calendar/members listener error handlers | ✅ Shipped |
+| 4.2 Non-blocking pending-items queue | ✅ Shipped — ref-backed FIFO + single-flight drain |
+| 4.3 Stable meal-plan callbacks | ✅ Shipped — ref-backed getter |
+| 4.4 Mock parity `safeToSpendBreakdown` | ✅ Shipped |
+| 5.1 Settings off `useHousehold()` shim | ✅ Shipped (only `MigrateSubmissions` shim remains, by design) |
+| 5.2 aria-live toasts | ✅ Shipped |
+| 5.3 Memoize hot handlers + extract `FilterControls` | ✅ Shipped |
+| 5.4 Tailwind utility cleanups | ✅ Shipped |
+| 6.1 Typed quota converter | ✅ Shipped |
+| 6.2 Root `no-explicit-any` parity | ✅ Shipped |
+| 6.3 CI coverage gate for `utils/` | ✅ Shipped — ratcheted thresholds in `vite.config.ts` + `pnpm test:coverage` in CI |
+| 6.4 husky + lint-staged pre-commit | ✅ Shipped |
+| 7 `weatherSensitive` dead code | ⏸️ Deferred — intentionally retained per `WEATHER_IMPLEMENTATION.md`; removing it contradicts the documented future plan (revisit as a deliberate decision) |
+
+---
+
 ## Executive Summary
 
 The codebase is **well-architected overall**: strict TypeScript, domain-sliced
