@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Meal, MealPlanItem, MealIngredient } from '@/types/schema';
 import { Plus, Trash2, Edit2, ChevronRight, ChevronLeft, ShoppingCart, Copy, CheckCircle2, MoreVertical, CalendarDays, Eye, Utensils } from 'lucide-react';
@@ -26,6 +26,18 @@ const MEAL_TYPE_META: Record<string, { dot: string; badge: string }> = {
   dinner: { dot: 'bg-brand-500', badge: 'bg-brand-50 text-brand-700 border-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/20' },
   snack: { dot: 'bg-violet-400', badge: 'bg-violet-50 text-violet-700 border-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:border-violet-500/20' },
 };
+
+// Pure helper — maps a saved Meal into the editable form shape. Defined at module
+// scope (no component state) so it's a stable reference and keeps the handlers that
+// use it free of an extra dependency.
+const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> => ({
+  name: isClone ? `${meal.name} (Copy)` : meal.name,
+  description: meal.description || '',
+  ingredients: meal.ingredients || [],
+  instructions: meal.instructions || [],
+  recipeUrl: meal.recipeUrl || '',
+  tags: meal.tags || []
+});
 
 const MealPlanTab: React.FC = () => {
   const {
@@ -344,16 +356,16 @@ const MealPlanTab: React.FC = () => {
       }
   };
 
-  const handleAddMealToDate = (date: Date) => {
+  const handleAddMealToDate = useCallback((date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     // Set up the modal to add to this date
       setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
     setTargetDate(dateStr);
     setMealType('dinner'); // Default
     setIsAddModalOpen(true);
-  };
+  }, []);
 
-  const handleEditMealPlanItem = (planItem: MealPlanItem, linkedMeal: Meal | undefined) => {
+  const handleEditMealPlanItem = useCallback((planItem: MealPlanItem, linkedMeal: Meal | undefined) => {
       // If linkedMeal exists, populate from it. Otherwise use snapshot name.
       setCurrentMeal({
           name: linkedMeal?.name || planItem.mealName,
@@ -369,7 +381,7 @@ const MealPlanTab: React.FC = () => {
       setEditingPlanItemId(planItem.id); // Track the plan item being edited
       setMealType(planItem.type || 'dinner');
       setIsAddModalOpen(true);
-  };
+  }, []);
 
   const handleMarkCooked = async () => {
     if (!viewingMeal) return;
@@ -465,16 +477,7 @@ const MealPlanTab: React.FC = () => {
       handleCancel();
   };
 
-  const mealToFormState = (meal: Meal, isClone: boolean = false): Partial<Meal> => ({
-      name: isClone ? `${meal.name} (Copy)` : meal.name,
-      description: meal.description || '',
-      ingredients: meal.ingredients || [],
-      instructions: meal.instructions || [],
-      recipeUrl: meal.recipeUrl || '',
-      tags: meal.tags || []
-  });
-
-  const handleCloneMeal = (meal: Meal) => {
+  const handleCloneMeal = useCallback((meal: Meal) => {
       // 1. Populate form with meal data (copy)
       setCurrentMeal(mealToFormState(meal, true));
 
@@ -485,25 +488,31 @@ const MealPlanTab: React.FC = () => {
       setIsPreviousMealsModalOpen(false);
       setIsAddModalOpen(true);
       toast.success('Cloned! You are editing a new copy.');
-  };
+  }, []);
 
-  const handleSelectMeal = (meal: Meal) => {
+  const handleSelectMeal = useCallback((meal: Meal) => {
       setCurrentMeal(mealToFormState(meal));
       setEditingMealId(meal.id);
       setIsPreviousMealsModalOpen(false);
       // Ensure the Add Meal modal is showing so the selected recipe is visible
       // and can be saved to the plan (mirrors handleCloneMeal / handleAIRequest).
       setIsAddModalOpen(true);
-  };
+  }, []);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
       setIsAddModalOpen(false);
       setTargetDate(null);
       setEditingMealId(null);
       setEditingPlanItemId(null);
       setMealType('dinner');
       setCurrentMeal({ tags: [], ingredients: [], instructions: [], recipeUrl: '' });
-  };
+  }, []);
+
+  // Stable modal-open handlers passed to AddMealModal so they don't recreate each
+  // render (keeps the prop identity stable for child memoization).
+  const handleOpenCookbook = useCallback(() => setIsPreviousMealsModalOpen(true), []);
+  const handleOpenAI = useCallback(() => setIsAIModalOpen(true), []);
+  const handleOpenImport = useCallback(() => setIsImportModalOpen(true), []);
 
   const handleAIRequest = async () => {
     if (!householdId) {
@@ -537,7 +546,7 @@ const MealPlanTab: React.FC = () => {
     }
   };
 
-  const handleRecipeImport = (meal: Partial<Meal>) => {
+  const handleRecipeImport = useCallback((meal: Partial<Meal>) => {
       setCurrentMeal(prev => ({
           ...prev,
           name: meal.name ?? prev.name,
@@ -547,7 +556,7 @@ const MealPlanTab: React.FC = () => {
           recipeUrl: meal.recipeUrl ?? prev.recipeUrl ?? '',
           tags: meal.tags ?? prev.tags ?? []
       }));
-  };
+  }, []);
 
   // --- Derived view data ---------------------------------------------------
   // Compute "now" once so all derived strings use the same instant.
@@ -872,9 +881,9 @@ const MealPlanTab: React.FC = () => {
         setCurrentMeal={setCurrentMeal}
         mealType={mealType}
         setMealType={setMealType}
-        onOpenCookbook={() => setIsPreviousMealsModalOpen(true)}
-        onOpenAI={() => setIsAIModalOpen(true)}
-        onOpenImport={() => setIsImportModalOpen(true)}
+        onOpenCookbook={handleOpenCookbook}
+        onOpenAI={handleOpenAI}
+        onOpenImport={handleOpenImport}
         onSave={saveMeal}
       />
 

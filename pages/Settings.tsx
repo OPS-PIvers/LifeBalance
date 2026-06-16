@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
+import {
+  useHouseholdCore,
+  useGamification,
+  useFinance,
+  useMealPlan,
+  useShopping,
+} from '@/contexts/FirebaseHouseholdContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/firebase.config';
 import { useNavigate } from 'react-router-dom';
@@ -47,24 +53,28 @@ const Settings: React.FC = () => {
   const {
     members,
     currentUser,
-    dailyPoints,
-    weeklyPoints,
-    totalPoints,
     addMember,
     updateMember,
     removeMember,
-    habits,
     householdSettings,
+    apiKeys,
+  } = useHouseholdCore();
+  const {
+    dailyPoints,
+    weeklyPoints,
+    totalPoints,
+    habits,
+  } = useGamification();
+  const {
     transactions,
     buckets,
-    meals,
-    shoppingList,
     calendarItems,
-    apiKeys,
     hasMoreTransactions,
     isLoadingOlderTransactions,
-    loadAllTransactions
-  } = useHousehold();
+    loadAllTransactions,
+  } = useFinance();
+  const { meals } = useMealPlan();
+  const { shoppingList } = useShopping();
   const navigate = useNavigate();
 
   // Modal state

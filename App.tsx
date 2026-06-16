@@ -229,23 +229,28 @@ const App: React.FC = () => {
               </Routes>
             </Suspense>
 
-            <Toaster
-              position="top-center"
-              containerClassName="z-toast"
-              containerStyle={{
-                top: 'calc(env(safe-area-inset-top) + 1rem)',
-                zIndex: 9999,
-              }}
-              toastOptions={{
-                className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
-                success: {
-                  iconTheme: {
-                    primary: '#10B981',
-                    secondary: 'white',
+            {/* Wrap the toast container in an aria-live region so screen readers
+                announce success/error feedback. role="status" + aria-live="polite"
+                queue announcements without interrupting the user. */}
+            <div role="status" aria-live="polite" aria-atomic="true">
+              <Toaster
+                position="top-center"
+                containerClassName="z-toast"
+                containerStyle={{
+                  top: 'calc(env(safe-area-inset-top) + 1rem)',
+                  zIndex: 9999,
+                }}
+                toastOptions={{
+                  className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
+                  success: {
+                    iconTheme: {
+                      primary: '#10B981',
+                      secondary: 'white',
+                    },
                   },
-                },
-              }}
-            />
+                }}
+              />
+            </div>
             <OfflineBanner />
           </div>
         </HouseholdProviderComponent>
