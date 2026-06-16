@@ -71,7 +71,8 @@ import {
   GroceryCatalogItem,
   Store,
   QuickStockList,
-  HouseholdApiKey
+  HouseholdApiKey,
+  PendingItem
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -608,6 +609,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     () => mergeById(mealPlanWindow, mealPlanExtra),
     [mealPlanWindow, mealPlanExtra]
   );
+  // Ref-backed mirror of the latest mealPlan so update/delete callbacks can look
+  // up the previous item without closing over the `mealPlan` array (which changes
+  // on every meal-plan snapshot) — keeping those callbacks referentially stable.
+  const mealPlanRef = useRef(mealPlan);
+  mealPlanRef.current = mealPlan;
   const loadedMealPlanWeeksRef = useRef<Set<string>>(new Set());
   // To-dos: all active items are live; completed items are windowed to the last
   // 30 days with older completions loadable on demand.
@@ -639,6 +645,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // before the `processed: true` write settles can't double-process an item
   // (which would create duplicate shopping items / todos / transactions).
   const processingItemIdsRef = useRef<Set<string>>(new Set());
+  // FIFO queue of pending voice-command items awaiting Gemini parsing. The
+  // pendingItems snapshot callback only enqueues (so it returns immediately and
+  // never blocks the listener on the network); a separate async drain loop
+  // (`drainingPendingRef` guards against running two drains at once) processes
+  // them. Items in `processingItemIdsRef` are never re-enqueued, preserving the
+  // double-processing guard.
+  const pendingItemQueueRef = useRef<PendingItem[]>([]);
+  const drainingPendingRef = useRef<boolean>(false);
   // Tracks which household's first snapshot has resolved; isLoading is derived
   // from it so switching households automatically re-shows skeletons until the
   // new household loads. It is re-armed to null in the listener effect's reset
@@ -756,6 +770,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setHasMoreInsights(false);
     setApiKeys([]);
     setPendingItemsCount(0);
+    // Drop any queued voice-command items from the previous household so the
+    // drain loop never processes them against the new household's collection.
+    pendingItemQueueRef.current = [];
+    processingItemIdsRef.current.clear();
     // Re-arms the isLoading skeleton until the new household's first snapshot lands.
     setLoadedHouseholdId(null);
 
@@ -814,6 +832,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     unsubscribers.push(
       onSnapshot(calQuery, (snapshot) => {
         setCalendarItems(snapshot.docs.map(doc => doc.data()));
+      }, (error) => {
+        // Calendar items feed Safe-to-Spend; a silent failure would leave that
+        // metric stale. Surface it like the accounts/buckets listeners do.
+        console.error('[calendarItems] listener failed:', error);
+        toast.error('Failed to sync calendar items. Some figures may be out of date.');
       })
     );
 
@@ -911,6 +934,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             }
           }
         }
+      }, (error) => {
+        console.error('[members] listener failed:', error);
+        toast.error('Failed to sync household members. Try refreshing.');
       })
     );
 
@@ -1040,79 +1066,106 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       collection(db, `households/${householdId}/pendingItems`).withConverter(pendingItemConverter),
       where('processed', '==', false)
     );
+    // Drains the pending-item queue one item at a time, off the snapshot
+    // callback's critical path. Each item is parsed via Gemini and routed to the
+    // appropriate handler; the in-flight `processingItemIdsRef` marker is held
+    // for the whole parse+write so a re-firing snapshot can't enqueue a duplicate.
+    async function drainPendingItemQueue(hid: string) {
+      // Single-flight: only one drain loop runs at a time. A new enqueue while a
+      // drain is in progress will be picked up by the in-progress loop (it reads
+      // the queue ref fresh each iteration).
+      if (drainingPendingRef.current) return;
+      drainingPendingRef.current = true;
+      try {
+        for (;;) {
+          const item = pendingItemQueueRef.current.shift();
+          if (!item) break;
+
+          try {
+            // Get available categories for parsing
+            const expenseCategories = bucketsRef.current.map(b => b.name);
+
+            // Parse with Gemini
+            // Dynamically load to prevent circular dependency and bundle bloat
+            const { parseNaturalLanguageCommand } = await import('@/services/geminiService');
+            const parsed = await parseNaturalLanguageCommand(
+              hid,
+              item.text,
+              item.type || 'unknown',
+              {
+                shopping: [...GROCERY_CATEGORIES],
+                expense: expenseCategories
+              }
+            );
+
+            // Route to appropriate handler
+            if (parsed.detectedType === 'shopping') {
+              await handleShoppingItems(parsed);
+              toast.success(`Added ${parsed.items.length} item(s) from voice command`);
+            } else if (parsed.detectedType === 'todo') {
+              await handleTodoItems(parsed);
+              toast.success(`Added ${parsed.tasks.length} task(s) from voice command`);
+            } else if (parsed.detectedType === 'expense') {
+              if (parsed.error) {
+                throw new Error(parsed.error);
+              }
+              await handleExpense(parsed);
+              toast.success(`Added expense: $${parsed.amount?.toFixed(2) || '0.00'} at ${parsed.merchant || 'Unknown'}`);
+            }
+
+            // Mark as processed
+            await updateDoc(doc(db, `households/${hid}/pendingItems`, item.id), {
+              processed: true,
+              processedAt: serverTimestamp()
+            });
+
+          } catch (error) {
+            console.error('Failed to process pending item:', error);
+
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+            // Mark as processed with error
+            await updateDoc(doc(db, `households/${hid}/pendingItems`, item.id), {
+              processed: true,
+              processedAt: serverTimestamp(),
+              error: errorMessage
+            });
+
+            toast.error(`Voice command failed: ${errorMessage}`);
+          } finally {
+            // Always clear the in-flight marker, whether the item processed
+            // successfully or errored (the doc is `processed: true` either way).
+            processingItemIdsRef.current.delete(item.id);
+          }
+        }
+      } finally {
+        drainingPendingRef.current = false;
+      }
+    }
+
     unsubscribers.push(
-      onSnapshot(pendingItemsQuery, async (snapshot) => {
+      onSnapshot(pendingItemsQuery, (snapshot) => {
         setPendingItemsCount(snapshot.size);
 
-        if (snapshot.size > 0) {
-          // Auto-process pending items
-          for (const docSnapshot of snapshot.docs) {
-            const item = docSnapshot.data();
-
-            // Re-entry guard: skip items already being processed by an earlier,
-            // still in-flight snapshot pass so we never double-process them.
-            if (processingItemIdsRef.current.has(docSnapshot.id)) {
-              continue;
-            }
-            processingItemIdsRef.current.add(docSnapshot.id);
-
-            try {
-              // Get available categories for parsing
-              const expenseCategories = bucketsRef.current.map(b => b.name);
-
-              // Parse with Gemini
-              // Dynamically load to prevent circular dependency and bundle bloat
-              const { parseNaturalLanguageCommand } = await import('@/services/geminiService');
-              const parsed = await parseNaturalLanguageCommand(
-                householdId,
-                item.text,
-                item.type || 'unknown',
-                {
-                  shopping: [...GROCERY_CATEGORIES],
-                  expense: expenseCategories
-                }
-              );
-
-              // Route to appropriate handler
-              if (parsed.detectedType === 'shopping') {
-                await handleShoppingItems(parsed);
-                toast.success(`Added ${parsed.items.length} item(s) from voice command`);
-              } else if (parsed.detectedType === 'todo') {
-                await handleTodoItems(parsed);
-                toast.success(`Added ${parsed.tasks.length} task(s) from voice command`);
-              } else if (parsed.detectedType === 'expense') {
-                if (parsed.error) {
-                  throw new Error(parsed.error);
-                }
-                await handleExpense(parsed);
-                toast.success(`Added expense: $${parsed.amount?.toFixed(2) || '0.00'} at ${parsed.merchant || 'Unknown'}`);
-              }
-
-              // Mark as processed
-              await updateDoc(doc(db, `households/${householdId}/pendingItems`, docSnapshot.id), {
-                processed: true,
-                processedAt: serverTimestamp()
-              });
-
-            } catch (error) {
-              console.error('Failed to process pending item:', error);
-
-              const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-              // Mark as processed with error
-              await updateDoc(doc(db, `households/${householdId}/pendingItems`, docSnapshot.id), {
-                processed: true,
-                processedAt: serverTimestamp(),
-                error: errorMessage
-              });
-
-              toast.error(`Voice command failed: ${errorMessage}`);
-            } finally {
-              // Always clear the in-flight marker, whether the item processed
-              // successfully or errored (the doc is `processed: true` either way).
-              processingItemIdsRef.current.delete(docSnapshot.id);
-            }
+        // Enqueue any not-yet-seen items and return immediately. Parsing happens
+        // in drainPendingItemQueue() so this callback never blocks the listener
+        // on the (potentially slow) Gemini network call.
+        let enqueuedAny = false;
+        for (const docSnapshot of snapshot.docs) {
+          // Re-entry guard: skip items already queued or being processed by an
+          // earlier, still in-flight pass so we never double-process them.
+          if (processingItemIdsRef.current.has(docSnapshot.id)) {
+            continue;
           }
+          processingItemIdsRef.current.add(docSnapshot.id);
+          pendingItemQueueRef.current.push(docSnapshot.data());
+          enqueuedAny = true;
+        }
+
+        if (enqueuedAny) {
+          // Fire-and-forget: the drain loop is single-flighted internally.
+          // `householdId` is non-null here (the effect early-returns otherwise).
+          void drainPendingItemQueue(householdId);
         }
       }, (error) => {
         console.error('[pendingItems] listener failed:', error);
@@ -3422,7 +3475,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateMealPlanItem = useCallback(async (id: string, updates: Partial<MealPlanItem>) => {
     if (!householdId) return;
     try {
-      const previous = mealPlan.find(i => i.id === id);
+      const previous = mealPlanRef.current.find(i => i.id === id);
       await updateDoc(doc(db, `households/${householdId}/mealPlan`, id), {
         ...updates,
       });
@@ -3434,12 +3487,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[updateMealPlanItem] Failed:', error);
       toast.error('Failed to update plan');
     }
-  }, [householdId, mealPlan, refreshMealPlanWeek]);
+  }, [householdId, refreshMealPlanWeek]);
 
   const deleteMealPlanItem = useCallback(async (id: string) => {
     if (!householdId) return;
     try {
-      const previous = mealPlan.find(i => i.id === id);
+      const previous = mealPlanRef.current.find(i => i.id === id);
       await deleteDoc(doc(db, `households/${householdId}/mealPlan`, id));
       if (previous?.date) await refreshMealPlanWeek(parseISO(previous.date));
       toast.success('Removed from plan');
@@ -3447,7 +3500,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       console.error('[deleteMealPlanItem] Failed:', error);
       toast.error('Failed to remove from plan');
     }
-  }, [householdId, mealPlan, refreshMealPlanWeek]);
+  }, [householdId, refreshMealPlanWeek]);
 
   // --- ACTIONS: TO-DOS ---
 
