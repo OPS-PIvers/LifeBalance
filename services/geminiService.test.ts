@@ -102,8 +102,7 @@ describe('geminiService', () => {
       });
 
       // Pass mock client to bypass "Test Mode" check
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mockClient = { models: { generateContent: generateContentMock } } as any;
+      const mockClient = { models: { generateContent: generateContentMock } } as unknown as Parameters<typeof reorganizeHabits>[2];
       const result = await reorganizeHabits('household-1', mockHabits, mockClient);
 
       expect(result).toEqual(mockResponse);
