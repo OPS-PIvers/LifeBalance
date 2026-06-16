@@ -1,6 +1,7 @@
-import React, { useState, ReactNode, useCallback } from 'react';
+import React, { useState, ReactNode, useCallback, useMemo } from 'react';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
   BudgetBucket,
@@ -393,7 +394,18 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   }, []);
 
   // Computed/derived state to match interface
-  const safeToSpend = 4000; // Mock value
+  const currentPeriodId = '2024-01-01';
+  // Derive the safe-to-spend breakdown from the SAME pure calculator the real
+  // Firebase context uses, so Test Mode exposes a well-formed, internally
+  // consistent SafeToSpendBreakdown (incl. checkingBalance/unpaidBills/
+  // pendingSpend) rather than a hardcoded number. This keeps the mock's
+  // useFinance() slice in parity with production — a consumer reading
+  // `safeToSpendBreakdown` no longer gets `undefined` in Test Mode.
+  const safeToSpendBreakdown: SafeToSpendBreakdown = useMemo(
+    () => calculateSafeToSpendBreakdown(accounts, calendarItems, buckets, currentPeriodId, transactions),
+    [accounts, calendarItems, buckets, currentPeriodId, transactions]
+  );
+  const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = 30;
   const weeklyPoints = 150;
   const totalPoints = 500;
@@ -417,7 +429,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     groceryCategories: groceryCategories
 
   } as unknown as Household;
-  const currentPeriodId = '2024-01-01';
   const bucketSpentMap = new Map();
 
   const contextValue: HouseholdContextType = {
@@ -425,6 +436,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     isLoading: false,
     // Computed State
     safeToSpend,
+    safeToSpendBreakdown,
     dailyPoints,
     weeklyPoints,
     totalPoints,
