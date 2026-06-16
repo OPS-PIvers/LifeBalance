@@ -145,11 +145,15 @@ restrict to the Generative Language API + quota caps). Long term: proxy Gemini
 calls through a Cloud Function so the key never leaves the server. (CI already uses
 a mock key, so CI logs are clean.)
 
-### 3.3 🟢 Firestore rules are strong, with two minor validation gaps
+### 3.3 🟡 Firestore rules are strong, with one latent bug and a minor gap
 `firestore.rules` (well-structured: length caps, immutable fields, RBAC,
-privilege-escalation defenses per `SECURITY_MODEL.md`). Two small additions:
-- Optional `CalendarItem.bucketId` is written but not length-validated (`~line 413`)
-  — add `isValidOptionalString(data.get('bucketId', null), 50)`.
+privilege-escalation defenses per `SECURITY_MODEL.md`). Two fixes:
+- 🟡 **`CalendarItem.bucketId` is rejected by the rules (latent bug).** `'bucketId'`
+  is absent from both the `hasOnly([...])` allow-list in `isValidCalendarItemCreate()`
+  (lines 395-399) **and** the `allowedKeys` set in `isValidCalendarItemUpdate()`
+  (lines 432-436), so any write carrying `bucketId` is denied — yet the schema and
+  Safe-to-Spend bill→bucket matching (CLAUDE.md) rely on this field. Add `'bucketId'`
+  to both lists and validate it with `isValidOptionalString(data.get('bucketId', null), 50)`.
 - `accounts.lastUpdated` is required to be a `timestamp`; consider accepting
   `timestamp | string` to match the calendar-items pattern and `serverTimestamp()`
   write timing.
@@ -170,7 +174,8 @@ onSnapshot(calQuery, (snapshot) => {
 Every sibling listener (e.g. habits at `:823-827`) has an error handler; this one
 doesn't. A permission/network error leaves calendar items silently stale — and
 calendar items feed Safe-to-Spend. Add the standard `(error) => { console.error… }`
-handler (ideally with a toast, matching accounts/buckets).
+handler (ideally with a toast, matching accounts/buckets). The **members listener**
+(`:863-915`) has the same gap — fix both in the same pass.
 
 ### 4.2 🟡 Pending-items listener blocks on a slow Gemini call
 `contexts/FirebaseHouseholdContext.tsx:~1044-1120`
