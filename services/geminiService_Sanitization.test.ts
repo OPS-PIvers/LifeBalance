@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { Habit, Transaction } from '@/types/schema';
 
+// The first AI-flow call imports a heavy module graph; raise the per-test
+// timeout so it doesn't flake the 5s default under the full-repo parallel run.
+vi.setConfig({ testTimeout: 30000 });
+
 // Hoist the mock function
 const { generateContentMock } = vi.hoisted(() => {
   return { generateContentMock: vi.fn() };
@@ -12,7 +16,8 @@ vi.mock('@/firebase.config', () => ({
 }));
 
 vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(),
+  // doc(...).withConverter(...) is used by the quota reads (finding 6.1).
+  doc: vi.fn(() => ({ withConverter: vi.fn().mockReturnThis() })),
   getDoc: vi.fn().mockResolvedValue({
     exists: () => true,
     data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2024-01-01' } })
