@@ -613,7 +613,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // up the previous item without closing over the `mealPlan` array (which changes
   // on every meal-plan snapshot) — keeping those callbacks referentially stable.
   const mealPlanRef = useRef(mealPlan);
-  mealPlanRef.current = mealPlan;
+  // Update the ref in an effect (not during render) so it stays correct under
+  // concurrent rendering; the consumers read it from event handlers, after commit.
+  useEffect(() => {
+    mealPlanRef.current = mealPlan;
+  }, [mealPlan]);
   const loadedMealPlanWeeksRef = useRef<Set<string>>(new Set());
   // To-dos: all active items are live; completed items are windowed to the last
   // 30 days with older completions loadable on demand.
@@ -1132,11 +1136,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
             });
 
             toast.error(`Voice command failed: ${errorMessage}`);
-          } finally {
-            // Always clear the in-flight marker, whether the item processed
-            // successfully or errored (the doc is `processed: true` either way).
-            processingItemIdsRef.current.delete(item.id);
           }
+          // The id stays in `processingItemIdsRef` for the rest of the session
+          // (it's cleared only on household switch). Both the success and error
+          // paths above set `processed: true`, so the item never needs
+          // re-processing; retaining the marker closes the race where a snapshot
+          // fires during the `updateDoc` propagation delay and re-enqueues it.
         }
       } finally {
         drainingPendingRef.current = false;

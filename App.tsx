@@ -229,28 +229,27 @@ const App: React.FC = () => {
               </Routes>
             </Suspense>
 
-            {/* Wrap the toast container in an aria-live region so screen readers
-                announce success/error feedback. role="status" + aria-live="polite"
-                queue announcements without interrupting the user. */}
-            <div role="status" aria-live="polite" aria-atomic="true">
-              <Toaster
-                position="top-center"
-                containerClassName="z-toast"
-                containerStyle={{
-                  top: 'calc(env(safe-area-inset-top) + 1rem)',
-                  zIndex: 9999,
-                }}
-                toastOptions={{
-                  className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
-                  success: {
-                    iconTheme: {
-                      primary: '#10B981',
-                      secondary: 'white',
-                    },
+            {/* react-hot-toast announces each toast via its own per-toast aria-live
+                region (default role="status", aria-live="polite"), so no outer
+                wrapper is needed — an extra region with aria-atomic would re-announce
+                every active toast on each new one. */}
+            <Toaster
+              position="top-center"
+              containerClassName="z-toast"
+              containerStyle={{
+                top: 'calc(env(safe-area-inset-top) + 1rem)',
+                zIndex: 9999,
+              }}
+              toastOptions={{
+                className: 'bg-brand-800 text-white font-medium rounded-lg shadow-lg',
+                success: {
+                  iconTheme: {
+                    primary: '#10B981',
+                    secondary: 'white',
                   },
-                }}
-              />
-            </div>
+                },
+              }}
+            />
             <OfflineBanner />
           </div>
         </HouseholdProviderComponent>

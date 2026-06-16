@@ -306,7 +306,7 @@ service cloud.firestore {
                  isValidNumber(request.resource.data.balance) &&
                  // Accept timestamp OR ISO string to match serverTimestamp() write timing
                  // and the calendar-items createdAt/updatedAt pattern.
-                 (request.resource.data.lastUpdated is timestamp || request.resource.data.lastUpdated is string) &&
+                 (request.resource.data.lastUpdated is timestamp || (request.resource.data.lastUpdated is string && isValidString(request.resource.data.lastUpdated, 50))) &&
                  isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
                  isValidOptionalNumber(request.resource.data.get('order', null)) &&
                  request.resource.data.createdBy is string;
@@ -318,7 +318,7 @@ service cloud.firestore {
           return (!data.keys().hasAny(['name']) || isValidString(data.name, 50)) &&
                  (!data.keys().hasAny(['type']) || data.type in ['checking', 'savings', 'credit']) &&
                  (!data.keys().hasAny(['balance']) || isValidNumber(data.balance)) &&
-                 (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp || data.lastUpdated is string) &&
+                 (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp || (data.lastUpdated is string && isValidString(data.lastUpdated, 50))) &&
                  (!data.keys().hasAny(['monthlyGoal']) || isValidOptionalNumber(data.monthlyGoal)) &&
                  (!data.keys().hasAny(['order']) || isValidOptionalNumber(data.order));
         }

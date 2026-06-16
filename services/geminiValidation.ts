@@ -62,14 +62,17 @@ const isFiniteNumber = (v: unknown): v is number =>
   typeof v === 'number' && Number.isFinite(v);
 const isBoolean = (v: unknown): v is boolean => typeof v === 'boolean';
 
-const isOptString = (v: unknown): v is string | undefined =>
-  v === undefined || isString(v);
-const isOptNumber = (v: unknown): v is number | undefined =>
-  v === undefined || isFiniteNumber(v);
-const isOptBoolean = (v: unknown): v is boolean | undefined =>
-  v === undefined || isBoolean(v);
-const isOptStringArray = (v: unknown): v is string[] | undefined =>
-  v === undefined || (Array.isArray(v) && v.every(isString));
+// Optional-field guards accept `null` as well as `undefined`: AI models routinely
+// return `null` for fields they can't populate rather than omitting them, and
+// consumers treat both as "absent" (falsy / optional chaining).
+const isOptString = (v: unknown): v is string | undefined | null =>
+  v === undefined || v === null || isString(v);
+const isOptNumber = (v: unknown): v is number | undefined | null =>
+  v === undefined || v === null || isFiniteNumber(v);
+const isOptBoolean = (v: unknown): v is boolean | undefined | null =>
+  v === undefined || v === null || isBoolean(v);
+const isOptStringArray = (v: unknown): v is string[] | undefined | null =>
+  v === undefined || v === null || (Array.isArray(v) && v.every(isString));
 
 /** Throws a {@link GeminiValidationError} with a contextual message. */
 const fail = (context: string, detail: string): never => {

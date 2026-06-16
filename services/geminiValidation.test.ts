@@ -57,6 +57,19 @@ describe('geminiValidation - validateReceiptData', () => {
       .toThrow(/suggestedHabits/);
   });
 
+  it('accepts null for optional fields (LLMs emit null instead of omitting)', () => {
+    const result = validateReceiptData({
+      merchant: 'Target',
+      amount: 25,
+      category: 'Shopping',
+      date: null,
+      suggestedHabits: null,
+      subBucket: null,
+      store: null,
+    });
+    expect(result.merchant).toBe('Target');
+  });
+
   it('rejects a non-object', () => {
     expect(() => validateReceiptData([])).toThrow(/expected an object/);
     expect(() => validateReceiptData(null)).toThrow(GeminiValidationError);
