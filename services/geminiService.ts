@@ -3,9 +3,43 @@ import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/sche
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
 import { db } from "@/firebase.config";
-import { doc, runTransaction, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  runTransaction,
+  collection,
+  addDoc,
+  serverTimestamp,
+  type FirestoreDataConverter,
+  type QueryDocumentSnapshot,
+  type DocumentData,
+} from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
 import type { ReceiptData } from './geminiService.types';
+import {
+  GeminiValidationError,
+  InvalidImageError,
+  validateBase64Image,
+  validateReceiptData,
+  validateBankTransactions,
+  validateMealSuggestion,
+  validateGroceryItems,
+  validateOptimizableItems,
+  validateInsight,
+  validateMagicAction,
+  validateHabitPointSuggestions,
+  validateHabitPatterns,
+  validateHabitReorganization,
+  validateParsedShoppingList,
+  validateParsedTodoList,
+  validateParsedExpense,
+  validateNaturalLanguageUnknown,
+  validateRecipe,
+  validateGeneratedWeeklyPlan,
+} from './geminiValidation';
+
+// Re-export image/validation error types and the image guard so callers/tests
+// can distinguish "invalid image" / "malformed AI response" from API outages.
+export { GeminiValidationError, InvalidImageError, validateBase64Image };
 
 // Re-export plain types so existing importers keep compiling unchanged.
 export type {
@@ -53,6 +87,28 @@ const validateApiKey = () => {
 
 /** Daily AI request cap. Mirrors the comment in the original code. */
 const AI_DAILY_QUOTA = 100;
+
+/**
+ * Typed converter for the household quota doc (finding 6.1).
+ *
+ * The shared converters in `utils/firestoreConverters.ts` intentionally omit a
+ * Household converter (its doc-ref is used inside `runTransaction`, where the
+ * shared module's authors chose not to attach one). We define a minimal,
+ * read-focused converter here and attach it via `.withConverter()` so the quota
+ * reads get a typed `Household` from `snap.data()` instead of an unchecked
+ * `snap.data() as Household` cast. `toFirestore` strips the synthetic `id` so it
+ * is never written back (mirroring the shared converters); quota writes continue
+ * to use `txn.update()` with explicit field maps and are unaffected.
+ */
+export const householdConverter: FirestoreDataConverter<Household> = {
+  toFirestore(household: Household): DocumentData {
+    const { id: _id, ...rest } = household;
+    return rest;
+  },
+  fromFirestore(snapshot: QueryDocumentSnapshot): Household {
+    return { ...snapshot.data(), id: snapshot.id } as Household;
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Kill-switch cache (TTL = 60 s) so we don't hit Firestore on every AI call.
@@ -126,7 +182,7 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
   }
 
   // 2. Atomically check + increment quota
-  const householdRef = doc(db, 'households', householdId);
+  const householdRef = doc(db, 'households', householdId).withConverter(householdConverter);
   const today = getLocalDateString();
 
   await runTransaction(db, async (txn) => {
@@ -136,7 +192,8 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
       throw new Error("Household not found");
     }
 
-    const data = snap.data() as Household;
+    // Typed read via householdConverter — no unchecked `as Household` cast.
+    const data = snap.data();
     const usage = data.aiUsage ?? { dailyCount: 0, lastResetDate: today };
 
     // If the date rolled over, treat the count as 0 for the new day.
@@ -168,14 +225,15 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
  * up-front increment still enforces the cap atomically against concurrent
  * callers. Never throws — a refund failure must not mask the original error.
  */
-const refundAiUsage = async (householdId: string): Promise<void> => {
-  const householdRef = doc(db, 'households', householdId);
+const refundAiUsage = async (householdId: string, opName?: string): Promise<void> => {
+  const householdRef = doc(db, 'households', householdId).withConverter(householdConverter);
   const today = getLocalDateString();
   try {
     await runTransaction(db, async (txn) => {
       const snap = await txn.get(householdRef);
       if (!snap.exists()) return;
-      const usage = (snap.data() as Household).aiUsage;
+      // Typed read via householdConverter — no unchecked `as Household` cast.
+      const usage = snap.data().aiUsage;
       // Only refund if the counter is still for today and above zero.
       if (!usage || usage.lastResetDate !== today || usage.dailyCount <= 0) return;
       txn.update(householdRef, {
@@ -183,7 +241,24 @@ const refundAiUsage = async (householdId: string): Promise<void> => {
       });
     });
   } catch (err) {
-    console.warn("Failed to refund AI usage after a failed request:", err);
+    // A refund failure leaves the household's quota off by one for the day; log
+    // rich context so it can be reconciled, and best-effort append to the audit
+    // log (finding 1.4). Never throws — masking the original error is worse.
+    console.warn(
+      `Failed to refund AI usage after a failed request (household=${householdId}, op=${opName ?? 'unknown'}, date=${today}):`,
+      err
+    );
+    Promise.resolve(
+      addDoc(collection(db, 'logs/ai_usage/refund_failures'), {
+        householdId,
+        op: opName ?? 'unknown',
+        date: today,
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: serverTimestamp(),
+      })
+    ).catch((auditErr: unknown) => {
+      console.error("Failed to write AI refund-failure audit log:", auditErr);
+    });
   }
 };
 
@@ -368,9 +443,66 @@ const sanitizeForPrompt = (input: string): string => {
 };
 
 /**
+ * Sanitizes a list of strings for inclusion in a prompt and joins them with a
+ * separator. Centralizes the repeated `arr.map(sanitizeForPrompt).join(', ')`
+ * pattern (finding 1.3) so the sanitization rule lives in one place. `falsy`
+ * entries are dropped after sanitization.
+ */
+const sanitizeList = (items: readonly string[] | undefined, separator = ', '): string =>
+  (items ?? []).map(sanitizeForPrompt).filter(Boolean).join(separator);
+
+/**
+ * Shared error-handling wrapper for the public Gemini functions (finding 1.3).
+ *
+ * Collapses the ~11 near-identical catch blocks into one place. Behavior is
+ * preserved:
+ *  - Quota-exceeded errors are rethrown untouched (so callers/UI can show the
+ *    specific cap message) — matching every prior `if (msg.includes("quota"))`.
+ *  - Validation errors (malformed/hallucinated AI JSON) and invalid-image errors
+ *    are surfaced with a clear, user-facing message distinct from an outage.
+ *  - All other errors become a generic, op-specific failure message.
+ *
+ * @param opName       Human-readable operation name for logs.
+ * @param userMessage  Fallback message shown to the user for generic failures.
+ * @param fn           The async operation to run.
+ */
+async function withErrorHandling<T>(
+  opName: string,
+  userMessage: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    console.error(`Gemini ${opName} Error:`, error);
+
+    // Preserve the quota-exceeded path exactly: rethrow so the specific cap
+    // message reaches the UI unchanged.
+    if (error instanceof Error && error.message.includes("quota")) {
+      throw error;
+    }
+
+    // Distinguish a malformed/hallucinated AI response from an API outage.
+    if (error instanceof GeminiValidationError) {
+      throw new Error(`${userMessage} The AI returned an unexpected response.`);
+    }
+
+    // Distinguish a bad input image from an API outage.
+    if (error instanceof InvalidImageError) {
+      throw new Error(`${userMessage} ${error.message}`);
+    }
+
+    throw new Error(userMessage);
+  }
+}
+
+/**
  * Helper to prepare image content parts
  */
 const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
+  // Validate the image up front so a malformed/oversized payload throws an
+  // InvalidImageError (distinct from an API outage) before any quota is spent.
+  validateBase64Image(base64Image);
   const mimeType = extractMimeType(base64Image);
   const cleanBase64 = stripDataUrlPrefix(base64Image);
 
@@ -401,7 +533,8 @@ async function generateJsonContent<T>(
   promptOrParts: string | Part[],
   schema: Schema,
   _aiClient?: Pick<typeof ai, 'models'>,
-  modelName: string = GEMINI_MODEL
+  modelName: string = GEMINI_MODEL,
+  validate?: (raw: unknown) => T,
 ): Promise<T> {
   validateApiKey();
 
@@ -430,16 +563,30 @@ async function generateJsonContent<T>(
     const text = response.text;
     if (!text) throw new Error("No data returned from Gemini");
 
-    const parsed = JSON.parse(text) as T;
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch (parseErr) {
+      // Surface as a validation error so callers treat it as a malformed AI
+      // response rather than an API outage.
+      throw new GeminiValidationError(
+        `Failed to parse AI response as JSON: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+      );
+    }
+
+    // Validate the parsed JSON BEFORE trusting it (finding 1.1). When a
+    // validator is supplied it both runtime-checks and narrows to T; the cast
+    // fallback preserves behavior for any (internal-only) call without one.
+    const parsed: T = validate ? validate(raw) : (raw as T);
     // Only log audit usage on success (the quota was already incremented up front).
     logAiUsage(householdId, modelName);
     return parsed;
   } catch (error) {
     console.error("Gemini API Error:", error);
     // The request was counted up front for atomic cap enforcement; since it
-    // failed (timeout, transient/non-transient API error, or unparseable
-    // response), refund the quota unit so failures don't lock users out.
-    await refundAiUsage(householdId);
+    // failed (timeout, transient/non-transient API error, or unparseable/
+    // invalid response), refund the quota unit so failures don't lock users out.
+    await refundAiUsage(householdId, modelName);
     throw error;
   }
 }
@@ -460,13 +607,13 @@ export const analyzeReceipt = async (
   availableSubBuckets?: Record<string, string[]>,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptData> => {
-  try {
+  return withErrorHandling('OCR', 'Failed to analyze receipt. Please try manual entry.', async () => {
     const categoryList = availableCategories?.length
-      ? availableCategories.map(sanitizeForPrompt).join(', ')
+      ? sanitizeList(availableCategories)
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const habitList = availableHabits?.length
-      ? availableHabits.map(sanitizeForPrompt).join(', ')
+      ? sanitizeList(availableHabits)
       : '';
 
     // Prepare sub-bucket context
@@ -507,13 +654,11 @@ export const analyzeReceipt = async (
         },
         required: ["merchant", "amount", "category"]
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateReceiptData
     );
-  } catch (error) {
-    console.error("Gemini OCR Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to analyze receipt. Please try manual entry.");
-  }
+  });
 };
 
 /**
@@ -531,13 +676,13 @@ export const parseBankStatement = async (
   availableHabits?: string[],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<BankTransactionData[]> => {
-  try {
+  return withErrorHandling('Bank Statement Parse', 'Failed to parse bank statement. Please try again or enter transactions manually.', async () => {
     const categoryList = availableCategories?.length
-      ? availableCategories.map(sanitizeForPrompt).join(', ')
+      ? sanitizeList(availableCategories)
       : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
 
     const habitList = availableHabits?.length
-      ? availableHabits.map(sanitizeForPrompt).join(', ')
+      ? sanitizeList(availableHabits)
       : '';
 
     const now = new Date();
@@ -570,7 +715,9 @@ export const parseBankStatement = async (
           required: ["merchant", "amount", "category", "date"]
         }
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateBankTransactions
     );
 
     // Ensure amounts are positive
@@ -578,12 +725,7 @@ export const parseBankStatement = async (
       ...tx,
       amount: Math.abs(tx.amount)
     }));
-
-  } catch (error) {
-    console.error("Gemini Bank Statement Parse Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to parse bank statement. Please try again or enter transactions manually.");
-  }
+  });
 };
 
 export interface MealSuggestionRequest {
@@ -614,8 +756,8 @@ export const suggestMeal = async (
   options: MealSuggestionRequest,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<MealSuggestionResponse> => {
-  try {
-    const previousMealsList = options.previousMeals.map(m => sanitizeForPrompt(m.name)).join(', ');
+  return withErrorHandling('Meal Suggestion', 'Failed to suggest meal.', async () => {
+    const previousMealsList = sanitizeList(options.previousMeals.map(m => m.name));
 
     let prompt = `Suggest a REAL, existing meal plan idea based on the following criteria. The meal must be a real dish that people actually cook.\n`;
     if (options.cheap) prompt += `- Should be budget-friendly/cheap.\n`;
@@ -657,14 +799,11 @@ export const suggestMeal = async (
         },
         required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateMealSuggestion
     );
-
-  } catch (error) {
-    console.error("Gemini Meal Suggestion Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to suggest meal.");
-  }
+  });
 };
 
 /**
@@ -680,8 +819,8 @@ export const parseGroceryReceipt = async (
   availableCategories: string[] = [...GROCERY_CATEGORIES],
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<GroceryItem[]> => {
-  try {
-    const categoriesStr = availableCategories.map(sanitizeForPrompt).join(', ');
+  return withErrorHandling('Grocery Receipt Parse', 'Failed to parse grocery receipt.', async () => {
+    const categoriesStr = sanitizeList(availableCategories);
 
     const prompt = `Analyze this grocery receipt. Extract all purchased food/grocery items.
                 For each item:
@@ -709,13 +848,11 @@ export const parseGroceryReceipt = async (
           required: ["name", "quantity", "category"]
         }
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateGroceryItems
     );
-  } catch (error) {
-    console.error("Gemini Grocery Receipt Parse Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to parse grocery receipt.");
-  }
+  });
 };
 
 /**
@@ -785,7 +922,9 @@ export const optimizeGroceryList = async (
           required: ["id", "name", "category"]
         }
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateOptimizableItems
     );
   } catch (error) {
     console.error("Gemini Optimization Error:", error);
@@ -824,7 +963,7 @@ export const generateInsight = async (
   options?: { includeMerchantNames?: boolean },
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<{ text: string, actions?: InsightAction[] }> => {
-  try {
+  return withErrorHandling('Insight Generation', 'Failed to generate insight.', async () => {
     // Anonymize and simplify data
     const simplifiedTransactions = transactions.slice(0, 50).map(t => ({
       amount: t.amount,
@@ -899,14 +1038,11 @@ export const generateInsight = async (
         },
         required: ['text']
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateInsight
     );
-
-  } catch (error) {
-    console.error("Gemini Insight Generation Error:", error);
-    if (error instanceof Error && error.message.includes("quota")) throw error;
-    throw new Error("Failed to generate insight.");
-  }
+  });
 };
 
 /**
@@ -928,9 +1064,9 @@ export const parseMagicAction = async (
   try {
     const sanitizedInput = sanitizeForPrompt(input);
     const categoryList = context.categories.length > 0
-      ? context.categories.join(', ')
+      ? sanitizeList(context.categories)
       : "No predefined categories";
-    const groceryCategoryList = context.groceryCategories.join(', ');
+    const groceryCategoryList = sanitizeList(context.groceryCategories);
 
     const prompt = `
       Analyze this user input: "${sanitizedInput}".
@@ -974,11 +1110,14 @@ export const parseMagicAction = async (
         },
         required: ["type", "confidence", "data"]
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateMagicAction
     );
   } catch (error) {
     console.error("Gemini Magic Action Parse Error:", error);
-    // Fallback or rethrow? Let's return unknown to be safe.
+    // Fallback or rethrow? Let's return unknown to be safe. A malformed AI
+    // response (GeminiValidationError) lands here too and degrades gracefully.
     return { type: 'unknown', confidence: 0, data: {} };
   }
 };
@@ -1068,7 +1207,8 @@ export const analyzeHabitPoints = async (
         }
       },
       _aiClient,
-      GEMINI_MODEL // Explicitly specify model
+      GEMINI_MODEL, // Explicitly specify model
+      validateHabitPointSuggestions
     );
 
     // 2. Validate and Post-process Results
@@ -1182,7 +1322,9 @@ export const analyzeHabitPatterns = async (
           required: ["title", "description", "type"]
         }
       },
-      _aiClient
+      _aiClient,
+      GEMINI_MODEL,
+      validateHabitPatterns
     );
 
   } catch (error) {
@@ -1265,7 +1407,8 @@ If no items found, return {"items": []}`;
           required: ["items"]
         },
         _aiClient,
-        GEMINI_MODEL
+        GEMINI_MODEL,
+        validateParsedShoppingList
       );
       return { ...result, detectedType: 'shopping', confidence: 1 };
     }
@@ -1310,7 +1453,8 @@ If no tasks found, return {"tasks": []}`;
           required: ["tasks"]
         },
         _aiClient,
-        GEMINI_MODEL
+        GEMINI_MODEL,
+        validateParsedTodoList
       );
       return { ...result, detectedType: 'todo', confidence: 1 };
     }
@@ -1352,7 +1496,8 @@ If no amount found, return { "error": "No amount found" }`;
           }
         },
         _aiClient,
-        GEMINI_MODEL
+        GEMINI_MODEL,
+        validateParsedExpense
       );
       return { ...result, detectedType: 'expense', confidence: 1 };
     }
@@ -1418,7 +1563,11 @@ If no amount found, return { "error": "No amount found" }`;
         required: ["detectedType", "confidence"]
       },
       _aiClient,
-      GEMINI_MODEL
+      GEMINI_MODEL,
+      // Validate the loose one-shot shape; the result conforms to the
+      // NaturalLanguageResult union by its `detectedType` discriminant.
+      (raw): NaturalLanguageResult =>
+        validateNaturalLanguageUnknown(raw) as unknown as NaturalLanguageResult
     );
 
   } catch (error) {
@@ -1506,7 +1655,8 @@ export const reorganizeHabits = async (
         required: ["habits", "reasoning"]
       },
       _aiClient,
-      GEMINI_MODEL
+      GEMINI_MODEL,
+      validateHabitReorganization
     );
 
   } catch (error) {
@@ -1571,7 +1721,8 @@ export const parseRecipe = async (
         required: ["name", "ingredients", "instructions", "tags"]
       },
       _aiClient,
-      GEMINI_MODEL
+      GEMINI_MODEL,
+      validateRecipe
     );
   } catch (error) {
     console.error("Gemini Recipe Parse Error:", error);
@@ -1629,14 +1780,11 @@ export const generateWeeklyPlan = async (
     const dinners = constraints.dinners && constraints.dinners > 0 ? Math.min(constraints.dinners, 7) : 3;
     const servings = constraints.servings && constraints.servings > 0 ? constraints.servings : 4;
 
-    const list = (arr?: string[]) =>
-      (arr ?? []).map(sanitizeForPrompt).filter(Boolean).join(', ');
-
-    const allergies = list(constraints.allergies);
-    const outList = list(constraints.outList);
-    const inList = list(constraints.inList);
-    const stores = list(constraints.stores);
-    const recent = list(constraints.recentMeals);
+    const allergies = sanitizeList(constraints.allergies);
+    const outList = sanitizeList(constraints.outList);
+    const inList = sanitizeList(constraints.inList);
+    const stores = sanitizeList(constraints.stores);
+    const recent = sanitizeList(constraints.recentMeals);
     const note = constraints.note ? sanitizeForPrompt(constraints.note) : '';
 
     const prompt = [
@@ -1742,7 +1890,8 @@ export const generateWeeklyPlan = async (
         required: ["meals", "items"],
       },
       _aiClient,
-      GEMINI_MODEL
+      GEMINI_MODEL,
+      validateGeneratedWeeklyPlan
     );
 
     // Normalize the AI's store array into the WeeklyPlan record + order.

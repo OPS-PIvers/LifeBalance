@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { MealSuggestionRequest, MealSuggestionResponse } from './geminiService';
 
+// The first AI-flow call imports a heavy module graph; raise the per-test
+// timeout so it doesn't flake the 5s default under the full-repo parallel run.
+vi.setConfig({ testTimeout: 30000 });
+
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {
   return { generateContentMock: vi.fn() };
@@ -30,7 +34,8 @@ vi.mock('@google/genai', () => {
 
 // Mock Firebase to avoid network calls in tests
 vi.mock('firebase/firestore', () => ({
-  doc: vi.fn(),
+  // doc(...).withConverter(...) is used by the quota reads (finding 6.1).
+  doc: vi.fn(() => ({ withConverter: vi.fn().mockReturnThis() })),
   getDoc: vi.fn(() => Promise.resolve({
     exists: () => true,
     data: () => ({ aiUsage: { dailyCount: 0, lastResetDate: '2026-01-01' } })

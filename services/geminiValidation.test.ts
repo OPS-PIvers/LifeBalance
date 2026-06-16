@@ -1,0 +1,308 @@
+import { describe, it, expect } from 'vitest';
+import {
+  GeminiValidationError,
+  InvalidImageError,
+  MAX_IMAGE_BYTES,
+  validateBase64Image,
+  validateReceiptData,
+  validateBankTransactions,
+  validateMealSuggestion,
+  validateGroceryItems,
+  validateOptimizableItems,
+  validateInsight,
+  validateMagicAction,
+  validateHabitPointSuggestions,
+  validateHabitPatterns,
+  validateHabitReorganization,
+  validateParsedShoppingList,
+  validateParsedTodoList,
+  validateParsedExpense,
+  validateNaturalLanguageUnknown,
+  validateRecipe,
+  validateGeneratedWeeklyPlan,
+} from './geminiValidation';
+
+// A structurally-valid base64 image data URL (1x1 transparent PNG).
+const VALID_IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+describe('geminiValidation - validateReceiptData', () => {
+  it('accepts a well-formed receipt with only required fields', () => {
+    const result = validateReceiptData({ merchant: 'Target', amount: 25, category: 'Shopping' });
+    expect(result.merchant).toBe('Target');
+    expect(result.amount).toBe(25);
+  });
+
+  it('accepts optional fields when correctly typed', () => {
+    const result = validateReceiptData({
+      merchant: 'Target', amount: 25, category: 'Shopping',
+      date: '2026-01-01', suggestedHabits: ['a'], subBucket: 'sub', store: 'Target',
+    });
+    expect(result.date).toBe('2026-01-01');
+    expect(result.suggestedHabits).toEqual(['a']);
+  });
+
+  it('rejects a missing required field', () => {
+    expect(() => validateReceiptData({ amount: 25, category: 'Shopping' }))
+      .toThrow(GeminiValidationError);
+  });
+
+  it('rejects a wrong-typed amount (hallucinated string)', () => {
+    expect(() => validateReceiptData({ merchant: 'Target', amount: 'twenty', category: 'Shopping' }))
+      .toThrow(/amount must be a number/);
+  });
+
+  it('rejects a wrong-typed optional field', () => {
+    expect(() => validateReceiptData({ merchant: 'T', amount: 1, category: 'S', suggestedHabits: 'x' }))
+      .toThrow(/suggestedHabits/);
+  });
+
+  it('rejects a non-object', () => {
+    expect(() => validateReceiptData([])).toThrow(/expected an object/);
+    expect(() => validateReceiptData(null)).toThrow(GeminiValidationError);
+  });
+});
+
+describe('geminiValidation - validateBankTransactions', () => {
+  it('accepts an array of well-formed transactions', () => {
+    const result = validateBankTransactions([
+      { merchant: 'A', amount: 1, category: 'X', date: '2026-01-01' },
+    ]);
+    expect(result).toHaveLength(1);
+  });
+
+  it('accepts an empty array', () => {
+    expect(validateBankTransactions([])).toEqual([]);
+  });
+
+  it('rejects a non-array', () => {
+    expect(() => validateBankTransactions({})).toThrow(/expected an array/);
+  });
+
+  it('rejects an element missing date (required here)', () => {
+    expect(() => validateBankTransactions([{ merchant: 'A', amount: 1, category: 'X' }]))
+      .toThrow(/date must be a string/);
+  });
+});
+
+describe('geminiValidation - validateMealSuggestion', () => {
+  const valid = {
+    name: 'Pasta', description: 'd', recipeUrl: 'u', reasoning: 'r',
+    instructions: ['a'], tags: ['t'],
+    ingredients: [{ name: 'Pasta', quantity: '200g' }],
+  };
+
+  it('accepts a well-formed suggestion', () => {
+    expect(validateMealSuggestion(valid).name).toBe('Pasta');
+  });
+
+  it('accepts empty arrays / empty strings', () => {
+    expect(validateMealSuggestion({ ...valid, instructions: [], tags: [], ingredients: [], recipeUrl: '' }).tags)
+      .toEqual([]);
+  });
+
+  it('rejects when ingredients entries are malformed', () => {
+    expect(() => validateMealSuggestion({ ...valid, ingredients: [{ name: 'Pasta' }] }))
+      .toThrow(/quantity must be a string/);
+  });
+
+  it('rejects when instructions are not string[]', () => {
+    expect(() => validateMealSuggestion({ ...valid, instructions: [1, 2] }))
+      .toThrow(/instructions must be string\[\]/);
+  });
+});
+
+describe('geminiValidation - validateGroceryItems', () => {
+  it('accepts required-only items', () => {
+    expect(validateGroceryItems([{ name: 'Milk', category: 'Dairy' }])).toHaveLength(1);
+  });
+  it('rejects a missing category', () => {
+    expect(() => validateGroceryItems([{ name: 'Milk' }])).toThrow(/category/);
+  });
+});
+
+describe('geminiValidation - validateOptimizableItems', () => {
+  it('accepts well-formed items', () => {
+    expect(validateOptimizableItems([{ id: '1', name: 'Milk' }])).toHaveLength(1);
+  });
+  it('rejects a missing id', () => {
+    expect(() => validateOptimizableItems([{ name: 'Milk' }])).toThrow(/id must be a string/);
+  });
+});
+
+describe('geminiValidation - validateInsight', () => {
+  it('accepts text-only', () => {
+    expect(validateInsight({ text: 'hi' }).text).toBe('hi');
+  });
+  it('accepts text with empty actions', () => {
+    expect(validateInsight({ text: 'hi', actions: [] }).actions).toEqual([]);
+  });
+  it('accepts a well-formed action', () => {
+    const r = validateInsight({ text: 'hi', actions: [{ type: 'update_bucket', label: 'L', payload: {} }] });
+    expect(r.actions).toHaveLength(1);
+  });
+  it('rejects a hallucinated action type', () => {
+    expect(() => validateInsight({ text: 'hi', actions: [{ type: 'delete_everything', label: 'L', payload: {} }] }))
+      .toThrow(/type must be one of/);
+  });
+  it('rejects when text missing', () => {
+    expect(() => validateInsight({ actions: [] })).toThrow(/text must be a string/);
+  });
+});
+
+describe('geminiValidation - validateMagicAction (discriminated union)', () => {
+  it('accepts transaction', () => {
+    const r = validateMagicAction({ type: 'transaction', confidence: 0.9, data: { merchant: 'T', amount: 5 } });
+    expect(r.type).toBe('transaction');
+  });
+  it('accepts unknown with empty data', () => {
+    expect(validateMagicAction({ type: 'unknown', confidence: 0, data: {} }).type).toBe('unknown');
+  });
+  it('rejects an invalid type value', () => {
+    expect(() => validateMagicAction({ type: 'banana', confidence: 1, data: {} })).toThrow(/type must be one of/);
+  });
+  it('rejects a non-number confidence', () => {
+    expect(() => validateMagicAction({ type: 'todo', confidence: 'high', data: {} })).toThrow(/confidence/);
+  });
+  it('rejects wrong-typed data field', () => {
+    expect(() => validateMagicAction({ type: 'transaction', confidence: 1, data: { amount: 'lots' } }))
+      .toThrow(/amount must be a number/);
+  });
+  it('rejects when data is missing', () => {
+    expect(() => validateMagicAction({ type: 'todo', confidence: 1 })).toThrow(/expected an object/);
+  });
+});
+
+describe('geminiValidation - validateHabitPointSuggestions', () => {
+  const valid = { habitId: '1', habitTitle: 'Run', currentPoints: 10, suggestedPoints: 15, reasoning: 'r' };
+  it('accepts well-formed', () => {
+    expect(validateHabitPointSuggestions([valid])).toHaveLength(1);
+  });
+  it('rejects non-number points', () => {
+    expect(() => validateHabitPointSuggestions([{ ...valid, suggestedPoints: 'x' }]))
+      .toThrow(/suggestedPoints/);
+  });
+});
+
+describe('geminiValidation - validateHabitPatterns', () => {
+  it('accepts well-formed with null relatedHabitId', () => {
+    const r = validateHabitPatterns([{ title: 'T', description: 'D', type: 'praise', relatedHabitId: null }]);
+    expect(r).toHaveLength(1);
+  });
+  it('rejects a hallucinated type', () => {
+    expect(() => validateHabitPatterns([{ title: 'T', description: 'D', type: 'roast' }]))
+      .toThrow(/type must be one of/);
+  });
+});
+
+describe('geminiValidation - validateHabitReorganization', () => {
+  it('accepts well-formed', () => {
+    const r = validateHabitReorganization({ reasoning: 'r', habits: [{ id: '1', category: 'C', order: 0 }] });
+    expect(r.habits).toHaveLength(1);
+  });
+  it('rejects a non-number order', () => {
+    expect(() => validateHabitReorganization({ reasoning: 'r', habits: [{ id: '1', category: 'C', order: 'first' }] }))
+      .toThrow(/order must be a number/);
+  });
+});
+
+describe('geminiValidation - natural language', () => {
+  it('validateParsedShoppingList accepts well-formed', () => {
+    expect(validateParsedShoppingList({ items: [{ item: 'Milk', quantity: 1, category: 'Dairy' }] }).items)
+      .toHaveLength(1);
+  });
+  it('validateParsedShoppingList rejects non-number quantity', () => {
+    expect(() => validateParsedShoppingList({ items: [{ item: 'Milk', quantity: 'one', category: 'Dairy' }] }))
+      .toThrow(/quantity must be a number/);
+  });
+  it('validateParsedTodoList rejects a bad priority', () => {
+    expect(() => validateParsedTodoList({ tasks: [{ task: 'x', priority: 'urgent' }] }))
+      .toThrow(/priority must be/);
+  });
+  it('validateParsedExpense accepts an error-only response', () => {
+    expect(validateParsedExpense({ error: 'No amount found' }).error).toBe('No amount found');
+  });
+  it('validateNaturalLanguageUnknown accepts shopping branch', () => {
+    const r = validateNaturalLanguageUnknown({
+      detectedType: 'shopping', confidence: 0.9, items: [{ item: 'Milk', quantity: 1, category: 'Dairy' }],
+    });
+    expect(r.detectedType).toBe('shopping');
+  });
+  it('validateNaturalLanguageUnknown rejects an invalid detectedType', () => {
+    expect(() => validateNaturalLanguageUnknown({ detectedType: 'mystery', confidence: 1 }))
+      .toThrow(/detectedType/);
+  });
+});
+
+describe('geminiValidation - validateRecipe (Partial<Meal>)', () => {
+  it('accepts a partial recipe', () => {
+    const r = validateRecipe({ name: 'Soup', ingredients: [{ name: 'Water' }], instructions: ['boil'], tags: ['easy'] });
+    expect(r.name).toBe('Soup');
+  });
+  it('accepts an empty object (all fields optional)', () => {
+    expect(validateRecipe({})).toEqual({});
+  });
+  it('rejects malformed ingredients', () => {
+    expect(() => validateRecipe({ ingredients: [{ name: 1 }] })).toThrow(/name must be a string/);
+  });
+});
+
+describe('geminiValidation - validateGeneratedWeeklyPlan', () => {
+  const valid = {
+    weekLabel: 'Week 1',
+    stores: [{ key: 's', name: 'Grocery' }],
+    meals: [{ name: 'Tacos', ingredients: ['beef'], prep: [{ t: 'chop', min: 5 }] }],
+    items: [{ n: 'beef', q: '1 lb', sec: 'meat' }],
+  };
+  it('accepts a well-formed plan', () => {
+    expect(validateGeneratedWeeklyPlan(valid).meals).toHaveLength(1);
+  });
+  it('rejects meals missing name', () => {
+    expect(() => validateGeneratedWeeklyPlan({ ...valid, meals: [{ ingredients: ['x'] }] }))
+      .toThrow(/name must be a string/);
+  });
+  it('rejects a step missing min', () => {
+    expect(() => validateGeneratedWeeklyPlan({
+      ...valid, meals: [{ name: 'T', ingredients: ['x'], prep: [{ t: 'chop' }] }],
+    })).toThrow(/min must be a number/);
+  });
+  it('rejects items missing n', () => {
+    expect(() => validateGeneratedWeeklyPlan({ ...valid, items: [{ q: '1 lb' }] }))
+      .toThrow(/n must be a string/);
+  });
+});
+
+describe('geminiValidation - validateBase64Image', () => {
+  it('accepts a valid data-URL PNG', () => {
+    expect(validateBase64Image(VALID_IMAGE)).toBeGreaterThan(0);
+  });
+
+  it('accepts a raw base64 payload (no data-URL prefix)', () => {
+    const raw = VALID_IMAGE.replace(/^data:[^;]+;base64,/, '');
+    expect(validateBase64Image(raw)).toBeGreaterThan(0);
+  });
+
+  it('rejects an empty string', () => {
+    expect(() => validateBase64Image('')).toThrow(InvalidImageError);
+  });
+
+  it('rejects a non-image data URL', () => {
+    expect(() => validateBase64Image('data:application/pdf;base64,AAAAAAAAAAAAAAAA'))
+      .toThrow(/Unsupported data URL MIME type/);
+  });
+
+  it('rejects a too-short payload', () => {
+    expect(() => validateBase64Image('AAAA')).toThrow(/too short/);
+  });
+
+  it('rejects invalid base64 characters', () => {
+    expect(() => validateBase64Image('not-valid-base64-!!!@@@')).toThrow(/not valid base64/);
+  });
+
+  it('rejects an oversized image', () => {
+    // Build a base64 string whose decoded size exceeds the cap.
+    const chars = Math.ceil((MAX_IMAGE_BYTES + 1024) / 3) * 4;
+    const huge = 'A'.repeat(chars);
+    expect(() => validateBase64Image(huge)).toThrow(/too large/);
+  });
+});
