@@ -304,7 +304,9 @@ service cloud.firestore {
           return isValidString(request.resource.data.name, 50) &&
                  request.resource.data.type in ['checking', 'savings', 'credit'] &&
                  isValidNumber(request.resource.data.balance) &&
-                 request.resource.data.lastUpdated is timestamp &&
+                 // Accept timestamp OR ISO string to match serverTimestamp() write timing
+                 // and the calendar-items createdAt/updatedAt pattern.
+                 (request.resource.data.lastUpdated is timestamp || request.resource.data.lastUpdated is string) &&
                  isValidOptionalNumber(request.resource.data.get('monthlyGoal', null)) &&
                  isValidOptionalNumber(request.resource.data.get('order', null)) &&
                  request.resource.data.createdBy is string;
@@ -316,7 +318,7 @@ service cloud.firestore {
           return (!data.keys().hasAny(['name']) || isValidString(data.name, 50)) &&
                  (!data.keys().hasAny(['type']) || data.type in ['checking', 'savings', 'credit']) &&
                  (!data.keys().hasAny(['balance']) || isValidNumber(data.balance)) &&
-                 (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp) &&
+                 (!data.keys().hasAny(['lastUpdated']) || data.lastUpdated is timestamp || data.lastUpdated is string) &&
                  (!data.keys().hasAny(['monthlyGoal']) || isValidOptionalNumber(data.monthlyGoal)) &&
                  (!data.keys().hasAny(['order']) || isValidOptionalNumber(data.order));
         }
@@ -395,7 +397,7 @@ service cloud.firestore {
               data.keys().hasOnly([
                 'title', 'amount', 'date', 'type', 'isPaid',
                 'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
+                'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId'
               ]) &&
               isValidString(data.title, 100) &&
               isValidNumber(data.amount) &&
@@ -411,6 +413,8 @@ service cloud.firestore {
               (data.get('createdBy', null) == null || data.createdBy is string) &&
               // Account linking (optional)
               isValidOptionalString(data.get('accountId', null), 50) &&
+              // Bucket linking (optional): used for precise bill→bucket coverage matching
+              isValidOptionalString(data.get('bucketId', null), 50) &&
               // Legacy fields (optional, for backward compatibility)
               isValidOptionalString(data.get('notes', null), 500) &&
               // createdAt/updatedAt can be either strings or timestamps
@@ -432,7 +436,7 @@ service cloud.firestore {
           let allowedKeys = [
             'title', 'amount', 'date', 'type', 'isPaid',
             'isRecurring', 'frequency', 'parentRecurringId', 'isDeleted',
-            'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId'
+            'createdBy', 'notes', 'createdAt', 'updatedAt', 'accountId', 'bucketId'
           ].toSet();
           return (
                  // Block writes to any non-allowlisted field (storage abuse): a key
@@ -451,6 +455,7 @@ service cloud.firestore {
                  (!changed.hasAny(['parentRecurringId']) || isValidOptionalString(data.get('parentRecurringId', null), 50)) &&
                  (!changed.hasAny(['isDeleted']) || data.get('isDeleted', null) == null || isValidBoolean(data.isDeleted)) &&
                  (!changed.hasAny(['accountId']) || isValidOptionalString(data.get('accountId', null), 50)) &&
+                 (!changed.hasAny(['bucketId']) || isValidOptionalString(data.get('bucketId', null), 50)) &&
                  (!changed.hasAny(['notes']) || isValidOptionalString(data.get('notes', null), 500)) &&
                  (!changed.hasAny(['updatedAt']) || data.get('updatedAt', null) == null || data.updatedAt is string || data.updatedAt is timestamp) &&
                  // Prevent tampering with ownership metadata and creation timestamps
