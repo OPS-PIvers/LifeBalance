@@ -33,6 +33,9 @@ export default tseslint.config(
           'caughtErrorsIgnorePattern': '^_'
         }
       ],
+      // Parity with the functions/ workspace, which enforces this as an error.
+      // Prefer proper types or `unknown` + narrowing over `any`.
+      '@typescript-eslint/no-explicit-any': 'error',
       ...reactPlugin.configs.recommended.rules,
       ...reactPlugin.configs['jsx-runtime'].rules,
       'react/prop-types': 'off',

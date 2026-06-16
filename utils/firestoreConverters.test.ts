@@ -46,9 +46,8 @@ function fakeSnap(id: string, data: Record<string, unknown>) {
  * In tests we construct plain objects; the constraint exists to support
  * FieldValue sentinels in production writes which don't apply here.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function callToFirestore<T>(converter: { toFirestore: (v: any) => Record<string, unknown> }, obj: T): Record<string, unknown> {
-  return converter.toFirestore(obj);
+function callToFirestore<T>(converter: { toFirestore: (v: never) => Record<string, unknown> }, obj: T): Record<string, unknown> {
+  return converter.toFirestore(obj as never);
 }
 
 // ---------------------------------------------------------------------------

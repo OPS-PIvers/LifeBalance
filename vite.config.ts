@@ -25,6 +25,24 @@ export default defineConfig(({ command }) => {
             '**/*.config.*',
             'vitest.setup.ts',
           ],
+          // Coverage ratchet for the critical business logic in utils/.
+          // These modules are the single source of truth for money math,
+          // safe-to-spend, habit scoring, dates, etc., so we gate them in CI
+          // (see .github/workflows/ci.yml). Floors are set just under the
+          // CURRENT aggregate coverage of utils/** (lines ~81.8%, stmts ~81.6%,
+          // funcs ~85.9%, branches ~73.7%) so the gate ratchets up over time
+          // without breaking the build today. The glob-keyed thresholds apply
+          // to the union of matched files (perFile defaults to false). Bump
+          // these floors as coverage improves; do NOT add a repo-wide threshold
+          // (overall coverage is much lower and would fail the build).
+          thresholds: {
+            'utils/**/*.{ts,tsx}': {
+              lines: 78,
+              statements: 78,
+              functions: 82,
+              branches: 70,
+            },
+          },
         },
       },
       resolve: {
