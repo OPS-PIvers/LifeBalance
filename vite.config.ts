@@ -57,6 +57,10 @@ export default defineConfig(({ command }) => {
       } : {},
       build: {
         sourcemap: 'hidden',
+        // Vite 8 transforms with oxc, which ignores the `esbuild.pure` option
+        // above. Route minification through esbuild so the console.* pure
+        // annotations are honoured and debug logging is dropped from prod.
+        minify: 'esbuild',
         rollupOptions: {
           output: {
             // Function form (not the object form) on purpose: the object form
