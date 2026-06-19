@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // Hoist the mock function so it can be referenced inside vi.mock
 const { generateContentMock } = vi.hoisted(() => {
@@ -22,7 +23,7 @@ vi.mock('firebase/firestore', () => ({
     data: () => ({ aiEnabled: true }),
   }),
   runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const mockTxn = {
       get: vi.fn().mockResolvedValue({
         exists: () => true,

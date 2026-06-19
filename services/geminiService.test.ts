@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { Habit } from '@/types/schema';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // These tests `await import('./geminiService')`, pulling in a heavy module graph
 // (Gemini SDK mock + firebase). Under the full-repo parallel run the first such
@@ -27,10 +28,10 @@ vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({ withConverter: vi.fn().mockReturnThis() })),
   getDoc: vi.fn().mockResolvedValue({
     exists: () => true,
-    data: () => ({ aiEnabled: true, aiUsage: { dailyCount: 0, lastResetDate: new Date().toISOString().split('T')[0] } })
+    data: () => ({ aiEnabled: true, aiUsage: { dailyCount: 0, lastResetDate: getLocalDateString() } })
   }),
   runTransaction: vi.fn().mockImplementation(async (_db, fn) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     const mockTxn = {
       get: vi.fn().mockResolvedValue({
         exists: () => true,
@@ -483,7 +484,7 @@ describe('geminiService – quota, timeout, and retry', () => {
           data: () => ({
             aiUsage: {
               dailyCount: 100,
-              lastResetDate: new Date().toISOString().split('T')[0],
+              lastResetDate: getLocalDateString(),
             },
           }),
         }),

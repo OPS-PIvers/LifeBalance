@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { format } from 'date-fns';
 import BudgetCalendar from './BudgetCalendar';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 
@@ -99,8 +100,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('displays todos for the selected date', () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       calendarItems: [],
@@ -128,8 +128,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('calls completeToDo when complete button is clicked', () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const mockCompleteToDo = vi.fn().mockResolvedValue(undefined);
 
     (useHousehold as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -190,8 +189,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('duplicates a calendar item', async () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-1',
       title: 'Rent',
@@ -230,8 +228,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('edits an existing calendar item', async () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-1',
       title: 'Rent',
@@ -274,8 +271,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('deletes a calendar item', () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-1',
       title: 'Rent',
@@ -349,8 +345,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('shows mobile actions drawer and handles actions', async () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-1',
       title: 'Rent',
@@ -408,8 +403,7 @@ describe('BudgetCalendar', () => {
   });
 
   it('hides edit option for paid items in mobile drawer', () => {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const item = {
       id: 'item-paid',
       title: 'Paid Bill',

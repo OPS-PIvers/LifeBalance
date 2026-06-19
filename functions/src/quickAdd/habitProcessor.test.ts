@@ -16,6 +16,7 @@ import {
   subDays,
   startOfISOWeek,
   subWeeks,
+  parseISO,
 } from "date-fns";
 import {
   calculateStreak,
@@ -36,7 +37,7 @@ const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
 function buildDailyDates(endDate: string, count: number): string[] {
   const dates: string[] = [];
   for (let i = 0; i < count; i++) {
-    dates.push(format(subDays(new Date(endDate), i), "yyyy-MM-dd"));
+    dates.push(format(subDays(parseISO(endDate), i), "yyyy-MM-dd"));
   }
   return dates;
 }

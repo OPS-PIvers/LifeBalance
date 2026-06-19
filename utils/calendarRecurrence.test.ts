@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { parseISO } from 'date-fns';
 import { generateRecurringInstances, expandCalendarItems, generateRecurringId, isRecurringId, parseRecurringId } from './calendarRecurrence';
 import { CalendarItem } from '@/types/schema';
 
@@ -55,8 +56,8 @@ describe('calendarRecurrence', () => {
     it('returns empty array for non-recurring item outside range', () => {
       const result = generateRecurringInstances(
         baseItem,
-        new Date('2024-02-01'),
-        new Date('2024-02-28')
+        parseISO('2024-02-01'),
+        parseISO('2024-02-28')
       );
       expect(result).toHaveLength(0);
     });
@@ -64,8 +65,8 @@ describe('calendarRecurrence', () => {
     it('returns original item for non-recurring item inside range', () => {
       const result = generateRecurringInstances(
         baseItem,
-        new Date('2023-12-01'),
-        new Date('2024-01-31')
+        parseISO('2023-12-01'),
+        parseISO('2024-01-31')
       );
       expect(result).toHaveLength(1);
       expect(result[0]!.id).toBe(baseItem.id);
@@ -79,8 +80,8 @@ describe('calendarRecurrence', () => {
       };
 
       // Range: Jan 1 to Jan 15 (should cover Jan 1, Jan 8, Jan 15)
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-15');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-15');
 
       const result = generateRecurringInstances(weeklyItem, rangeStart, rangeEnd);
 
@@ -100,8 +101,8 @@ describe('calendarRecurrence', () => {
       };
 
       // Range: Jan 1 to Jan 29 (Jan 1, Jan 15, Jan 29)
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-29');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-29');
 
       const result = generateRecurringInstances(biWeeklyItem, rangeStart, rangeEnd);
 
@@ -119,8 +120,8 @@ describe('calendarRecurrence', () => {
       };
 
       // Range: Jan 1 to Mar 1
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-03-01');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-03-01');
 
       const result = generateRecurringInstances(monthlyItem, rangeStart, rangeEnd);
 
@@ -139,8 +140,8 @@ describe('calendarRecurrence', () => {
       };
 
       // Range: Jan 1 2024 (Monday) to Jan 8 2024 (Monday)
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-08');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-08');
 
       const result = generateRecurringInstances(oldItem, rangeStart, rangeEnd);
 
@@ -158,8 +159,8 @@ describe('calendarRecurrence', () => {
       };
 
       // Range starts 4 weeks later: Jan 29
-      const rangeStart = new Date('2024-01-29');
-      const rangeEnd = new Date('2024-01-30');
+      const rangeStart = parseISO('2024-01-29');
+      const rangeEnd = parseISO('2024-01-30');
 
       const result = generateRecurringInstances(oldItem, rangeStart, rangeEnd);
 
@@ -175,8 +176,8 @@ describe('calendarRecurrence', () => {
         };
 
         // Range: Jan 1 to Jan 5
-        const rangeStart = new Date('2024-01-01');
-        const rangeEnd = new Date('2024-01-05');
+        const rangeStart = parseISO('2024-01-01');
+        const rangeEnd = parseISO('2024-01-05');
 
         const result = generateRecurringInstances(unknownFreqItem, rangeStart, rangeEnd);
 
@@ -208,8 +209,8 @@ describe('calendarRecurrence', () => {
       };
 
       const items = [recurringItem, paidInstance];
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-15');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-15');
 
       const result = expandCalendarItems(items, rangeStart, rangeEnd);
 
@@ -286,8 +287,8 @@ describe('calendarRecurrence', () => {
         paidOutOfRange,
       ];
 
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-15');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-15');
 
       const result = expandCalendarItems(items, rangeStart, rangeEnd);
 
@@ -322,8 +323,8 @@ describe('calendarRecurrence', () => {
       };
 
       const items = [recurringItem, deletedInstance];
-      const rangeStart = new Date('2024-01-01');
-      const rangeEnd = new Date('2024-01-15');
+      const rangeStart = parseISO('2024-01-01');
+      const rangeEnd = parseISO('2024-01-15');
 
       const result = expandCalendarItems(items, rangeStart, rangeEnd);
 
