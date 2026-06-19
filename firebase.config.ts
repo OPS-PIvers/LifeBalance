@@ -73,16 +73,17 @@ export const auth = getAuth(app);
 // Enable Firestore offline persistence (IndexedDB) with multi-tab support.
 // Falls back to plain getFirestore if IndexedDB is unavailable (SSR, private
 // browsing, some CI environments) so the app never hard-crashes.
-let db: Firestore;
-try {
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  });
-} catch (e) {
-  console.warn('Firestore persistence unavailable, falling back to default cache.', e);
-  db = getFirestore(app);
+function initFirestore(): Firestore {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch (e) {
+    console.warn('Firestore persistence unavailable, falling back to default cache.', e);
+    return getFirestore(app);
+  }
 }
-export { db };
+export const db = initFirestore();
 
 // Initialize Messaging with conditional check for browser environment
 // to prevent errors in SSR, tests, or unsupported contexts.
