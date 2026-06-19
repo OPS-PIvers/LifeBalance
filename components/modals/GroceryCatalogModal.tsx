@@ -153,7 +153,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search history..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-none transition-all placeholder:text-slate-400"
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-hidden transition-all placeholder:text-slate-400"
             autoFocus
           />
         </div>
@@ -185,7 +185,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 {/* Content */}
                 <button
                   type="button"
-                  className="flex-1 min-w-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
+                  className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 rounded-lg px-1 -mx-1"
                   onClick={() => handleAddItem(item)}
                 >
                   <div className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.name}</div>
@@ -281,7 +281,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 type="text"
                 value={editingItem.name}
                 onChange={e => setEditingItem({...editingItem, name: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-hidden"
               />
             </div>
             <div>
@@ -290,7 +290,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                 type="text"
                 value={editingItem.category}
                 onChange={e => setEditingItem({...editingItem, category: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-hidden"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -301,7 +301,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   value={editingItem.defaultQuantity || ''}
                   onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
                   placeholder="e.g. 1"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-hidden"
                 />
               </div>
               <div>
@@ -311,7 +311,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
                   value={editingItem.defaultStore || ''}
                   onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
                   placeholder="Optional"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-hidden"
                 />
               </div>
             </div>

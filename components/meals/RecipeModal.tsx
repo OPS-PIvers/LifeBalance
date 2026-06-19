@@ -95,7 +95,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                         "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all w-full text-left",
                         isChecked
                           ? "bg-slate-50 border-slate-200 opacity-60 dark:bg-slate-800/50 dark:border-slate-700"
-                          : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:hover:border-brand-500/50"
+                          : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-xs dark:bg-slate-800 dark:border-slate-700 dark:hover:border-brand-500/50"
                       )}
                     >
                       <div className={clsx(
@@ -132,7 +132,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                         "flex gap-4 p-4 rounded-xl border cursor-pointer transition-all w-full text-left",
                         isChecked
                           ? "bg-slate-50 border-slate-200 opacity-60 dark:bg-slate-800/50 dark:border-slate-700"
-                          : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:hover:border-brand-500/50"
+                          : "bg-white border-slate-200 hover:border-brand-300 hover:shadow-xs dark:bg-slate-800 dark:border-slate-700 dark:hover:border-brand-500/50"
                       )}
                     >
                       <div className={clsx(
@@ -177,14 +177,14 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             <Button
               variant="primary"
               onClick={onMarkCooked}
-              className="flex-[2] shadow-lg shadow-brand-200"
+              className="flex-2 shadow-lg shadow-brand-200"
               leftIcon={<ChefHat size={18} />}
             >
               Mark as Cooked
             </Button>
           )}
           {isCooked && (
-             <div className="flex-[2] flex items-center justify-center gap-2 bg-green-50 text-green-700 font-bold rounded-xl border border-green-200 opacity-80 cursor-default dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20">
+             <div className="flex-2 flex items-center justify-center gap-2 bg-green-50 text-green-700 font-bold rounded-xl border border-green-200 opacity-80 cursor-default dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/20">
                 <CheckCircle2 size={18} /> Bon Appétit!
              </div>
           )}

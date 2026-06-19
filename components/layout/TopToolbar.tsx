@@ -39,12 +39,12 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative z-dropdown">
-        <header className="z-sticky w-full bg-brand-800/95 backdrop-blur-md shadow-sm border-b border-white/5 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800/95 backdrop-blur-md shadow-xs border-b border-white/5 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
             aria-label="View Safe to Spend details"
-            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
             onClick={() => setIsSafeSpendOpen(true)}
           >
             <span
@@ -71,7 +71,7 @@ const TopToolbar: React.FC = () => {
             <button
               type="button"
               aria-label="View Rewards and Points breakdown"
-              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
               onClick={() => setIsRewardsOpen(true)}
             >
               {/* Daily Points (Gold Star) */}
@@ -105,7 +105,7 @@ const TopToolbar: React.FC = () => {
               ref={profileButtonRef}
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400"
               aria-label="Open Profile Menu"
               aria-expanded={isProfileOpen}
               aria-haspopup="menu"

@@ -40,7 +40,7 @@ export const SkeletonText: React.FC<{ lines?: number; className?: string }> = ({
 
 /**
  * Glass-card shaped skeleton matching the app's widget container
- * (bg-white/80 backdrop-blur rounded-3xl). Wrap arbitrary skeleton content.
+ * (bg-white/80 backdrop-blur-sm rounded-3xl). Wrap arbitrary skeleton content.
  */
 export const SkeletonCard: React.FC<{ className?: string; children?: React.ReactNode }> = ({
   className,

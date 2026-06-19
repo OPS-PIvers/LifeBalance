@@ -165,7 +165,7 @@ const ShoppingListTab: React.FC = () => {
       sorted = sorted.filter(item => item.store === filterStore);
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     setItems(sorted);
   }, [shoppingList, filterStore]);
 
@@ -508,7 +508,7 @@ const ShoppingListTab: React.FC = () => {
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none placeholder:text-slate-400 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden placeholder:text-slate-400 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
                 <button
                     type="submit"
@@ -526,7 +526,7 @@ const ShoppingListTab: React.FC = () => {
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-sm text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-violet-600 hover:bg-violet-50/50 hover:border-violet-200/50 dark:hover:text-violet-300 dark:hover:bg-violet-500/15 dark:hover:border-violet-500/30 active:scale-95 transition-all disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-xs text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-violet-600 hover:bg-violet-50/50 hover:border-violet-200/50 dark:hover:text-violet-300 dark:hover:bg-violet-500/15 dark:hover:border-violet-500/30 active:scale-95 transition-all disabled:opacity-50"
                 title="AI Optimize List"
              >
                 {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -535,7 +535,7 @@ const ShoppingListTab: React.FC = () => {
 
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-sm text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-indigo-50/50 hover:border-indigo-200/50 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/15 dark:hover:border-indigo-500/30 active:scale-95 transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-xs text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-indigo-50/50 hover:border-indigo-200/50 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/15 dark:hover:border-indigo-500/30 active:scale-95 transition-all"
                 title="View Item History"
              >
                 <Clock className="w-3.5 h-3.5" />
@@ -548,10 +548,10 @@ const ShoppingListTab: React.FC = () => {
                   aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
                   aria-expanded={isFilterOpen}
                   aria-haspopup="listbox"
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-xl shadow-sm text-xs font-medium transition-all ${
+                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-xl shadow-xs text-xs font-medium transition-all ${
                     filterStore
                       ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-700/30 dark:border-brand-500/40 dark:text-brand-200'
-                      : 'bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm border-slate-200/50 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-50 dark:hover:text-slate-100 dark:hover:bg-slate-700/50'
+                      : 'bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border-slate-200/50 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-50 dark:hover:text-slate-100 dark:hover:bg-slate-700/50'
                   }`}
                >
                   <Filter className="w-3.5 h-3.5" />

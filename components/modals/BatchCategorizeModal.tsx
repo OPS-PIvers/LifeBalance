@@ -63,7 +63,7 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
             disabled={isSaving}
-            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
+            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-hidden focus:border-brand-400 transition-colors disabled:opacity-70"
           >
             <option value="">Select Category...</option>
             {categories.map((cat) => (

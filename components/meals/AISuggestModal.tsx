@@ -41,7 +41,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
                     type="checkbox"
                     checked={aiOptions.cheap}
                     onChange={e => setAiOptions({...aiOptions, cheap: e.target.checked})}
-                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                    className="w-5 h-5 rounded-sm text-violet-600 focus:ring-violet-500"
                 />
                 <div>
                     <div className="font-bold text-slate-800 dark:text-slate-200">Budget Friendly</div>
@@ -54,7 +54,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
                     type="checkbox"
                     checked={aiOptions.quick}
                     onChange={e => setAiOptions({...aiOptions, quick: e.target.checked})}
-                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                    className="w-5 h-5 rounded-sm text-violet-600 focus:ring-violet-500"
                 />
                 <div>
                     <div className="font-bold text-slate-800 dark:text-slate-200">Quick & Easy</div>
@@ -67,7 +67,7 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
                     type="checkbox"
                     checked={aiOptions.new}
                     onChange={e => setAiOptions({...aiOptions, new: e.target.checked})}
-                    className="w-5 h-5 rounded text-violet-600 focus:ring-violet-500"
+                    className="w-5 h-5 rounded-sm text-violet-600 focus:ring-violet-500"
                 />
                 <div>
                     <div className="font-bold text-slate-800 dark:text-slate-200">Try Something New</div>

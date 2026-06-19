@@ -43,7 +43,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
             return (
               <div 
                 key={reward.id}
-                className={`flex flex-col p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 shadow-sm transition-all ${
+                className={`flex flex-col p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 shadow-xs transition-all ${
                   !canAfford ? 'opacity-60 grayscale-[0.5]' : 'hover:border-habit-gold/50'
                 }`}
               >

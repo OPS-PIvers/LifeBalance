@@ -217,12 +217,12 @@ const ShortcutSetupGuide: React.FC = () => {
                       <strong>Paste the URL:</strong>
                       <button
                         onClick={() => copyToClipboard(getQuickAddEndpointUrl(example.endpoint), 'URL')}
-                        className="mt-1 w-full flex items-center justify-between bg-gray-50 rounded px-2 py-1.5 text-left hover:bg-gray-100 border"
+                        className="mt-1 w-full flex items-center justify-between bg-gray-50 rounded-sm px-2 py-1.5 text-left hover:bg-gray-100 border"
                       >
                         <code className="text-xs text-blue-600 break-all">
                           {getQuickAddEndpointUrl(example.endpoint)}
                         </code>
-                        <Copy className="w-3 h-3 text-gray-400 flex-shrink-0 ml-2" />
+                        <Copy className="w-3 h-3 text-gray-400 shrink-0 ml-2" />
                       </button>
                     </li>
 
@@ -237,13 +237,13 @@ const ShortcutSetupGuide: React.FC = () => {
                     <li>
                       <strong>Add Headers</strong> (tap &quot;Add new header&quot; for each):
                       <div className="mt-2 space-y-2 ml-4">
-                        <div className="bg-gray-50 rounded p-2 border">
+                        <div className="bg-gray-50 rounded-sm p-2 border">
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-gray-500">Key:</span>
                               <button
                                 onClick={() => copyToClipboard('Authorization', 'Key')}
-                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                className="ml-1 bg-white border px-2 py-0.5 rounded-sm font-mono hover:bg-gray-100"
                               >
                                 Authorization
                               </button>
@@ -255,13 +255,13 @@ const ShortcutSetupGuide: React.FC = () => {
                           </div>
                           <p className="text-xs text-gray-500 mt-1">Replace [API_KEY] with your actual key from above</p>
                         </div>
-                        <div className="bg-gray-50 rounded p-2 border">
+                        <div className="bg-gray-50 rounded-sm p-2 border">
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div>
                               <span className="text-gray-500">Key:</span>
                               <button
                                 onClick={() => copyToClipboard('Content-Type', 'Key')}
-                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                className="ml-1 bg-white border px-2 py-0.5 rounded-sm font-mono hover:bg-gray-100"
                               >
                                 Content-Type
                               </button>
@@ -270,7 +270,7 @@ const ShortcutSetupGuide: React.FC = () => {
                               <span className="text-gray-500">Value:</span>
                               <button
                                 onClick={() => copyToClipboard('application/json', 'Value')}
-                                className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                className="ml-1 bg-white border px-2 py-0.5 rounded-sm font-mono hover:bg-gray-100"
                               >
                                 application/json
                               </button>
@@ -284,33 +284,33 @@ const ShortcutSetupGuide: React.FC = () => {
                       <strong>Request Body:</strong> Tap &quot;JSON&quot; → tap &quot;Add new field&quot; for each field below:
                       <div className="mt-2 space-y-2 ml-4">
                         {example.fields.map((field, i) => (
-                          <div key={i} className="bg-gray-50 rounded p-2 border">
+                          <div key={i} className="bg-gray-50 rounded-sm p-2 border">
                             <div className="text-xs space-y-1">
                               <div>
                                 <span className="text-gray-500">Key:</span>
                                 <button
                                   onClick={() => copyToClipboard(field.key, 'Key')}
-                                  className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                  className="ml-1 bg-white border px-2 py-0.5 rounded-sm font-mono hover:bg-gray-100"
                                 >
                                   {field.key}
                                 </button>
                               </div>
                               <div>
                                 <span className="text-gray-500">Type:</span>
-                                <span className="ml-1 bg-gray-200 px-2 py-0.5 rounded font-medium">
+                                <span className="ml-1 bg-gray-200 px-2 py-0.5 rounded-sm font-medium">
                                   {field.valueType}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-gray-500">Value:</span>
                                 {field.isVariable ? (
-                                  <span className="ml-1 bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">
+                                  <span className="ml-1 bg-purple-100 text-purple-700 px-2 py-0.5 rounded-sm text-xs">
                                     Tap value field → &quot;Select Variable&quot; → choose <strong>{field.value}</strong> (blue pill)
                                   </span>
                                 ) : (
                                   <button
                                     onClick={() => copyToClipboard(field.value, 'Value')}
-                                    className="ml-1 bg-white border px-2 py-0.5 rounded font-mono hover:bg-gray-100"
+                                    className="ml-1 bg-white border px-2 py-0.5 rounded-sm font-mono hover:bg-gray-100"
                                   >
                                     {field.value}
                                   </button>
@@ -344,9 +344,9 @@ const ShortcutSetupGuide: React.FC = () => {
       </div>
 
       {/* iOS Lock Screen Feature */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-3">
+      <div className="bg-linear-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-3">
         <div className="flex items-start gap-2">
-          <Smartphone className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+          <Smartphone className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-semibold text-purple-800">iOS Lock Screen Shortcuts</h4>
             <p className="text-sm text-purple-700 mt-1">

@@ -47,7 +47,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
+    <div className="bg-linear-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
       <div className="bg-white dark:bg-slate-800 rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <Sparkles size={16} className="text-violet-600 dark:text-violet-300 animate-pulse" />
@@ -60,7 +60,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
             value={magicInput}
             onChange={(e) => setMagicInput(e.target.value)}
             placeholder="Spent $20 on Pizza..."
-            className="flex-1 bg-violet-50 dark:bg-violet-500/15 border-none outline-none text-brand-800 dark:text-slate-100 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
+            className="flex-1 bg-violet-50 dark:bg-violet-500/15 border-none outline-hidden text-brand-800 dark:text-slate-100 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
             disabled={magicLoading}
           />
           <button

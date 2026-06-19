@@ -70,7 +70,7 @@ const Dashboard: React.FC = () => {
         </div>
         <button
           onClick={() => setIsAnalyticsOpen(true)}
-          className="p-3 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 rounded-2xl shadow-sm text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800 active:scale-95 transition-all"
+          className="p-3 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 rounded-2xl shadow-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800 active:scale-95 transition-all"
           aria-label="Open Analytics"
         >
           <BarChart2 size={24} />
@@ -84,7 +84,7 @@ const Dashboard: React.FC = () => {
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-white/90 dark:bg-slate-800/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-sm ring-1 ring-black/5 dark:ring-white/5 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
+          <div className="bg-white/90 dark:bg-slate-800/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xs ring-1 ring-black/5 dark:ring-white/5 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
             <div className="flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)] animate-pulse"></div>
               <div className="flex-1">
@@ -104,9 +104,9 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
               {actionQueue.length > 0 ? (
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-sm"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-xs"></span>
               ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm"></span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs"></span>
               )}
               Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
             </h2>
@@ -174,7 +174,7 @@ const Dashboard: React.FC = () => {
 
       </div>
 
-      <Suspense fallback={<div className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-sm" />}>
+      <Suspense fallback={<div className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-xs" />}>
         {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
         {isChallengeModalOpen && (
           <ChallengeHubModal
@@ -211,7 +211,7 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm hover:shadow-md transition-all group"
+                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all group"
                  >
                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm group-hover:text-slate-900 dark:group-hover:text-slate-100">{acc.name}</span>
                    <span className="font-mono text-xs text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300">${acc.balance.toLocaleString()}</span>

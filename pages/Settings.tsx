@@ -282,7 +282,7 @@ const Settings: React.FC = () => {
                 <Terminal className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-lg font-bold text-indigo-900 tracking-tight">Developer Console</h3>
               </div>
-              <span className="text-xs font-bold text-indigo-600 bg-white px-2 py-1 rounded border border-indigo-200 group-hover:border-indigo-300 shadow-sm">
+              <span className="text-xs font-bold text-indigo-600 bg-white px-2 py-1 rounded-sm border border-indigo-200 group-hover:border-indigo-300 shadow-xs">
                 ADMIN
               </span>
             </button>
@@ -305,7 +305,7 @@ const Settings: React.FC = () => {
                 <img
                   src={user.photoURL}
                   alt={user.displayName || 'User'}
-                  className="w-16 h-16 rounded-full shadow-sm ring-2 ring-white"
+                  className="w-16 h-16 rounded-full shadow-xs ring-2 ring-white"
                 />
               ) : (
                 <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center shadow-inner">
@@ -320,12 +320,12 @@ const Settings: React.FC = () => {
                 {currentUser && (
                   <div className="flex items-center gap-2 mt-2">
                     {currentUser.role === 'admin' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full shadow-sm">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full shadow-xs">
                         <Crown size={12} />
                         Admin
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2.5 py-0.5 rounded-full shadow-sm">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-700 bg-brand-50 border border-brand-100 px-2.5 py-0.5 rounded-full shadow-xs">
                         <Shield size={12} />
                         Member
                       </span>
@@ -356,7 +356,7 @@ const Settings: React.FC = () => {
                 aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-sm ${
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shadow-xs ${
                     notificationStatus === 'granted' ? 'bg-green-100 text-green-600' : 'bg-white text-slate-400 group-hover:text-brand-500'
                   }`}>
                     <Bell size={18} />
@@ -370,7 +370,7 @@ const Settings: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg shadow-sm ${
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg shadow-xs ${
                   notificationStatus === 'granted' ? 'text-green-700 bg-green-100 border border-green-200' :
                   notificationStatus === 'denied' ? 'text-rose-700 bg-rose-100 border border-rose-200' :
                   'text-brand-600 bg-white border border-brand-200'
@@ -429,7 +429,7 @@ const Settings: React.FC = () => {
             <HouseholdInviteCard inviteCode={householdSettings.inviteCode} />
 
             {/* Shared Household Points */}
-            <div className="p-5 bg-gradient-to-r from-slate-50 to-blue-50/50 rounded-2xl border border-slate-200/60 shadow-sm">
+            <div className="p-5 bg-linear-to-r from-slate-50 to-blue-50/50 rounded-2xl border border-slate-200/60 shadow-xs">
               <h4 className="text-sm font-bold text-slate-700 mb-4 tracking-tight">Shared Household Points</h4>
               <div className="grid grid-cols-3 gap-3">
                 <button
@@ -490,7 +490,7 @@ const Settings: React.FC = () => {
                 .map((member) => (
                   <div
                     key={member.uid}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow"
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200/60 shadow-xs hover:shadow-md transition-shadow"
                   >
                     {member.photoURL ? (
                       <img
@@ -512,7 +512,7 @@ const Settings: React.FC = () => {
                           )}
                         </p>
                         {member.role === 'admin' && (
-                          <Crown size={14} className="text-amber-500 flex-shrink-0" />
+                          <Crown size={14} className="text-amber-500 shrink-0" />
                         )}
                       </div>
                       {member.email && (
@@ -562,7 +562,7 @@ const Settings: React.FC = () => {
           {/* Data Management */}
           <div>
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shadow-sm">
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shadow-xs">
                 <Download className="w-6 h-6 text-blue-600" />
               </div>
               <div>
@@ -583,7 +583,7 @@ const Settings: React.FC = () => {
                 aria-label="Export full household data backup as JSON file"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform">
                     <FileJson size={18} className="text-brand-600" />
                   </div>
                   <div className="text-left">
@@ -601,7 +601,7 @@ const Settings: React.FC = () => {
                 aria-label="Export transaction history as CSV file"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform">
                     <FileSpreadsheet size={18} className="text-emerald-600" />
                   </div>
                   <div className="text-left">

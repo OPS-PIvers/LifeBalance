@@ -27,7 +27,7 @@ export const CompactSelect: React.FC<CompactSelectProps> = ({
       value={value}
       aria-label={ariaLabel ?? placeholder}
       onChange={(e) => onChange(e.target.value || '')}
-      className={`px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-none w-full dark:bg-brand-700/40 dark:border-brand-500/40 dark:text-brand-100 ${className}`}
+      className={`px-2 py-1 rounded-lg text-xxs font-bold bg-brand-50 border border-brand-200 text-brand-600 outline-hidden w-full dark:bg-brand-700/40 dark:border-brand-500/40 dark:text-brand-100 ${className}`}
     >
       <option value="">{placeholder}</option>
       {options.map(opt => (

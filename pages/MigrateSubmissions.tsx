@@ -74,7 +74,7 @@ const MigrateSubmissions: React.FC = () => {
   // Show loading state while household data is loading
   if (!householdSettings || !currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-linear-to-br from-brand-50 via-white to-brand-50 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4" />
           <p className="text-brand-400">Loading household data...</p>
@@ -207,7 +207,7 @@ const MigrateSubmissions: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-brand-50 p-4 pb-24">
+    <div className="min-h-screen bg-linear-to-br from-brand-50 via-white to-brand-50 p-4 pb-24">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -226,7 +226,7 @@ const MigrateSubmissions: React.FC = () => {
         {/* Info Card */}
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
           <div className="flex gap-3">
-            <AlertCircle className="text-blue-600 flex-shrink-0" size={20} />
+            <AlertCircle className="text-blue-600 shrink-0" size={20} />
             <div className="text-sm text-blue-800">
               <p className="font-bold mb-2">What this does:</p>
               <ul className="list-disc list-inside space-y-1">
@@ -276,7 +276,7 @@ const MigrateSubmissions: React.FC = () => {
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
             <div className="flex gap-3">
-              <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
+              <AlertCircle className="text-red-600 shrink-0" size={20} />
               <div className="text-sm text-red-800">
                 <p className="font-bold mb-1">Migration Error</p>
                 <p>{error}</p>
@@ -289,7 +289,7 @@ const MigrateSubmissions: React.FC = () => {
         {isComplete && (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
             <div className="flex gap-3">
-              <CheckCircle className="text-green-600 flex-shrink-0" size={20} />
+              <CheckCircle className="text-green-600 shrink-0" size={20} />
               <div className="text-sm text-green-800">
                 <p className="font-bold mb-1">Migration Complete!</p>
                 <p>

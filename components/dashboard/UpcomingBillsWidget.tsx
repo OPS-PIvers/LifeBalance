@@ -69,7 +69,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
         {upcomingBills.map(bill => (
             <div key={bill.id} className="flex items-center justify-between group">
               <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-sm transition-all dark:bg-slate-700/50 dark:border-slate-700 dark:text-slate-500 dark:group-hover:bg-slate-700">
+                 <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-xs transition-all dark:bg-slate-700/50 dark:border-slate-700 dark:text-slate-500 dark:group-hover:bg-slate-700">
                     {bill.displayDate}
                  </div>
                  <div className="min-w-0">

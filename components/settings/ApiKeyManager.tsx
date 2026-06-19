@@ -129,7 +129,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {newlyCreatedKey && (
         <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 space-y-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-amber-800">Copy your API key now!</p>
               <p className="text-sm text-amber-700">
@@ -188,7 +188,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-4 text-xs text-brand-500">
-                <code className="bg-brand-50 px-2 py-0.5 rounded">{key.keyPrefix}...</code>
+                <code className="bg-brand-50 px-2 py-0.5 rounded-sm">{key.keyPrefix}...</code>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {key.lastUsedAt
@@ -233,7 +233,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder="e.g., iPhone Shortcut"
-              className="w-full px-3 py-2 border border-brand-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full px-3 py-2 border border-brand-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
             />
           </div>
 
@@ -249,7 +249,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, habits: e.target.checked })
                   }
-                  className="rounded border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm text-brand-700">Habits (toggle habits)</span>
               </label>
@@ -260,7 +260,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, expenses: e.target.checked })
                   }
-                  className="rounded border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm text-brand-700">Expenses (add transactions)</span>
               </label>
@@ -271,7 +271,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, shoppingList: e.target.checked })
                   }
-                  className="rounded border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
                 />
                 <span className="text-sm text-brand-700">Shopping List (add items)</span>
               </label>
@@ -314,12 +314,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             <button
               key={endpoint}
               onClick={() => handleCopyEndpoint(endpoint)}
-              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded border border-slate-100/50 hover:bg-slate-50/50 text-left"
+              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded-sm border border-slate-100/50 hover:bg-slate-50/50 text-left"
             >
               <span className="text-xs font-mono text-slate-600 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3 h-3 text-slate-400 flex-shrink-0 ml-2" />
+              <Copy className="w-3 h-3 text-slate-400 shrink-0 ml-2" />
             </button>
           ))}
         </div>
@@ -361,7 +361,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
       {/* Security Warning */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-xs text-amber-700">
           API keys bypass normal authentication. Only share with trusted devices
           and revoke keys if your device is lost or compromised.

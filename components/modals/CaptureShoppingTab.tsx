@@ -38,7 +38,7 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Milk, Eggs"
-          className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+          className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden"
         />
       </div>
 
@@ -50,7 +50,7 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
               id="item-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full appearance-none p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+              className="w-full appearance-none p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden"
             >
               {GROCERY_CATEGORIES.map(c => (
                 <option key={c} value={c}>{c}</option>
@@ -67,7 +67,7 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="e.g. 2, 500g"
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden"
           />
         </div>
       </div>
@@ -82,7 +82,7 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
             value={store}
             onChange={(e) => setStore(e.target.value)}
             placeholder="e.g. Costco, Trader Joe's"
-            className="w-full p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-none"
+            className="w-full p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden"
           />
         </div>
       </div>

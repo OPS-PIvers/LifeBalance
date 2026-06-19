@@ -26,7 +26,7 @@ export const Switch: React.FC<SwitchProps> = ({
     <label
       htmlFor={inputId}
       className={cn(
-        "relative inline-flex items-center flex-shrink-0",
+        "relative inline-flex items-center shrink-0",
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
         className
       )}
@@ -42,7 +42,7 @@ export const Switch: React.FC<SwitchProps> = ({
       />
       <div className={cn(
         "w-11 h-6 rounded-full peer transition-colors duration-200 ease-in-out",
-        "bg-brand-200 dark:bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-500/30",
+        "bg-brand-200 dark:bg-slate-700 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-500/30",
         "peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500",
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",

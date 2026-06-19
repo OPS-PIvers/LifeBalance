@@ -96,7 +96,7 @@ const HabitHistoryCalendar: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Calendar Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-brand-100 dark:border-slate-700 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xs border border-brand-100 dark:border-slate-700 p-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-bold text-lg text-brand-800 dark:text-slate-100">
@@ -161,10 +161,10 @@ const HabitHistoryCalendar: React.FC = () => {
         <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-slate-500 uppercase tracking-wide">
           <span>Less</span>
           <div className="flex gap-1">
-             <div className="w-3 h-3 rounded bg-emerald-200"></div>
-             <div className="w-3 h-3 rounded bg-emerald-300"></div>
-             <div className="w-3 h-3 rounded bg-emerald-400"></div>
-             <div className="w-3 h-3 rounded bg-emerald-500"></div>
+             <div className="w-3 h-3 rounded-sm bg-emerald-200"></div>
+             <div className="w-3 h-3 rounded-sm bg-emerald-300"></div>
+             <div className="w-3 h-3 rounded-sm bg-emerald-400"></div>
+             <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
           </div>
           <span>More</span>
         </div>
@@ -191,7 +191,7 @@ const HabitHistoryCalendar: React.FC = () => {
             {selectedDateHabits.map(habit => {
               const isPositive = habit.type === 'positive';
               return (
-                <div key={habit.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-brand-100 dark:border-slate-700 shadow-sm flex items-center justify-between group animate-in slide-in-from-bottom-2">
+                <div key={habit.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-brand-100 dark:border-slate-700 shadow-xs flex items-center justify-between group animate-in slide-in-from-bottom-2">
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "w-10 h-10 rounded-lg flex items-center justify-center font-bold transition-colors",

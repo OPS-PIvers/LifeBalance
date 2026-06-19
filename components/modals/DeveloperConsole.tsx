@@ -194,7 +194,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                               <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 dark:text-blue-300 hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded ml-2" aria-label={`Delete tester ${t.email}`}>
+                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded-sm ml-2" aria-label={`Delete tester ${t.email}`}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -253,7 +253,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                         <div key={report.id} className="p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60 hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-2">
                                 <div>
-                                    <span className="text-xs font-mono bg-slate-100/50 dark:bg-slate-700/30 px-2 py-1 rounded text-slate-600 dark:text-slate-300 font-bold">{report.version}</span>
+                                    <span className="text-xs font-mono bg-slate-100/50 dark:bg-slate-700/30 px-2 py-1 rounded-sm text-slate-600 dark:text-slate-300 font-bold">{report.version}</span>
                                     <span className="ml-2 text-xs text-slate-400 dark:text-slate-500">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
                                 <button onClick={() => copyReport(report)} className="text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 p-1.5 rounded-lg" title="Copy JSON" aria-label="Copy report as JSON">
@@ -267,7 +267,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                                 <span>HID: {report.householdId}</span>
                             </div>
                             {report.errorContext && (
-                                <div className="mt-2 bg-red-50 dark:bg-red-500/15 p-2 rounded text-xs text-red-700 dark:text-red-300 font-mono overflow-x-auto border border-red-100 dark:border-red-500/30">
+                                <div className="mt-2 bg-red-50 dark:bg-red-500/15 p-2 rounded-sm text-xs text-red-700 dark:text-red-300 font-mono overflow-x-auto border border-red-100 dark:border-red-500/30">
                                     <strong>Error Context:</strong><br/>
                                     {report.errorContext}
                                 </div>

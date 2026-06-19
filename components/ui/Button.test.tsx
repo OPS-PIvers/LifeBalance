@@ -155,7 +155,7 @@ describe('Button', () => {
   it('applies focus-visible styles', () => {
     render(<Button>Focus Me</Button>);
     const button = screen.getByRole('button', { name: /focus me/i });
-    expect(button).toHaveClass('focus:outline-none');
+    expect(button).toHaveClass('focus:outline-hidden');
     expect(button).toHaveClass('focus-visible:ring-2');
     expect(button).toHaveClass('focus-visible:ring-brand-500/20');
     expect(button).toHaveClass('focus-visible:ring-offset-2');

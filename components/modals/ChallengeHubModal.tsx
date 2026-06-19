@@ -203,7 +203,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="e.g., No Spend November"
-                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-none"
+                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-hidden"
                   />
                 </div>
 
@@ -216,7 +216,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Add details about this challenge..."
-                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl resize-none h-20 focus:border-brand-400 outline-none"
+                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl resize-none h-20 focus:border-brand-400 outline-hidden"
                   />
                 </div>
 
@@ -230,7 +230,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                       onClick={() => setTargetType('count')}
                       className={`flex-1 p-4 rounded-xl border-2 transition-all ${
                         targetType === 'count'
-                          ? 'border-brand-400 dark:border-slate-600 bg-brand-50 dark:bg-slate-700/50 shadow-sm'
+                          ? 'border-brand-400 dark:border-slate-600 bg-brand-50 dark:bg-slate-700/50 shadow-xs'
                           : 'border-brand-100 dark:border-slate-700 hover:border-brand-200 dark:hover:border-slate-600'
                       }`}
                     >
@@ -241,7 +241,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                       onClick={() => setTargetType('percentage')}
                       className={`flex-1 p-4 rounded-xl border-2 transition-all ${
                         targetType === 'percentage'
-                          ? 'border-brand-400 dark:border-slate-600 bg-brand-50 dark:bg-slate-700/50 shadow-sm'
+                          ? 'border-brand-400 dark:border-slate-600 bg-brand-50 dark:bg-slate-700/50 shadow-xs'
                           : 'border-brand-100 dark:border-slate-700 hover:border-brand-200 dark:hover:border-slate-600'
                       }`}
                     >
@@ -280,7 +280,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     <select
                       value={selectedYearlyGoalId}
                       onChange={(e) => setSelectedYearlyGoalId(e.target.value)}
-                      className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-none"
+                      className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-hidden"
                     >
                       <option value="">No yearly goal</option>
                       {yearlyGoals.map((goal) => (
@@ -303,7 +303,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                           onClick={() => toggleHabitSelection('suggested-habit')}
                           className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
                             selectedHabitIds.includes('suggested-habit')
-                              ? 'bg-white dark:bg-slate-800 border-brand-400 dark:border-slate-600 shadow-sm'
+                              ? 'bg-white dark:bg-slate-800 border-brand-400 dark:border-slate-600 shadow-xs'
                               : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'
                           }`}
                         >
@@ -341,7 +341,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                           onClick={() => toggleHabitSelection(habit.id)}
                           className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${
                             isSelected
-                              ? 'bg-white dark:bg-slate-800 border-brand-400 dark:border-slate-600 shadow-sm'
+                              ? 'bg-white dark:bg-slate-800 border-brand-400 dark:border-slate-600 shadow-xs'
                               : 'bg-transparent border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'
                           }`}
                         >
@@ -380,7 +380,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 {displayYearlyGoal ? (
                   <>
                     {/* Goal Info */}
-                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-500/30">
+                    <div className="bg-linear-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-500/30">
                       <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100 mb-1">
                         {displayYearlyGoal.title}
                       </h3>
@@ -484,7 +484,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
               {/* Freeze Bank Tab */}
               <TabsContent value="freeze" className="space-y-6">
                 {/* Token Display */}
-                <div className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-500/10 dark:to-blue-500/10 p-6 rounded-2xl border border-cyan-100 dark:border-cyan-500/30">
+                <div className="bg-linear-to-br from-cyan-50 to-blue-50 dark:from-cyan-500/10 dark:to-blue-500/10 p-6 rounded-2xl border border-cyan-100 dark:border-cyan-500/30">
                   <h3 className="text-sm font-bold text-brand-400 dark:text-slate-400 uppercase mb-3">
                     Available Tokens
                   </h3>
@@ -494,7 +494,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         key={i}
                         className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                           i < (freezeBank?.tokens || 0)
-                            ? 'bg-gradient-to-br from-cyan-400 to-blue-500 text-white shadow-lg scale-110'
+                            ? 'bg-linear-to-br from-cyan-400 to-blue-500 text-white shadow-lg scale-110'
                             : 'bg-brand-100 dark:bg-slate-700/50 text-brand-300 dark:text-slate-500'
                         }`}
                       >
@@ -593,7 +593,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                     {selectedDate && selectedHabitForFreeze && (
                       <button
                         onClick={handleUseFreeze}
-                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
+                        className="w-full py-3 bg-linear-to-r from-cyan-500 to-blue-500 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
                       >
                         Use Freeze Token ❄️
                       </button>

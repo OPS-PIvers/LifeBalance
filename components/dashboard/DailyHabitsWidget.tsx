@@ -133,7 +133,7 @@ export const DailyHabitsWidget: React.FC = () => {
                {/* Toggle Button */}
                <button
                   onClick={() => toggleHabit(habit.id, habit.isCompleted ? 'down' : 'up')}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-sm flex-shrink-0 ${
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-xs shrink-0 ${
                       habit.isCompleted
                       ? 'bg-emerald-500 text-white hover:bg-emerald-600'
                       : 'bg-slate-100 text-slate-300 hover:bg-slate-200 hover:text-slate-400 dark:bg-slate-700 dark:text-slate-500 dark:hover:bg-slate-600 dark:hover:text-slate-400'

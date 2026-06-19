@@ -103,7 +103,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-indigo-100 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/15 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-sm">
+          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-xs">
             <ListOrdered size={20} />
           </div>
           <div>
@@ -201,7 +201,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
           </button>
           <button
             onClick={handleApply}
-            className="flex-1 py-3 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-xs active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             <Check size={18} />
             Apply Changes

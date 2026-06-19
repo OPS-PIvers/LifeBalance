@@ -695,7 +695,7 @@ const MealPlanTab: React.FC = () => {
         {/* Plan my week (AI generate / import) */}
         <button
             onClick={() => setIsWeeklyPlanOpen(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-gradient-to-r from-violet-600 to-brand-600 text-white rounded-xl text-sm font-bold shadow-sm shadow-violet-200 hover:from-violet-700 hover:to-brand-700 transition-all active:scale-95"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-linear-to-r from-violet-600 to-brand-600 text-white rounded-xl text-sm font-bold shadow-xs shadow-violet-200 hover:from-violet-700 hover:to-brand-700 transition-all active:scale-95"
         >
             <Sparkles className="w-4 h-4" /> Plan My Week
         </button>
@@ -739,7 +739,7 @@ const MealPlanTab: React.FC = () => {
             </div>
             <button
                 onClick={() => handleAddMealToDate(selectedDate)}
-                className="flex items-center gap-1.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-full transition-colors shadow-sm shadow-brand-200 active:scale-95"
+                className="flex items-center gap-1.5 text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-full transition-colors shadow-xs shadow-brand-200 active:scale-95"
             >
                 <Plus className="w-4 h-4" /> Add Meal
             </button>
@@ -758,7 +758,7 @@ const MealPlanTab: React.FC = () => {
                             key={planItem.id}
                             onClick={() => { if (linkedMeal) setViewingMeal({ meal: linkedMeal, planItem }); }}
                             className={clsx(
-                                "group flex items-stretch gap-3 rounded-2xl border p-3.5 shadow-sm transition-all relative",
+                                "group flex items-stretch gap-3 rounded-2xl border p-3.5 shadow-xs transition-all relative",
                                 linkedMeal && "cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600",
                                 isCooked
                                     ? "bg-green-50/40 border-green-200 dark:bg-emerald-500/10 dark:border-emerald-500/20"

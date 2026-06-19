@@ -13,7 +13,7 @@ export const EmptyChallengeWidget: React.FC<EmptyChallengeWidgetProps> = ({ onOp
     <button
       type="button"
       onClick={onOpenModal}
-      className="w-full text-left bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 cursor-pointer active:scale-[0.98] transition-all hover:bg-white dark:hover:bg-slate-800 group focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+      className="w-full text-left bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 cursor-pointer active:scale-[0.98] transition-all hover:bg-white dark:hover:bg-slate-800 group focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
       aria-label="Set Monthly Challenge"
     >
       <div className="flex items-center justify-between mb-2">

@@ -209,7 +209,7 @@ const BudgetHistory: React.FC = () => {
                     : 100;
 
                   return (
-                    <div key={bucket.id} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-3 rounded-xl ring-1 ring-black/5 shadow-sm">
+                    <div key={bucket.id} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-3 rounded-xl ring-1 ring-black/5 shadow-xs">
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-bold text-brand-700 dark:text-slate-200">{bucket.bucketName}</span>
                         <span className={`text-sm font-bold ${bucketSavings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>

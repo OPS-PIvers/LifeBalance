@@ -47,7 +47,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
       aria-label="Open Challenge Hub"
       onClick={onOpenModal}
       onKeyDown={handleKeyDown}
-      className="w-full text-left bg-gradient-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+      className="w-full text-left bg-linear-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/50"
     >
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
@@ -84,7 +84,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
           aria-label={`Challenge progress: ${Math.round(challengeProgress)}% complete`}
         >
           <div
-            className="h-full bg-gradient-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
+            className="h-full bg-linear-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
             style={{ width: `${challengeProgress}%` }}
           />
         </div>

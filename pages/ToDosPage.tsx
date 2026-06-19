@@ -199,7 +199,7 @@ const ToDosPage: React.FC = () => {
         label: (
             <span className="flex items-center gap-1.5">
                 Completed
-                <span className="bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-xs font-normal">
+                <span className="bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded-sm text-xs font-normal">
                     {completedCount}
                 </span>
             </span>
@@ -284,7 +284,7 @@ const ToDosPage: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-sm ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
+        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-xs ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
           <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
           <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
         </div>
@@ -799,7 +799,7 @@ const ToDosPage: React.FC = () => {
             </legend>
             {members.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-500 py-2">
-                <AlertCircle size={16} className="flex-shrink-0" />
+                <AlertCircle size={16} className="shrink-0" />
                 <span>No household members available to assign this task.</span>
               </div>
             ) : (
@@ -987,8 +987,8 @@ const TodoRow = React.memo(function TodoRow({
       <div className="flex items-start gap-3">
         {/* Complete Checkbox or Selection Box */}
         {isSelectionMode ? (
-          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
-            {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded" />}
+          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
+            {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
           </div>
         ) : (
           <button
@@ -1003,7 +1003,7 @@ const TodoRow = React.memo(function TodoRow({
                 toast.error('Failed to complete to-do');
               }
             }}
-            className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+            className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
               color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-500/40 dark:hover:bg-rose-500/15' :
               color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
               'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
@@ -1171,7 +1171,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
     <div className="animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex items-baseline justify-between mb-4 px-1">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-sm`}></div>
+          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-xs`}></div>
           <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">{title}</h2>
         </div>
         <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{subtitle}</span>
@@ -1298,11 +1298,11 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                     return (
                         <div
                             key={item.id}
-                            className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-sm transition-all group dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800"
+                            className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-xs transition-all group dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800"
                         >
                             <button
                                 onClick={() => { haptic('light'); onUncomplete(item.id); }}
-                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors flex-shrink-0 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors shrink-0 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
                                 title="Mark as incomplete"
                                 aria-label={`Mark as incomplete: ${item.text}`}
                             >

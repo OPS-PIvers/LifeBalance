@@ -27,7 +27,7 @@ export const LazyMount: React.FC<LazyMountProps> = ({ when, children }) => {
       fallback={
         when ? (
           <div
-            className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-xs"
             aria-hidden="true"
             data-testid="lazy-mount-fallback"
           />

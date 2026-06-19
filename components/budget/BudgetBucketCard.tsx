@@ -102,7 +102,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
     <div className="bg-white/90 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-3xl ring-1 ring-black/5 shadow-glass-card border border-white/20 dark:border-white/5 relative group overflow-hidden transition-all duration-300 hover:shadow-premium">
       {/* Header - Clickable for toggle */}
       <div
-        className="flex items-center justify-between mb-4 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 outline-none rounded-xl"
+        className="flex items-center justify-between mb-4 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 outline-hidden rounded-xl"
         onClick={() => onExpand(bucket.id)}
         role="button"
         tabIndex={0}
@@ -116,7 +116,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full shadow-sm ${bucket.color}`} />
+          <div className={`w-3 h-3 rounded-full shadow-xs ${bucket.color}`} />
           <span className="font-bold tracking-tight text-slate-900 dark:text-slate-100 text-lg">{bucket.name}</span>
         </div>
 
@@ -138,7 +138,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700 rounded text-right font-bold dark:text-slate-100"
+                    className="w-16 p-1 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-700 rounded-sm text-right font-bold dark:text-slate-100"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
@@ -167,7 +167,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     }
                   }}
                   aria-label={`Edit limit for ${bucket.name}, currently $${bucket.limit}`}
-                  className="text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-sm"
+                  className="text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-xs"
                 >
                   ${bucket.limit}
                 </button>
@@ -213,7 +213,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
           className={`h-full rounded-full transition-all duration-500 relative ${isOverspent ? 'bg-money-neg' : bucket.color}`}
           style={{ width: `${percent}%` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent" />
+          <div className="absolute inset-0 bg-linear-to-b from-white/30 to-transparent" />
         </div>
       </div>
 
@@ -227,7 +227,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             {bucketTransactions.map(tx => (
               <div
                 key={tx.id}
-                className="flex justify-between items-center text-sm py-2.5 px-3 bg-slate-50/50 dark:bg-slate-700/50 hover:bg-white dark:hover:bg-slate-700 rounded-xl border border-transparent hover:border-slate-100 dark:hover:border-slate-600 hover:shadow-sm transition-all group"
+                className="flex justify-between items-center text-sm py-2.5 px-3 bg-slate-50/50 dark:bg-slate-700/50 hover:bg-white dark:hover:bg-slate-700 rounded-xl border border-transparent hover:border-slate-100 dark:hover:border-slate-600 hover:shadow-xs transition-all group"
               >
                 <div className="flex-1">
                   <p className="font-semibold text-slate-900 dark:text-slate-100">{tx.merchant}</p>

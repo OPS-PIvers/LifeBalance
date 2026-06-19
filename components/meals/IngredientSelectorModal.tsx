@@ -117,9 +117,9 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             role="checkbox"
                             aria-checked={isSelected}
                             tabIndex={0}
-                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-brand-500/50 ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all focus:outline-hidden focus:ring-2 focus:ring-brand-500/50 ${
                                 isSelected
-                                    ? 'bg-brand-50 border-brand-200 shadow-sm dark:bg-brand-700/30 dark:border-brand-500/40'
+                                    ? 'bg-brand-50 border-brand-200 shadow-xs dark:bg-brand-700/30 dark:border-brand-500/40'
                                     : 'bg-white border-slate-100 hover:border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-700/50'
                             }`}
                         >

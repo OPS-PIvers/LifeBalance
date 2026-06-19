@@ -148,7 +148,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         type="text"
                         value={currentMeal.name || ''}
                         onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 font-medium text-slate-900 dark:text-slate-100"
+                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 font-medium text-slate-900 dark:text-slate-100"
                         placeholder="e.g. Adobo Chicken & Rice"
                     />
                 </div>
@@ -164,7 +164,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 onClick={() => setMealType(type as 'breakfast' | 'lunch' | 'dinner' | 'snack')}
                                 className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-all ${
                                     mealType === type
-                                        ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-slate-100'
+                                        ? 'bg-white text-slate-900 shadow-xs dark:bg-slate-800 dark:text-slate-100'
                                         : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
                                 }`}
                             >
@@ -180,7 +180,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         id="meal-description"
                         value={currentMeal.description || ''}
                         onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm text-slate-700 dark:text-slate-200 leading-relaxed"
+                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm text-slate-700 dark:text-slate-200 leading-relaxed"
                         rows={2}
                         placeholder="Add notes about preparation..."
                     />
@@ -201,7 +201,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                     .filter(line => line.length > 0),
                             })
                         }
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm font-mono text-slate-600 dark:text-slate-300"
+                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm font-mono text-slate-600 dark:text-slate-300"
                         rows={4}
                         placeholder="Step 1...&#10;Step 2..."
                     />
@@ -214,7 +214,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         type="url"
                         value={currentMeal.recipeUrl || ''}
                         onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm text-blue-600 dark:text-blue-400"
+                        className="w-full p-3 bg-slate-50/50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:placeholder:text-slate-500 text-sm text-blue-600 dark:text-blue-400"
                         placeholder="https://example.com/recipe"
                     />
                 </div>
@@ -268,13 +268,13 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 onChange={e => setTagInput(e.target.value)}
                                 placeholder="Add custom tag..."
                                 aria-label="Add custom tag"
-                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-slate-50 border border-slate-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-slate-50 border border-slate-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
                                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                             />
                             <button
                                 onClick={handleAddTag}
                                 disabled={!tagInput.trim()}
-                                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white shadow-sm rounded-full text-brand-600 disabled:opacity-50 hover:bg-slate-50 dark:bg-slate-800 dark:text-brand-300 dark:hover:bg-slate-700"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white shadow-xs rounded-full text-brand-600 disabled:opacity-50 hover:bg-slate-50 dark:bg-slate-800 dark:text-brand-300 dark:hover:bg-slate-700"
                                 aria-label="Add custom tag"
                             >
                                 <Plus className="w-3 h-3" />
@@ -291,9 +291,9 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                   {currentMeal.ingredients && currentMeal.ingredients.length > 0 && (
                       <div className="mb-4 flex flex-wrap gap-2">
                           {currentMeal.ingredients.map((ing, idx) => (
-                              <div key={`${ing.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-sm dark:bg-slate-800 dark:border-slate-700">
+                              <div key={`${ing.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm shadow-xs dark:bg-slate-800 dark:border-slate-700">
                                   <span className="font-semibold text-slate-700 dark:text-slate-200">{ing.name}</span>
-                                  <span className="text-slate-400 text-xs bg-slate-50 px-1.5 py-0.5 rounded dark:text-slate-400 dark:bg-slate-700/50">{ing.quantity}</span>
+                                  <span className="text-slate-400 text-xs bg-slate-50 px-1.5 py-0.5 rounded-sm dark:text-slate-400 dark:bg-slate-700/50">{ing.quantity}</span>
                                   <button
                                       onClick={() => {
                                           setCurrentMeal(prev => ({
@@ -313,14 +313,14 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
                   <div className="space-y-4">
                       {/* Ingredient Entry */}
-                      <div className="bg-white/60 p-4 rounded-xl border border-slate-200/60 shadow-sm dark:bg-slate-800/60 dark:border-slate-700">
+                      <div className="bg-white/60 p-4 rounded-xl border border-slate-200/60 shadow-xs dark:bg-slate-800/60 dark:border-slate-700">
                           <label htmlFor="ingredient-name" className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Add Ingredient</label>
                           <div className="flex gap-2">
                               <input
                                   id="ingredient-name"
                                   type="text"
                                   placeholder="Item name"
-                                  className="flex-1 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                  className="flex-1 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-hidden p-2.5 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
                                   value={ingredientName}
                                   onChange={(e) => setIngredientName(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -329,7 +329,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   aria-label="Ingredient quantity"
                                   type="text"
                                   placeholder="Qty"
-                                  className="w-20 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-none p-2.5 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+                                  className="w-20 rounded-xl border-slate-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-hidden p-2.5 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
                                   value={ingredientQty}
                                   onChange={(e) => setIngredientQty(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -337,7 +337,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               <button
                                   onClick={handleAddIngredient}
                                   disabled={!ingredientName.trim()}
-                                  className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors shadow-sm"
+                                  className="p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:hover:bg-brand-600 transition-colors shadow-xs"
                                   aria-label="Add ingredient"
                               >
                                   <Plus className="w-5 h-5" />

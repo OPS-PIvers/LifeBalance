@@ -49,7 +49,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
           value={formData.title}
           onChange={e => onFormChange({ title: e.target.value })}
           placeholder="e.g., Practice guitar"
-          className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-none"
+          className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-hidden"
         />
       </div>
 
@@ -113,7 +113,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             onClick={() => onFormChange({ scoringType: 'threshold' })}
             className={`p-3 rounded-xl border text-left transition-all ${
               formData.scoringType === 'threshold'
-                ? 'bg-white dark:bg-slate-700 border-brand-300 dark:border-slate-600 shadow-sm ring-1 ring-brand-200 dark:ring-slate-600'
+                ? 'bg-white dark:bg-slate-700 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200 dark:ring-slate-600'
                 : 'bg-brand-50 dark:bg-slate-700/50 border-transparent hover:bg-white dark:hover:bg-slate-700'
             }`}
           >
@@ -124,7 +124,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             onClick={() => onFormChange({ scoringType: 'incremental' })}
             className={`p-3 rounded-xl border text-left transition-all ${
               formData.scoringType === 'incremental'
-                ? 'bg-white dark:bg-slate-700 border-brand-300 dark:border-slate-600 shadow-sm ring-1 ring-brand-200 dark:ring-slate-600'
+                ? 'bg-white dark:bg-slate-700 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200 dark:ring-slate-600'
                 : 'bg-brand-50 dark:bg-slate-700/50 border-transparent hover:bg-white dark:hover:bg-slate-700'
             }`}
           >

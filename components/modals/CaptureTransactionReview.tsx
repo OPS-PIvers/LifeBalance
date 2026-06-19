@@ -56,7 +56,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
               <button
                 onClick={() => onToggleSelection(tx.id)}
                 aria-label={tx.selected ? "Deselect transaction" : "Select transaction"}
-                className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+                className={`mt-1 w-5 h-5 rounded flex items-center justify-center shrink-0 focus:outline-hidden focus:ring-2 focus:ring-brand-500 ${
                   tx.selected ? 'bg-brand-800 text-white' : 'border-2 border-brand-300 dark:border-slate-600'
                 }`}
               >
@@ -89,7 +89,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                     <select
                       value={tx.category}
                       onChange={(e) => onUpdateTransaction(tx.id, { category: e.target.value, subBucketId: undefined })}
-                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 border-none outline-none"
+                      className="px-2 py-1 rounded-lg text-xxs font-bold bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 border-none outline-hidden"
                     >
                       {dynamicCategories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>

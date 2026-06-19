@@ -152,14 +152,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                  disabled={isSaving}
                  type="button"
                  aria-pressed={type === 'positive'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white dark:bg-slate-800 shadow-sm text-money-pos' : 'text-brand-400 dark:text-slate-400'}`}
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white dark:bg-slate-800 shadow-xs text-money-pos' : 'text-brand-400 dark:text-slate-400'}`}
                >Good</button>
                <button
                  onClick={() => setType('negative')}
                  disabled={isSaving}
                  type="button"
                  aria-pressed={type === 'negative'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white dark:bg-slate-800 shadow-sm text-money-neg' : 'text-brand-400 dark:text-slate-400'}`}
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white dark:bg-slate-800 shadow-xs text-money-neg' : 'text-brand-400 dark:text-slate-400'}`}
                >Bad</button>
              </div>
           </div>
@@ -175,7 +175,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               disabled={isSaving}
               type="button"
               aria-pressed={scoringType === 'incremental'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
             >
               <span className="block font-bold mb-1">Incremental</span>
               <span className="text-brand-400 dark:text-slate-400">Points for every tap.</span>
@@ -185,7 +185,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               disabled={isSaving}
               type="button"
               aria-pressed={scoringType === 'threshold'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-sm ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
             >
               <span className="block font-bold mb-1">Threshold</span>
               <span className="text-brand-400 dark:text-slate-400">Points only when target met.</span>

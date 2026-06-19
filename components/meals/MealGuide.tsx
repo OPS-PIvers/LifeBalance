@@ -132,7 +132,7 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
               <button
                 key={mealKey(meal, i)}
                 onClick={() => openRecipe(i)}
-                className="w-full text-left flex items-start gap-3 p-4 rounded-2xl bg-white border border-slate-200/70 shadow-sm hover:shadow-md hover:border-slate-300 transition-all dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600"
+                className="w-full text-left flex items-start gap-3 p-4 rounded-2xl bg-white border border-slate-200/70 shadow-xs hover:shadow-md hover:border-slate-300 transition-all dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600"
               >
                 <span className="font-serif text-2xl font-bold text-brand-600 dark:text-brand-300 leading-none w-7 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
@@ -189,7 +189,7 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
     onClick={onClick}
     className={clsx(
       'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
-      active ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'
+      active ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'
     )}
   >
     {icon} {children}
@@ -249,7 +249,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
           type="time"
           value={serveValue}
           onChange={(e) => onServeChange(e.target.value)}
-          className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100"
+          className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100"
         />
       </div>
       <div className="text-right">
@@ -502,14 +502,14 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
         {i < steps.length - 1 ? (
           <button
             onClick={() => setI(v => Math.min(steps.length - 1, v + 1))}
-            className="flex-[2] flex items-center justify-center gap-2 py-3.5 bg-brand-800 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all dark:bg-brand-600 dark:hover:bg-brand-500"
+            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-brand-800 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all dark:bg-brand-600 dark:hover:bg-brand-500"
           >
             Next <ChevronRight className="w-5 h-5" />
           </button>
         ) : (
           <button
             onClick={onClose}
-            className="flex-[2] flex items-center justify-center gap-2 py-3.5 bg-green-600 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all"
+            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-green-600 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all"
           >
             <Check className="w-5 h-5" /> Done
           </button>

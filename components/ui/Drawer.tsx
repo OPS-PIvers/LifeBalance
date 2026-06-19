@@ -85,7 +85,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
-            className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-sm"
+            className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-xs"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
             aria-hidden="true"
@@ -103,7 +103,7 @@ export const Drawer: React.FC<DrawerProps> = ({
               // `dvh` tracks the *visible* viewport, so the sheet (and its CTA)
               // isn't hidden behind the iOS software keyboard. `vh` is kept as a
               // fallback for browsers without dvh support.
-              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col outline-none",
+              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col outline-hidden",
               // Fixed detent: stable frame that scrolls internally instead of
               // resizing as content changes between tabs/steps.
               height === 'tall' && "h-[90vh] supports-[height:100dvh]:h-[90dvh]",

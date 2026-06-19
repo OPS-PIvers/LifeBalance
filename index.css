@@ -1,28 +1,107 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-@layer utilities {
+@plugin 'tailwindcss-animate';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: Inter, sans-serif;
+  --font-mono: JetBrains Mono, monospace;
+
+  --color-brand-50: #f8fafc;
+  --color-brand-100: #f1f5f9;
+  --color-brand-200: #e2e8f0;
+  --color-brand-300: #cbd5e1;
+  --color-brand-400: #94a3b8;
+  --color-brand-500: #64748b;
+  --color-brand-600: #475569;
+  --color-brand-700: #334155;
+  --color-brand-800: #1e293b;
+  --color-brand-900: #0f172a;
+
+  --color-money-pos: #10b981;
+  --color-money-neg: #f43f5e;
+  --color-money-bgPos: #ecfdf5;
+  --color-money-bgNeg: #fff1f2;
+
+  --color-habit-streak: #f97316;
+  --color-habit-gold: #fbbf24;
+  --color-habit-blue: #60a5fa;
+
+  --radius-card: 1rem;
+  --radius-btn: 0.75rem;
+
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-glass: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --shadow-glass-card: 0 8px 30px rgba(0, 0, 0, 0.04);
+  --shadow-glass-sm: 0 2px 10px rgba(0, 0, 0, 0.02);
+  --shadow-glass-deep: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --shadow-nav: 0 -10px 40px -15px rgba(0, 0, 0, 0.05);
+  --shadow-premium:
+    0 20px 40px -4px rgba(0, 0, 0, 0.08), 0 8px 16px -4px rgba(0, 0, 0, 0.04);
+  --shadow-btn-primary:
+    0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn-primary-hover:
+    0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn-secondary: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-btn-success:
+    0 1px 2px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn-warning:
+    0 1px 2px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --shadow-btn-destructive:
+    0 1px 2px rgba(244, 63, 94, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  --spacing-safe: env(safe-area-inset-bottom);
+
+  --text-xxs: 10px;
+
+  --z-index-sticky: 40;
+  --z-index-dropdown: 50;
+  --z-index-modal: 60;
+  --z-index-popover: 70;
+  --z-index-banner: 55;
+  --z-index-toast: 110;
+
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility no-scrollbar {
   /* Hide scrollbar for clean UI in chips */
-  .no-scrollbar::-webkit-scrollbar {
+  &::-webkit-scrollbar {
     display: none;
   }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
+@utility scroll-contain-y {
   /* Unified scroll container preventing touch-through overscroll */
-  .scroll-contain-y {
-    @apply overflow-y-auto overscroll-contain;
-  }
+  @apply overflow-y-auto overscroll-contain;
+}
 
+@utility skeleton {
   /* Shimmer placeholder used by the Skeleton primitive */
-  .skeleton {
-    position: relative;
-    overflow: hidden;
-  }
-  .skeleton::after {
+  position: relative;
+  overflow: hidden;
+  &::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -35,7 +114,18 @@
     );
     animation: skeleton-shimmer 1.6s ease-in-out infinite;
   }
-  .dark .skeleton::after {
+  .dark &::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 50%,
+      transparent 100%
+    );
+  }
+}
+
+@utility dark {
+  & .skeleton::after {
     background: linear-gradient(
       90deg,
       transparent 0%,

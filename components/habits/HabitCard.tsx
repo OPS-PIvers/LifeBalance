@@ -78,7 +78,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   );
 
   const buttonClasses = cn(
-    "relative flex items-center justify-center w-14 h-14 rounded-2xl shadow-sm transition-all duration-200 z-10",
+    "relative flex items-center justify-center w-14 h-14 rounded-2xl shadow-xs transition-all duration-200 z-10",
     !isActive && "bg-slate-50 dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 text-slate-300 dark:text-slate-500 group-hover/card:ring-slate-300 dark:group-hover/card:ring-slate-500 group-hover/card:bg-slate-100 dark:group-hover/card:bg-slate-600",
     isActive && isPositive && "bg-money-pos text-white shadow-emerald-200/50 ring-0",
     isActive && !isPositive && "bg-money-neg text-white shadow-rose-200/50 ring-0",
@@ -152,14 +152,14 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
         {/* Invisible clickable overlay for main card interaction */}
         <button
           onClick={handleCardClick}
-          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card"
+          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-brand-400 focus:ring-offset-2 rounded-card"
           aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
           tabIndex={0}
           style={{ zIndex: 1 }}
         />
         
         {/* ACTION INDICATOR */}
-        <div className="flex-shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
+        <div className="shrink-0 mr-4 relative group pointer-events-none" style={{ zIndex: 2 }}>
           <div className={buttonClasses}>
             {isThreshold && !isCompleted ? (
               <span className="text-lg font-bold font-mono">{habit.count}</span>
@@ -201,7 +201,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                  e.stopPropagation();
                  resetHabit(habit.id);
               }}
-              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 dark:text-slate-300 shadow-sm active:scale-90 hover:bg-rose-50 dark:hover:bg-rose-500/20 hover:text-money-neg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
+              className="absolute -top-2 -right-2 p-2 -m-2 bg-white dark:bg-slate-700 ring-1 ring-slate-200 dark:ring-slate-600 rounded-full w-6 h-6 flex items-center justify-center text-slate-400 dark:text-slate-300 shadow-xs active:scale-90 hover:bg-rose-50 dark:hover:bg-rose-500/20 hover:text-money-neg transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-rose-400 pointer-events-auto"
               aria-label="Reset habit progress"
               style={{ zIndex: 20 }}
             >
@@ -233,7 +233,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   setIsMenuOpen(!isMenuOpen);
                   setFocusedMenuIndex(0); // Reset focus to first item
                 }}
-                className="p-1 text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-slate-400 pointer-events-auto"
+                className="p-1 text-slate-300 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 rounded-full hover:bg-black/5 dark:hover:bg-white/5 focus:outline-hidden focus:ring-2 focus:ring-slate-400 pointer-events-auto"
                 aria-label="Habit options menu"
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
@@ -312,7 +312,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleEdit();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === 0 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
@@ -326,7 +326,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleViewLog();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-600 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === 1 && "bg-brand-50 dark:bg-slate-700/50"
                 )}
                 role="menuitem"
@@ -342,7 +342,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                     setIsMenuOpen(false);
                   }}
                   className={cn(
-                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
+                    "w-full text-left px-4 py-2 text-xs font-bold text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/15 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                     focusedMenuIndex === 2 && "bg-indigo-50 dark:bg-indigo-500/15"
                   )}
                   role="menuitem"
@@ -357,7 +357,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   handleDelete();
                 }}
                 className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
+                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1",
                   focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-rose-50 dark:bg-rose-500/15"
                 )}
                 role="menuitem"

@@ -301,7 +301,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     >
                         <Minus size={16} />
                     </Button>
-                    <span className="font-bold min-w-[3rem] text-center">{item.totalCount}</span>
+                    <span className="font-bold min-w-12 text-center">{item.totalCount}</span>
                     <Button
                         variant="secondary"
                         size="icon-sm"
@@ -315,7 +315,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
                 <p className="text-sm text-gray-600 dark:text-slate-300 mb-2 mt-4">Total Lifetime Completions:</p>
                 <div className="flex items-center gap-3">
-                   <span className="font-bold min-w-[3rem] text-center">
+                   <span className="font-bold min-w-12 text-center">
                    {item.totalCount}
                    </span>
                 </div>

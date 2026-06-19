@@ -562,7 +562,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
               {/* Camera View */}
               {view === 'camera' && (
-                <div className="relative bg-black rounded-xl overflow-hidden aspect-[3/4]">
+                <div className="relative bg-black rounded-xl overflow-hidden aspect-3/4">
                   <video
                     ref={videoRef}
                     autoPlay
@@ -574,7 +574,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     <button
                       onClick={capturePhoto}
                       aria-label="Capture photo"
-                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-sm flex items-center justify-center active:scale-90 transition-transform focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-xs flex items-center justify-center active:scale-90 transition-transform focus:outline-hidden focus:ring-2 focus:ring-brand-500"
                     >
                       <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full" />
                     </button>

@@ -14,7 +14,7 @@ interface CaptureMenuProps {
   onMagicSuccess: (result: MagicActionResponse) => void;
 }
 
-const BUTTON_CLASSES = "w-full flex items-center gap-4 p-4 bg-white/80 dark:bg-slate-800/60 backdrop-blur-sm border-transparent ring-1 ring-black/5 rounded-2xl shadow-glass hover:ring-black/10 hover:shadow-lg transition-all active:scale-[0.98] group";
+const BUTTON_CLASSES = "w-full flex items-center gap-4 p-4 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xs border-transparent ring-1 ring-black/5 rounded-2xl shadow-glass hover:ring-black/10 hover:shadow-lg transition-all active:scale-[0.98] group";
 
 export const CaptureMenu: React.FC<CaptureMenuProps> = ({
   onScan,

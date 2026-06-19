@@ -137,7 +137,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                         e.preventDefault();
                     }
                 }}
-                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+                className="touch-none cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 rounded-sm"
                 aria-label={`Drag to reorder ${item.name}`}
             >
                 <GripVertical size={20} />

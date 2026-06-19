@@ -217,7 +217,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="e.g. use the ground beef in the freezer, keep it quick this week"
-              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
             />
           </div>
           <div className="flex gap-3">
@@ -225,7 +225,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             <button
               onClick={handleGenerate}
               disabled={busy}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-violet-600 text-white font-bold rounded-xl shadow-lg hover:bg-violet-700 disabled:opacity-60 transition-all active:scale-95"
+              className="flex-2 flex items-center justify-center gap-2 py-3 bg-violet-600 text-white font-bold rounded-xl shadow-lg hover:bg-violet-700 disabled:opacity-60 transition-all active:scale-95"
             >
               {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Planning…</> : <><Sparkles className="w-5 h-5" /> Generate</>}
             </button>
@@ -252,14 +252,14 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             onChange={(e) => setImportText(e.target.value)}
             rows={6}
             placeholder='Paste week.json here…'
-            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-none dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
           />
           <div className="flex gap-3">
             <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">Back</button>
             <button
               onClick={handleImport}
               disabled={!importText.trim()}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 disabled:opacity-50 transition-all active:scale-95 dark:bg-slate-700 dark:hover:bg-slate-600"
+              className="flex-2 flex items-center justify-center gap-2 py-3 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 disabled:opacity-50 transition-all active:scale-95 dark:bg-slate-700 dark:hover:bg-slate-600"
             >
               <ChefHat className="w-5 h-5" /> Preview
             </button>
@@ -276,7 +276,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             <button
               onClick={handleApply}
               disabled={busy}
-              className="flex-[2] flex items-center justify-center gap-2 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 disabled:opacity-60 transition-all active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-500"
+              className="flex-2 flex items-center justify-center gap-2 py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg hover:bg-brand-900 disabled:opacity-60 transition-all active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-500"
             >
               {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Adding…</> : <><CalendarPlus className="w-5 h-5" /> Add to my week</>}
             </button>

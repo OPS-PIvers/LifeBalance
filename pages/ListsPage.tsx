@@ -42,7 +42,7 @@ const ListsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur-sm">
+      <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur-xs">
         <SegmentedControl
           options={tabs}
           value={activeTab}

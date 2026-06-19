@@ -154,10 +154,10 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       <img
         src={assignee.photoURL}
         alt={assignee.displayName ?? 'Assigned member'}
-        className="w-4 h-4 rounded-full border border-white object-cover flex-shrink-0"
+        className="w-4 h-4 rounded-full border border-white object-cover shrink-0"
       />
     ) : (
-      <div className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 border border-white dark:border-slate-700 flex-shrink-0">
+      <div className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 border border-white dark:border-slate-700 shrink-0">
         {assignee.displayName?.charAt(0) || '?'}
       </div>
     );
@@ -271,7 +271,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-3 rounded-2xl border shadow-sm ${iconClasses}`}>
+          <div className={`p-3 rounded-2xl border shadow-xs ${iconClasses}`}>
              {iconComponent}
           </div>
           <div>
@@ -305,7 +305,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           {!isExpanded && (
             <button
               onClick={handleExpand}
-              className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-sm active:scale-95 bg-slate-900"
+              className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-xs active:scale-95 bg-slate-900"
               aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
             >
               Review
@@ -518,7 +518,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                               }}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
                                 isSelected
-                                  ? 'bg-habit-green text-white shadow-sm'
+                                  ? 'bg-habit-green text-white shadow-xs'
                                   : confidence === 'high'
                                   ? 'bg-violet-50 border-2 border-violet-300 text-violet-700 hover:bg-violet-100 dark:bg-violet-500/10 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/20'
                                   : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300 dark:hover:bg-blue-500/20'
@@ -545,7 +545,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                               onClick={() => {
                                 setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
                               }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-sm"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-xs"
                             >
                               <Check size={12} strokeWidth={3} />
                               {habit.title}
@@ -590,7 +590,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                         onClick={() => setSelectedCategory(bucket.name)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                           selectedCategory === bucket.name
-                            ? 'bg-slate-900 text-white shadow-sm'
+                            ? 'bg-slate-900 text-white shadow-xs'
                             : 'bg-white/50 border border-slate-200 text-slate-600 hover:bg-white dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
                         }`}
                       >
@@ -602,7 +602,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                       onClick={() => setSelectedCategory('Budgeted in Calendar')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                         selectedCategory === 'Budgeted in Calendar'
-                          ? 'bg-indigo-700 text-white shadow-sm'
+                          ? 'bg-indigo-700 text-white shadow-xs'
                           : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30 dark:hover:bg-indigo-500/20'
                       }`}
                     >

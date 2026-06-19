@@ -20,7 +20,7 @@ export const SafeToSpendHero: React.FC = () => {
   // Render a loading skeleton while the context hasn't produced a breakdown yet.
   if (breakdown === undefined) {
     return (
-      <div className="relative overflow-hidden rounded-3xl p-6 shadow-premium ring-1 bg-gradient-to-br from-slate-300 to-slate-400 ring-slate-300/30 animate-pulse">
+      <div className="relative overflow-hidden rounded-3xl p-6 shadow-premium ring-1 bg-linear-to-br from-slate-300 to-slate-400 ring-slate-300/30 animate-pulse">
         <div className="h-6 w-32 rounded-lg bg-white/30 mb-3" />
         <div className="h-10 w-48 rounded-xl bg-white/40 mb-2" />
         <div className="h-4 w-40 rounded-lg bg-white/25" />
@@ -38,8 +38,8 @@ export const SafeToSpendHero: React.FC = () => {
       className={cn(
         'relative overflow-hidden rounded-3xl p-6 shadow-premium ring-1 transition-colors',
         isPositive
-          ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 ring-emerald-400/30 dark:from-emerald-600 dark:to-emerald-800'
-          : 'bg-gradient-to-br from-rose-500 to-rose-600 ring-rose-400/30 dark:from-rose-600 dark:to-rose-800'
+          ? 'bg-linear-to-br from-emerald-500 to-emerald-600 ring-emerald-400/30 dark:from-emerald-600 dark:to-emerald-800'
+          : 'bg-linear-to-br from-rose-500 to-rose-600 ring-rose-400/30 dark:from-rose-600 dark:to-rose-800'
       )}
     >
       <button
@@ -51,7 +51,7 @@ export const SafeToSpendHero: React.FC = () => {
         aria-expanded={expanded}
         aria-controls="sts-breakdown"
         aria-label={expanded ? 'Hide Safe to Spend breakdown' : 'Show Safe to Spend breakdown'}
-        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
+        className="w-full text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/50 rounded-2xl"
       >
         <div className="flex items-start justify-between">
           <div>

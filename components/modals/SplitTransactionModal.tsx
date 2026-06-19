@@ -152,7 +152,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
 
       <div className="p-4 space-y-4">
         {splits.map((split, index) => (
-          <div key={split.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-200 dark:border-slate-700 shadow-sm relative group">
+          <div key={split.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-200 dark:border-slate-700 shadow-xs relative group">
             <div className="absolute top-2 left-2 text-xs font-bold text-brand-300 dark:text-slate-500">
               Split #{index + 1}
             </div>
@@ -160,7 +160,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
             {splits.length > 2 && (
               <button
                 onClick={() => handleRemoveSplit(split.id)}
-                className="absolute top-2 right-2 text-gray-300 dark:text-slate-600 hover:text-money-neg p-1 hover:bg-rose-50 dark:hover:bg-rose-500/20 rounded transition-colors"
+                className="absolute top-2 right-2 text-gray-300 dark:text-slate-600 hover:text-money-neg p-1 hover:bg-rose-50 dark:hover:bg-rose-500/20 rounded-sm transition-colors"
                 title="Remove split"
                 aria-label={`Remove split ${index + 1}`}
               >

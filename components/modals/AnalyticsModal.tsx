@@ -272,7 +272,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               {/* Hero Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* Weekly Points */}
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Target size={80} />
                   </div>
@@ -293,7 +293,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Consistency Score */}
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                      <Brain size={80} />
                   </div>
@@ -315,7 +315,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 {/* Active Streaks */}
-                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
+                <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xs border border-slate-100 dark:border-slate-700 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <Flame size={80} />
                   </div>
@@ -330,7 +330,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart A: Balance (Points vs Spending) */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
                   <Activity size={16} className="text-brand-500 dark:text-slate-400"/>
                   Daily Balance: Effort vs. Spending
@@ -389,7 +389,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart B: Week-over-Week */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
                   <Target size={16} className="text-blue-500 dark:text-blue-300"/>
                   Performance: This Week vs Last
@@ -416,7 +416,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
             <div role="tabpanel" id="analytics-tabpanel-behavior" aria-labelledby="analytics-tab-behavior" className="space-y-6">
 
               {/* Chart C: Consistency Radar */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Category Balance</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -439,7 +439,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart D: Heatmap */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Consistency Heatmap (90 Days)</h3>
                 </div>
@@ -481,7 +481,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
             <div role="tabpanel" id="analytics-tabpanel-wallet" aria-labelledby="analytics-tab-wallet" className="space-y-6">
 
               {/* Chart E: Burn Down */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6 flex items-center gap-2">
                   <Wallet size={16} className="text-red-500 dark:text-red-400"/>
                   Budget Burn-Down
@@ -531,7 +531,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
               </div>
 
               {/* Chart F: Variable Expense Trend */}
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl shadow-xs border border-slate-100 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 mb-6">Variable Expense Trend (6 Months)</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">

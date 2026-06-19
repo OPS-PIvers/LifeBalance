@@ -40,7 +40,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter task description"
-          className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none"
+          className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
         />
       </div>
 
@@ -54,7 +54,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none appearance-none"
+            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-hidden appearance-none"
             style={{ WebkitAppearance: 'none' }}
           />
           <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 dark:text-slate-400 pointer-events-none" />
@@ -67,7 +67,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
         </legend>
         {members.length === 0 ? (
           <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-400 py-2">
-            <AlertCircle size={16} className="flex-shrink-0" />
+            <AlertCircle size={16} className="shrink-0" />
             <span>No household members available.</span>
           </div>
         ) : (

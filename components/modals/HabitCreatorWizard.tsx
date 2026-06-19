@@ -260,7 +260,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       ariaLabelledBy={titleId}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 dark:border-slate-700 flex-shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 dark:border-slate-700 shrink-0">
         <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
@@ -294,7 +294,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               {/* Create Custom Button */}
               <button
                 onClick={openCreateCustom}
-                className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-brand-50 to-indigo-50 dark:from-slate-700/50 dark:to-indigo-500/10 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl hover:border-brand-400 dark:hover:border-slate-500 transition-colors group"
+                className="w-full flex items-center justify-between p-4 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-slate-700/50 dark:to-indigo-500/10 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl hover:border-brand-400 dark:hover:border-slate-500 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-brand-100 dark:bg-slate-700/50 rounded-xl flex items-center justify-center text-brand-600 dark:text-slate-300 group-hover:bg-brand-200 transition-colors">
@@ -338,7 +338,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-100 dark:border-slate-700 flex-shrink-0">
+        <div className="p-4 border-t border-brand-100 dark:border-slate-700 shrink-0">
           {view === 'main' ? (
             <button
               onClick={handleClose}

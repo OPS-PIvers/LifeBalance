@@ -71,7 +71,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 dark:bg-slate-700/40 dark:border-slate-700">
                  <div className="flex gap-3">
-                     <div className="bg-white p-2 rounded-lg shadow-sm h-fit dark:bg-slate-800">
+                     <div className="bg-white p-2 rounded-lg shadow-xs h-fit dark:bg-slate-800">
                          <Sparkles className="w-5 h-5 text-violet-500 dark:text-violet-400" />
                      </div>
                      <div>
@@ -89,7 +89,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
                      value={text}
                      onChange={(e) => setText(e.target.value)}
                      placeholder="Paste recipe here...&#10;&#10;Example:&#10;Spaghetti Carbonara&#10;Ingredients:&#10;- 400g spaghetti&#10;- 150g pancetta&#10;..."
-                     className="w-full h-64 p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-none text-sm font-mono text-slate-700 resize-none leading-relaxed dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
+                     className="w-full h-64 p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all outline-hidden text-sm font-mono text-slate-700 resize-none leading-relaxed dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-200 dark:placeholder:text-slate-500"
                  />
              </div>
         </div>

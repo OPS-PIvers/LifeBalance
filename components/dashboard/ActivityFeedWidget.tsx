@@ -60,7 +60,7 @@ export const ActivityFeedWidget: React.FC = () => {
         {recentActivity.map(activity => (
           <div key={`${activity.type}-${activity.id}`} className="flex items-center justify-between py-3 px-2 hover:bg-slate-50/80 dark:hover:bg-slate-700/50 rounded-xl transition-colors">
             <div className="flex items-center gap-3">
-               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-sm ${
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 shadow-xs ${
                  activity.type === 'transaction'
                   ? 'bg-blue-50 border border-blue-100 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/20'
                   : 'bg-emerald-50 border border-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:border-emerald-500/20'

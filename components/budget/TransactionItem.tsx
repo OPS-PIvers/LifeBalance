@@ -48,7 +48,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           onToggleSelection(tx.id);
         }
       } : undefined}
-      className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-sm flex items-center justify-between transition-all group cursor-pointer ${
+      className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-xs flex items-center justify-between transition-all group cursor-pointer ${
         isSelected
           ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-300 ring-1 ring-slate-300 dark:ring-slate-600'
           : 'bg-white/80 dark:bg-slate-800/60 border-transparent hover:ring-slate-200 dark:hover:ring-slate-700 hover:shadow-glass'
@@ -66,10 +66,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           </div>
         )}
 
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-black/5 shadow-sm ${
+        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-black/5 shadow-xs ${
            tx.category === INCOME_CATEGORY
-            ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/15 dark:to-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-            : 'bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700/50 dark:to-slate-700/50 text-slate-500 dark:text-slate-400'
+            ? 'bg-linear-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/15 dark:to-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+            : 'bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-700/50 dark:to-slate-700/50 text-slate-500 dark:text-slate-400'
         }`}>
           {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>

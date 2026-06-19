@@ -144,7 +144,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full ${c} ${isSelected ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-none focus:ring-2 focus:ring-brand-800 focus:ring-offset-1 transition-all`}
+                  className={`w-8 h-8 rounded-full ${c} ${isSelected ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-hidden focus:ring-2 focus:ring-brand-800 focus:ring-offset-1 transition-all`}
                   aria-label={`Select ${colorName}`}
                   aria-checked={isSelected}
                   role="radio"
@@ -179,7 +179,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
               onChange={e => setNewSubBucketName(e.target.value)}
               placeholder="New sub-category..."
               aria-label="New sub-category name"
-              className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault();

@@ -321,8 +321,8 @@ const BudgetCalendar: React.FC = () => {
                 className={`
                   relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-2xl text-sm font-medium cursor-pointer transition-all duration-200
                   ${!isSameMonth(day, monthStart) ? 'text-slate-300 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300'}
-                  ${isSelected ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg scale-110 ring-2 ring-slate-900 dark:ring-slate-100 ring-offset-2 ring-offset-white dark:ring-offset-slate-800' : 'hover:bg-white dark:hover:bg-slate-700/50 hover:shadow-sm'}
-                  ${isToday(day) && !isSelected ? 'text-slate-900 dark:text-slate-100 font-bold bg-white dark:bg-slate-700/50 shadow-sm' : ''}
+                  ${isSelected ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg scale-110 ring-2 ring-slate-900 dark:ring-slate-100 ring-offset-2 ring-offset-white dark:ring-offset-slate-800' : 'hover:bg-white dark:hover:bg-slate-700/50 hover:shadow-xs'}
+                  ${isToday(day) && !isSelected ? 'text-slate-900 dark:text-slate-100 font-bold bg-white dark:bg-slate-700/50 shadow-xs' : ''}
                 `}
               >
                 {format(day, 'd')}
@@ -377,7 +377,7 @@ const BudgetCalendar: React.FC = () => {
           <div className="space-y-3">
             {/* ToDos Section */}
             {selectedTodos.map(todo => (
-              <div key={todo.id} className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex items-center justify-between group">
+              <div key={todo.id} className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-xs flex items-center justify-between group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg bg-blue-50 dark:bg-blue-500/15 text-blue-600 dark:text-blue-300">
                     <CheckSquare size={20} />
@@ -413,7 +413,7 @@ const BudgetCalendar: React.FC = () => {
 
             {/* Financial Items Section */}
             {selectedItems.map(item => (
-              <div key={item.id} className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-sm flex items-center justify-between group">
+              <div key={item.id} className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-md p-5 rounded-xl ring-1 ring-black/5 shadow-xs flex items-center justify-between group">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-lg ${
                     item.type === 'income' ? 'bg-money-bgPos dark:bg-emerald-500/15 text-money-pos' : 'bg-money-bgNeg dark:bg-rose-500/15 text-money-neg'

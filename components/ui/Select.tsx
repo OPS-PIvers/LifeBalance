@@ -36,7 +36,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-invalid={!!error}
             aria-describedby={error ? errorId : undefined}
             className={cn(
-              "w-full p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all shadow-sm disabled:opacity-50 disabled:bg-slate-50 dark:disabled:bg-slate-700/50 appearance-none text-slate-900 dark:text-slate-100",
+              "w-full p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-hidden focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all shadow-xs disabled:opacity-50 disabled:bg-slate-50 dark:disabled:bg-slate-700/50 appearance-none text-slate-900 dark:text-slate-100",
               icon ? "pl-10" : "pl-3",
               "pr-10", // Space for the chevron
               error && "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10",

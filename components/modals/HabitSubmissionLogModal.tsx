@@ -238,9 +238,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('stats'); }
               if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('calendar'); }
             }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'log'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
+                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
@@ -258,9 +258,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('calendar'); }
               if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('log'); }
             }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'stats'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
+                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
@@ -278,9 +278,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('log'); }
               if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('stats'); }
             }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'calendar'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-sm'
+                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
                 : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
             }`}
           >
@@ -305,7 +305,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             className="p-4 space-y-4"
           >
             {/* Calendar Controls */}
-            <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border border-brand-100 dark:border-slate-700 shadow-sm">
+            <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border border-brand-100 dark:border-slate-700 shadow-xs">
               <button
                 onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
                 className="p-2 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 transition-colors"
@@ -327,7 +327,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Calendar Grid */}
             <div
-              className="bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 p-4 shadow-sm"
+              className="bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 p-4 shadow-xs"
               role="grid"
               aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
             >
@@ -399,7 +399,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           >
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/10 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30">
+              <div className="bg-linear-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/10 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30">
                 <div className="flex items-center gap-2 mb-1">
                   <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
                   <span className="text-xs font-bold text-emerald-600 dark:text-emerald-300 uppercase tracking-wide">Total Points</span>
@@ -410,7 +410,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-500/10 dark:to-purple-500/10 p-4 rounded-xl border border-purple-200 dark:border-purple-500/30">
+              <div className="bg-linear-to-br from-purple-50 to-purple-100 dark:from-purple-500/10 dark:to-purple-500/10 p-4 rounded-xl border border-purple-200 dark:border-purple-500/30">
                 <div className="flex items-center gap-2 mb-1">
                   <TrendingUp className="w-4 h-4 text-purple-600 dark:text-purple-300" />
                   <span className="text-xs font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Submissions</span>
@@ -421,7 +421,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-500/10 dark:to-orange-500/10 p-4 rounded-xl border border-orange-200 dark:border-orange-500/30">
+              <div className="bg-linear-to-br from-orange-50 to-orange-100 dark:from-orange-500/10 dark:to-orange-500/10 p-4 rounded-xl border border-orange-200 dark:border-orange-500/30">
                 <div className="flex items-center gap-2 mb-1">
                   <Flame className="w-4 h-4 text-orange-600 dark:text-orange-300" />
                   <span className="text-xs font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wide">Current Streak</span>
@@ -432,7 +432,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 </p>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-500/10 p-4 rounded-xl border border-blue-200 dark:border-blue-500/30">
+              <div className="bg-linear-to-br from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-500/10 p-4 rounded-xl border border-blue-200 dark:border-blue-500/30">
                 <div className="flex items-center gap-2 mb-1">
                   <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-300" />
                   <span className="text-xs font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide">Multiplier</span>
@@ -468,7 +468,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                         </div>
                         <div className="h-2 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
+                            className="h-full bg-linear-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
                             style={{ width: `${barWidth}%` }}
                           />
                         </div>
@@ -503,7 +503,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           </div>
                           <div className="h-2 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-purple-400 to-purple-600 rounded-full transition-all duration-500"
+                              className="h-full bg-linear-to-r from-purple-400 to-purple-600 rounded-full transition-all duration-500"
                               style={{ width: `${barWidth}%` }}
                             />
                           </div>
@@ -534,7 +534,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             {!isAddMode && (
               <button
                 onClick={() => setIsAddMode(true)}
-                className="w-full mb-4 py-3 bg-brand-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-brand-900 active:scale-98 transition-all shadow-sm"
+                className="w-full mb-4 py-3 bg-brand-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
               >
                 <Plus size={16} /> Add Submission
               </button>
@@ -553,7 +553,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
                       max={getLocalDateString()}
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                     />
                   </div>
                   <div>
@@ -563,7 +563,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       type="time"
                       value={formTime}
                       onChange={(e) => setFormTime(e.target.value)}
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                     />
                   </div>
                   <div>
@@ -574,7 +574,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       value={formCount}
                       onChange={(e) => setFormCount(e.target.value)}
                       min="1"
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
                     />
                   </div>
                 </div>
@@ -587,7 +587,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   </button>
                   <button
                     onClick={handleAdd}
-                    className="flex-1 py-2 bg-brand-800 text-white font-bold rounded-lg hover:bg-brand-900 active:scale-98 transition-all shadow-sm"
+                    className="flex-1 py-2 bg-brand-800 text-white font-bold rounded-lg hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
                   >
                     Add
                   </button>
@@ -609,15 +609,15 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   const dayCount = subs.reduce((sum, s) => sum + s.count, 0);
 
                   return (
-                    <div key={date} className="border border-brand-100 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-r from-brand-50 to-brand-100 dark:from-slate-700/50 dark:to-slate-700/50 px-3 py-2.5 flex items-center justify-between">
+                    <div key={date} className="border border-brand-100 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
+                      <div className="bg-linear-to-r from-brand-50 to-brand-100 dark:from-slate-700/50 dark:to-slate-700/50 px-3 py-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <Calendar size={14} className="text-brand-600 dark:text-slate-300 flex-shrink-0" />
+                          <Calendar size={14} className="text-brand-600 dark:text-slate-300 shrink-0" />
                           <span className="text-xs font-bold text-brand-800 dark:text-slate-100 truncate">
                             {format(parseISO(date), 'MMMM d, yyyy')}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                        <div className="flex items-center gap-3 shrink-0 ml-2">
                           <span className="text-xs bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
                           </span>
@@ -652,7 +652,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1 ml-3 flex-shrink-0">
+                            <div className="flex items-center gap-1 ml-3 shrink-0">
                               <button
                                 onClick={() => {
                                   setEditingSubmission(sub);
@@ -704,7 +704,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
               min="1"
-              className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-400"
+              className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-brand-400"
             />
           </div>
 
@@ -724,7 +724,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             </button>
             <button
               onClick={handleUpdate}
-              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 active:scale-98 transition-all shadow-sm"
+              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
             >
               Save Changes
             </button>

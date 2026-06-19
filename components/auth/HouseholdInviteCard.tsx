@@ -27,7 +27,7 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
         </span>
         <button
           onClick={handleCopy}
-          className="flex-shrink-0 p-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 active:scale-95 transition-all duration-200"
+          className="shrink-0 p-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 active:scale-95 transition-all duration-200"
           aria-label="Copy invite code"
         >
           {copied ? <Check size={20} /> : <Copy size={20} />}

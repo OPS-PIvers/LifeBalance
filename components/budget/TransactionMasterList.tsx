@@ -371,7 +371,7 @@ const TransactionMasterList: React.FC = () => {
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500"
+            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-hidden focus:border-brand-400 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500"
           />
           {searchTerm && (
             <Button

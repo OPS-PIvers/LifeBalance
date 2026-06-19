@@ -111,7 +111,7 @@ export const MoneyPulseWidget: React.FC = () => {
           {recentTransactions.map(tx => (
             <div key={tx.id} className="flex items-center justify-between py-3 px-2 hover:bg-slate-50/80 dark:hover:bg-slate-700/50 rounded-xl transition-colors">
               <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-sm dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500">
+                 <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500">
                     <Receipt size={16} />
                  </div>
                  <div className="min-w-0">

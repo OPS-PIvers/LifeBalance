@@ -41,9 +41,9 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
   };
 
   return (
-    <div className="bg-gradient-to-br from-indigo-50/80 to-white/80 dark:from-indigo-500/10 dark:to-slate-800/60 backdrop-blur-md border border-indigo-100/50 dark:border-indigo-500/20 shadow-sm rounded-3xl p-6">
+    <div className="bg-linear-to-br from-indigo-50/80 to-white/80 dark:from-indigo-500/10 dark:to-slate-800/60 backdrop-blur-md border border-indigo-100/50 dark:border-indigo-500/20 shadow-xs rounded-3xl p-6">
       <div className="flex items-start gap-4">
-        <div className="p-2.5 bg-white/80 dark:bg-slate-800/70 backdrop-blur-sm rounded-xl shadow-sm text-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-500/20">
+        <div className="p-2.5 bg-white/80 dark:bg-slate-800/70 backdrop-blur-xs rounded-xl shadow-xs text-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-500/20">
           <Sparkles size={20} />
         </div>
         <div className="flex-1">
@@ -52,7 +52,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
             <div className="flex gap-2">
               <button
                 onClick={onOpenArchive}
-                className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-50 dark:hover:bg-slate-700"
+                className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all hover:bg-indigo-50 dark:hover:bg-slate-700"
               >
                 <History size={12} />
                 History
@@ -60,7 +60,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
               <button
                 onClick={refreshInsight}
                 disabled={isGeneratingInsight}
-                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 <Wand2 size={12} />
                 {isGeneratingInsight ? 'Generating...' : 'Get Insight'}
@@ -94,7 +94,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
                       handleAction(action);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-300 dark:border-indigo-500/20 rounded-lg text-xs font-bold shadow-sm active:scale-95 transition-all"
+                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-300 dark:border-indigo-500/20 rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all"
                 >
                   {getActionIcon(action.type)}
                   {action.label}

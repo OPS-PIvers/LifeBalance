@@ -86,7 +86,7 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
         dragHandle={
           <div
             onPointerDown={e => controls.start(e)}
-            className="cursor-grab active:cursor-grabbing touch-none p-1 focus:outline-none focus:ring-2 focus:ring-brand-400 rounded"
+            className="cursor-grab active:cursor-grabbing touch-none p-1 focus:outline-hidden focus:ring-2 focus:ring-brand-400 rounded-sm"
             title="Drag to reorder"
             tabIndex={0}
             role="button"

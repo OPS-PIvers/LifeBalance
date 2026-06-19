@@ -41,8 +41,8 @@ export const HabitCoach: React.FC = () => {
   return (
     <div className="space-y-6">
       {!hasRun ? (
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white text-center shadow-lg">
-          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <div className="bg-linear-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white text-center shadow-lg">
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-xs rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Sparkles size={32} className="text-white" />
           </div>
           <h2 className="text-xl font-bold mb-2">Unlock Your Habit Potential</h2>
@@ -74,7 +74,7 @@ export const HabitCoach: React.FC = () => {
 
           <div className="grid gap-4">
             {insights.map((insight, idx) => (
-              <div key={idx} className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-brand-100 dark:border-slate-700 flex gap-4">
+              <div key={idx} className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-xs border border-brand-100 dark:border-slate-700 flex gap-4">
                 <div className={`p-3 rounded-xl h-fit shrink-0 ${
                   insight.type === 'praise' ? 'bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300' :
                   insight.type === 'critique' ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300' :

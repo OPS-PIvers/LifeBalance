@@ -52,9 +52,9 @@ export const ThemeToggle: React.FC = () => {
             onClick={() => select(opt.value)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
-              'flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-bold tracking-tight transition-all active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30',
+              'flex flex-col items-center justify-center gap-1.5 py-3 rounded-xl border text-xs font-bold tracking-tight transition-all active:scale-[0.98] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/30',
               isActive
-                ? 'bg-brand-800 text-white border-brand-800 shadow-sm dark:bg-brand-100 dark:text-brand-900 dark:border-brand-100'
+                ? 'bg-brand-800 text-white border-brand-800 shadow-xs dark:bg-brand-100 dark:text-brand-900 dark:border-brand-100'
                 : 'bg-white text-slate-500 border-slate-200/60 hover:bg-slate-50 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700/50 dark:hover:text-slate-200'
             )}
           >

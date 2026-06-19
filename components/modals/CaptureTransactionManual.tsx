@@ -183,7 +183,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             placeholder="0.00"
             step="0.01"
             min="0"
-            className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-slate-100 placeholder:text-brand-200 outline-none text-center bg-transparent"
+            className="w-full pl-8 text-4xl font-mono font-bold text-brand-800 dark:text-slate-100 placeholder:text-brand-200 outline-hidden text-center bg-transparent"
           />
         </div>
       </div>
@@ -196,7 +196,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           value={merchant}
           onChange={(e) => setMerchant(e.target.value)}
           placeholder="e.g. Starbucks"
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
+          className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-hidden font-medium"
         />
       </div>
 
@@ -207,7 +207,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           type="date"
           value={transactionDate}
           onChange={(e) => setTransactionDate(e.target.value)}
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium"
+          className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-hidden font-medium"
         />
       </div>
 
@@ -218,7 +218,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             id="manual-store"
             value={store}
             onChange={(e) => setStore(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium appearance-none"
+            className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-hidden font-medium appearance-none"
           >
             <option value="">Select Store...</option>
             {stores.map(s => (
@@ -233,7 +233,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
             id="manual-account"
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-none font-medium appearance-none"
+            className="w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-800 outline-hidden font-medium appearance-none"
           >
             <option value="">Select Account...</option>
             {accounts.map(a => (
@@ -341,7 +341,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
                       isSelected
-                        ? 'bg-habit-green text-white shadow-sm'
+                        ? 'bg-habit-green text-white shadow-xs'
                         : confidence === 'high'
                         ? 'bg-violet-50 dark:bg-violet-500/15 border-2 border-violet-300 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-500/20'
                         : 'bg-blue-50 dark:bg-blue-500/15 border border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-300 hover:bg-blue-100'
@@ -366,7 +366,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
                   onClick={() => {
                     setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-sm"
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-xs"
                 >
                   <Check size={12} strokeWidth={3} />
                   {habit.title}
@@ -408,7 +408,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           aria-checked={isRecurring}
           aria-labelledby="recurring-label"
           onClick={() => setIsRecurring(!isRecurring)}
-          className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300'}`}
+          className={`relative w-11 h-6 rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-brand-500 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300'}`}
         >
           <span className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-slate-800 rounded-full transition-transform ${isRecurring ? 'translate-x-5' : 'translate-x-0'}`} />
         </button>

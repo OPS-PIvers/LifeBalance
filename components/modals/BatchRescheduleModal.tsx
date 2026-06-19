@@ -87,7 +87,7 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             disabled={isSaving}
-            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-none focus:border-brand-400 transition-colors disabled:opacity-70"
+            className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-hidden focus:border-brand-400 transition-colors disabled:opacity-70"
           />
         </div>
       </div>

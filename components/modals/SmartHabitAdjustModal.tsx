@@ -90,7 +90,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-purple-100 bg-purple-50 dark:bg-purple-500/15 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-300 shadow-sm">
+          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-300 shadow-xs">
             <Sparkles size={20} />
           </div>
           <div>
@@ -145,7 +145,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
             {suggestions.map((suggestion) => (
               <div
                 key={suggestion.habitId}
-                className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow animate-in slide-in-from-bottom-2 fade-in duration-300"
+                className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 shadow-xs hover:shadow-md transition-shadow animate-in slide-in-from-bottom-2 fade-in duration-300"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
@@ -169,7 +169,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
                   <div className="flex items-center gap-2 sm:flex-col shrink-0">
                     <button
                       onClick={() => handleAccept(suggestion)}
-                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold shadow-sm hover:bg-purple-700 active:scale-95 transition-all"
+                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold shadow-xs hover:bg-purple-700 active:scale-95 transition-all"
                       title="Accept Change"
                     >
                       <Check size={18} />

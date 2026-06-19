@@ -49,7 +49,7 @@ export const SegmentedControl = <T extends string>({
       role="radiogroup"
       aria-label={name}
       className={cn(
-        "flex bg-slate-100/50 dark:bg-slate-700/50 backdrop-blur-sm p-1 rounded-xl",
+        "flex bg-slate-100/50 dark:bg-slate-700/50 backdrop-blur-xs p-1 rounded-xl",
         showBorder && "ring-1 ring-black/5 dark:ring-white/10",
         className
       )}
@@ -69,9 +69,9 @@ export const SegmentedControl = <T extends string>({
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
-              "flex-1 py-2 rounded-lg text-sm font-bold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+              "flex-1 py-2 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500",
               isActive
-                ? cn("bg-white shadow-sm ring-1 ring-black/5 dark:bg-slate-800 dark:ring-white/10", option.activeClassName || "text-slate-900 dark:text-slate-100")
+                ? cn("bg-white shadow-xs ring-1 ring-black/5 dark:bg-slate-800 dark:ring-white/10", option.activeClassName || "text-slate-900 dark:text-slate-100")
                 : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200",
               option.className
             )}

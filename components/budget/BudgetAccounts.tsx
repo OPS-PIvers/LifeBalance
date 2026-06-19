@@ -246,7 +246,7 @@ const BudgetAccounts: React.FC = () => {
                   type="number"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
-                  className="w-24 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-lg px-2 py-1 text-right font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500 dark:text-slate-100"
+                  className="w-24 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-lg px-2 py-1 text-right font-mono font-bold outline-hidden focus:ring-2 focus:ring-brand-500 dark:text-slate-100"
                   autoFocus
                 />
                 <Button
@@ -262,7 +262,7 @@ const BudgetAccounts: React.FC = () => {
               <button
                 type="button"
                 onClick={() => startEditing(account.id, account.balance)}
-                className="group cursor-pointer text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 rounded-lg"
+                className="group cursor-pointer text-right focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 rounded-lg"
                 aria-label={`Edit balance for ${account.name}`}
               >
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
@@ -295,7 +295,7 @@ const BudgetAccounts: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Net Worth Header */}
-      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-glass-deep ring-1 ring-white/10 text-center">
+      <div className="bg-linear-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-glass-deep ring-1 ring-white/10 text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
           ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

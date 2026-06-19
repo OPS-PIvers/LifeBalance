@@ -124,7 +124,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
              {/* Sort Dropdown (Simplified as buttons for mobile friendliness) */}
-             <div className="flex bg-white dark:bg-slate-700/50 rounded-lg p-1 border border-slate-200 dark:border-slate-600 shadow-sm shrink-0">
+             <div className="flex bg-white dark:bg-slate-700/50 rounded-lg p-1 border border-slate-200 dark:border-slate-600 shadow-xs shrink-0">
                 <button
                     type="button"
                     onClick={() => setSortBy('name')}
@@ -165,7 +165,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                     aria-pressed={selectedTags.includes(tag)}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors whitespace-nowrap ${
                         selectedTags.includes(tag)
-                        ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                        ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
                         : 'bg-white text-slate-600 border-slate-200 hover:border-brand-300 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600 dark:hover:border-brand-500/50'
                     }`}
                 >
@@ -194,7 +194,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                 <div key={meal.id} className="flex items-stretch gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <button
                         onClick={() => onSelect(meal)}
-                        className="flex-1 text-left p-4 hover:bg-slate-50/80 rounded-2xl border border-slate-200/60 bg-white shadow-sm hover:shadow-md transition-all group flex justify-between items-center dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700/50"
+                        className="flex-1 text-left p-4 hover:bg-slate-50/80 rounded-2xl border border-slate-200/60 bg-white shadow-xs hover:shadow-md transition-all group flex justify-between items-center dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700/50"
                     >
                         <div>
                             <span className="font-bold text-slate-700 group-hover:text-brand-700 block mb-0.5 dark:text-slate-200 dark:group-hover:text-brand-300">{meal.name}</span>
@@ -212,9 +212,9 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 {meal.tags && meal.tags.length > 0 && (
                                     <div className="hidden sm:flex gap-1">
                                         {meal.tags.slice(0, 2).map(t => (
-                                            <span key={t} className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-medium dark:bg-slate-700/50 dark:text-slate-400">{t}</span>
+                                            <span key={t} className="text-xxs px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-md font-medium dark:bg-slate-700/50 dark:text-slate-400">{t}</span>
                                         ))}
-                                        {meal.tags.length > 2 && <span className="text-[10px] text-slate-400 dark:text-slate-500">+{meal.tags.length - 2}</span>}
+                                        {meal.tags.length > 2 && <span className="text-xxs text-slate-400 dark:text-slate-500">+{meal.tags.length - 2}</span>}
                                     </div>
                                 )}
                             </div>
@@ -225,7 +225,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                         type="button"
                         aria-label="Clone as New Meal"
                         onClick={() => onClone(meal)}
-                        className="px-4 text-slate-400 hover:text-brand-600 hover:bg-brand-50 border border-slate-200/60 bg-white hover:border-brand-200 rounded-2xl transition-colors shadow-sm dark:text-slate-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-brand-500/40"
+                        className="px-4 text-slate-400 hover:text-brand-600 hover:bg-brand-50 border border-slate-200/60 bg-white hover:border-brand-200 rounded-2xl transition-colors shadow-xs dark:text-slate-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-brand-500/40"
                         title="Clone as New Meal"
                     >
                         <Copy className="w-5 h-5" />

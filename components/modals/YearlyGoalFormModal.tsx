@@ -90,7 +90,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="e.g., Family Trip to Disney"
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-none transition-colors"
+            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:border-brand-400 outline-hidden transition-colors"
           />
         </div>
 
@@ -104,7 +104,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add details about this goal..."
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl resize-none h-20 focus:border-brand-400 outline-none transition-colors"
+            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl resize-none h-20 focus:border-brand-400 outline-hidden transition-colors"
           />
         </div>
 
@@ -121,7 +121,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
               onChange={(e) => setYear(parseInt(e.target.value))}
               min={new Date().getFullYear()}
               max={new Date().getFullYear() + 5}
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
+              className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl font-mono focus:border-brand-400 outline-hidden transition-colors"
             />
           </div>
 
@@ -136,7 +136,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
               onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
               min={1}
               max={12}
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl font-mono focus:border-brand-400 outline-none transition-colors"
+              className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl font-mono focus:border-brand-400 outline-hidden transition-colors"
             />
           </div>
         </div>

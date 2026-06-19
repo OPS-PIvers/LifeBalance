@@ -226,7 +226,7 @@ const Habits: React.FC = () => {
           <div className="px-4 mb-6">
             <button
               onClick={() => navigate('/migrate-submissions')}
-              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all active:scale-98"
+              className="w-full bg-linear-to-r from-purple-500 to-indigo-600 text-white rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all active:scale-98"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
