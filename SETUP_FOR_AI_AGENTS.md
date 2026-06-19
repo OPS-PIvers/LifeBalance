@@ -1,6 +1,6 @@
 # Setup Guide for AI Coding Agents
 
-This guide helps AI coding agents (like Jules, Claude Code, Cursor, etc.) quickly set up and explore the LifeBalance project using **Test Mode**.
+This guide helps AI coding agents (like Claude Code, Cursor, etc.) quickly set up and explore the LifeBalance project using **Test Mode**.
 
 ## Quick Start (3 steps)
 
