@@ -21,8 +21,26 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
 
   // Keep the latest habits in a ref so the open-effect can read the current
   // value at fetch time without re-running every time `habits` changes.
+  // Written in an effect (not during render) per the latest-ref pattern.
   const habitsRef = useRef(habits);
-  habitsRef.current = habits;
+  useEffect(() => {
+    habitsRef.current = habits;
+  });
+
+  // Reset state when analysis is no longer active (modal closed or no household).
+  // Done during render on the active→inactive edge rather than in an effect so
+  // it doesn't trigger a cascading render. Mirrors the previous effect's `else`
+  // branch, which cleared these whenever `isOpen && householdId` was false.
+  const isActive = isOpen && !!householdId;
+  const [wasActive, setWasActive] = useState(isActive);
+  if (wasActive !== isActive) {
+    setWasActive(isActive);
+    if (!isActive) {
+      setPlan(null);
+      setIsLoading(false);
+      setError(null);
+    }
+  }
 
   // Analyze habits when modal opens
   useEffect(() => {
@@ -44,10 +62,6 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       };
 
       fetchPlan();
-    } else {
-      setPlan(null);
-      setIsLoading(false);
-      setError(null);
     }
   }, [isOpen, householdId]);
 

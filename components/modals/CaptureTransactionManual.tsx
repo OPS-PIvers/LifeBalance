@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Check, CheckCircle2, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -75,12 +75,18 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
     return availableSubBuckets.find(sb => sb.id === subBucketId)?.id;
   }, [subBucketId, availableSubBuckets]);
 
-  // Default category update (if dynamicCategories loads late)
-  useEffect(() => {
+  // Default category update (if dynamicCategories loads late). Done during
+  // render on the dynamicCategories-change edge rather than in an effect so it
+  // doesn't trigger a cascading render. The lazy initializer above already
+  // covers the case where categories are present at mount; this handles them
+  // arriving asynchronously afterwards.
+  const [prevDynamicCategories, setPrevDynamicCategories] = useState(dynamicCategories);
+  if (prevDynamicCategories !== dynamicCategories) {
+    setPrevDynamicCategories(dynamicCategories);
     if (!category && dynamicCategories.length > 0) {
       setCategory(dynamicCategories[0]);
     }
-  }, [dynamicCategories, category]);
+  }
 
   // Smart habit suggestions for manual entry (based on merchant name)
   const suggestedHabits = useMemo(() => {

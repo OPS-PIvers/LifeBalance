@@ -54,6 +54,13 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
 
   useEffect(() => {
     if (isOpen) {
+      // loadData() is an async Firestore fetch that synchronously flips the
+      // loading flag before awaiting. This is legitimate external-system
+      // synchronization (re-fetched on open and on tab change), not derivable
+      // state — deferring the loading flag would cause a content flash before
+      // the spinner. loadData is also invoked from event handlers, so it must
+      // remain a callable that owns its loading transitions.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional load-on-open; see comment above
       loadData();
     }
   }, [isOpen, activeTab, loadData]);

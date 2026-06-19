@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
@@ -19,14 +19,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const { updateTransaction, deleteTransaction, addTransaction, buckets, accounts } = useFinance();
   const { stores } = useShopping();
 
-  const [amount, setAmount] = useState('');
-  const [merchant, setMerchant] = useState('');
-  const [category, setCategory] = useState('');
-  const [subBucketId, setSubBucketId] = useState<string | undefined>(undefined);
-  const [store, setStore] = useState('');
-  const [accountId, setAccountId] = useState('');
-  const [date, setDate] = useState('');
-  const [status, setStatus] = useState<'verified' | 'pending_review'>('verified');
+  // Initialize the form fields from the transaction prop. Using lazy
+  // initializers (rather than a post-mount effect) means the first render is
+  // already populated; the prev-tracker below re-populates on later changes.
+  const [amount, setAmount] = useState(() => transaction ? transaction.amount.toString() : '');
+  const [merchant, setMerchant] = useState(() => transaction?.merchant ?? '');
+  const [category, setCategory] = useState(() => transaction?.category ?? '');
+  const [subBucketId, setSubBucketId] = useState<string | undefined>(() => transaction?.subBucketId);
+  const [store, setStore] = useState(() => transaction?.store || '');
+  const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
+  const [date, setDate] = useState(() => transaction?.date ?? '');
+  const [status, setStatus] = useState<'verified' | 'pending_review'>(() => transaction?.status ?? 'verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -37,8 +40,13 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const selectedBucket = buckets.find(b => b.name === category);
   const subBuckets = selectedBucket?.subBuckets || [];
 
-  // Populate form when transaction changes
-  useEffect(() => {
+  // Re-populate the form when the transaction prop changes. Done during render
+  // (on the reference-change edge) rather than in an effect so it doesn't
+  // trigger a cascading render. Mirrors the previous effect keyed on
+  // `[transaction]`; the initial population is handled by the initializers above.
+  const [prevTransaction, setPrevTransaction] = useState(transaction);
+  if (prevTransaction !== transaction) {
+    setPrevTransaction(transaction);
     if (transaction) {
       setAmount(transaction.amount.toString());
       setMerchant(transaction.merchant);
@@ -49,14 +57,17 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setDate(transaction.date);
       setStatus(transaction.status);
     }
-  }, [transaction]);
+  }
 
-  // Reset delete confirmation when modal closes
-  useEffect(() => {
+  // Reset delete confirmation when the modal closes. Done during render on the
+  // open→close edge rather than in an effect (the component stays mounted).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
     if (!isOpen) {
       setShowDeleteConfirm(false);
     }
-  }, [isOpen]);
+  }
 
   const handleSave = async () => {
     if (!transaction || isSaving) return;

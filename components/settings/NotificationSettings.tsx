@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -68,15 +68,21 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
 
   const hourOptions = getHourOptions();
 
-  useEffect(() => {
+  // Sync local preferences when the saved preferences prop changes. Done during
+  // render on that change edge rather than in an effect so it doesn't trigger a
+  // cascading render. Mirrors the previous effect keyed on `[currentPreferences]`
+  // (which fully replaced local state from the prop, ignoring the previous value).
+  const [prevCurrentPreferences, setPrevCurrentPreferences] = useState(currentPreferences);
+  if (prevCurrentPreferences !== currentPreferences) {
+    setPrevCurrentPreferences(currentPreferences);
     if (currentPreferences) {
-      setPreferences(_prev => ({
+      setPreferences({
         ...currentPreferences,
         // Preserve existing timezone or fallback to browser's
         timezone: currentPreferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      }));
+      });
     }
-  }, [currentPreferences]);
+  }
 
   const handleToggle = (key: keyof NotificationPreferences) => {
     setPreferences(prev => {

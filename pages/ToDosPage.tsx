@@ -59,12 +59,16 @@ const ToDosPage: React.FC = () => {
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [isBatchRescheduleOpen, setIsBatchRescheduleOpen] = useState(false);
 
-  // Clear selection when mode is toggled off
-  useEffect(() => {
+  // Clear selection when selection mode is toggled off. Done during render on
+  // the on→off edge rather than in an effect so it doesn't trigger a cascading
+  // render. Mirrors the previous effect keyed on `[isSelectionMode]`.
+  const [wasSelectionMode, setWasSelectionMode] = useState(isSelectionMode);
+  if (wasSelectionMode !== isSelectionMode) {
+    setWasSelectionMode(isSelectionMode);
     if (!isSelectionMode) {
       setSelectedIds(new Set());
     }
-  }, [isSelectionMode]);
+  }
 
   // Update date at midnight so todo categorization (immediate/upcoming/radar) stays accurate.
   // NOTE: useMidnightScheduler (hooks/useMidnightScheduler.ts) is not used here because its

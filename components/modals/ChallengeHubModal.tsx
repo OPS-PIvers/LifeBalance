@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Check, Plus } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -46,7 +46,24 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHabitForFreeze, setSelectedHabitForFreeze] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Populate the challenge form from initial data, the active challenge, or
+  // reset to blanks. Done during render on the change edge of those inputs
+  // rather than in an effect so it doesn't trigger a cascading render. The
+  // tracker starts null so this also runs on the first render, mirroring the
+  // previous effect (keyed on `[activeChallenge, isOpen, initialData]`) which
+  // ran on mount and on every change.
+  const [prevKey, setPrevKey] = useState<{
+    activeChallenge: typeof activeChallenge;
+    isOpen: boolean;
+    initialData: typeof initialData;
+  } | null>(null);
+  if (
+    prevKey === null ||
+    prevKey.activeChallenge !== activeChallenge ||
+    prevKey.isOpen !== isOpen ||
+    prevKey.initialData !== initialData
+  ) {
+    setPrevKey({ activeChallenge, isOpen, initialData });
     if (initialData) {
       setTitle(initialData.title);
       setDescription(initialData.description || '');
@@ -83,7 +100,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
       setSuggestedHabit(null);
       setSelectedYearlyGoalId('');
     }
-  }, [activeChallenge, isOpen, initialData]);
+  }
 
   const toggleHabitSelection = (habitId: string) => {
     setSelectedHabitIds((prev) =>

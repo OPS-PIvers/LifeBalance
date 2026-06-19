@@ -63,6 +63,13 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   // Load submissions when modal opens
   useEffect(() => {
     if (isOpen && habit.id) {
+      // loadSubmissions() is an async Firestore fetch that synchronously flips
+      // the loading flag before awaiting. This is legitimate external-system
+      // synchronization (re-fetched whenever the modal opens for a habit), not
+      // derivable state — deferring the loading flag would cause a content flash
+      // before the spinner. loadSubmissions is also invoked from the add/edit/
+      // delete handlers, so it must remain a callable that owns its loading.
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional load-on-open; see comment above
       loadSubmissions();
     }
   }, [isOpen, habit.id, loadSubmissions]);

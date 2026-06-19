@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
@@ -31,8 +31,14 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
     [...buckets.map(b => b.name), 'Budgeted in Calendar'].sort(),
   [buckets]);
 
-  // Initialize splits when transaction changes or modal opens
-  useEffect(() => {
+  // Initialize splits when the transaction changes or the modal opens. Done
+  // during render on that change edge rather than in an effect so it doesn't
+  // trigger a cascading render. The tracker starts null so this also runs on
+  // the first render, mirroring the previous effect (keyed on
+  // `[transaction, isOpen]`) which ran on mount and on every change.
+  const [prevKey, setPrevKey] = useState<{ transaction: Transaction | null; isOpen: boolean } | null>(null);
+  if (prevKey === null || prevKey.transaction !== transaction || prevKey.isOpen !== isOpen) {
+    setPrevKey({ transaction, isOpen });
     if (transaction && isOpen) {
       setSplits([
         {
@@ -49,7 +55,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         }
       ]);
     }
-  }, [transaction, isOpen]);
+  }
 
   // Calculate totals
   const totalAmount = transaction?.amount || 0;

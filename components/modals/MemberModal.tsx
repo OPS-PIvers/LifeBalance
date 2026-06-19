@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Save } from 'lucide-react';
 import { HouseholdMember, Role } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
@@ -19,12 +19,21 @@ const MemberModal: React.FC<MemberModalProps> = ({
   initialMember,
   title,
 }) => {
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('member');
+  // Initialize the form from the member being edited (lazy initializers, so the
+  // first render is already populated for the edit case).
+  const [displayName, setDisplayName] = useState(() => initialMember?.displayName ?? '');
+  const [email, setEmail] = useState(() => initialMember?.email || '');
+  const [role, setRole] = useState<Role>(() => initialMember?.role ?? 'member');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  // Re-populate (or reset) the form when the member being edited or the open
+  // state changes. Done during render on that change edge rather than in an
+  // effect so it doesn't trigger a cascading render. Mirrors the previous effect
+  // keyed on `[initialMember, isOpen]`; the initial population is handled by the
+  // initializers above.
+  const [prevKey, setPrevKey] = useState({ initialMember, isOpen });
+  if (prevKey.initialMember !== initialMember || prevKey.isOpen !== isOpen) {
+    setPrevKey({ initialMember, isOpen });
     if (initialMember) {
       setDisplayName(initialMember.displayName);
       setEmail(initialMember.email || '');
@@ -34,7 +43,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
       setEmail('');
       setRole('member');
     }
-  }, [initialMember, isOpen]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

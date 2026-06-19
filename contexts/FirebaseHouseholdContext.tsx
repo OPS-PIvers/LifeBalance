@@ -730,6 +730,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // stays alive across auth changes, meaning state would otherwise persist in
     // memory (and could flash during a transition or be read by the next user
     // who signs in without a full reload).
+    // This effect synchronizes with an external system (Firestore real-time
+    // listeners); the synchronous reset is an intentional security teardown of
+    // the previous household before re-subscribing, not derivable state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional cross-household state teardown; see comment above
     setAccounts([]);
     setBuckets([]);
     setRecentTransactions([]);
@@ -1344,7 +1348,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const windowStart = getTransactionWindowStart(currentPeriodId);
     txWindowStartRef.current = windowStart;
     // Reset any previously paged-in older transactions for the new window.
+    // This effect synchronizes with an external system (the Firestore
+    // transactions listener); these synchronous resets re-baseline the live
+    // window before (re-)subscribing and are not derivable state.
     txOlderCursorRef.current = null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional listener-window re-baseline; see comment above
     setOlderTransactions([]);
     setTransactionWindowStart(windowStart);
     setHasMoreTransactions(windowStart !== null);

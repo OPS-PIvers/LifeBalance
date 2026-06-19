@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
@@ -14,16 +14,24 @@ const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
   const { addHabit, updateHabit } = useGamification();
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<string>(CATEGORIES[0] ?? 'Health');
-  const [type, setType] = useState<'positive' | 'negative'>('positive');
-  const [scoringType, setScoringType] = useState<'incremental' | 'threshold'>('threshold');
-  const [period, setPeriod] = useState<'daily' | 'weekly'>('daily');
-  const [basePoints, setBasePoints] = useState('10');
-  const [targetCount, setTargetCount] = useState('1');
+  // Form State — lazy initializers so the first render is already populated for
+  // the edit case; the defaults match the reset branch below for the new case.
+  const [title, setTitle] = useState(() => editingHabit?.title ?? '');
+  const [category, setCategory] = useState<string>(() => editingHabit?.category ?? (CATEGORIES[0] ?? 'Health'));
+  const [type, setType] = useState<'positive' | 'negative'>(() => editingHabit?.type ?? 'positive');
+  const [scoringType, setScoringType] = useState<'incremental' | 'threshold'>(() => editingHabit?.scoringType || 'threshold');
+  const [period, setPeriod] = useState<'daily' | 'weekly'>(() => editingHabit?.period ?? 'daily');
+  const [basePoints, setBasePoints] = useState(() => editingHabit ? editingHabit.basePoints.toString() : '10');
+  const [targetCount, setTargetCount] = useState(() => editingHabit ? editingHabit.targetCount.toString() : '1');
 
-  useEffect(() => {
+  // Re-populate (or reset to defaults) the form when the habit being edited or
+  // the open state changes. Done during render on that change edge rather than
+  // in an effect so it doesn't trigger a cascading render. Mirrors the previous
+  // effect keyed on `[editingHabit, isOpen]`; the initial population is handled
+  // by the initializers above.
+  const [prevKey, setPrevKey] = useState({ editingHabit, isOpen });
+  if (prevKey.editingHabit !== editingHabit || prevKey.isOpen !== isOpen) {
+    setPrevKey({ editingHabit, isOpen });
     if (editingHabit) {
       setTitle(editingHabit.title);
       setCategory(editingHabit.category);
@@ -42,7 +50,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setBasePoints('10');
       setTargetCount('1');
     }
-  }, [editingHabit, isOpen]);
+  }
 
   const [isSaving, setIsSaving] = useState(false);
 

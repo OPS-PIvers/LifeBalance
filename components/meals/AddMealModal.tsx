@@ -49,13 +49,18 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   const [ingredientName, setIngredientName] = useState('');
   const [ingredientQty, setIngredientQty] = useState('');
 
-  React.useEffect(() => {
+  // Reset the transient entry fields when the modal closes. Done during render
+  // on the open→close edge rather than in an effect so it doesn't trigger a
+  // cascading render (the component stays mounted across open/close).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
     if (!isOpen) {
       setTagInput('');
       setIngredientName('');
       setIngredientQty('');
     }
-  }, [isOpen]);
+  }
 
   const handleAddTag = () => {
     const trimmedInput = tagInput.trim();
