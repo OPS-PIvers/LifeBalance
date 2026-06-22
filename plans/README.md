@@ -19,6 +19,7 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#649](https://github.com/OPS-PIvers/LifeBalance/pull/649) | **015** Money-model double-count characterization tests + investigation doc | **MERGED + DEPLOYED** — investigation only (no behavior change) |
 | [#646](https://github.com/OPS-PIvers/LifeBalance/pull/646) | **004** Content-Security-Policy (Report-Only) + header hardening | **MERGED + DEPLOYED + VERIFIED LIVE** — header served; 0 violations on login; enforce-flip documented |
 | [#644](https://github.com/OPS-PIvers/LifeBalance/pull/644) | **008** Firebase Analytics foundation + `sign_up`/`login` events | **MERGED + DEPLOYED + VERIFIED LIVE** — 0 console errors; GA4 beacons firing (`tid=G-JJNX8HYJZK`) |
 | [#643](https://github.com/OPS-PIvers/LifeBalance/pull/643) | **012** Remove dead `sendtestnotification` self-access guard | **MERGED + DEPLOYED** |
@@ -33,6 +34,7 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | PR | What | Why it's gated |
 |----|------|----------------|
 | [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) | **007** `deleteHousehold` Cloud Function + admin-only Danger Zone UI | **Destructive**, and the recursive cascade can't be safely exercised against prod from here. Built + 7 unit tests + lint/build/context-tests green. **Review it, then verify the first real deletion against a throwaway household before merging.** |
+| [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) | **022** Shareable invite link + deep-link join (additive client UI) | **Low-risk + 15 unit tests**, but user-facing UI I can't visually verify on prod (renders in authed/setup views). Wants a quick UX glance (button placement/copy), then merge. |
 
 ## Status table
 
@@ -53,9 +55,9 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
 | 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
 | 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | TODO |
-| 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | TODO (characterization tests first — do NOT auto-fix) |
+| 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
 | 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | TODO |
-| 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | TODO |
+| 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | 🔶 **PR #650 OPEN — quick UX glance** (link + deep-link + `navigator.share`; 15 tests; QR deferred) |
 | 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | TODO |
 | 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | TODO |
 | 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C | MED | TODO |
@@ -70,24 +72,28 @@ nearest related plan as those files are touched.
 ## Recommended next steps
 
 Phase-0 `[C]` safety items **004, 006, 008, 010, 012 are shipped + deployed + live-verified**, and
-**007 is built and waiting in [PR #647](https://github.com/OPS-PIvers/LifeBalance/pull/647)** (see the
-tables above). What's left:
+**015** (money-model characterization) is merged. Two PRs await your review: **#647 (007)** and
+**#650 (022)**.
 
 **Needs you (human):**
-1. **Review + merge #647 (007 `deleteHousehold`)**, then verify the first real deletion against a
-   throwaway household.
-2. The Human-Only Checklist (PRD §4): set the `GEMINI_API_KEY` secret (after #014 lands), provision the
+1. **Review + merge [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) (007 `deleteHousehold`)**,
+   then verify the first real deletion against a throwaway household.
+2. **Glance at + merge [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) (022 invite link)** —
+   low-risk additive UI; just confirm the share-button placement/copy.
+3. The Human-Only Checklist (PRD §4): set the `GEMINI_API_KEY` secret (after #014 lands), provision the
    `admin` claim (B2 / #009), lock down the Gemini key in Cloud Console, and — recommended — **enable
-   branch protection on `main`** requiring the CI `validate` check. Right now PRs can merge without CI
-   passing, so the new rules-test gate only protects `main` once it's a required check.
+   branch protection on `main`** requiring the CI `validate` check (right now PRs can merge without CI
+   passing, so the rules-test gate only protects `main` once it's required).
+4. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
+   opposite-signed bugs (double-count + voice invisibility); the fix is a separate MED-risk PR.
 
-**Claude-buildable next (fully autonomous, low risk):**
-3. **014 (Gemini proxy)** — `[C→H]`; build the proxy Cloud Function + client switch (dormant until the
-   human sets the secret). Moves the API key off the client.
-4. **015 (money-model investigation)** — characterization tests + a written analysis of the pending-txn
-   double-count. Zero prod risk; do **not** auto-fix.
-5. **020 (onboarding wizard)** + **022 (invite link)** — highest-ROI activation work; verifiable locally
-   via Test Mode (`?test=true`) + Playwright. Best reviewed *with* you for UX judgment.
+**Claude-buildable next (fully autonomous):**
+5. **014 (Gemini proxy)** — `[C→H]`; the proxy Cloud Function + client switch. Highest remaining
+   security value (moves the API key off the client). Best done with focused context — it's a
+   security-critical change that touches every AI feature, so it warrants careful review.
+6. **020 (onboarding wizard)** — highest-ROI activation work; verifiable locally via Test Mode
+   (`?test=true`) + Playwright. Best reviewed *with* you for UX judgment.
+7. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
 
 ### Minor follow-ups noted during execution
 - **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
