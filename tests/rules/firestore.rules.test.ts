@@ -1,0 +1,407 @@
+/**
+ * Firestore Security Rules unit tests.
+ *
+ * These run against the Firestore emulator (started by `pnpm test:rules`, which
+ * wraps this suite in `firebase emulators:exec --only firestore`). They load the
+ * real `firestore.rules` from the repo root and assert the security-critical
+ * properties of the rule set so that a future rules change can't silently open a
+ * hole. A bad rules deploy makes ALL household data unreadable (the deploy is
+ * atomic with no staging — see plans/PRD.md §2), so this is the guardrail that
+ * must pass before any `firestore.rules` edit reaches `main`.
+ *
+ * Run:  pnpm test:rules
+ *
+ * Convention: test globals are imported explicitly from 'vitest' (matching the
+ * rest of the suite) rather than relying on `globals: true`, so `tsc --noEmit`
+ * stays clean under the project's strict config.
+ */
+import { readFileSync } from 'node:fs';
+import {
+  assertFails,
+  assertSucceeds,
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from '@firebase/rules-unit-testing';
+import {
+  doc,
+  collection,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  setLogLevel,
+  type Firestore,
+} from 'firebase/firestore';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, it } from 'vitest';
+
+// The emulator treats any `demo-*` project as offline-only (no real credentials,
+// never touches production). Must match the --project flag in `test:rules`.
+const PROJECT_ID = 'demo-lifebalance';
+const HOST = '127.0.0.1';
+const PORT = 8080;
+
+// --- Test principals -------------------------------------------------------
+const ALICE = 'alice-uid'; // admin + member of H1
+const BOB = 'bob-uid'; //   plain member of H1
+const CAROL = 'carol-uid'; // member of H2 (a different household)
+const DAVE = 'dave-uid'; //  authenticated but belongs to no household
+
+const H1 = 'household-1';
+const H2 = 'household-2';
+const INVITE_CODE = 'INVITE1'; // resolves to H1
+const FIXED_DATE = '2026-06-22'; // stable date string for aiUsage assertions
+
+let testEnv: RulesTestEnvironment;
+
+// rules-unit-testing@5's RulesTestContext.firestore() is *typed* as the legacy
+// compat `firebase.firestore.Firestore`, but at runtime it returns a modular
+// Firestore that the app's `firebase/firestore` functions (doc/setDoc/...)
+// operate on directly — this is the documented v9 usage pattern. The compat and
+// modular declarations don't structurally overlap, so bridge the type once here
+// at the boundary; the runtime object is the right one.
+type EmulatorFirestore = ReturnType<
+  ReturnType<RulesTestEnvironment['authenticatedContext']>['firestore']
+>;
+function asFirestore(db: EmulatorFirestore): Firestore {
+  return db as unknown as Firestore;
+}
+
+/** Firestore handle for a given principal (null uid = unauthenticated). */
+function dbFor(uid: string | null): Firestore {
+  const context = uid
+    ? testEnv.authenticatedContext(uid)
+    : testEnv.unauthenticatedContext();
+  return asFirestore(context.firestore());
+}
+
+/** Seed baseline data with rules bypassed, so each test starts from a known state. */
+async function seed(): Promise<void> {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = asFirestore(ctx.firestore());
+
+    await setDoc(doc(db, 'households', H1), {
+      name: 'Test Household',
+      memberUids: [ALICE, BOB],
+      createdBy: ALICE,
+      inviteCode: INVITE_CODE,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      aiUsage: { dailyCount: 2, lastResetDate: FIXED_DATE },
+    });
+    await setDoc(doc(db, 'households', H1, 'members', ALICE), {
+      displayName: 'Alice',
+      role: 'admin',
+    });
+    await setDoc(doc(db, 'households', H1, 'members', BOB), {
+      displayName: 'Bob',
+      role: 'member',
+    });
+    await setDoc(doc(db, 'households', H1, 'transactions', 'txn-seed'), {
+      amount: 10,
+      merchant: 'Seed Store',
+      category: 'Groceries',
+      date: '2026-06-01',
+      status: 'verified',
+    });
+    await setDoc(doc(db, 'households', H1, 'apiKeys', 'key-seed'), {
+      hashedKey: 'hash',
+      keyPrefix: 'lb_pre',
+      name: 'iOS Shortcut',
+      status: 'active',
+      permissions: ['habit'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      createdBy: ALICE,
+      usageCount: 0,
+    });
+
+    await setDoc(doc(db, 'households', H2), {
+      name: 'Other Household',
+      memberUids: [CAROL],
+      createdBy: CAROL,
+      inviteCode: 'OTHER1',
+    });
+    await setDoc(doc(db, 'households', H2, 'members', CAROL), {
+      displayName: 'Carol',
+      role: 'admin',
+    });
+
+    await setDoc(doc(db, 'inviteCodes', INVITE_CODE), { householdId: H1 });
+  });
+}
+
+beforeAll(async () => {
+  // Silence the noisy "permission denied" Firestore logs that assertFails expects.
+  setLogLevel('error');
+  testEnv = await initializeTestEnvironment({
+    projectId: PROJECT_ID,
+    firestore: {
+      // Resolve relative to cwd (the repo root, where `pnpm test:rules` runs).
+      rules: readFileSync('firestore.rules', 'utf8'),
+      host: HOST,
+      port: PORT,
+    },
+  });
+});
+
+afterAll(async () => {
+  await testEnv.cleanup();
+});
+
+beforeEach(async () => {
+  await testEnv.clearFirestore();
+  await seed();
+});
+
+afterEach(async () => {
+  await testEnv.clearFirestore();
+});
+
+describe('unauthenticated access', () => {
+  it('cannot read a household document', async () => {
+    await assertFails(getDoc(doc(dbFor(null), 'households', H1)));
+  });
+
+  it('cannot read a household subcollection (transactions)', async () => {
+    await assertFails(
+      getDoc(doc(dbFor(null), 'households', H1, 'transactions', 'txn-seed')),
+    );
+  });
+
+  it('cannot write a habit', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(null), 'households', H1, 'habits', 'h'), {
+        title: 'Read',
+        category: 'Health',
+      }),
+    );
+  });
+});
+
+describe('non-member access (authenticated, no membership)', () => {
+  it('cannot read the household document', async () => {
+    await assertFails(getDoc(doc(dbFor(DAVE), 'households', H1)));
+  });
+
+  it('cannot read household transactions', async () => {
+    await assertFails(
+      getDoc(doc(dbFor(DAVE), 'households', H1, 'transactions', 'txn-seed')),
+    );
+  });
+
+  it('cannot create a habit in a household it does not belong to', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(DAVE), 'households', H1, 'habits', 'h'), {
+        title: 'Sneaky',
+        category: 'Health',
+      }),
+    );
+  });
+
+  it('cannot read an arbitrary (catch-all) subcollection', async () => {
+    await assertFails(getDoc(doc(dbFor(DAVE), 'households', H1, 'lists', 'x')));
+  });
+});
+
+describe('cross-household isolation', () => {
+  it("a member of H2 cannot read H1's household document", async () => {
+    await assertFails(getDoc(doc(dbFor(CAROL), 'households', H1)));
+  });
+
+  it("a member of H2 cannot read H1's transactions", async () => {
+    await assertFails(
+      getDoc(doc(dbFor(CAROL), 'households', H1, 'transactions', 'txn-seed')),
+    );
+  });
+});
+
+describe('member access', () => {
+  it('can read its own household document', async () => {
+    await assertSucceeds(getDoc(doc(dbFor(BOB), 'households', H1)));
+  });
+
+  it('can read household transactions', async () => {
+    await assertSucceeds(
+      getDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-seed')),
+    );
+  });
+
+  it('can read a generic (catch-all) subcollection', async () => {
+    await assertSucceeds(getDoc(doc(dbFor(BOB), 'households', H1, 'lists', 'x')));
+  });
+
+  it('can create a well-formed transaction', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'txn-new'), {
+        amount: 25.5,
+        merchant: 'Coffee Shop',
+        category: 'Dining',
+        date: '2026-06-22',
+        status: 'pending_review',
+      }),
+    );
+  });
+
+  it('can create a well-formed habit', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'habit-new'), {
+        title: 'Read 30 minutes',
+        category: 'Health',
+      }),
+    );
+  });
+});
+
+describe('input validation', () => {
+  it('rejects a transaction with a non-numeric amount', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'bad-amount'), {
+        amount: 'twenty',
+        merchant: 'Store',
+        category: 'Misc',
+        date: '2026-06-22',
+      }),
+    );
+  });
+
+  it('rejects a transaction missing the required merchant field', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'transactions', 'no-merchant'), {
+        amount: 5,
+        category: 'Misc',
+        date: '2026-06-22',
+      }),
+    );
+  });
+
+  it('rejects a habit whose title exceeds the length cap', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'habits', 'too-long'), {
+        title: 'x'.repeat(101),
+        category: 'Health',
+      }),
+    );
+  });
+});
+
+describe('privilege-escalation prevention', () => {
+  it('a member cannot promote themselves to admin', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('a member can update their own display name', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', BOB), {
+        displayName: 'Bobby',
+      }),
+    );
+  });
+
+  it('an admin can change another member’s role', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(ALICE), 'households', H1, 'members', BOB), {
+        role: 'admin',
+      }),
+    );
+  });
+});
+
+describe('immutable household fields', () => {
+  it('a member cannot rewrite createdBy', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1), { createdBy: BOB }),
+    );
+  });
+
+  it('a member cannot rewrite the invite code', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1), { inviteCode: 'HACKED' }),
+    );
+  });
+});
+
+describe('AI usage quota integrity', () => {
+  it('allows incrementing the daily count by exactly one', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1), {
+        aiUsage: { dailyCount: 3, lastResetDate: FIXED_DATE },
+      }),
+    );
+  });
+
+  it('denies jumping the daily count by more than one', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1), {
+        aiUsage: { dailyCount: 99, lastResetDate: FIXED_DATE },
+      }),
+    );
+  });
+});
+
+describe('API keys are admin-only', () => {
+  it('a non-admin member cannot read API keys', async () => {
+    await assertFails(
+      getDoc(doc(dbFor(BOB), 'households', H1, 'apiKeys', 'key-seed')),
+    );
+  });
+
+  it('an admin can read API keys', async () => {
+    await assertSucceeds(
+      getDoc(doc(dbFor(ALICE), 'households', H1, 'apiKeys', 'key-seed')),
+    );
+  });
+});
+
+describe('invite codes', () => {
+  it('an authenticated user can fetch a single invite code by id', async () => {
+    await assertSucceeds(getDoc(doc(dbFor(DAVE), 'inviteCodes', INVITE_CODE)));
+  });
+
+  it('listing/enumerating invite codes is denied', async () => {
+    await assertFails(getDocs(collection(dbFor(DAVE), 'inviteCodes')));
+  });
+
+  it('invite codes cannot be modified', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(ALICE), 'inviteCodes', INVITE_CODE), {
+        householdId: H2,
+      }),
+    );
+  });
+});
+
+describe('joining via invite code', () => {
+  it('a new user can join as a non-admin member with a valid invite code', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(DAVE), 'households', H1, 'members', DAVE), {
+        displayName: 'Dave',
+        role: 'member',
+        inviteCode: INVITE_CODE,
+      }),
+    );
+  });
+
+  it('a new user cannot self-assign the admin role while joining', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(DAVE), 'households', H1, 'members', DAVE), {
+        displayName: 'Dave',
+        role: 'admin',
+        inviteCode: INVITE_CODE,
+      }),
+    );
+  });
+});
+
+describe('server-only collections', () => {
+  it('clients cannot create pendingItems (voice-command intake is Admin-SDK only)', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'pendingItems', 'p'), {
+        text: 'buy milk',
+        source: 'voice',
+        processed: false,
+      }),
+    );
+  });
+});

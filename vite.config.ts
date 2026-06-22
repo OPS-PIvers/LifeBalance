@@ -2,6 +2,7 @@
 import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { configDefaults } from 'vitest/config';
 
 export default defineConfig(({ command }) => {
     return {
@@ -14,6 +15,11 @@ export default defineConfig(({ command }) => {
         globals: true,
         environment: 'jsdom',
         setupFiles: './vitest.setup.ts',
+        // Firestore Security Rules tests (tests/rules/**) run against the
+        // Firestore emulator via a dedicated config (vitest.rules.config.ts,
+        // invoked by `pnpm test:rules`). Exclude them from the default jsdom
+        // run, which has no emulator.
+        exclude: [...configDefaults.exclude, 'tests/rules/**'],
         coverage: {
           provider: 'v8',
           include: ['**/*.{ts,tsx}'],

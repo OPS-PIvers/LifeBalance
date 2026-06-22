@@ -85,5 +85,14 @@
       "pnpm --filter functions run build"
     ],
     "runtime": "nodejs20"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "singleProjectMode": true,
+    "ui": {
+      "enabled": false
+    }
   }
 }
