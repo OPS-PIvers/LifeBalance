@@ -17,6 +17,13 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
+      # Cache the Firestore emulator jar (downloaded on first `pnpm test:rules`)
+      # so subsequent runs don't re-fetch ~60 MB.
+      - name: Cache Firebase emulators
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-firestore
       - name: Lint Root
         # We keep linting separate to clearly see which part fails (root or functions)
         run: pnpm lint
@@ -30,6 +37,13 @@ jobs:
         # up. Replaces the previous plain 'pnpm test' step (coverage runs the
         # tests too, so we don't run the suite twice).
         run: pnpm test:coverage
+      # Firestore Security Rules tests run against the Firestore emulator
+      # (ubuntu-latest ships a compatible JDK, so no extra Java setup needed).
+      # This gates every firestore.rules change: a bad rules deploy is atomic
+      # with no staging and can make all household data unreadable (see
+      # plans/PRD.md §2), so the rules must be proven before they reach main.
+      - name: Firestore Rules Tests
+        run: pnpm test:rules
       - name: Build Root (Dry Run)
         run: pnpm run build
         env:
