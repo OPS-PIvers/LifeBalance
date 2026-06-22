@@ -549,12 +549,11 @@ export const sendtestnotification = onCall(
       throw new HttpsError("not-found", "Member profile not found.");
     }
 
-    // Security check: Ensure the authenticated user is accessing their own profile
-    // Note: If admins should be allowed to test others' notifications, adjust this check.
-    // Here we strictly enforce self-testing.
-    if (userId !== request.auth.uid) {
-        throw new HttpsError("permission-denied", "You can only send test notifications to yourself.");
-    }
+    // No self-access guard is needed here: userId is request.auth.uid, so this
+    // callable only ever reads and notifies the caller's OWN member document
+    // (households/{householdId}/members/{userId}). The previous
+    // `userId !== request.auth.uid` check was dead code (always false) and has
+    // been removed.
 
     const memberData = memberDoc.data() as HouseholdMember;
     const tokens = memberData.fcmTokens;
