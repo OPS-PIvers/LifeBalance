@@ -46,7 +46,8 @@ import {
   transactionConverter,
   todoConverter,
 } from '@/utils/firestoreConverters';
-import { db } from '@/firebase.config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Account,
@@ -289,6 +290,7 @@ export interface HouseholdContextType {
   addMember: (memberData: Partial<HouseholdMember>) => Promise<void>;
   updateMember: (memberId: string, updates: Partial<HouseholdMember>) => Promise<void>;
   removeMember: (memberId: string) => Promise<void>;
+  deleteHousehold: () => Promise<void>;
 
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
@@ -392,7 +394,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'hasMoreInsights' | 'loadAllInsights'
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
-  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember'
+  | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
 >;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -3082,6 +3084,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  const deleteHousehold = useCallback(async () => {
+    if (!householdId) return;
+    const fn = httpsCallable(functions, 'deletehousehold');
+    await fn({ householdId });
+    toast.success('Household deleted');
+    // Hard reload so AuthContext re-resolves (no household -> routes to /setup) and
+    // all Firestore listeners tear down cleanly.
+    window.location.reload();
+  }, [householdId]);
+
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
@@ -3842,10 +3854,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addMember,
     updateMember,
     removeMember,
+    deleteHousehold,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
-    householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember,
+    householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
   ]);
 
   return (

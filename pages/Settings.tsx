@@ -25,7 +25,8 @@ import {
   FileJson,
   FileSpreadsheet,
   Smartphone,
-  Terminal
+  Terminal,
+  AlertTriangle
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -56,6 +57,7 @@ const Settings: React.FC = () => {
     addMember,
     updateMember,
     removeMember,
+    deleteHousehold,
     householdSettings,
     apiKeys,
   } = useHouseholdCore();
@@ -83,6 +85,10 @@ const Settings: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+
+  // Danger zone: delete household
+  const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
+  const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
 
   // Points Breakdown Modal
   const [activePointsView, setActivePointsView] = useState<'daily' | 'weekly' | 'total' | null>(null);
@@ -136,6 +142,19 @@ const Settings: React.FC = () => {
       console.error('Error removing member:', error);
     } finally {
       setIsRemovingMember(false);
+    }
+  };
+
+  const handleConfirmDeleteHousehold = async () => {
+    setIsDeletingHousehold(true);
+    try {
+      // On success this triggers a hard reload, so there is nothing to reset here.
+      await deleteHousehold();
+    } catch (error) {
+      console.error('Error deleting household:', error);
+      toast.error('Failed to delete household');
+      setIsDeletingHousehold(false);
+      setIsDeleteHouseholdOpen(false);
     }
   };
 
@@ -550,6 +569,45 @@ const Settings: React.FC = () => {
           </div>
         </CollapsibleCard>
 
+        {/* Danger Zone - admins only */}
+        {currentUser?.role === 'admin' && (
+          <Card className="overflow-hidden border-2 border-rose-200 dark:border-rose-900/60 bg-rose-50/40 dark:bg-rose-950/20">
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center shadow-xs">
+                  <AlertTriangle className="w-6 h-6 text-rose-600 dark:text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-rose-900 dark:text-rose-200 tracking-tight">
+                    Danger Zone
+                  </h3>
+                  <p className="text-sm text-rose-700/80 dark:text-rose-300/80 font-medium">
+                    Irreversible actions for this household
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-white/70 dark:bg-slate-900/40 border border-rose-200/70 dark:border-rose-900/50 p-4">
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                  Delete Household
+                </p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                  Permanently deletes this household and all of its data for every
+                  member. This cannot be undone.
+                </p>
+                <Button
+                  onClick={() => setIsDeleteHouseholdOpen(true)}
+                  variant="destructive"
+                  className="mt-4 w-full sm:w-auto"
+                  leftIcon={<Trash2 size={18} />}
+                >
+                  Delete Household
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+
         <CollapsibleCard
           id="data"
           title="Data Management"
@@ -704,6 +762,23 @@ const Settings: React.FC = () => {
         title="Remove member"
         confirmLabel="Remove"
         message={`Are you sure you want to remove ${memberToRemove?.displayName ?? 'this member'} from the household?`}
+      />
+
+      <ConfirmDialog
+        isOpen={isDeleteHouseholdOpen}
+        onClose={() => setIsDeleteHouseholdOpen(false)}
+        onConfirm={handleConfirmDeleteHousehold}
+        isConfirming={isDeletingHousehold}
+        title="Delete household?"
+        confirmLabel="Delete forever"
+        message={
+          <>
+            This permanently deletes <span className="font-semibold">{householdSettings.name}</span> and{' '}
+            <span className="font-semibold">all of its data</span> — habits, transactions, budgets, meals,
+            and everything else — for <span className="font-semibold">every member</span>, not just you.
+            This action cannot be undone. Only household admins can do this.
+          </>
+        }
       />
     </div>
   );
