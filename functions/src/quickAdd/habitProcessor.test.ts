@@ -444,3 +444,90 @@ describe("processToggleHabit — weekly habit streak multipliers", () => {
     expect(result?.multiplier).toBe(1.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// processToggleHabit — negative habit sign fix (GHSA-style regression tests)
+// ---------------------------------------------------------------------------
+
+describe("processToggleHabit — negative habit sign", () => {
+  /** Negative incremental habit (e.g. "Late night snack" -10 pts each). */
+  const negativeIncremental: Habit = {
+    ...baseHabit,
+    type: "negative",
+    scoringType: "incremental",
+    basePoints: 10,
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+  };
+
+  /** Negative threshold habit (e.g. "Skip exercise" -20 pts when reached). */
+  const negativeThreshold: Habit = {
+    ...baseHabit,
+    type: "negative",
+    scoringType: "threshold",
+    basePoints: 20,
+    targetCount: 1,
+    count: 0,
+    totalCount: 0,
+    completedDates: [],
+    streakDays: 0,
+  };
+
+  it("(a) negative incremental toggled up yields a NEGATIVE pointsChange", () => {
+    const result = processToggleHabit(negativeIncremental, "up");
+    expect(result).not.toBeNull();
+    // sign = -1, direction up → pointsChange = -1 * floor(10 * 1.0) = -10
+    expect(result!.pointsChange).toBe(-10);
+  });
+
+  it("(a) negative incremental toggled down yields a POSITIVE pointsChange (undo)", () => {
+    // When we undo a logged negative habit, the user gets those points back.
+    const withCount: Habit = { ...negativeIncremental, count: 1, totalCount: 1 };
+    const result = processToggleHabit(withCount, "down");
+    expect(result).not.toBeNull();
+    // sign = -1, direction down → pointsChange = -(-1) * floor(10 * 1.0) = +10
+    expect(result!.pointsChange).toBe(10);
+  });
+
+  it("(b) negative threshold habit reaching target yields a NEGATIVE pointsChange", () => {
+    const result = processToggleHabit(negativeThreshold, "up");
+    expect(result).not.toBeNull();
+    // sign = -1, threshold just-completed → pointsChange = -1 * floor(20 * 1.0) = -20
+    expect(result!.pointsChange).toBe(-20);
+  });
+
+  it("(b) negative threshold habit un-completing yields a POSITIVE pointsChange (undo)", () => {
+    const completed: Habit = {
+      ...negativeThreshold,
+      count: 1,
+      totalCount: 1,
+      completedDates: [today],
+    };
+    const result = processToggleHabit(completed, "down");
+    expect(result).not.toBeNull();
+    // sign = -1, threshold just-lost → pointsChange = -(-1) * floor(20 * 1.0) = +20
+    expect(result!.pointsChange).toBe(20);
+  });
+
+  it("(c) positive habit is byte-identical to pre-fix behaviour (sign=1 is a no-op)", () => {
+    // Positive habit with 6-day streak → prospective streak 7 → 2.0x multiplier.
+    const positiveHabit: Habit = {
+      ...baseHabit,
+      type: "positive",
+      scoringType: "threshold",
+      basePoints: 10,
+      targetCount: 1,
+      count: 0,
+      completedDates: buildDailyDates(yesterday, 6),
+      streakDays: 6,
+    };
+    const result = processToggleHabit(positiveHabit, "up");
+    expect(result).not.toBeNull();
+    expect(result!.multiplier).toBe(2.0);
+    // sign = 1 → pointsChange = 1 * floor(10 * 2.0) = 20
+    expect(result!.pointsChange).toBe(20);
+  });
+});
