@@ -119,6 +119,7 @@ export function processToggleHabit(
     habit.type === "positive",
     habit.period
   );
+  const sign = habit.type === "positive" ? 1 : -1;
 
   let isCompletedNow = false;
   let wasCompletedBefore = false;
@@ -126,9 +127,9 @@ export function processToggleHabit(
   if (habit.scoringType === "incremental") {
     // Incremental: Points on every action
     if (direction === "up") {
-      pointsChange = Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else {
-      pointsChange = -Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
     const target = habit.targetCount > 0 ? habit.targetCount : 1;
     isCompletedNow = newCount >= target;
@@ -140,9 +141,9 @@ export function processToggleHabit(
     wasCompletedBefore = habit.count >= target;
 
     if (isCompletedNow && !wasCompletedBefore) {
-      pointsChange = Math.floor(habit.basePoints * multiplier);
+      pointsChange = sign * Math.floor(habit.basePoints * multiplier);
     } else if (!isCompletedNow && wasCompletedBefore) {
-      pointsChange = -Math.floor(habit.basePoints * multiplier);
+      pointsChange = -sign * Math.floor(habit.basePoints * multiplier);
     }
   }
 

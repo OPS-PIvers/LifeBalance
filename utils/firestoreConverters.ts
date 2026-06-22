@@ -27,6 +27,7 @@
  *   to avoid touching atomic writeBatch sequences unnecessarily.
  */
 
+import { format } from 'date-fns';
 import {
   type FirestoreDataConverter,
   type QueryDocumentSnapshot,
@@ -113,14 +114,19 @@ export const bucketPeriodSnapshotConverter: FirestoreDataConverter<BucketPeriodS
 };
 
 // ---------------------------------------------------------------------------
-// CalendarItem
+// CalendarItem — normalizes legacy Timestamp `date` to a local yyyy-MM-dd string.
 // ---------------------------------------------------------------------------
 export const calendarItemConverter: FirestoreDataConverter<CalendarItem> = {
   toFirestore(item: CalendarItem): DocumentData {
     return omitKey(item, 'id');
   },
   fromFirestore(snapshot: QueryDocumentSnapshot): CalendarItem {
-    return { ...snapshot.data(), id: snapshot.id } as CalendarItem;
+    const d = snapshot.data();
+    return {
+      ...d,
+      id: snapshot.id,
+      date: d['date'] instanceof Timestamp ? format(d['date'].toDate(), 'yyyy-MM-dd') : d['date'],
+    } as CalendarItem;
   },
 };
 
