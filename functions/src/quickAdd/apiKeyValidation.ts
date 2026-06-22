@@ -193,9 +193,15 @@ export async function checkRateLimit(
       return { allowed: true };
     });
   } catch (error) {
-    logger.error("Error checking rate limit:", error);
-    // Fail open to not block legitimate requests on errors
-    return { allowed: true };
+    // Fail CLOSED: if the rate-limit bookkeeping read/write errors, deny the
+    // request rather than letting it through. The quickAdd endpoints are public
+    // (API-key auth only), so failing open would let an attacker bypass the
+    // limiter entirely by inducing Firestore errors — unbounded writes and
+    // Firebase billing amplification. The short retry window keeps a transient
+    // Firestore blip from locking a legitimate caller out for the full
+    // rate-limit window (callers honor the Retry-After header we return).
+    logger.error("Error checking rate limit (failing closed):", error);
+    return { allowed: false, retryAfterMs: 60 * 1000 };
   }
 }
 
