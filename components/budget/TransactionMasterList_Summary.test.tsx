@@ -33,6 +33,9 @@ vi.mock('react-hot-toast', () => ({
 vi.mock('@/components/modals/EditTransactionModal', () => ({ default: (): null => null }));
 vi.mock('@/components/modals/SplitTransactionModal', () => ({ default: (): null => null }));
 vi.mock('@/components/modals/BatchCategorizeModal', () => ({ default: (): null => null }));
+vi.mock('@/components/modals/CaptureTransactionManual', () => ({
+  CaptureTransactionManual: (): null => null,
+}));
 vi.mock('@/components/ui/Modal', () => ({ Modal: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 // Mock Lucide icons
@@ -57,6 +60,8 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div />,
   Plus: () => <div />,
   MoreVertical: () => <div />,
+  Receipt: () => <div />,
+  PlusCircle: () => <div />,
 }));
 
 describe('TransactionMasterList Summary Widget', () => {
@@ -97,6 +102,9 @@ describe('TransactionMasterList Summary Widget', () => {
       splitTransaction: vi.fn(),
       householdId: 'test-household',
       stores: [],
+      buckets: [],
+      accounts: [],
+      habits: [],
     });
   });
 

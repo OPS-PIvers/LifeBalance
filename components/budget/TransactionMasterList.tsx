@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useFinance, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
-import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors } from 'lucide-react';
+import { useFinance, useGamification, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
+import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Receipt, PlusCircle } from 'lucide-react';
 import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '@/types/schema';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import SplitTransactionModal from '@/components/modals/SplitTransactionModal';
 import BatchCategorizeModal from '@/components/modals/BatchCategorizeModal';
+import { CaptureTransactionManual } from '@/components/modals/CaptureTransactionManual';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Drawer } from '@/components/ui/Drawer';
@@ -26,6 +27,8 @@ const TransactionMasterList: React.FC = () => {
     deleteTransaction,
     updateTransaction,
     addTransaction,
+    accounts,
+    buckets: financeBuckets,
     hasMoreTransactions,
     isLoadingOlderTransactions,
     loadOlderTransactions,
@@ -34,6 +37,7 @@ const TransactionMasterList: React.FC = () => {
   } = useFinance();
   const { householdId } = useHouseholdCore();
   const { stores } = useShopping();
+  const { habits } = useGamification();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -46,6 +50,9 @@ const TransactionMasterList: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [storeFilter, setStoreFilter] = useState<string>('all');
+
+  // Add-first-transaction drawer state
+  const [isAddingFirst, setIsAddingFirst] = useState(false);
 
   // Edit Modal State
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -529,22 +536,45 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Transaction List */}
       {filteredTransactions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-          <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
-            <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+        transactions.length === 0 && searchTerm.trim() === '' && activeFilterCount === 0 ? (
+          /* Zero-data empty state: no transactions at all and no active filters */
+          <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-800/40">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4 text-slate-400 dark:text-slate-500">
+              <Receipt size={28} />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No transactions yet</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+              Start tracking your spending by adding your first transaction.
+            </p>
+            <Button
+              onClick={() => setIsAddingFirst(true)}
+              variant="primary"
+              size="md"
+              className="mt-5"
+              leftIcon={<PlusCircle size={16} />}
+            >
+              Add your first transaction
+            </Button>
           </div>
-          <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
-          <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
-            Nothing matches your current search and filters.
-          </p>
-          <Button
-            variant="link"
-            onClick={clearFilters}
-            className="mt-2 font-bold text-sm"
-          >
-            Clear all filters
-          </Button>
-        </div>
+        ) : (
+          /* Filter-empty state: transactions exist but none match the current search/filters */
+          <div className="flex flex-col items-center justify-center text-center py-12 px-6">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
+              <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+            </div>
+            <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
+            <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
+              Nothing matches your current search and filters.
+            </p>
+            <Button
+              variant="link"
+              onClick={clearFilters}
+              className="mt-2 font-bold text-sm"
+            >
+              Clear all filters
+            </Button>
+          </div>
+        )
       ) : (
         /*
          * Bounded scroll container — the virtualizer needs a fixed-height
@@ -876,6 +906,24 @@ const TransactionMasterList: React.FC = () => {
             )}
           </div>
         </div>
+      </Drawer>
+
+      {/* Add First Transaction Drawer (opened from zero-data empty state) */}
+      <Drawer
+        isOpen={isAddingFirst}
+        onClose={() => setIsAddingFirst(false)}
+        title="Add Transaction"
+      >
+        <CaptureTransactionManual
+          onAddTransaction={addTransaction}
+          onClose={() => setIsAddingFirst(false)}
+          dynamicCategories={financeBuckets.map(b => b.name)}
+          habits={habits}
+          transactions={transactions}
+          buckets={financeBuckets}
+          stores={stores}
+          accounts={accounts}
+        />
       </Drawer>
     </div>
   );
