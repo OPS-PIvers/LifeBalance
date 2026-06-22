@@ -2,6 +2,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  getAdditionalUserInfo,
   signOut as firebaseSignOut,
   User,
   type UserCredential,
@@ -9,6 +10,21 @@ import {
 import { FirebaseError } from 'firebase/app';
 import { auth, googleProvider } from '@/firebase.config';
 import { isPWA } from '@/services/notificationService';
+import { track } from '@/services/analytics';
+
+/**
+ * Emit an activation analytics event for a completed sign-in, distinguishing a
+ * brand-new account (`sign_up`) from a returning user (`login`). Fully
+ * defensive — analytics must never interfere with authentication.
+ */
+function trackSignIn(result: UserCredential): void {
+  try {
+    const isNewUser = getAdditionalUserInfo(result)?.isNewUser ?? false;
+    track(isNewUser ? 'sign_up' : 'login', { method: 'google' });
+  } catch {
+    // Never let analytics break the sign-in flow.
+  }
+}
 
 // Popup failures that mean "this environment can't do popups" — fall back to
 // the full-page redirect flow instead of surfacing an error to the user.
@@ -38,6 +54,7 @@ export const signInWithGoogle = async (): Promise<User | null> => {
 
   try {
     const result = await signInWithPopup(auth, googleProvider);
+    trackSignIn(result);
     return result.user;
   } catch (error: unknown) {
     if (error instanceof FirebaseError && POPUP_UNSUPPORTED_CODES.has(error.code)) {
@@ -66,7 +83,8 @@ export const completeRedirectSignIn = async (): Promise<void> => {
   // Resolves with null when there is no pending redirect, so this is a cheap
   // no-op on normal app loads.
   redirectResultPromise ??= getRedirectResult(auth);
-  await redirectResultPromise;
+  const result = await redirectResultPromise;
+  if (result) trackSignIn(result);
 };
 
 /**
