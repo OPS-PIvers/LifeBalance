@@ -202,9 +202,12 @@ Each phase has an **exit criterion** — don't move on until you hit it.
   here's next week." This is the retention heartbeat.
 - **Referral mechanics:** invite N friends → free month. (Couples invites are organic;
   *friend* invites are the growth lever.)
-- **Real AI insights** (today `refreshInsight` returns randomized strings — `TODO.md`):
-  wire it to actual spending/habit data. This is a marquee differentiator and a retention
-  driver.
+- **Make AI insights proactive.** The integration already exists — `refreshInsight`
+  (`contexts/FirebaseHouseholdContext.tsx:3614`) is wired to `generateInsight` and produces
+  real, actionable insights from transaction + habit data on demand. The retention
+  opportunity is making them *automatic* (surfaced in the weekly recap, on dashboard load,
+  or when spending patterns shift) rather than only when a user taps refresh. This is a
+  marquee differentiator and a retention driver.
 - **Streaks/notifications tuned for habit formation** (the literature is clear: timely,
   personal nudges drive DAU).
 - **Exit:** flat-to-rising retention curve (the "smile") and a viral coefficient you can
@@ -266,7 +269,7 @@ solo, in your spare time.** Tiers:
 | **Delightful partner-invite flow** | Built-in virality | One-tap shareable link; replace buried 6-char code. |
 | **Marketing/landing page + waitlist** | Distribution | Static site (Framer/Carrd) or a public Vite route. |
 | **Fix unbounded listeners (`todo/14`)** | Breaks at scale | Window meals/calendar/grocery + add indexes. |
-| **Real AI insights** (replace random strings) | Marquee differentiator | Wire `refreshInsight` to real data via the proxy. |
+| **Proactive AI insights** (auto-surface, not just on-tap) | Marquee differentiator | Integration exists; trigger it automatically (recap/dashboard/pattern-shift). |
 | **Weekly household recap (email/push)** | Retention heartbeat | Scheduled function + a digest template. |
 | **E2E test skeleton (Playwright)** | Confidence to ship fast | Cover signup → add account → add habit. |
 | **Context test coverage** | Guard your riskiest file | The 3.8k-line context owns every money mutation. |
@@ -364,7 +367,8 @@ account deletion (B3). Stand up a landing page with a waitlist. Fix the unbounde
 listeners. _Exit: flip off the allowlist, let real strangers in, watch the funnel._
 
 **Days 61–90 — Find the loop, then charge.**
-Wire real AI insights. Ship the weekly recap. Watch Week-4 retention. **Only once people
+Make AI insights proactive (auto-surface them). Ship the weekly recap. Watch Week-4
+retention. **Only once people
 come back on their own,** start Stripe billing. _Exit: first dollar from a stranger, and a
 retention number you'd put on a slide._
 
@@ -381,7 +385,7 @@ retention number you'd put on a slide._
 | Monolithic state (split candidate) | `contexts/FirebaseHouseholdContext.tsx` (~3.8k lines) |
 | Cloud Functions (billing/deletion go here) | `functions/src/` |
 | Onboarding entry points | `pages/Login.tsx`, `pages/HouseholdSetup.tsx` |
-| Random-string insights (make real) | context `refreshInsight` + `TODO.md` |
+| AI insights (make proactive/automatic) | context `refreshInsight` (`:3614`) + `generateInsight` |
 | Deferred scale work | `todo/04`, `todo/14`, `todo/18`, `todo/19` |
 
 ---
