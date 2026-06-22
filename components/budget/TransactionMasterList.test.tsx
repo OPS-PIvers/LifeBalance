@@ -69,6 +69,14 @@ vi.mock('@/components/ui/Modal', () => ({
     ) : null
 }));
 
+vi.mock('@/components/modals/CaptureTransactionManual', () => ({
+  CaptureTransactionManual: ({ onClose }: { onClose: () => void }) => (
+    <div data-testid="capture-transaction-manual">
+      <button onClick={onClose}>Close capture</button>
+    </div>
+  ),
+}));
+
 // Mock Lucide icons
 vi.mock('lucide-react', () => ({
   Search: () => <div data-testid="search-icon" />,
@@ -91,6 +99,8 @@ vi.mock('lucide-react', () => ({
   Bookmark: () => <div data-testid="bookmark-icon" />,
   Plus: () => <div data-testid="plus-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  Receipt: () => <div data-testid="receipt-icon" />,
+  PlusCircle: () => <div data-testid="plus-circle-icon" />,
 }));
 
 // ---------------------------------------------------------------------------
@@ -222,6 +232,9 @@ describe('TransactionMasterList', () => {
     splitTransaction: mockSplitTransaction,
     householdId: 'test-household',
     stores: [],
+    buckets: [],
+    accounts: [],
+    habits: [],
     hasMoreTransactions: false,
     isLoadingOlderTransactions: false,
     loadOlderTransactions: vi.fn(),
@@ -280,6 +293,20 @@ describe('TransactionMasterList', () => {
 
       expect(screen.getByText('No transactions found')).toBeInTheDocument();
       expect(screen.getByText('Clear all filters')).toBeInTheDocument();
+    });
+
+    it('renders zero-data empty state when there are no transactions and no filters', () => {
+      vi.mocked(useHousehold).mockReturnValue({
+        ...defaultMockValue(),
+        transactions: [],
+      } as unknown as ReturnType<typeof useHousehold>);
+
+      render(<TransactionMasterList />);
+
+      expect(screen.getByText('No transactions yet')).toBeInTheDocument();
+      expect(screen.getByText('Add your first transaction')).toBeInTheDocument();
+      // Filter-empty copy should NOT appear
+      expect(screen.queryByText('No transactions found')).not.toBeInTheDocument();
     });
   });
 
