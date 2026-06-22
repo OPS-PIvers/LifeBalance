@@ -16,6 +16,13 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
+      # firebase-tools >=15 requires a JDK >=21 to run the Firestore emulator
+      # used by the "Firestore Rules Tests" step below. The runner's default JDK
+      # is older, so pin 21 explicitly.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
       - run: pnpm install --frozen-lockfile
       # Cache the Firestore emulator jar (downloaded on first `pnpm test:rules`)
       # so subsequent runs don't re-fetch ~60 MB.
