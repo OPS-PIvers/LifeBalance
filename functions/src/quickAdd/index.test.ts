@@ -207,6 +207,13 @@ function configureRateLimit(allowed: boolean): void {
   );
 }
 
+/** Configure checkRateLimit's runTransaction to throw (Firestore error → must fail closed). */
+function configureRateLimitError(): void {
+  adminMock.db.runTransaction.mockRejectedValue(
+    new Error("firestore unavailable")
+  );
+}
+
 /** logApiCall writes to db.collection('logs/api_calls/requests').add(...). */
 const logAddMock = vi.fn(() => Promise.resolve({ id: "log1" }));
 
@@ -363,6 +370,17 @@ describe("quickAdd common HTTP-layer behavior", () => {
 
   it("rate limit exceeded returns 429 RATE_LIMITED and sets Retry-After", async () => {
     configureRateLimit(false);
+    const res = makeRes();
+    await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
+    expect(res.statusCode).toBe(429);
+    expect(res.body).toMatchObject({ error: { code: "RATE_LIMITED" } });
+    expect(res.headers["Retry-After"]).toBeDefined();
+  });
+
+  it("rate-limit check ERROR fails CLOSED (429), never open", async () => {
+    // A Firestore error during the limit check must DENY the request, not grant
+    // it — otherwise the public endpoints could be flooded by inducing errors.
+    configureRateLimitError();
     const res = makeRes();
     await asHandler(quickAddHabit)(makeReq({ body: { habitId: "h1" } }), res);
     expect(res.statusCode).toBe(429);
