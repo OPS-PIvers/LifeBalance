@@ -9,10 +9,12 @@ import {
 // Mock the firebase config so importing authService doesn't initialize a real app.
 vi.mock('@/firebase.config', () => ({ auth: {}, googleProvider: {} }));
 vi.mock('@/services/notificationService', () => ({ isPWA: vi.fn() }));
+vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 vi.mock('firebase/auth', () => ({
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
   getRedirectResult: vi.fn(),
+  getAdditionalUserInfo: vi.fn(),
   signOut: vi.fn(),
 }));
 
@@ -57,6 +59,42 @@ describe('authService', () => {
 
       expect(result).toBe(user);
       expect(signInWithRedirect).not.toHaveBeenCalled();
+    });
+
+    it('tracks sign_up for a new user on popup sign-in', async () => {
+      const { isPWA } = await import('@/services/notificationService');
+      const { getAdditionalUserInfo } = await import('firebase/auth');
+      const { track } = await import('@/services/analytics');
+      const { signInWithGoogle } = await import('@/services/authService');
+      vi.mocked(isPWA).mockReturnValue(false);
+      vi.mocked(signInWithPopup).mockResolvedValue({
+        user: { uid: 'u1' },
+      } as unknown as Awaited<ReturnType<typeof signInWithPopup>>);
+      vi.mocked(getAdditionalUserInfo).mockReturnValue({
+        isNewUser: true,
+      } as unknown as ReturnType<typeof getAdditionalUserInfo>);
+
+      await signInWithGoogle();
+
+      expect(track).toHaveBeenCalledWith('sign_up', { method: 'google' });
+    });
+
+    it('tracks login for a returning user on popup sign-in', async () => {
+      const { isPWA } = await import('@/services/notificationService');
+      const { getAdditionalUserInfo } = await import('firebase/auth');
+      const { track } = await import('@/services/analytics');
+      const { signInWithGoogle } = await import('@/services/authService');
+      vi.mocked(isPWA).mockReturnValue(false);
+      vi.mocked(signInWithPopup).mockResolvedValue({
+        user: { uid: 'u1' },
+      } as unknown as Awaited<ReturnType<typeof signInWithPopup>>);
+      vi.mocked(getAdditionalUserInfo).mockReturnValue({
+        isNewUser: false,
+      } as unknown as ReturnType<typeof getAdditionalUserInfo>);
+
+      await signInWithGoogle();
+
+      expect(track).toHaveBeenCalledWith('login', { method: 'google' });
     });
 
     it('falls back to redirect (returns null) when popup fails with auth/popup-blocked', async () => {
