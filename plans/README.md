@@ -19,6 +19,7 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#646](https://github.com/OPS-PIvers/LifeBalance/pull/646) | **004** Content-Security-Policy (Report-Only) + header hardening | **MERGED + DEPLOYED + VERIFIED LIVE** — header served; 0 violations on login; enforce-flip documented |
 | [#644](https://github.com/OPS-PIvers/LifeBalance/pull/644) | **008** Firebase Analytics foundation + `sign_up`/`login` events | **MERGED + DEPLOYED + VERIFIED LIVE** — 0 console errors; GA4 beacons firing (`tid=G-JJNX8HYJZK`) |
 | [#643](https://github.com/OPS-PIvers/LifeBalance/pull/643) | **012** Remove dead `sendtestnotification` self-access guard | **MERGED + DEPLOYED** |
 | [#642](https://github.com/OPS-PIvers/LifeBalance/pull/642) | **006** Rate limiter fails **closed** on Firestore errors (was fail-open → billing/abuse risk) | **MERGED + DEPLOYED** |
@@ -26,6 +27,12 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | [#640](https://github.com/OPS-PIvers/LifeBalance/pull/640) | **021** Budget zero-data empty state with add-first-transaction CTA | **MERGED + DEPLOYED** |
 | [#639](https://github.com/OPS-PIvers/LifeBalance/pull/639) | **001** protobufjs RCE patch + **002** server habit-sign bug + **003** calendar-converter bill-drop | **MERGED + DEPLOYED + VERIFIED** |
 | [#638](https://github.com/OPS-PIvers/LifeBalance/pull/638) | The planning set (PRD + plans + audit) | **MERGED** |
+
+## 🔶 Open for your review (NOT auto-merged)
+
+| PR | What | Why it's gated |
+|----|------|----------------|
+| [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) | **007** `deleteHousehold` Cloud Function + admin-only Danger Zone UI | **Destructive**, and the recursive cascade can't be safely exercised against prod from here. Built + 7 unit tests + lint/build/context-tests green. **Review it, then verify the first real deletion against a throwaway household before merging.** |
 
 ## Status table
 
@@ -36,10 +43,10 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | 003 | Patch protobufjs RCE via `pnpm.overrides` | 0 | C | LOW | ✅ DONE (#639) |
 | 021 | Budget zero-data empty state + CTA | 1 | C | LOW | ✅ DONE (#640) |
 | 005 | "Download all my data" (B4) | 0 | C | — | ✅ **ALREADY DONE on `main`** — see note below. Minor follow-up only. |
-| 004 | Content-Security-Policy + header hardening | 0 | C | MED | TODO (needs in-browser verification it doesn't break Gemini/Firebase/fonts) |
+| 004 | Content-Security-Policy + header hardening | 0 | C | MED | ✅ DONE (#646) — **Report-Only** deployed + verified live (0 violations on login). Flip-to-enforce needs authed-path verify + inline-script hashes (runbook in PR) |
 | 006 | Rate limiter must fail **closed** (quickAdd) | 0 | C | MED | ✅ DONE (#642) |
 | 012 | Remove dead `sendtestnotification` guard | 0 | C | LOW | ✅ DONE (#643) — `isTimeToSend` confirmed intentional; retry-dedup is the real follow-up |
-| 007 | `deleteHousehold` Cloud Function + confirm-to-delete UI (B3) | 0 | C→H | MED | TODO |
+| 007 | `deleteHousehold` Cloud Function + confirm-to-delete UI (B3) | 0 | C→H | MED | 🔶 **PR #647 OPEN — review before merge** (built + 7 tests; destructive → verify first deletion) |
 | 008 | Firebase Analytics instrumentation (measurementId already in env) | 0 | C | LOW | ✅ DONE (#644) — verified live (GA4 beacons firing); `sign_up`/`login` wired, more events trivial follow-ups |
 | 009 | Remove hardcoded admin UID after claim provisioned (B2) | 0 | C→H | HIGH | TODO (blocked on Human-Checklist #3) |
 | 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
@@ -62,23 +69,25 @@ nearest related plan as those files are touched.
 
 ## Recommended next steps
 
-Phase-0 `[C]` safety items **006, 008, 010, 012 are shipped + deployed + live-verified** (see table).
-Remaining, in order:
+Phase-0 `[C]` safety items **004, 006, 008, 010, 012 are shipped + deployed + live-verified**, and
+**007 is built and waiting in [PR #647](https://github.com/OPS-PIvers/LifeBalance/pull/647)** (see the
+tables above). What's left:
 
-1. **004 (CSP)** — the last pure-`[C]` Phase-0 safety item. Now lower-risk to land: the live
-   in-browser smoke-test loop is working (Playwright → `lifebalance-26080.web.app`), so a CSP that
-   broke Firebase / Gemini / Google Fonts / FCM / analytics would surface immediately as console
-   errors and can be caught before it reaches users.
-2. **007 (`deleteHousehold`)** — `[C→H]`; Claude builds the Cloud Function + confirm-to-delete UI +
-   tests now; a human triggers the first real deletion to verify.
-3. **014 (Gemini proxy)** — `[C→H]`; Claude builds the proxy fn + client switch; human sets the
-   `GEMINI_API_KEY` server secret (Human-Checklist #2).
-4. **015 (money-model investigation)** — characterization tests only, zero prod risk; documents the
-   pending-txn double-count before any fix is attempted.
-5. **020 (onboarding)** — the highest-ROI Phase-1 activation work once Phase 0 is closed.
+**Needs you (human):**
+1. **Review + merge #647 (007 `deleteHousehold`)**, then verify the first real deletion against a
+   throwaway household.
+2. The Human-Only Checklist (PRD §4): set the `GEMINI_API_KEY` secret (after #014 lands), provision the
+   `admin` claim (B2 / #009), lock down the Gemini key in Cloud Console, and — recommended — **enable
+   branch protection on `main`** requiring the CI `validate` check. Right now PRs can merge without CI
+   passing, so the new rules-test gate only protects `main` once it's a required check.
 
-The `[C→H]` items (009 / 011 / 013 / 014 / 007) are Claude-buildable now; they wait only on the
-Human-Only Checklist (PRD §4).
+**Claude-buildable next (fully autonomous, low risk):**
+3. **014 (Gemini proxy)** — `[C→H]`; build the proxy Cloud Function + client switch (dormant until the
+   human sets the secret). Moves the API key off the client.
+4. **015 (money-model investigation)** — characterization tests + a written analysis of the pending-txn
+   double-count. Zero prod risk; do **not** auto-fix.
+5. **020 (onboarding wizard)** + **022 (invite link)** — highest-ROI activation work; verifiable locally
+   via Test Mode (`?test=true`) + Playwright. Best reviewed *with* you for UX judgment.
 
 ### Minor follow-ups noted during execution
 - **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
