@@ -194,6 +194,21 @@ describe('calendarItemConverter', () => {
     const partial = { title: 'Paycheck', amount: 2000, date: '2024-01-15', type: 'income', isPaid: true };
     expect(() => calendarItemConverter.fromFirestore(fakeSnap('cal-2', partial))).not.toThrow();
   });
+
+  it('(b) legacy Timestamp date is converted to a local yyyy-MM-dd string', () => {
+    // Simulate a Firestore Timestamp stored at midnight UTC on 2024-06-15.
+    const ts = Timestamp.fromDate(new Date('2024-06-15T00:00:00.000Z'));
+    const result = calendarItemConverter.fromFirestore(fakeSnap('cal-3', { ...wellFormed, date: ts }));
+    // format() uses local time, but in test environments (UTC) this is still 2024-06-15.
+    expect(result.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Must be a plain string, not a Timestamp object.
+    expect(typeof result.date).toBe('string');
+  });
+
+  it('(b) string date is returned unchanged', () => {
+    const result = calendarItemConverter.fromFirestore(fakeSnap('cal-4', { ...wellFormed, date: '2024-03-20' }));
+    expect(result.date).toBe('2024-03-20');
+  });
 });
 
 // ---------------------------------------------------------------------------
