@@ -19,9 +19,13 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
-| [#639](https://github.com/OPS-PIvers/LifeBalance/pull/639) | **001** protobufjs RCE patch + **002** server habit-sign bug + **003** calendar-converter bill-drop | **MERGED + DEPLOYED + VERIFIED** |
+| [#644](https://github.com/OPS-PIvers/LifeBalance/pull/644) | **008** Firebase Analytics foundation + `sign_up`/`login` events | **MERGED + DEPLOYED + VERIFIED LIVE** — 0 console errors; GA4 beacons firing (`tid=G-JJNX8HYJZK`) |
+| [#643](https://github.com/OPS-PIvers/LifeBalance/pull/643) | **012** Remove dead `sendtestnotification` self-access guard | **MERGED + DEPLOYED** |
+| [#642](https://github.com/OPS-PIvers/LifeBalance/pull/642) | **006** Rate limiter fails **closed** on Firestore errors (was fail-open → billing/abuse risk) | **MERGED + DEPLOYED** |
+| [#641](https://github.com/OPS-PIvers/LifeBalance/pull/641) | **010** Firestore rules unit tests (32 assertions) + emulator harness + CI gate (JDK 21 pinned) | **MERGED + DEPLOYED + VERIFIED** |
 | [#640](https://github.com/OPS-PIvers/LifeBalance/pull/640) | **021** Budget zero-data empty state with add-first-transaction CTA | **MERGED + DEPLOYED** |
-| [#638](https://github.com/OPS-PIvers/LifeBalance/pull/638) | This planning set (PRD + plans + audit) | **OPEN — your review** |
+| [#639](https://github.com/OPS-PIvers/LifeBalance/pull/639) | **001** protobufjs RCE patch + **002** server habit-sign bug + **003** calendar-converter bill-drop | **MERGED + DEPLOYED + VERIFIED** |
+| [#638](https://github.com/OPS-PIvers/LifeBalance/pull/638) | The planning set (PRD + plans + audit) | **MERGED** |
 
 ## Status table
 
@@ -33,12 +37,12 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | 021 | Budget zero-data empty state + CTA | 1 | C | LOW | ✅ DONE (#640) |
 | 005 | "Download all my data" (B4) | 0 | C | — | ✅ **ALREADY DONE on `main`** — see note below. Minor follow-up only. |
 | 004 | Content-Security-Policy + header hardening | 0 | C | MED | TODO (needs in-browser verification it doesn't break Gemini/Firebase/fonts) |
-| 006 | Rate limiter must fail **closed** (quickAdd) | 0 | C | MED | TODO |
-| 012 | Remove dead `sendtestnotification` guard | 0 | C | LOW | TODO (minor; the `isTimeToSend` "minute" item was a misread — hour-only is intentional relaxed matching; real follow-up is retry-dedup) |
+| 006 | Rate limiter must fail **closed** (quickAdd) | 0 | C | MED | ✅ DONE (#642) |
+| 012 | Remove dead `sendtestnotification` guard | 0 | C | LOW | ✅ DONE (#643) — `isTimeToSend` confirmed intentional; retry-dedup is the real follow-up |
 | 007 | `deleteHousehold` Cloud Function + confirm-to-delete UI (B3) | 0 | C→H | MED | TODO |
-| 008 | Firebase Analytics instrumentation (measurementId already in env) | 0 | C | LOW | TODO (defensive `isSupported()`+try/catch init; verify live boot after deploy) |
+| 008 | Firebase Analytics instrumentation (measurementId already in env) | 0 | C | LOW | ✅ DONE (#644) — verified live (GA4 beacons firing); `sign_up`/`login` wired, more events trivial follow-ups |
 | 009 | Remove hardcoded admin UID after claim provisioned (B2) | 0 | C→H | HIGH | TODO (blocked on Human-Checklist #3) |
-| 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | TODO (zero prod risk — tests only; unblocks all rules changes) |
+| 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
 | 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
 | 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
 | 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | TODO |
@@ -56,15 +60,31 @@ Lower-severity audit findings not yet ticketed (atomicity MEDs CORRECTNESS-02/04
 PERF-04/05, DEPS-04/05/06, DX-03/05) are catalogued in [`audit/`](./audit/) and should be folded into the
 nearest related plan as those files are touched.
 
-## Recommended next steps (for the next session)
+## Recommended next steps
 
-1. **010 (rules tests)** — zero prod risk, unblocks every future rules change. Do this before 009.
-2. **004 (CSP)** + **006 (rate-limit fail-closed)** — the remaining Phase-0 safety items; 004 needs a
-   live in-browser check that the policy doesn't block Gemini/Firebase/Google Fonts/FCM.
-3. **008 (analytics)** — start measuring activation/retention; defensive init, verify boot live.
-4. **020 (onboarding)** — the highest-ROI Phase-1 work once Phase 0 is closed.
-5. The `[C→H]` items (009/011/013/014/007) — Claude can build them now; they wait on the
-   Human-Only Checklist (PRD §4).
+Phase-0 `[C]` safety items **006, 008, 010, 012 are shipped + deployed + live-verified** (see table).
+Remaining, in order:
+
+1. **004 (CSP)** — the last pure-`[C]` Phase-0 safety item. Now lower-risk to land: the live
+   in-browser smoke-test loop is working (Playwright → `lifebalance-26080.web.app`), so a CSP that
+   broke Firebase / Gemini / Google Fonts / FCM / analytics would surface immediately as console
+   errors and can be caught before it reaches users.
+2. **007 (`deleteHousehold`)** — `[C→H]`; Claude builds the Cloud Function + confirm-to-delete UI +
+   tests now; a human triggers the first real deletion to verify.
+3. **014 (Gemini proxy)** — `[C→H]`; Claude builds the proxy fn + client switch; human sets the
+   `GEMINI_API_KEY` server secret (Human-Checklist #2).
+4. **015 (money-model investigation)** — characterization tests only, zero prod risk; documents the
+   pending-txn double-count before any fix is attempted.
+5. **020 (onboarding)** — the highest-ROI Phase-1 activation work once Phase 0 is closed.
+
+The `[C→H]` items (009 / 011 / 013 / 014 / 007) are Claude-buildable now; they wait only on the
+Human-Only Checklist (PRD §4).
+
+### Minor follow-ups noted during execution
+- **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
+  and are auto-upgraded to Node 24 (non-blocking warning). Bump to newer action majors when available.
+- **PWA meta tag:** `index.html` still uses the deprecated `<meta name="apple-mobile-web-app-capable">`;
+  add `<meta name="mobile-web-app-capable" content="yes">` (the only console warning on the live app).
 
 ## Findings reframed / corrected during execution
 
