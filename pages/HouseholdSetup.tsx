@@ -1,21 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createHousehold, joinHousehold, getHouseholdDetails } from '@/services/householdService';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import { parseInviteCode } from '@/utils/inviteLink';
 import toast from 'react-hot-toast';
 
 type ViewMode = 'choice' | 'create' | 'join' | 'success';
 
 const HouseholdSetup: React.FC = () => {
-  const [mode, setMode] = useState<ViewMode>('choice');
-  const [loading, setLoading] = useState(false);
-  const [householdName, setHouseholdName] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [createdInviteCode, setCreatedInviteCode] = useState('');
   const { user, householdId, loading: authLoading, setHouseholdId } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Deep-link support: if arriving via a shared invite link (?invite=CODE),
+  // pre-fill the code and open the join view straight away. Derived once at
+  // mount from the URL (which HashRouter has available on first render) so we
+  // avoid a setState-in-effect cascade. We intentionally do NOT auto-submit —
+  // the user still confirms by clicking Join.
+  const initialInviteCode = parseInviteCode(searchParams.toString());
+
+  const [mode, setMode] = useState<ViewMode>(initialInviteCode ? 'join' : 'choice');
+  const [loading, setLoading] = useState(false);
+  const [householdName, setHouseholdName] = useState('');
+  const [inviteCode, setInviteCode] = useState(initialInviteCode ?? '');
+  const [createdInviteCode, setCreatedInviteCode] = useState('');
 
   // Redirect if already has household
   useEffect(() => {
