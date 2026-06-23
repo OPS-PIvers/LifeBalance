@@ -137,11 +137,31 @@ describe("geminiproxy", () => {
     });
   });
 
-  it("maps an SDK failure to an internal HttpsError", async () => {
-    generateContentMock.mockRejectedValue(new Error("upstream 503"));
+  it("maps an unknown SDK failure to an internal HttpsError", async () => {
+    generateContentMock.mockRejectedValue(new Error("boom"));
 
     await expect(
       asCallable(geminiproxy)({ auth: AUTH, data: VALID_DATA })
     ).rejects.toMatchObject({ code: "internal" });
+  });
+
+  it("maps a Gemini 503 to a retryable 'unavailable' HttpsError", async () => {
+    generateContentMock.mockRejectedValue(
+      Object.assign(new Error("UNAVAILABLE"), { status: 503 })
+    );
+
+    await expect(
+      asCallable(geminiproxy)({ auth: AUTH, data: VALID_DATA })
+    ).rejects.toMatchObject({ code: "unavailable" });
+  });
+
+  it("maps a Gemini 429 to a retryable 'resource-exhausted' HttpsError", async () => {
+    generateContentMock.mockRejectedValue(
+      Object.assign(new Error("RESOURCE_EXHAUSTED"), { status: 429 })
+    );
+
+    await expect(
+      asCallable(geminiproxy)({ auth: AUTH, data: VALID_DATA })
+    ).rejects.toMatchObject({ code: "resource-exhausted" });
   });
 });

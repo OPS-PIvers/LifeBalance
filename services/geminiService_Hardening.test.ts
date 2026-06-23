@@ -83,13 +83,16 @@ describe('geminiService hardening - JSON validation (finding 1.1)', () => {
       .rejects.toThrow(/unexpected response/);
   });
 
-  it('refunds the quota unit when a response is rejected', async () => {
+  it('does NOT refund the quota unit on failure (failed calls consume quota)', async () => {
     const { generateInsight } = await import('./geminiService');
     generateContentMock.mockResolvedValue({ text: JSON.stringify({ text: 123 }) });
 
     await expect(generateInsight('hh', [], [])).rejects.toThrow();
-    // The refund transaction decrements aiUsage back down.
-    expect(txnUpdateMock).toHaveBeenCalledWith(
+    // A client-side refund (-1) is rejected by firestore.rules (only +1 allowed),
+    // which used to spray a 403 + audit-log-permission cascade in the console. The
+    // refund was removed (Plan 014): the up-front increment stands, with no
+    // compensating decrement.
+    expect(txnUpdateMock).not.toHaveBeenCalledWith(
       expect.anything(),
       { aiUsage: { dailyCount: 0, lastResetDate: expect.any(String) } },
     );

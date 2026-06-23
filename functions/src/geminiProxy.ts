@@ -40,6 +40,24 @@ interface GeminiProxyResult {
   text: string | undefined;
 }
 
+/**
+ * Best-effort HTTP status extraction from an upstream Gemini SDK error. The
+ * @google/genai ApiError carries a numeric `status` (e.g. 503); some shapes use
+ * the string enum (e.g. "UNAVAILABLE"). Returns undefined when no status is found.
+ */
+const httpStatusOf = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return undefined;
+  }
+  const status = (error as { status?: unknown }).status;
+  if (typeof status === "number") return status;
+  if (typeof status === "string") {
+    if (status === "UNAVAILABLE") return 503;
+    if (status === "RESOURCE_EXHAUSTED") return 429;
+  }
+  return undefined;
+};
+
 export const geminiproxy = onCall(
   {
     secrets: [geminiApiKey],
@@ -91,6 +109,18 @@ export const geminiproxy = onCall(
       return { text: response.text };
     } catch (error) {
       logger.error("geminiproxy generateContent failed:", error);
+      // Preserve the transient-ness of upstream Gemini errors so the client's
+      // retry logic (isTransientError + withTimeoutAndRetry) can retry them. A
+      // generic "internal" reads as non-transient client-side, which would turn a
+      // momentary Gemini 503/429 into a visible failure that the direct SDK path
+      // used to retry transparently (Plan 014).
+      const status = httpStatusOf(error);
+      if (status === 503) {
+        throw new HttpsError("unavailable", "Gemini is temporarily unavailable.");
+      }
+      if (status === 429) {
+        throw new HttpsError("resource-exhausted", "Gemini rate limit reached.");
+      }
       throw new HttpsError("internal", "Gemini request failed.");
     }
   }
