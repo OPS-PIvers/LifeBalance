@@ -19,6 +19,11 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#657](https://github.com/OPS-PIvers/LifeBalance/pull/657) + [#656](https://github.com/OPS-PIvers/LifeBalance/pull/656) | **014** Gemini proxy activation flipped on, then **reverted** (cold-start timeout) | **MERGED + DEPLOYED** — proxy now dormant; see the 014 callout |
+| [#654](https://github.com/OPS-PIvers/LifeBalance/pull/654) | **014** Gemini proxy **stage 1** — `geminiproxy` Cloud Function + flag-gated client switch | **MERGED + DEPLOYED** (dormant — flag off; needs `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM, both now done) |
+| [#652](https://github.com/OPS-PIvers/LifeBalance/pull/652) + [#653](https://github.com/OPS-PIvers/LifeBalance/pull/653) | **fix** Deploy Firestore indexes (wire `firestore.indexes.json`) | **MERGED + DEPLOYED + VERIFIED** — `todos` composite index built; completed-todos listener no longer 403s |
+| [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) | **022** Shareable invite link + deep-link join | **MERGED + DEPLOYED** |
+| [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) | **007** `deleteHousehold` Cloud Function + admin-only Danger Zone | **MERGED + DEPLOYED** (verify first deletion on a throwaway) |
 | [#649](https://github.com/OPS-PIvers/LifeBalance/pull/649) | **015** Money-model double-count characterization tests + investigation doc | **MERGED + DEPLOYED** — investigation only (no behavior change) |
 | [#646](https://github.com/OPS-PIvers/LifeBalance/pull/646) | **004** Content-Security-Policy (Report-Only) + header hardening | **MERGED + DEPLOYED + VERIFIED LIVE** — header served; 0 violations on login; enforce-flip documented |
 | [#644](https://github.com/OPS-PIvers/LifeBalance/pull/644) | **008** Firebase Analytics foundation + `sign_up`/`login` events | **MERGED + DEPLOYED + VERIFIED LIVE** — 0 console errors; GA4 beacons firing (`tid=G-JJNX8HYJZK`) |
@@ -33,8 +38,9 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Why it's gated |
 |----|------|----------------|
-| [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) | **007** `deleteHousehold` Cloud Function + admin-only Danger Zone UI | **Destructive**, and the recursive cascade can't be safely exercised against prod from here. Built + 7 unit tests + lint/build/context-tests green. **Review it, then verify the first real deletion against a throwaway household before merging.** |
-| [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) | **022** Shareable invite link + deep-link join (additive client UI) | **Low-risk + 15 unit tests**, but user-facing UI I can't visually verify on prod (renders in authed/setup views). Wants a quick UX glance (button placement/copy), then merge. |
+| [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) | **020** First-run onboarding wizard (new-creator gated; seeds checking account + starter habits) | Code-verified (lint 0 errors / build / **1014 tests** / wiring + gating reviewed) but it's **user-facing UX I can't visually judge**. Walk it via Test Mode (`pnpm dev` + `VITE_ENABLE_TEST_MODE=true` → `/#/onboarding?test=true`), then merge. |
+
+> **#647 (007 deleteHousehold) and #650 (022 invite link) were merged + deployed** during the session (you OK'd them). 007's first real deletion is still worth verifying on a throwaway household before you rely on it.
 
 ## Status table
 
@@ -48,16 +54,16 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | 004 | Content-Security-Policy + header hardening | 0 | C | MED | ✅ DONE (#646) — **Report-Only** deployed + verified live (0 violations on login). Flip-to-enforce needs authed-path verify + inline-script hashes (runbook in PR) |
 | 006 | Rate limiter must fail **closed** (quickAdd) | 0 | C | MED | ✅ DONE (#642) |
 | 012 | Remove dead `sendtestnotification` guard | 0 | C | LOW | ✅ DONE (#643) — `isTimeToSend` confirmed intentional; retry-dedup is the real follow-up |
-| 007 | `deleteHousehold` Cloud Function + confirm-to-delete UI (B3) | 0 | C→H | MED | 🔶 **PR #647 OPEN — review before merge** (built + 7 tests; destructive → verify first deletion) |
+| 007 | `deleteHousehold` Cloud Function + confirm-to-delete UI (B3) | 0 | C→H | MED | ✅ DONE (#647) — merged + deployed (function live). Verify the first real deletion on a throwaway household before relying on it |
 | 008 | Firebase Analytics instrumentation (measurementId already in env) | 0 | C | LOW | ✅ DONE (#644) — verified live (GA4 beacons firing); `sign_up`/`login` wired, more events trivial follow-ups |
 | 009 | Remove hardcoded admin UID after claim provisioned (B2) | 0 | C→H | HIGH | TODO (blocked on Human-Checklist #3) |
 | 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
 | 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
 | 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
-| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | TODO |
+| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | 🟡 STAGE-1 DEPLOYED (#654) — proxy fn + `GEMINI_API_KEY` secret live but **dormant**; activation (#656) was **reverted** (#657): cold start > 30s client timeout → AI timed out. Needs a latency decision (see callout below) |
 | 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
-| 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | TODO |
-| 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | 🔶 **PR #650 OPEN — quick UX glance** (link + deep-link + `navigator.share`; 15 tests; QR deferred) |
+| 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | 🔶 **PR #658 OPEN — UX review** (built + 1014 tests; new-creator gated; walk via Test Mode) |
+| 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | ✅ DONE (#650) — merged + deployed |
 | 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | TODO |
 | 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | TODO |
 | 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C | MED | TODO |
@@ -71,29 +77,40 @@ nearest related plan as those files are touched.
 
 ## Recommended next steps
 
-Phase-0 `[C]` safety items **004, 006, 008, 010, 012 are shipped + deployed + live-verified**, and
-**015** (money-model characterization) is merged. Two PRs await your review: **#647 (007)** and
-**#650 (022)**.
+Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deployed; **007** and **022**
+are merged + deployed; **branch protection** on `main` (requiring the CI `validate` check, admins
+included) is now **enabled**; the `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set.
+One PR awaits your review: **#658 (020 onboarding)**.
+
+### 🟡 014 — needs your decision (the one thing that didn't fully land)
+The Gemini proxy **works** (auth + secret + live function verified), but routing AI through it makes the
+**first call after the function idles (~15 min) exceed `geminiService`'s 30s client timeout** (cold
+start) → AI insight timed out. So activation was **reverted** — AI is back on the fast direct path. To
+finish 014, pick the latency tradeoff:
+- **Bump the timeouts** (`geminiService` 30s → ~90s, `geminiproxy` 60s → ~120s) so cold-start calls
+  *complete* (~30–50s first-call wait) instead of erroring. Cheapest; degrades first-call UX.
+- **Min-instances ≥ 1** on `geminiproxy` to kill cold starts — **costs money** (you said don't pay).
+
+Once chosen, the rest is mechanical: flip `VITE_USE_GEMINI_PROXY=true` → verify → **stage 2** removes
+`VITE_GEMINI_API_KEY` from the client (the real security win). **Also fix** the AI **failure-path** bug
+found en route: on an AI error the client tries to *refund* the quota (`-1`) + write an audit log, but
+`firestore.rules` only allows `+1` aiUsage updates → a 403 cascade. Harmless while AI succeeds; surfaces
+on any failure.
 
 **Needs you (human):**
-1. **Review + merge [#647](https://github.com/OPS-PIvers/LifeBalance/pull/647) (007 `deleteHousehold`)**,
-   then verify the first real deletion against a throwaway household.
-2. **Glance at + merge [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) (022 invite link)** —
-   low-risk additive UI; just confirm the share-button placement/copy.
-3. The Human-Only Checklist (PRD §4): set the `GEMINI_API_KEY` secret (after #014 lands), provision the
-   `admin` claim (B2 / #009), lock down the Gemini key in Cloud Console, and — recommended — **enable
-   branch protection on `main`** requiring the CI `validate` check (right now PRs can merge without CI
-   passing, so the rules-test gate only protects `main` once it's required).
-4. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
+1. **Review + merge [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) (020 onboarding)** after a
+   Test-Mode walkthrough.
+2. **Decide 014's latency tradeoff** (callout above).
+3. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
    opposite-signed bugs (double-count + voice invisibility); the fix is a separate MED-risk PR.
+4. Verify **007**'s first real deletion on a throwaway household before relying on it.
+5. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009); lock the Gemini key in
+   Cloud Console.
 
 **Claude-buildable next (fully autonomous):**
-5. **014 (Gemini proxy)** — `[C→H]`; the proxy Cloud Function + client switch. Highest remaining
-   security value (moves the API key off the client). Best done with focused context — it's a
-   security-critical change that touches every AI feature, so it warrants careful review.
-6. **020 (onboarding wizard)** — highest-ROI activation work; verifiable locally via Test Mode
-   (`?test=true`) + Playwright. Best reviewed *with* you for UX judgment.
-7. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
+6. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
+7. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
+   hardening (the index pipeline is now wired, so 040's indexes deploy cleanly).
 
 ### Minor follow-ups noted during execution
 - **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
