@@ -71,6 +71,14 @@ vi.mock('@google/genai', () => {
   };
 });
 
+// Plan 050b: geminiService reads getBillingEnabled() to decide whether the AI quota
+// uses the legacy 100/day cap (billing off) or the per-plan cap (billing on). Mock it
+// so both states are deterministic. (vitest hoists vi.mock/vi.hoisted to the top.)
+const { getBillingEnabledMock } = vi.hoisted(() => ({ getBillingEnabledMock: vi.fn() }));
+vi.mock('./appConfig', () => ({
+  getBillingEnabled: getBillingEnabledMock,
+}));
+
 describe('geminiService', () => {
   beforeAll(() => {
     process.env.VITE_GEMINI_API_KEY = 'test-key';
@@ -468,6 +476,8 @@ describe('geminiService – quota, timeout, and retry', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: billing dormant -> legacy 100/day cap for everyone.
+    getBillingEnabledMock.mockResolvedValue(false);
   });
 
   it('throws quota-exceeded error when daily limit is reached', async () => {
@@ -503,6 +513,75 @@ describe('geminiService – quota, timeout, and retry', () => {
 
     // Gemini should NOT have been called.
     expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it('billing off: keeps the legacy cap so an at-99 household still passes', async () => {
+    const { generateInsight } = await import('./geminiService');
+    const { runTransaction } = await import('firebase/firestore');
+    generateContentMock.mockResolvedValue({ text: '{"insights":[]}' });
+    // billing OFF (default) + 99 used -> under the legacy 100 cap -> Gemini is called.
+    vi.mocked(runTransaction).mockImplementationOnce(async (_db, fn) => {
+      const mockTxn = {
+        get: vi.fn().mockResolvedValue({
+          exists: () => true,
+          data: () => ({ aiUsage: { dailyCount: 99, lastResetDate: getLocalDateString() } }),
+        }),
+        update: vi.fn(),
+        set: vi.fn(),
+        delete: vi.fn(),
+      };
+      await fn(mockTxn as unknown as Parameters<typeof fn>[0]);
+    });
+    await generateInsight('test-household', [], []).catch(() => { /* parse not under test */ });
+    expect(generateContentMock).toHaveBeenCalled();
+  });
+
+  it('billing on: caps a free household at the tight free tier', async () => {
+    const { generateInsight } = await import('./geminiService');
+    const { runTransaction } = await import('firebase/firestore');
+    getBillingEnabledMock.mockResolvedValue(true);
+    // Free household (no subscription) already at the free cap (3) -> blocked.
+    vi.mocked(runTransaction).mockImplementationOnce(async (_db, fn) => {
+      const mockTxn = {
+        get: vi.fn().mockResolvedValue({
+          exists: () => true,
+          data: () => ({ aiUsage: { dailyCount: 3, lastResetDate: getLocalDateString() } }),
+        }),
+        update: vi.fn(),
+        set: vi.fn(),
+        delete: vi.fn(),
+      };
+      await fn(mockTxn as unknown as Parameters<typeof fn>[0]);
+    });
+    await expect(
+      generateInsight('test-household', [], [])
+    ).rejects.toThrow('Daily AI quota exceeded');
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
+
+  it('billing on: a premium household gets the larger premium cap', async () => {
+    const { generateInsight } = await import('./geminiService');
+    const { runTransaction } = await import('firebase/firestore');
+    getBillingEnabledMock.mockResolvedValue(true);
+    generateContentMock.mockResolvedValue({ text: '{"insights":[]}' });
+    // Premium household at 100 used -> well under the premium cap (500) -> Gemini runs.
+    vi.mocked(runTransaction).mockImplementationOnce(async (_db, fn) => {
+      const mockTxn = {
+        get: vi.fn().mockResolvedValue({
+          exists: () => true,
+          data: () => ({
+            subscription: { plan: 'premium', status: 'active' },
+            aiUsage: { dailyCount: 100, lastResetDate: getLocalDateString() },
+          }),
+        }),
+        update: vi.fn(),
+        set: vi.fn(),
+        delete: vi.fn(),
+      };
+      await fn(mockTxn as unknown as Parameters<typeof fn>[0]);
+    });
+    await generateInsight('test-household', [], []).catch(() => { /* parse not under test */ });
+    expect(generateContentMock).toHaveBeenCalled();
   });
 
   it('rejects with a timeout error when the Gemini request hangs', async () => {

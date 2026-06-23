@@ -64,3 +64,53 @@ describe('getOpenSignup', () => {
     await expect(getOpenSignup()).resolves.toBe(false);
   });
 });
+
+describe('getBillingEnabled', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const importFresh = async () => (await import('./appConfig')).getBillingEnabled;
+
+  it('returns true when the doc has billingEnabled: true', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { billingEnabled: true }));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(true);
+  });
+
+  it('returns false when billingEnabled is explicitly false', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { billingEnabled: false }));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(false);
+  });
+
+  it('returns false (dormant) when the billingEnabled field is absent', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { openSignup: true }));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(false);
+  });
+
+  it('returns false when the config doc does not exist', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(false));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(false);
+  });
+
+  it('fails closed (returns false) when getDoc rejects', async () => {
+    vi.mocked(getDoc).mockRejectedValue(new Error('firestore unreachable'));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(false);
+  });
+
+  it('treats a non-boolean truthy value as off (strict === true)', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { billingEnabled: 'true' }));
+    const getBillingEnabled = await importFresh();
+    await expect(getBillingEnabled()).resolves.toBe(false);
+  });
+});

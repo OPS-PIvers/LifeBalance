@@ -38,14 +38,18 @@ export interface PlanLimits {
  */
 export const FREE_LIMITS: PlanLimits = {
   maxMembers: 2,
-  aiDailyCap: 10,
+  // Deliberately small: the free tier is a teaser meant to drive upgrades. This cap
+  // only takes effect once billing is LIVE (`billingEnabled` on) — until then
+  // geminiService applies the legacy 100/day cap to everyone, so current users are
+  // unaffected. Tune freely (it's a product knob). See geminiService.checkAndIncrementAiUsage.
+  aiDailyCap: 3,
   historyMonths: 13,
   recapEnabled: false,
 };
 
 export const PREMIUM_LIMITS: PlanLimits = {
   maxMembers: 20,
-  aiDailyCap: 200,
+  aiDailyCap: 500,
   historyMonths: 120,
   recapEnabled: true,
 };

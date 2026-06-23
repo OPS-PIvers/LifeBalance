@@ -62,3 +62,43 @@ export const getOpenSignup = (): Promise<boolean> => {
 
   return openSignupPromise;
 };
+
+/** How long (ms) to reuse a cached billing-enabled value before re-fetching. */
+const BILLING_ENABLED_CACHE_TTL_MS = 60_000;
+
+let billingEnabledPromise: Promise<boolean> | null = null;
+let billingEnabledFetchedAt = 0;
+
+/**
+ * Returns the current `billingEnabled` flag from the global app config (Plan 050).
+ *
+ * Gates the entire freemium surface: the upgrade UI AND the plan-aware AI cap. It
+ * fails CLOSED (returns `false`) when the doc is missing, the field is absent, or
+ * the read throws, so billing stays **dormant / free-tier-permissive** unless an
+ * operator has explicitly set the boolean `billingEnabled: true`. While off, no
+ * upgrade UI shows and the AI quota keeps its legacy cap for everyone — so flipping
+ * this is what actually launches the tiered limits. A human flips it WITHOUT a
+ * deploy in the Firestore console (effective within ~60 s).
+ */
+export const getBillingEnabled = (): Promise<boolean> => {
+  const now = Date.now();
+  if (billingEnabledPromise !== null && now - billingEnabledFetchedAt < BILLING_ENABLED_CACHE_TTL_MS) {
+    return billingEnabledPromise;
+  }
+
+  billingEnabledFetchedAt = now;
+  billingEnabledPromise = (async (): Promise<boolean> => {
+    try {
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data().billingEnabled === true : false;
+    } catch {
+      // Fail closed: keep billing dormant if config is unreachable. Clear the cache
+      // so the next call retries rather than caching the fallback.
+      billingEnabledPromise = null;
+      return false;
+    }
+  })();
+
+  return billingEnabledPromise;
+};
