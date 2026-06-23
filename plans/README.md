@@ -19,6 +19,8 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#667](https://github.com/OPS-PIvers/LifeBalance/pull/667) | **030** Playwright E2E skeleton — boots Test Mode (`?test=true`) + navigates Budget/Habits via the bottom nav; insulated from the required `validate` job; separate **non-required** `e2e` CI job | **MERGED + DEPLOYED** — both CI checks green (`validate` ~3m, `e2e` ~1m); 2/2 specs pass in CI; no app-bundle change |
+| [#666](https://github.com/OPS-PIvers/LifeBalance/pull/666) | **023 follow-up** Cloud Functions money strings made currency-aware (bill reminder, low-balance alert, quickAdd expense) via a server-side `formatCurrency()` twin | **MERGED + DEPLOYED** — functions deploy green; 54 functions tests pass; reads `household.currency` (USD fallback) |
 | [#664](https://github.com/OPS-PIvers/LifeBalance/pull/664) | **023** Centralize currency formatting — `formatCurrency()`/`useFormatCurrency()` + `Household.currency` (default USD) + Settings selector; ~25 money displays migrated | **MERGED + DEPLOYED + VERIFIED LIVE** — consistent `$1,234.56`; 0 console errors on dashboard + budget |
 | [#662](https://github.com/OPS-PIvers/LifeBalance/pull/662) | **014** AI reliability — proxy retries transient Gemini 503/429; drop the rules-rejected quota refund (kills the 403 console cascade) | **MERGED + DEPLOYED + VERIFIED** — fn rev 00004; new bundle 0 console errors |
 | [#660](https://github.com/OPS-PIvers/LifeBalance/pull/660) | **014** Gemini proxy **finalized** — activated + `VITE_GEMINI_API_KEY` removed from the bundle; client 90s / fn 120s timeouts | **MERGED + DEPLOYED + VERIFIED LIVE** — proxy ACTIVE; key out of the bundle; **key rotated** (secret v2, old key dead) — B1 fully closed |
@@ -67,8 +69,9 @@ _Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mo
 | 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | ✅ DONE (#658) — merged + deployed after your Test-Mode walkthrough |
 | 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | ✅ DONE (#650) — merged + deployed |
 | 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | ✅ **DONE (#664)** — `formatCurrency()` + `useFormatCurrency()` + `Household.currency` (default USD) + Settings selector; ~25 money displays migrated. Live-verified (consistent `$1,234.56`, 0 console errors). Cloud Functions notif strings are a follow-up |
-| 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | TODO |
-| 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C | MED | TODO |
+| 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | ✅ DONE (#667) — boots Test Mode + navigates Budget/Habits; non-required `e2e` CI job; required `validate` job insulated (vitest/tsc/eslint all exclude `e2e/`) |
+| 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C→H | MED (HIGH for calendar) | 📝 **PLAN WRITTEN** ([040](./040-bound-unbounded-listeners.md)) — ready for human-watched execution; 3 PRs (grocery → meals → calendar); calendar needs an index-only PR + index-build watch first. Not auto-shipped (silent Safe-to-Spend breakage risk on an atomic-deploy prod) |
+| 023-fu | Cloud Functions money strings → currency-aware (023 follow-up) | 1 | C | LOW | ✅ DONE (#666) — server-side `formatCurrency()` twin; bill/alert/quickAdd strings read `household.currency` |
 | 050–052 | Stripe billing code + entitlements + freemium gating | 2 | C / H(keys) | MED | TODO |
 | 060–064 | Recap, proactive insights, referrals, badges, notification-scan cost fix | 3 | C | MED | TODO |
 | 070–072 | Cost-control, context split, admin panel + audit log | 4 | C | MED | TODO |
@@ -80,9 +83,12 @@ nearest related plan as those files are touched.
 ## Recommended next steps
 
 Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deployed; **007**, **022**,
-**020** (onboarding), and **014** (Gemini proxy — active, client key removed) are merged + deployed;
+**020** (onboarding), **014** (Gemini proxy — active, client key removed), **023** (currency) + its
+**Cloud Functions follow-up** (#666), and **030** (Playwright E2E skeleton, #667) are merged + deployed;
 **branch protection** on `main` (requiring the CI `validate` check, admins included) is **enabled**; the
-`GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open.
+`GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open. **040** (bound the
+unbounded listeners) now has a [written plan](./040-bound-unbounded-listeners.md) but was **deliberately
+not auto-shipped** — see below.
 
 ### ✅ 014 — fully done (#660, #662): proxy active, key removed + rotated, reliability hardened
 Decision made and executed: **route Gemini through the server-side proxy** (not client-side). The
@@ -110,11 +116,21 @@ retry / no-refund tests; new bundle boots with 0 console errors.
 2. Verify **007**'s first real deletion on a throwaway household before relying on it.
 3. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
 
-**Claude-buildable next (fully autonomous):**
-4. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
-   hardening (the index pipeline is now wired, so 040's indexes deploy cleanly).
-5. **023 follow-up:** make Cloud Functions push-notification money strings currency-aware (separate
-   `functions/` package; needs its own formatter).
+### 📝 040 — plan written, NOT auto-shipped (needs a human watching the deploy)
+The remaining Phase-1 hardening item, **040 (bound the 3 unbounded listeners)**, was scoped and written up
+as a full self-contained plan ([040](./040-bound-unbounded-listeners.md)) rather than auto-merged. Reason:
+on this **atomic-deploy** prod (one push deploys rules+indexes+functions+hosting, no staging/rollback),
+bounding `calendarItems` incorrectly **silently breaks Safe-to-Spend** (Firestore `orderBy` drops docs
+missing the sort field; a filtered-out recurring template corrupts bill projection), and the composite
+index must finish building *before* the query ships. The plan splits the work into **three risk-ascending
+PRs** (grocery → meals → calendar) with the calendar slice gated on an index-only PR + a human watching the
+index reach *Enabled*. This is the right `[C→H]` shape, not a fire-and-forget `[C]` auto-ship.
+
+**Claude-buildable next (fully autonomous), once 040 is picked up with a human present:**
+4. **030 (E2E skeleton) ✅ done (#667)** and the **023 Cloud-Functions follow-up ✅ done (#666)** — both
+   shipped this run. Deeper E2E specs (add-account, add/toggle-habit, capture-FAB) build on the #667 skeleton.
+5. Beyond 040, the next autonomous targets are Phase-3 cost/retention items (**064** notification-scan fix,
+   **061** proactive insights) — all larger and several `[C→H]`.
 
 ### Minor follow-ups noted during execution
 - **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
