@@ -14,6 +14,8 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { getLocalDateString } from "@/utils/dateHelpers";
+import { getLimits } from "@/utils/entitlements";
+import { getBillingEnabled } from "./appConfig";
 import type { ReceiptData } from './geminiService.types';
 import {
   GeminiValidationError,
@@ -90,8 +92,13 @@ const validateApiKey = () => {
 // Quota management (fix #3 — single Firestore transaction to prevent TOCTOU)
 // ---------------------------------------------------------------------------
 
-/** Daily AI request cap. Mirrors the comment in the original code. */
-const AI_DAILY_QUOTA = 100;
+/**
+ * Legacy flat AI request cap, applied to EVERY household while billing is dormant
+ * (`billingEnabled` off — the current state). Once billing is live the cap becomes
+ * plan-aware (`utils/entitlements` `getLimits().aiDailyCap`); until then this keeps the
+ * historical behavior so current / free-tier users are not suddenly throttled.
+ */
+const LEGACY_AI_DAILY_QUOTA = 100;
 
 /**
  * Typed converter for the household quota doc (finding 6.1).
@@ -186,6 +193,11 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
     console.warn("Failed to check global AI config:", error);
   }
 
+  // 1b. Is billing live? Decides whether the daily cap is plan-aware (billing on) or
+  // the legacy flat cap for everyone (billing off — the current state). Cached and
+  // fail-closed to off, so a config error keeps the safe legacy cap.
+  const billingEnabled = await getBillingEnabled();
+
   // 2. Atomically check + increment quota
   const householdRef = doc(db, 'households', householdId).withConverter(householdConverter);
   const today = getLocalDateString();
@@ -199,13 +211,18 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
 
     // Typed read via householdConverter — no unchecked `as Household` cast.
     const data = snap.data();
+
+    // Plan-aware cap once billing is live; the legacy flat cap for everyone until then
+    // (an absent subscription resolves to the free tier inside getLimits).
+    const cap = billingEnabled ? getLimits(data).aiDailyCap : LEGACY_AI_DAILY_QUOTA;
+
     const usage = data.aiUsage ?? { dailyCount: 0, lastResetDate: today };
 
     // If the date rolled over, treat the count as 0 for the new day.
     const currentCount = usage.lastResetDate === today ? usage.dailyCount : 0;
 
-    if (currentCount >= AI_DAILY_QUOTA) {
-      throw new Error(`Daily AI quota exceeded (${AI_DAILY_QUOTA} requests/day). Try again tomorrow.`);
+    if (currentCount >= cap) {
+      throw new Error(`Daily AI quota exceeded (${cap} requests/day). Try again tomorrow.`);
     }
 
     // Write the updated counter (reset if new day, otherwise increment).

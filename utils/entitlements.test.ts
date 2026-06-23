@@ -68,4 +68,11 @@ describe('limit tables', () => {
     expect(FREE_LIMITS.recapEnabled).toBe(false);
     expect(PREMIUM_LIMITS.recapEnabled).toBe(true);
   });
+
+  it('keeps the free AI cap a small teaser value', () => {
+    // The free cap is a deliberately tight teaser to drive upgrades. It only applies
+    // once billing is live; geminiService falls back to the legacy 100/day cap while
+    // billing is off, so current users are unaffected (tested in geminiService.test).
+    expect(FREE_LIMITS.aiDailyCap).toBe(3);
+  });
 });
