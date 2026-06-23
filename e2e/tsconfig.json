@@ -1,0 +1,18 @@
+{
+  // Type-checking config for the Playwright e2e specs. The root tsconfig
+  // EXCLUDES `e2e` (so the required `validate` job's `tsc --noEmit` never
+  // touches these files — Playwright transpiles them with its own pipeline),
+  // and this dedicated config lets editors + the non-required `e2e` CI job
+  // still type-check them. `@playwright/test` supplies its own types.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "noEmit": true
+  },
+  // Override the inherited root `exclude` (which lists "e2e" so the required
+  // `tsc --noEmit` skips these files); without this override the inherited
+  // "e2e" entry would exclude this config's own inputs (TS18003).
+  "exclude": ["node_modules"],
+  "include": ["."]
+}

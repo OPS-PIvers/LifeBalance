@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint';
 import reactPlugin from 'eslint-plugin-react';
 
 export default tseslint.config(
-  { ignores: ['dist', 'functions', 'coverage'] },
+  // e2e/ + playwright.config.ts are linted/transpiled by Playwright's own
+  // pipeline (and type-checked via e2e/tsconfig.json), so keep them out of the
+  // required `validate` job's `eslint .` run.
+  { ignores: ['dist', 'functions', 'coverage', 'e2e', 'playwright.config.ts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

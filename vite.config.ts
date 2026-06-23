@@ -19,7 +19,10 @@ export default defineConfig(({ command }) => {
         // Firestore emulator via a dedicated config (vitest.rules.config.ts,
         // invoked by `pnpm test:rules`). Exclude them from the default jsdom
         // run, which has no emulator.
-        exclude: [...configDefaults.exclude, 'tests/rules/**'],
+        // e2e/** holds Playwright specs (*.spec.ts) — exclude them too, or
+        // vitest's default glob would try to run them under jsdom (they are
+        // driven by `pnpm test:e2e` against the dev server instead).
+        exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**'],
         coverage: {
           provider: 'v8',
           include: ['**/*.{ts,tsx}'],
