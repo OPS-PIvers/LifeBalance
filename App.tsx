@@ -8,6 +8,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import MainLayout from './components/layout/MainLayout';
 import OfflineBanner from './components/layout/OfflineBanner';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy load pages for code splitting and faster initial load
 const Login = React.lazy(() => import('./pages/Login'));
@@ -17,6 +18,7 @@ const Budget = React.lazy(() => import('./pages/Budget'));
 const Habits = React.lazy(() => import('./pages/Habits'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const MigrateSubmissions = React.lazy(() => import('./pages/MigrateSubmissions'));
+const OnboardingWizard = React.lazy(() => import('./components/onboarding/OnboardingWizard'));
 const MealsPage = React.lazy(() => import('./pages/MealsPage'));
 const ShoppingPage = React.lazy(() => import('./pages/ShoppingPage'));
 const ToDosPage = React.lazy(() => import('./pages/ToDosPage'));
@@ -133,6 +135,21 @@ const App: React.FC = () => {
                 {/* Public Routes */}
                 <Route path="/login" element={<Login />} />
                 <Route path="/setup" element={<HouseholdSetup />} />
+
+                {/* First-run onboarding wizard — full-page (no MainLayout). Gated
+                    to new creators: ProtectedRoute sends users with no household to
+                    /setup, and the wizard itself redirects to / once onboarding is
+                    complete, so returning users never get stuck here. */}
+                <Route
+                  path="/onboarding"
+                  element={
+                    <ProtectedRoute>
+                      <ErrorBoundary>
+                        <OnboardingWizard />
+                      </ErrorBoundary>
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Protected Routes */}
                 <Route

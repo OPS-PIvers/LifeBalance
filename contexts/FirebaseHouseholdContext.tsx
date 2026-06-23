@@ -292,6 +292,10 @@ export interface HouseholdContextType {
   removeMember: (memberId: string) => Promise<void>;
   deleteHousehold: () => Promise<void>;
 
+  // Onboarding
+  /** Mark the first-run onboarding wizard as finished so it is never shown again. */
+  completeOnboarding: () => Promise<void>;
+
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -395,6 +399,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
+  | 'completeOnboarding'
 >;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -3094,6 +3099,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     window.location.reload();
   }, [householdId]);
 
+  // --- ACTIONS: ONBOARDING ---
+
+  const completeOnboarding = useCallback(async () => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { onboardingComplete: true });
+  }, [householdId]);
+
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
@@ -3855,10 +3867,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateMember,
     removeMember,
     deleteHousehold,
+    completeOnboarding,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
+    completeOnboarding,
   ]);
 
   return (

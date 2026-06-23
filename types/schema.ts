@@ -348,6 +348,12 @@ export interface Household {
     lastResetDate: string; // YYYY-MM-DD
   };
 
+  // First-run onboarding wizard. Set to true once the creator finishes (or skips)
+  // the wizard so it is never shown again. Absent/false on legacy households means
+  // they predate the wizard — they must never be routed into it (the wizard is
+  // only triggered from the household-creation flow, not on dashboard load).
+  onboardingComplete?: boolean;
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate
