@@ -14,6 +14,12 @@ export { quickAddHabit, quickAddExpense, quickAddReceipt, quickAddShoppingItem, 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
 
+// Export the Stripe billing functions (Plan 050a). Dormant until a human sets the
+// STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET secrets and configures the webhook
+// endpoint — see docs/STRIPE_SETUP_RUNBOOK.md. No client UI reaches them yet.
+export { createcheckoutsession } from "./stripe/checkout";
+export { stripewebhook } from "./stripe/webhook";
+
 const db = admin.firestore();
 const messaging = admin.messaging();
 
