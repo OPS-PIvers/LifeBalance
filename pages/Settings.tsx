@@ -37,6 +37,7 @@ import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
@@ -49,6 +50,17 @@ import DeveloperConsole from '@/components/modals/DeveloperConsole';
 
 const APP_VERSION = '0.8.0-alpha';
 
+// Currencies offered in the household currency picker. `symbol` is shown in the
+// option label only; actual formatting is driven by the ISO code via `formatCurrency`.
+const CURRENCY_OPTIONS: { code: string; symbol: string; label: string }[] = [
+  { code: 'USD', symbol: '$', label: 'US Dollar' },
+  { code: 'EUR', symbol: '€', label: 'Euro' },
+  { code: 'GBP', symbol: '£', label: 'British Pound' },
+  { code: 'CAD', symbol: 'C$', label: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
+  { code: 'JPY', symbol: '¥', label: 'Japanese Yen' },
+];
+
 const Settings: React.FC = () => {
   const { user, householdId } = useAuth();
   const {
@@ -59,6 +71,7 @@ const Settings: React.FC = () => {
     removeMember,
     deleteHousehold,
     householdSettings,
+    setHouseholdCurrency,
     apiKeys,
   } = useHouseholdCore();
   const {
@@ -100,6 +113,17 @@ const Settings: React.FC = () => {
 
   const handleToggleSection = (id: string) => {
     setOpenSection(prev => prev === id ? null : id);
+  };
+
+  const handleCurrencyChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newCurrency = e.target.value;
+    try {
+      await setHouseholdCurrency(newCurrency);
+      toast.success('Currency updated');
+    } catch (error) {
+      console.error('[Settings] Failed to update currency:', error);
+      toast.error('Failed to update currency');
+    }
   };
 
   // Notification State
@@ -358,6 +382,25 @@ const Settings: React.FC = () => {
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
               <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 tracking-tight">Appearance</h4>
               <ThemeToggle />
+            </div>
+
+            {/* Currency */}
+            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 tracking-tight">Currency</h4>
+              <Select
+                label="Display currency"
+                value={householdSettings?.currency ?? 'USD'}
+                onChange={handleCurrencyChange}
+              >
+                {CURRENCY_OPTIONS.map(({ code, symbol, label }) => (
+                  <option key={code} value={code}>
+                    {`${code} (${symbol}) — ${label}`}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                Used to format money throughout the app.
+              </p>
             </div>
 
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">

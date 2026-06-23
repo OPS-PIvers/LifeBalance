@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 // --- Helper Functions ---
 
@@ -36,6 +37,7 @@ export interface TransactionItemProps {
 }
 
 export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDuplicate, onSplit, onMore, isSelectionMode, isSelected, onToggleSelection }: TransactionItemProps) => {
+  const fmt = useFormatCurrency();
   return (
     <div
       onClick={() => isSelectionMode && onToggleSelection(tx.id)}
@@ -98,7 +100,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           <p className={`font-mono font-bold tracking-tight text-base ${
             tx.category === INCOME_CATEGORY ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'
           }`}>
-            {tx.category === INCOME_CATEGORY ? '+' : ''}${tx.amount.toFixed(2)}
+            {tx.category === INCOME_CATEGORY ? '+' : ''}{fmt(tx.amount)}
           </p>
           {tx.status === 'pending_review' && (
             <Badge variant="warning" size="sm">

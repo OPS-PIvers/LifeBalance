@@ -1,5 +1,6 @@
 import React, { useState, useCallback, Suspense } from 'react';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
@@ -37,6 +38,7 @@ const Dashboard: React.FC = () => {
   } = useFinance();
   const { activeChallenge, habits } = useGamification();
   const { updateToDo, deleteToDo, completeToDo } = useTodos();
+  const fmt = useFormatCurrency();
   
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -214,7 +216,7 @@ const Dashboard: React.FC = () => {
                    className="w-full p-4 flex justify-between items-center bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all group"
                  >
                    <span className="font-bold text-slate-700 dark:text-slate-200 text-sm group-hover:text-slate-900 dark:group-hover:text-slate-100">{acc.name}</span>
-                   <span className="font-mono text-xs text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300">${acc.balance.toLocaleString()}</span>
+                   <span className="font-mono text-xs text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300">{fmt(acc.balance)}</span>
                  </button>
                ))}
              </div>

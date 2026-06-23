@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
 import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -17,6 +18,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
   const today = useMemo(() => startOfToday(), []);
   const twoWeeksOut = useMemo(() => addDays(today, UPCOMING_DAYS_WINDOW), [today]);
   const expanded = useExpandedCalendarItems(today, twoWeeksOut);
+  const fmt = useFormatCurrency();
 
   const upcomingBills = useMemo(() => {
     // Filter, sort, and transform
@@ -79,7 +81,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
               </div>
               <div className="flex items-center gap-3">
                  <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                    ${bill.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    {fmt(bill.amount, { decimals: 0 })}
                  </span>
                  <button
                    onClick={() => onPay(bill.id)}

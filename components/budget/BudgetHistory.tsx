@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { BucketPeriodSnapshot } from '@/types/schema';
 import { format, parseISO } from 'date-fns';
 import { roundMoney } from '@/utils/money';
@@ -27,6 +28,7 @@ const BudgetHistory: React.FC = () => {
     isLoadingOlderBucketHistory,
     loadAllBucketHistory,
   } = useFinance();
+  const fmt = useFormatCurrency();
   const [expandedPeriodId, setExpandedPeriodId] = useState<string | null>(null);
 
   const historyGroups = useMemo(() => {
@@ -164,7 +166,7 @@ const BudgetHistory: React.FC = () => {
                   </div>
                   <div className="text-right">
                     <div className={`text-lg font-bold ${savings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
-                      {savings >= 0 ? '+' : ''}${savings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {savings >= 0 ? '+' : ''}{fmt(savings)}
                     </div>
                     <p className="text-xs text-brand-400 dark:text-slate-500">
                       {savings >= 0 ? 'saved' : 'overspent'}
@@ -175,8 +177,8 @@ const BudgetHistory: React.FC = () => {
                 {/* Progress Bar */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-xs font-medium text-brand-600 dark:text-slate-300">
-                    <span>${group.totalSpent.toLocaleString()} spent</span>
-                    <span>${group.totalLimit.toLocaleString()} limit</span>
+                    <span>{fmt(group.totalSpent)} spent</span>
+                    <span>{fmt(group.totalLimit)} limit</span>
                   </div>
                   <div className="h-3 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
                     <div
@@ -213,7 +215,7 @@ const BudgetHistory: React.FC = () => {
                       <div className="flex justify-between items-center mb-2">
                         <span className="font-bold text-brand-700 dark:text-slate-200">{bucket.bucketName}</span>
                         <span className={`text-sm font-bold ${bucketSavings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
-                          ${bucket.totalSpent.toLocaleString()} <span className="text-brand-300 dark:text-slate-500 font-normal">/ ${bucket.limit.toLocaleString()}</span>
+                          {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-slate-500 font-normal">/ {fmt(bucket.limit)}</span>
                         </span>
                       </div>
                       <div className="h-1.5 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">

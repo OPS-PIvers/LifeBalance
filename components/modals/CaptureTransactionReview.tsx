@@ -3,6 +3,7 @@ import { Check, AlertCircle } from 'lucide-react';
 import { ParsedTransaction } from '@/types/ui';
 import { BudgetBucket, Store, Account } from '@/types/schema';
 import { CompactSelect } from '@/components/ui/CompactSelect';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
@@ -27,6 +28,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
   stores,
   accounts
 }) => {
+  const fmt = useFormatCurrency();
   const selectedCount = parsedTransactions.filter(t => t.selected).length;
   const allSelected = parsedTransactions.every(t => t.selected) && parsedTransactions.length > 0;
 
@@ -67,7 +69,7 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-bold text-brand-700 dark:text-slate-200 truncate">{tx.merchant}</p>
                   <span className="font-mono font-bold text-brand-800 dark:text-slate-100 shrink-0">
-                    ${tx.amount.toFixed(2)}
+                    {fmt(tx.amount)}
                   </span>
                 </div>
                 <p className="text-xs text-brand-400 dark:text-slate-400 mb-2">{tx.date}</p>

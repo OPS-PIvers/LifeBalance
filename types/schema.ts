@@ -2,7 +2,6 @@
 export type Role = 'admin' | 'member';
 
 export const INCOME_CATEGORY = 'Income';
-export const CURRENCY_FORMAT_OPTIONS: Intl.NumberFormatOptions = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
 
 export interface NotificationPreferences {
   // Habit reminders
@@ -353,6 +352,10 @@ export interface Household {
   // they predate the wizard — they must never be routed into it (the wizard is
   // only triggered from the household-creation flow, not on dashboard load).
   onboardingComplete?: boolean;
+
+  // ISO-4217 currency code (e.g. 'USD', 'EUR') used to format money throughout the
+  // app. Absent on legacy households, which fall back to the default (USD).
+  currency?: string;
 
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate

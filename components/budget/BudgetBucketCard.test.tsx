@@ -2,7 +2,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BudgetBucketCard } from './BudgetBucketCard';
 import { BudgetBucket, Transaction } from '@/types/schema';
+import { formatCurrency } from '@/utils/formatCurrency';
 import { vi, describe, it, expect } from 'vitest';
+
+// BudgetBucketCard formats amounts via useFormatCurrency (which reads the
+// household context). These tests render the card without a provider, so back the
+// hook with the real USD formatter — output is unchanged ($200.00, $500, etc.).
+vi.mock('@/hooks/useFormatCurrency', () => ({
+  useFormatCurrency: () => (amount: number, options?: { decimals?: 0 | 2 }) =>
+    formatCurrency(amount, options),
+}));
 
 describe('BudgetBucketCard', () => {
   const mockBucket: BudgetBucket = {

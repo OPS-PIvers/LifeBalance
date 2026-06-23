@@ -10,6 +10,7 @@ import {
 } from '@/hooks/useActionQueue';
 import { HouseholdMember, BudgetBucket, Habit, Transaction, ToDo } from '@/types/schema';
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import Input from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
@@ -127,6 +128,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   deleteCalendarItem,
 }) => {
 
+  const fmt = useFormatCurrency();
   const [selectedHabitIds, setSelectedHabitIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
 
@@ -300,7 +302,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
         <div className="flex items-center gap-3">
           {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
-            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">${item.amount.toLocaleString()}</span>
+            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{fmt(item.amount)}</span>
           )}
           {!isExpanded && (
             <button

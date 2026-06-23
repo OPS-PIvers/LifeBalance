@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, Mor
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -60,6 +61,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
   onDeleteTransaction,
   onOpenTransactionActions,
 }) => {
+  const fmt = useFormatCurrency();
   const totalCommitted = spent.verified + spent.pending;
   const percent = Math.min(100, (totalCommitted / bucket.limit) * 100);
   const isOverspent = totalCommitted > bucket.limit;
@@ -123,10 +125,10 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium flex flex-col items-end">
             <div className={`flex items-center gap-1 ${isOverspent ? 'text-money-neg font-bold' : 'text-slate-700 dark:text-slate-200'}`}>
-              <span className="font-mono tracking-tight font-bold" aria-label={`Verified spending: $${spent.verified.toFixed(2)}`}>${spent.verified.toFixed(2)}</span>
+              <span className="font-mono tracking-tight font-bold" aria-label={`Verified spending: ${fmt(spent.verified)}`}>{fmt(spent.verified)}</span>
               {spent.pending > 0 && (
                 <span className="text-slate-400 dark:text-slate-500 font-mono text-xs">
-                  +${spent.pending.toFixed(2)}
+                  +{fmt(spent.pending)}
                 </span>
               )}
               <span className="text-slate-300 dark:text-slate-600 font-light">/</span>
@@ -166,10 +168,10 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                       onStartEditingLimit(bucket.id);
                     }
                   }}
-                  aria-label={`Edit limit for ${bucket.name}, currently $${bucket.limit}`}
+                  aria-label={`Edit limit for ${bucket.name}, currently ${fmt(bucket.limit, { decimals: 0 })}`}
                   className="text-slate-400 dark:text-slate-500 border-b border-dashed border-slate-200 dark:border-slate-700 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded-xs"
                 >
-                  ${bucket.limit}
+                  {fmt(bucket.limit, { decimals: 0 })}
                 </button>
               )}
             </div>
@@ -207,7 +209,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(percent)}
-        aria-label={`${bucket.name} spending: ${Math.round(percent)}% of $${bucket.limit} limit`}
+        aria-label={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
       >
         <div
           className={`h-full rounded-full transition-all duration-500 relative ${isOverspent ? 'bg-money-neg' : bucket.color}`}
@@ -242,7 +244,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   <span className={`font-mono font-bold ${
                     tx.status === 'pending_review' ? 'text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'
                   }`}>
-                    ${tx.amount.toFixed(2)}
+                    {fmt(tx.amount)}
                   </span>
 
                   {/* Actions: Buttons on Desktop, More Menu on Mobile */}
@@ -295,7 +297,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         <div className="mt-3 bg-money-bgNeg dark:bg-rose-500/15 p-3 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-2 text-money-neg text-xs font-bold">
             <AlertTriangle size={14} />
-            <span>Over by ${(totalCommitted - bucket.limit).toFixed(2)}</span>
+            <span>Over by {fmt(totalCommitted - bucket.limit)}</span>
           </div>
           <Button
             variant="outline"

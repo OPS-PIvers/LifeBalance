@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useId } from 'react';
 import { X, TrendingUp, TrendingDown, Flame, Activity, Target, Wallet, Brain } from 'lucide-react';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { sumMoney } from '@/utils/money';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -67,6 +68,7 @@ const CHART_STYLES = {
 const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const { transactions, currentPeriodId, buckets, loadAllTransactions } = useFinance();
   const { habits } = useGamification();
+  const fmt = useFormatCurrency();
   const titleId = useId();
   const [activeTab, setActiveTab] = useState<AnalyticsTab>('pulse');
 
@@ -492,7 +494,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                        <CartesianGrid {...CHART_STYLES.cartesianGrid} />
                        <XAxis dataKey="day" {...CHART_STYLES.xAxis} />
                        <YAxis hide />
-                       <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
+                       <Tooltip content={<CustomTooltip formatter={(val: number) => fmt(val)} />} />
 
                        {/* Ideal Pacing (Reference Line) */}
                        <Line
@@ -550,7 +552,7 @@ const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
                       </defs>
                       <CartesianGrid {...CHART_STYLES.cartesianGrid} />
                       <XAxis dataKey="month" {...CHART_STYLES.xAxis} />
-                      <Tooltip content={<CustomTooltip formatter={(val: number) => `$${val.toLocaleString()}`} />} />
+                      <Tooltip content={<CustomTooltip formatter={(val: number) => fmt(val)} />} />
 
                       {trendCategories.map((cat, idx) => (
                         <Area

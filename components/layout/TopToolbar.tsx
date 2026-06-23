@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
@@ -20,6 +21,7 @@ const TopToolbar: React.FC = () => {
   const { safeToSpend } = useFinance();
   const { dailyPoints, weeklyPoints } = useGamification();
   const { currentUser } = useAuth();
+  const fmt = useFormatCurrency();
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -50,7 +52,7 @@ const TopToolbar: React.FC = () => {
             <span
               className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
             >
-              ${Math.abs(safeToSpend).toFixed(2)}
+              {fmt(Math.abs(safeToSpend))}
             </span>
             <span className="text-xs text-brand-400 uppercase tracking-wider font-bold leading-tight">
               Safe to Spend

@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
 import { Account } from '@/types/schema';
 import { sumMoney, subtractMoney } from '@/utils/money';
@@ -12,6 +13,7 @@ import Select from '@/components/ui/Select';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useFinance();
+  const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
 
@@ -266,7 +268,7 @@ const BudgetAccounts: React.FC = () => {
                 aria-label={`Edit balance for ${account.name}`}
               >
                 <p className={`font-mono font-bold text-lg ${isLiability ? 'text-money-neg' : 'text-money-pos'}`}>
-                  ${account.balance.toLocaleString()}
+                  {fmt(account.balance)}
                 </p>
                 <p className="text-xxs text-brand-300 dark:text-slate-500 group-hover:text-brand-500 dark:group-hover:text-slate-400 flex justify-end items-center gap-1 transition-colors">
                   Tap to edit <Pencil size={8} />
@@ -281,7 +283,7 @@ const BudgetAccounts: React.FC = () => {
           <div className="mt-2 ml-7">
             <div className="flex justify-between text-xxs text-brand-400 dark:text-slate-500 mb-1">
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
-              <span>Target: ${account.monthlyGoal.toLocaleString()}</span>
+              <span>Target: {fmt(account.monthlyGoal)}</span>
             </div>
             <div className="h-1.5 w-full bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
               <div className="h-full bg-habit-gold transition-all duration-700" style={{ width: `${progress}%` }} />
@@ -298,16 +300,16 @@ const BudgetAccounts: React.FC = () => {
       <div className="bg-linear-to-br from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-glass-deep ring-1 ring-white/10 text-center">
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Net Worth</p>
         <p className="text-4xl font-mono font-bold tracking-tight">
-          ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          {fmt(netWorth)}
         </p>
         <div className="flex justify-center gap-6 mt-3 text-sm">
           <div>
             <span className="text-slate-400">Assets:</span>{' '}
-            <span className="text-emerald-400 font-mono">${assets.toLocaleString()}</span>
+            <span className="text-emerald-400 font-mono">{fmt(assets)}</span>
           </div>
           <div>
             <span className="text-slate-400">Liabilities:</span>{' '}
-            <span className="text-rose-400 font-mono">${debts.toLocaleString()}</span>
+            <span className="text-rose-400 font-mono">{fmt(debts)}</span>
           </div>
         </div>
       </div>
@@ -318,7 +320,7 @@ const BudgetAccounts: React.FC = () => {
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-brand-600 dark:text-slate-300 uppercase tracking-wide">Assets</h3>
             <div className="flex-1 h-px bg-brand-100 dark:bg-slate-700"></div>
-            <span className="text-sm font-mono text-emerald-600">${assets.toLocaleString()}</span>
+            <span className="text-sm font-mono text-emerald-600">{fmt(assets)}</span>
           </div>
           <div className="space-y-2">
             {assetAccounts.map(account => renderAccountCard(account, false))}
@@ -332,7 +334,7 @@ const BudgetAccounts: React.FC = () => {
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-brand-600 dark:text-slate-300 uppercase tracking-wide">Liabilities</h3>
             <div className="flex-1 h-px bg-brand-100 dark:bg-slate-700"></div>
-            <span className="text-sm font-mono text-rose-600">${debts.toLocaleString()}</span>
+            <span className="text-sm font-mono text-rose-600">{fmt(debts)}</span>
           </div>
           <div className="space-y-2">
             {liabilityAccounts.map(account => renderAccountCard(account, true))}

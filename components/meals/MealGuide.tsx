@@ -18,6 +18,7 @@ import {
   groupItemsByStore,
 } from '@/utils/weeklyPlanMapper';
 import { sumMoney } from '@/utils/money';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import {
   CalendarDays, ShoppingCart, ChevronRight, ChevronLeft, Clock, Check,
   ArrowLeft, ArrowRight, Box, Timer, Hourglass, Baby, ChefHat, X,
@@ -365,6 +366,7 @@ interface ShoppingViewProps {
 const itemId = (_it: WeeklyPlanGroceryItem, i: number): string => `i${i}`;
 
 const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggle }) => {
+  const fmt = useFormatCurrency();
   const groups = groupItemsByStore(plan);
   const allItems = useMemo(() => plan.items ?? [], [plan.items]);
   const total = subtotal(allItems);
@@ -384,11 +386,11 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
       <div className="rounded-2xl bg-white border border-slate-200 p-4 mb-4 flex items-end justify-between dark:bg-slate-800 dark:border-slate-700">
         <div>
           <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Estimated total</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">${total.toFixed(2)}</div>
+          <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{fmt(total)}</div>
         </div>
         <div className="text-right">
           <div className="text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">{itemsLeft} left</div>
-          <div className="text-xxs text-slate-400 dark:text-slate-500 tabular-nums">${remaining.toFixed(2)} to buy</div>
+          <div className="text-xxs text-slate-400 dark:text-slate-500 tabular-nums">{fmt(remaining)} to buy</div>
         </div>
       </div>
 
@@ -408,7 +410,7 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
                   <div className="font-bold text-slate-900 dark:text-slate-100">{group.name}</div>
                   {group.why && <div className="text-xxs text-slate-400 dark:text-slate-500">{group.why}</div>}
                 </div>
-                <div className="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums">${groupSubtotal.toFixed(2)}</div>
+                <div className="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums">{fmt(groupSubtotal)}</div>
               </div>
               {sections.map(sec => (
                 <div key={sec} className="mb-2">
@@ -437,7 +439,7 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
                             {it.note && <span className="block text-xxs text-slate-400 dark:text-slate-500">{it.note}</span>}
                           </span>
                           {typeof it.p === 'number' && (
-                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-slate-300 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300')}>${it.p.toFixed(2)}</span>
+                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-slate-300 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300')}>{fmt(it.p)}</span>
                           )}
                         </button>
                       );

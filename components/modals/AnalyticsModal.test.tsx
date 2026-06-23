@@ -32,6 +32,9 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
       }
     ],
   }),
+  useHouseholdCore: () => ({
+    householdSettings: { currency: 'USD' },
+  }),
 }));
 
 // Mock Recharts to avoid DOM dependency issues

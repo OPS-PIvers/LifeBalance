@@ -3,11 +3,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaptureTransactionReview } from './CaptureTransactionReview';
 import { ParsedTransaction } from '@/types/ui';
 import { BudgetBucket } from '@/types/schema';
+import { formatCurrency } from '@/utils/formatCurrency';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="icon-check" />,
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
+}));
+
+// CaptureTransactionReview now formats amounts via useFormatCurrency (which reads
+// the household context). This component test renders without a provider, so back
+// the hook with the real USD formatter — output is unchanged ($10.00, etc.).
+vi.mock('@/hooks/useFormatCurrency', () => ({
+  useFormatCurrency: () => (amount: number) => formatCurrency(amount),
 }));
 
 const mockTransactions: ParsedTransaction[] = [
