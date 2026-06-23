@@ -148,6 +148,21 @@ Google user**:
 
 ---
 
+## 4. Monetization — Stripe account, secrets & webhook (Plan 050–052) 🟢
+
+Stripe billing has its own turnkey runbook: **[`STRIPE_SETUP_RUNBOOK.md`](./STRIPE_SETUP_RUNBOOK.md)**.
+Phase 0 (create the account + business entity + bank + product/price) has **no code dependency and real
+verification lead time — start it whenever you decide to monetize**. Phase 1 (set
+`STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, wire the webhook, flip `billingEnabled`) comes **after** the
+billing functions are deployed, and runs in Stripe **test mode** first.
+
+## 5. Public launch gate — legal review + open signup (Plans 011 + 013) 🟢
+
+Opening signup to the public is gated on the legal pages being finalized first. The ordered procedure —
+fill the 7 `[PLACEHOLDER]`s, legal review, remove the DRAFT banner, then the §3 `openSignup` flip — is in
+**[`PRELAUNCH_CHECKLIST.md`](./PRELAUNCH_CHECKLIST.md)**. (§3 above is the access-flip step; the checklist
+sequences it behind the legal work.)
+
 ## Notes
 
 - Firestore rules latent-bug fix for `CalendarItem.bucketId` (audit §3.3) is a
