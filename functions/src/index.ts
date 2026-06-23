@@ -4,6 +4,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import { formatInTimeZone } from "date-fns-tz";
+import { formatCurrency } from "./utils/formatCurrency";
 
 admin.initializeApp();
 
@@ -377,6 +378,10 @@ export const sendbillreminders = onSchedule(
       const membersSnapshot = await householdDoc.ref.collection("members").get();
       logger.info(`Household ${householdDoc.id}: ${membersSnapshot.docs.length} member(s)`);
 
+      // Currency for user-facing money strings is sourced from the household doc
+      // (the top-level `currency` field added by the client). Falls back to USD.
+      const currency = householdDoc.data()?.currency || "USD";
+
       for (const memberDoc of membersSnapshot.docs) {
         const member = memberDoc.data() as HouseholdMember;
         const prefs = member.notificationPreferences;
@@ -439,7 +444,7 @@ export const sendbillreminders = onSchedule(
               `Bills due in ${daysAhead} day${daysAhead > 1 ? "s" : ""}`,
               `${upcomingBills.length} bill${
                 upcomingBills.length > 1 ? "s" : ""
-              } totaling $${totalAmount.toFixed(2)} coming up`,
+              } totaling ${formatCurrency(totalAmount, { currency })} coming up`,
               {
                 type: "bill_reminder",
                 url: "/budget",
@@ -488,6 +493,11 @@ export const sendbudgetalerts = onDocumentWritten(
         0
       );
 
+    // Currency for the alert string is sourced from the household doc (the
+    // top-level `currency` field added by the client). Falls back to USD.
+    const householdSnap = await householdRef.get();
+    const currency = householdSnap.data()?.currency || "USD";
+
     for (const memberDoc of membersSnapshot.docs) {
       const member = memberDoc.data() as HouseholdMember;
       const prefs = member.notificationPreferences;
@@ -500,9 +510,9 @@ export const sendbudgetalerts = onDocumentWritten(
         await sendNotificationToUser(
           member.fcmTokens,
           "Low Balance Alert! 💰",
-          `Your safe-to-spend is down to $${checkingBalance.toFixed(
-            2
-          )}. Time to watch your spending.`,
+          `Your safe-to-spend is down to ${formatCurrency(checkingBalance, {
+            currency,
+          })}. Time to watch your spending.`,
           {
             type: "budget_alert",
             url: "/budget",
