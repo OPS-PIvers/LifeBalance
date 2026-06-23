@@ -12,14 +12,16 @@ evidence (6 parallel auditors) is in [`audit/`](./audit/).
 > staging) — it ships in its own PR, behind rules tests (Plan 010), and a human watches it. Code-
 > only PRs are low-risk.
 
-## ✅ Shipped on the autonomous run (2026-06-22)
+## ✅ Shipped on the autonomous run (2026-06-22 → 06-23)
 
 All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was smoke-tested
 (clean login render, zero console errors) after each deploy.
 
 | PR | What | Status |
 |----|------|--------|
-| [#657](https://github.com/OPS-PIvers/LifeBalance/pull/657) + [#656](https://github.com/OPS-PIvers/LifeBalance/pull/656) | **014** Gemini proxy activation flipped on, then **reverted** (cold-start timeout) | **MERGED + DEPLOYED** — proxy now dormant; see the 014 callout |
+| [#660](https://github.com/OPS-PIvers/LifeBalance/pull/660) | **014** Gemini proxy **finalized** — activated + `VITE_GEMINI_API_KEY` removed from the bundle; client 90s / fn 120s timeouts | **MERGED + DEPLOYED** — proxy ACTIVE; key out of the bundle (B1). **Rotate the old key to fully close it** |
+| [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) | **020** First-run onboarding wizard (new-creator gated; seeds checking + starter habits) | **MERGED + DEPLOYED** (after your Test-Mode walkthrough) |
+| [#657](https://github.com/OPS-PIvers/LifeBalance/pull/657) + [#656](https://github.com/OPS-PIvers/LifeBalance/pull/656) | **014** earlier activation attempt — flipped on then reverted (cold start vs 30s client timeout); **superseded by #660** | **MERGED + DEPLOYED** (historical) |
 | [#654](https://github.com/OPS-PIvers/LifeBalance/pull/654) | **014** Gemini proxy **stage 1** — `geminiproxy` Cloud Function + flag-gated client switch | **MERGED + DEPLOYED** (dormant — flag off; needs `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM, both now done) |
 | [#652](https://github.com/OPS-PIvers/LifeBalance/pull/652) + [#653](https://github.com/OPS-PIvers/LifeBalance/pull/653) | **fix** Deploy Firestore indexes (wire `firestore.indexes.json`) | **MERGED + DEPLOYED + VERIFIED** — `todos` composite index built; completed-todos listener no longer 403s |
 | [#650](https://github.com/OPS-PIvers/LifeBalance/pull/650) | **022** Shareable invite link + deep-link join | **MERGED + DEPLOYED** |
@@ -36,9 +38,7 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 ## 🔶 Open for your review (NOT auto-merged)
 
-| PR | What | Why it's gated |
-|----|------|----------------|
-| [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) | **020** First-run onboarding wizard (new-creator gated; seeds checking account + starter habits) | Code-verified (lint 0 errors / build / **1014 tests** / wiring + gating reviewed) but it's **user-facing UX I can't visually judge**. Walk it via Test Mode (`pnpm dev` + `VITE_ENABLE_TEST_MODE=true` → `/#/onboarding?test=true`), then merge. |
+_Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mode walkthrough; #660 (014 proxy finalization) merged after CI.
 
 > **#647 (007 deleteHousehold) and #650 (022 invite link) were merged + deployed** during the session (you OK'd them). 007's first real deletion is still worth verifying on a throwaway household before you rely on it.
 
@@ -60,9 +60,9 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 | 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
 | 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
 | 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
-| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | 🟡 STAGE-1 DEPLOYED (#654) — proxy fn + `GEMINI_API_KEY` secret live but **dormant**; activation (#656) was **reverted** (#657): cold start > 30s client timeout → AI timed out. Needs a latency decision (see callout below) |
+| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | ✅ **DONE (#660)** — proxy ACTIVE; `VITE_GEMINI_API_KEY` removed from the client bundle (the B1 security win). Cold-start fix: client 30s→90s, fn 60s→120s. Live `geminiproxy` confirmed at rev 00002 / timeoutSeconds 120. First real call self-confirms cold-start latency; **rotate the old key** to fully close B1 |
 | 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
-| 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | 🔶 **PR #658 OPEN — UX review** (built + 1014 tests; new-creator gated; walk via Test Mode) |
+| 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | ✅ DONE (#658) — merged + deployed after your Test-Mode walkthrough |
 | 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | ✅ DONE (#650) — merged + deployed |
 | 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | TODO |
 | 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | TODO |
@@ -77,35 +77,40 @@ nearest related plan as those files are touched.
 
 ## Recommended next steps
 
-Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deployed; **007** and **022**
-are merged + deployed; **branch protection** on `main` (requiring the CI `validate` check, admins
-included) is now **enabled**; the `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set.
-One PR awaits your review: **#658 (020 onboarding)**.
+Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deployed; **007**, **022**,
+**020** (onboarding), and **014** (Gemini proxy — active, client key removed) are merged + deployed;
+**branch protection** on `main` (requiring the CI `validate` check, admins included) is **enabled**; the
+`GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open.
 
-### 🟡 014 — needs your decision (the one thing that didn't fully land)
-The Gemini proxy **works** (auth + secret + live function verified), but routing AI through it makes the
-**first call after the function idles (~15 min) exceed `geminiService`'s 30s client timeout** (cold
-start) → AI insight timed out. So activation was **reverted** — AI is back on the fast direct path. To
-finish 014, pick the latency tradeoff:
-- **Bump the timeouts** (`geminiService` 30s → ~90s, `geminiproxy` 60s → ~120s) so cold-start calls
-  *complete* (~30–50s first-call wait) instead of erroring. Cheapest; degrades first-call UX.
-- **Min-instances ≥ 1** on `geminiproxy` to kill cold starts — **costs money** (you said don't pay).
+### ✅ 014 — shipped (#660): proxy active, client key removed
+Decision made and executed: **route Gemini through the server-side proxy** (not client-side). The
+`VITE_GEMINI_API_KEY` is no longer in the production bundle — the real B1 security win. The cold-start
+timeout (the sole reason the first attempt was reverted) is fixed with the **bump-the-timeouts** option:
+`geminiService` 30s → 90s and `geminiproxy` 60s → 120s, so the first call after idle *completes*
+(~30–50s) instead of erroring. **Min-instances was intentionally NOT used** (standing cost — "don't pay").
 
-Once chosen, the rest is mechanical: flip `VITE_USE_GEMINI_PROXY=true` → verify → **stage 2** removes
-`VITE_GEMINI_API_KEY` from the client (the real security win). **Also fix** the AI **failure-path** bug
-found en route: on an AI error the client tries to *refund* the quota (`-1`) + write an audit log, but
-`firestore.rules` only allows `+1` aiUsage updates → a 403 cascade. Harmless while AI succeeds; surfaces
-on any failure.
+Verified: `geminiproxy` live at rev 00002 / `timeoutSeconds` 120 (GCP audit logs); key absent from the
+build; **1015 tests** (incl. a new no-client-key proxy test); deploy green. The **first real
+authenticated AI call** self-confirms the live cold-start latency (couldn't drive it headlessly — the
+callable is auth-gated and the browser session was closed).
+
+**Two follow-ups:**
+1. **Rotate the Gemini key (closes B1 fully).** Removing it from the bundle stops *future* leaks, but the
+   old value was public for a long time — any copy already extracted still works. Generate a new key in
+   Google AI Studio and update the `GEMINI_API_KEY` Cloud secret; the old key dies.
+2. **AI failure-path 403** (own PR, human-watched — touches `firestore.rules`): on an AI error the client
+   *refunds* the quota (`-1`) + writes an audit log, but `firestore.rules` only allows `+1` aiUsage
+   updates → a 403. `refundAiUsage` swallows it (logs only, never user-facing), so it's non-blocking;
+   the clean fix is a rules change allowing the decrement.
 
 **Needs you (human):**
-1. **Review + merge [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) (020 onboarding)** after a
-   Test-Mode walkthrough.
-2. **Decide 014's latency tradeoff** (callout above).
-3. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
+1. **Rotate the Gemini API key.** The bundle no longer ships it (#660), but the old value was public for a
+   long time — extracted copies still work until you rotate. Generate a new key and update the
+   `GEMINI_API_KEY` Cloud secret; the old one dies. This is what fully closes B1.
+2. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
    opposite-signed bugs (double-count + voice invisibility); the fix is a separate MED-risk PR.
-4. Verify **007**'s first real deletion on a throwaway household before relying on it.
-5. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009); lock the Gemini key in
-   Cloud Console.
+3. Verify **007**'s first real deletion on a throwaway household before relying on it.
+4. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
 
 **Claude-buildable next (fully autonomous):**
 6. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
