@@ -52,6 +52,9 @@ export interface HouseholdMember {
   lastWeeklyPointsReset?: string;
   fcmTokens?: string[]; // Array of FCM tokens for push notifications
   notificationPreferences?: NotificationPreferences; // User's notification settings
+  // Legal consent captured at signup — Plan 011
+  consentAcceptedAt?: string; // ISO timestamp when Terms + Privacy were accepted
+  consentVersion?: string; // CONSENT_VERSION accepted (see utils/legal.ts)
 }
 
 export interface Account {

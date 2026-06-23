@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/firebase.config';
 import { generateInviteCode } from '@/utils/inviteCodeGenerator';
+import { CONSENT_VERSION } from '@/utils/legal';
 
 /**
  * Get the household ID for a given user
@@ -90,6 +91,10 @@ export const createHousehold = async (userId: string, householdName: string): Pr
         total: 0,
       },
       joinedAt: serverTimestamp(),
+      // Legal consent captured at signup (Plan 011). Written at create time —
+      // the member create rule does not whitelist fields, so this is permitted.
+      consentAcceptedAt: serverTimestamp(),
+      consentVersion: CONSENT_VERSION,
     });
 
     return householdRef.id;
@@ -144,6 +149,10 @@ export const joinHousehold = async (userId: string, inviteCode: string): Promise
         total: 0,
       },
       joinedAt: serverTimestamp(),
+      // Legal consent captured at signup (Plan 011). Written at create time —
+      // the member create rule does not whitelist fields, so this is permitted.
+      consentAcceptedAt: serverTimestamp(),
+      consentVersion: CONSENT_VERSION,
     });
 
     // Add user to household memberUids array

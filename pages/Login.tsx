@@ -159,7 +159,21 @@ const Login: React.FC = () => {
 
           {/* Footer */}
           <p className="text-center text-xs text-brand-400 dark:text-slate-400 pt-4">
-            By signing in, you agree to manage your household responsibly
+            By continuing you agree to our{' '}
+            <a
+              href="#/terms"
+              className="underline hover:text-brand-600 dark:hover:text-slate-200"
+            >
+              Terms
+            </a>{' '}
+            and{' '}
+            <a
+              href="#/privacy"
+              className="underline hover:text-brand-600 dark:hover:text-slate-200"
+            >
+              Privacy Policy
+            </a>
+            .
           </p>
         </div>
 
