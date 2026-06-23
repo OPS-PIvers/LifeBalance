@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore';
 import { getMessaging, type Messaging } from 'firebase/messaging';
+import { getFunctions } from 'firebase/functions';
 
 // Fallback to mock config if env vars are missing (for Test Mode/CI)
 const mockConfig = {
@@ -84,6 +85,9 @@ function initFirestore(): Firestore {
   }
 }
 export const db = initFirestore();
+
+// Initialize Cloud Functions (callable functions, e.g. deletehousehold).
+export const functions = getFunctions(app);
 
 // Initialize Messaging with conditional check for browser environment
 // to prevent errors in SSR, tests, or unsupported contexts.

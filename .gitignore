@@ -41,3 +41,7 @@ functions/package-lock.json
 
 # Claude Code harness scaffolding (agent worktrees are temporary + auto-cleaned)
 .claude/worktrees/
+
+# Playwright MCP smoke-test artifacts (snapshots, screenshots, console logs)
+.playwright-mcp/
+live-before-008.png

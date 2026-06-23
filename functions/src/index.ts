@@ -585,3 +585,66 @@ export const sendtestnotification = onCall(
     throw new HttpsError("internal", "Failed to send test notification");
   }
 });
+
+/**
+ * Callable function: Permanently delete a household and all of its data.
+ *
+ * Only a household admin may invoke this. Recursively deletes the household
+ * document and every subcollection (members, habits, transactions, etc.), then
+ * removes any invite codes that point at the household. Uses a longer timeout
+ * because large households can have many subcollection documents to delete.
+ */
+export const deletehousehold = onCall(
+  {
+    cors: true,
+    timeoutSeconds: 300,
+  },
+  async (request) => {
+    // Ensure the user is authenticated
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    const householdId = request.data?.householdId;
+
+    if (!householdId || typeof householdId !== "string") {
+      throw new HttpsError(
+        "invalid-argument",
+        "The function must be called with a householdId."
+      );
+    }
+
+    // Verify the caller is an admin of THIS household.
+    const memberRef = db.doc(
+      `households/${householdId}/members/${request.auth.uid}`
+    );
+    const memberDoc = await memberRef.get();
+
+    if (!memberDoc.exists || memberDoc.data()?.role !== "admin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only a household admin can delete the household."
+      );
+    }
+
+    // Recursively delete the household document and all of its subcollections.
+    await db.recursiveDelete(db.doc(`households/${householdId}`));
+
+    // Remove any invite codes that pointed at the deleted household.
+    const inviteSnap = await db
+      .collection("inviteCodes")
+      .where("householdId", "==", householdId)
+      .get();
+    await Promise.all(inviteSnap.docs.map((d) => d.ref.delete()));
+
+    logger.info("Household deleted", {
+      householdId,
+      deletedBy: request.auth.uid,
+    });
+
+    return { success: true };
+  }
+);

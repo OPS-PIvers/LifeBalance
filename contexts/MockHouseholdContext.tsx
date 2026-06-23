@@ -127,6 +127,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Account deleted');
   }, []);
 
+  const deleteHousehold = useCallback(async () => {
+    toast.success('Mock: Household deleted');
+  }, []);
+
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, balance: newBalance, lastUpdated: new Date().toISOString() } : a));
     toast.success('Mock: Balance updated');
@@ -569,6 +573,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addMember: noOp,
     updateMember: noOp,
     removeMember: noOp,
+    deleteHousehold,
   };
 
   // Test Mode does not need render isolation, so every slice receives the same
