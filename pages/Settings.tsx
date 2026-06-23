@@ -26,7 +26,8 @@ import {
   FileSpreadsheet,
   Smartphone,
   Terminal,
-  AlertTriangle
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -47,6 +48,9 @@ import toast from 'react-hot-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/firebase.config';
 import DeveloperConsole from '@/components/modals/DeveloperConsole';
+import PaywallModal from '@/components/modals/PaywallModal';
+import { useBillingEnabled } from '@/hooks/useBillingEnabled';
+import { getPlan } from '@/utils/entitlements';
 
 const APP_VERSION = '0.8.0-alpha';
 
@@ -98,6 +102,10 @@ const Settings: React.FC = () => {
   const [selectedMember, setSelectedMember] = useState<HouseholdMember | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<HouseholdMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+
+  // Billing / upgrade (Plan 050b) — dormant until billingEnabled is turned on.
+  const billingEnabled = useBillingEnabled();
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Danger zone: delete household
   const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
@@ -402,6 +410,41 @@ const Settings: React.FC = () => {
                 Used to format money throughout the app.
               </p>
             </div>
+
+            {/* Plan (Plan 050b) — only shown once billing is live; dormant by default. */}
+            {billingEnabled && (
+              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3 tracking-tight">Plan</h4>
+                {getPlan(householdSettings) === 'premium' ? (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2.5 py-0.5 rounded-full shadow-xs dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30">
+                      <Sparkles size={12} />
+                      Premium
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">Thanks for supporting LifeBalance.</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-full dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600">
+                        Free
+                      </span>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        Upgrade for more AI, more members, and premium features.
+                      </p>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={<Sparkles className="w-4 h-4" />}
+                      onClick={() => setShowPaywall(true)}
+                    >
+                      Upgrade
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-700">
               <button
@@ -823,6 +866,14 @@ const Settings: React.FC = () => {
           </>
         }
       />
+
+      {householdId && (
+        <PaywallModal
+          isOpen={showPaywall}
+          onClose={() => setShowPaywall(false)}
+          householdId={householdId}
+        />
+      )}
     </div>
   );
 };
