@@ -360,6 +360,20 @@ export interface Household {
   // app. Absent on legacy households, which fall back to the default (USD).
   currency?: string;
 
+  // Billing / subscription (Plan 050). Absent on every legacy + free-tier
+  // household — treat absent as the free plan everywhere (see utils/entitlements.ts).
+  // Only the Stripe webhook (Admin SDK) ever writes this block; clients read it for
+  // display. Never gate a paid feature on this client-readable value alone — the
+  // server (Cloud Function / firestore.rules) is the source of truth for entitlement.
+  subscription?: {
+    plan: 'free' | 'premium';
+    status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'incomplete';
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    currentPeriodEnd?: string; // ISO 8601, derived from Stripe current_period_end (unix → ISO)
+    priceId?: string;
+  };
+
   // Legacy fields for migration support
   startDate?: string; // YYYY-MM-DD format - deprecated, use lastPaycheckDate
   payPeriodSettings?: { startDate: string }; // Deprecated, use lastPaycheckDate

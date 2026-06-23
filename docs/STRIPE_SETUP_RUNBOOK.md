@@ -45,8 +45,11 @@ That's everything Phase 0. The remaining steps need the deployed functions.
 
 ## Phase 1 — After the billing code is deployed (test mode first) 🟡
 
-> **Precondition:** the 050 PRs are merged and `firebase deploy` has shipped the functions. Confirm with
-> `firebase functions:list` — you should see **`createcheckoutsession`** and **`stripewebhook`**.
+> **Where the code stands:** the functions (`createcheckoutsession`, `stripewebhook`) are implemented and
+> unit-tested in `functions/src/stripe/` but **staged, not deployed** — they are intentionally not exported
+> from [`functions/src/index.ts`](../functions/src/index.ts), because deploying a secret-bound function
+> needs its secrets to already exist (a non-interactive `firebase deploy` fails otherwise). So the order is
+> **set the secrets (1.3) → export + deploy the functions (1.3b) → configure (1.4+)**.
 
 ### 1.3 Set the Stripe secrets (Cloud Functions)
 These mirror the `GEMINI_API_KEY` pattern (`defineSecret`); Claude never sees the values. From the repo
@@ -57,13 +60,27 @@ root, with the Firebase CLI authenticated to the project:
 firebase functions:secrets:set STRIPE_SECRET_KEY
 # (paste the key when prompted)
 
-# The webhook signing secret comes from step 1.5 — set it after you create the endpoint.
+# Set a TEMPORARY placeholder now (e.g. whsec_placeholder); replace it with the real
+# signing secret once the webhook endpoint exists (step 1.5), then redeploy.
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
 ```
 
 > ⚠️ **Secrets pin at deploy time.** After setting (or rotating) a secret you must **redeploy the
-> functions** for them to bind the new version: `firebase deploy --only functions`. (This is the same
-> gotcha as the 014 Gemini proxy — see that history if a function reads a stale secret.)
+> functions** (`firebase deploy --only functions`) for the new version to bind. (Same gotcha as the 014
+> Gemini proxy — see that history if a function reads a stale secret.)
+
+### 1.3b Wire in + deploy the functions
+Now that both secrets exist, export the staged functions in
+[`functions/src/index.ts`](../functions/src/index.ts) (the two lines noted in that file):
+
+```ts
+export { createcheckoutsession } from "./stripe/checkout";
+export { stripewebhook } from "./stripe/webhook";
+```
+
+Deploy: `firebase deploy --only functions`. The bound deploy now succeeds because the secrets exist.
+Confirm with `firebase functions:list` — you should see **`createcheckoutsession`** and
+**`stripewebhook`** (copy the latter's URL for step 1.5).
 
 ### 1.4 Point the app at your Price ID
 Firestore console → `app_config` → `global` doc → set field **`stripePriceId` (string)** to the Price ID

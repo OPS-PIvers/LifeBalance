@@ -14,6 +14,16 @@ export { quickAddHabit, quickAddExpense, quickAddReceipt, quickAddShoppingItem, 
 // Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
 export { geminiproxy } from "./geminiProxy";
 
+// Stripe billing functions (Plan 050a) live in ./stripe and are fully implemented
+// and unit-tested, but are intentionally NOT exported here yet. Exporting a function
+// deploys it, and deploying these binds the STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+// secrets — which a non-interactive `firebase deploy` (our CI) REQUIRES to already
+// exist in Secret Manager, failing the whole deploy otherwise. Creating those secrets
+// is a human step. ACTIVATION: set the secrets (docs/STRIPE_SETUP_RUNBOOK.md §1.3),
+// then wire them in here and redeploy:
+//   export { createcheckoutsession } from "./stripe/checkout";
+//   export { stripewebhook } from "./stripe/webhook";
+
 const db = admin.firestore();
 const messaging = admin.messaging();
 
