@@ -23,6 +23,7 @@ import {
   resetStaleHabit,
   fuzzyMatchHabit,
 } from "./habitProcessor";
+import { formatCurrency } from "../utils/formatCurrency";
 
 const db = admin.firestore();
 
@@ -425,6 +426,10 @@ export const quickAddExpense = onRequest(
       const householdDoc = await householdRef.get();
       const householdData = householdDoc.data();
 
+      // Currency for the user-facing response string is sourced from the
+      // household doc (the top-level `currency` field added by the client).
+      const currency = householdData?.currency || "USD";
+
       // Calculate pay period (simplified - just use the transaction date)
       const payPeriodId = householdData?.lastPaycheckDate || transactionDate;
 
@@ -455,7 +460,7 @@ export const quickAddExpense = onRequest(
       // 8. Return success
       jsonResponse(res, 200, {
         success: true,
-        message: `Expense added: $${amount.toFixed(2)} at ${merchant} (pending review)`,
+        message: `Expense added: ${formatCurrency(amount, { currency })} at ${merchant} (pending review)`,
         data: {
           transactionId: transactionRef.id,
           amount,
