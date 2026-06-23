@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { createHousehold, joinHousehold, getHouseholdDetails } from '@/services/householdService';
-import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
+import { createHousehold, joinHousehold } from '@/services/householdService';
 import { parseInviteCode } from '@/utils/inviteLink';
 import toast from 'react-hot-toast';
 
-type ViewMode = 'choice' | 'create' | 'join' | 'success';
+type ViewMode = 'choice' | 'create' | 'join';
 
 const HouseholdSetup: React.FC = () => {
   const { user, householdId, loading: authLoading, setHouseholdId } = useAuth();
@@ -25,13 +24,19 @@ const HouseholdSetup: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [householdName, setHouseholdName] = useState('');
   const [inviteCode, setInviteCode] = useState(initialInviteCode ?? '');
-  const [createdInviteCode, setCreatedInviteCode] = useState('');
 
-  // Redirect if already has household
+  // Set just before a create/join handler navigates the user onward. Without it,
+  // the "already has household" redirect below would fire on the next render
+  // (setHouseholdId updates householdId synchronously) and bounce a brand-new
+  // creator from /onboarding to /. The handler picks the destination explicitly.
+  const navigatingAwayRef = useRef(false);
+
+  // Redirect if already has household (e.g. an existing user navigates to /setup
+  // directly). Skipped while a create/join handler is steering the user itself.
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/login');
-    } else if (!authLoading && householdId) {
+    } else if (!authLoading && householdId && !navigatingAwayRef.current) {
       navigate('/');
     }
   }, [user, householdId, authLoading, navigate]);
@@ -43,16 +48,15 @@ const HouseholdSetup: React.FC = () => {
     setLoading(true);
     try {
       const householdId = await createHousehold(user.uid, householdName.trim());
+      // Claim the navigation before householdId propagates so the redirect effect
+      // doesn't race us to '/'.
+      navigatingAwayRef.current = true;
       setHouseholdId(householdId);
-
-      // Get the invite code we just created
-      const details = await getHouseholdDetails(householdId);
-      if (details) {
-        setCreatedInviteCode(details.inviteCode);
-      }
-
-      setMode('success');
       toast.success('Household created successfully!');
+      // Route new creators into the first-run onboarding wizard (which seeds a
+      // starting balance + habits and surfaces the invite code). The join flow
+      // below goes straight to the dashboard instead.
+      navigate('/onboarding');
     } catch (error: unknown) {
       console.error('Error creating household:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create household';
@@ -69,6 +73,7 @@ const HouseholdSetup: React.FC = () => {
     setLoading(true);
     try {
       const householdId = await joinHousehold(user.uid, inviteCode.trim().toUpperCase());
+      navigatingAwayRef.current = true;
       setHouseholdId(householdId);
       toast.success('Successfully joined household!');
       navigate('/');
@@ -81,10 +86,6 @@ const HouseholdSetup: React.FC = () => {
     }
   };
 
-  const handleContinue = () => {
-    navigate('/');
-  };
-
   return (
     <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -95,12 +96,10 @@ const HouseholdSetup: React.FC = () => {
               <Home className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-brand-800 dark:text-slate-100 mb-2">
-              {mode === 'success' ? 'All Set!' : 'Set Up Your Household'}
+              Set Up Your Household
             </h1>
             <p className="text-brand-500 dark:text-slate-400 text-sm">
-              {mode === 'success'
-                ? 'Your household is ready to use'
-                : 'Create a new household or join an existing one'}
+              Create a new household or join an existing one
             </p>
           </div>
 
@@ -221,30 +220,6 @@ const HouseholdSetup: React.FC = () => {
                 )}
               </button>
             </form>
-          )}
-
-          {/* Success View */}
-          {mode === 'success' && createdInviteCode && (
-            <div className="space-y-4">
-              <div className="bg-green-50 dark:bg-green-500/15 border-2 border-green-200 dark:border-green-500/30 rounded-xl p-4 text-center">
-                <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Users className="w-6 h-6 text-white" />
-                </div>
-                <p className="text-green-800 dark:text-green-200 font-semibold">Household Created!</p>
-                <p className="text-green-600 dark:text-green-300 text-sm mt-1">
-                  Invite family members to join
-                </p>
-              </div>
-
-              <HouseholdInviteCard inviteCode={createdInviteCode} />
-
-              <button
-                onClick={handleContinue}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200"
-              >
-                Continue to Dashboard
-              </button>
-            </div>
           )}
         </div>
       </div>
