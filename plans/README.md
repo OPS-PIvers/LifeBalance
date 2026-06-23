@@ -19,7 +19,8 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
-| [#660](https://github.com/OPS-PIvers/LifeBalance/pull/660) | **014** Gemini proxy **finalized** — activated + `VITE_GEMINI_API_KEY` removed from the bundle; client 90s / fn 120s timeouts | **MERGED + DEPLOYED** — proxy ACTIVE; key out of the bundle (B1). **Rotate the old key to fully close it** |
+| [#662](https://github.com/OPS-PIvers/LifeBalance/pull/662) | **014** AI reliability — proxy retries transient Gemini 503/429; drop the rules-rejected quota refund (kills the 403 console cascade) | **MERGED + DEPLOYED + VERIFIED** — fn rev 00004; new bundle 0 console errors |
+| [#660](https://github.com/OPS-PIvers/LifeBalance/pull/660) | **014** Gemini proxy **finalized** — activated + `VITE_GEMINI_API_KEY` removed from the bundle; client 90s / fn 120s timeouts | **MERGED + DEPLOYED + VERIFIED LIVE** — proxy ACTIVE; key out of the bundle; **key rotated** (secret v2, old key dead) — B1 fully closed |
 | [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) | **020** First-run onboarding wizard (new-creator gated; seeds checking + starter habits) | **MERGED + DEPLOYED** (after your Test-Mode walkthrough) |
 | [#657](https://github.com/OPS-PIvers/LifeBalance/pull/657) + [#656](https://github.com/OPS-PIvers/LifeBalance/pull/656) | **014** earlier activation attempt — flipped on then reverted (cold start vs 30s client timeout); **superseded by #660** | **MERGED + DEPLOYED** (historical) |
 | [#654](https://github.com/OPS-PIvers/LifeBalance/pull/654) | **014** Gemini proxy **stage 1** — `geminiproxy` Cloud Function + flag-gated client switch | **MERGED + DEPLOYED** (dormant — flag off; needs `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM, both now done) |
@@ -60,7 +61,7 @@ _Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mo
 | 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
 | 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
 | 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
-| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | ✅ **DONE (#660)** — proxy ACTIVE; `VITE_GEMINI_API_KEY` removed from the client bundle (the B1 security win). Cold-start fix: client 30s→90s, fn 60s→120s. Live `geminiproxy` confirmed at rev 00002 / timeoutSeconds 120. First real call self-confirms cold-start latency; **rotate the old key** to fully close B1 |
+| 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | ✅ **DONE (#660, #662)** — proxy ACTIVE; client key removed **and rotated** (secret v2; old key dead) — B1 fully closed. Cold-start fix (client 90s / fn 120s); transient 503/429 auto-retry + no refund-403 cascade (#662). Live-verified end-to-end (fn rev 00004) |
 | 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
 | 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | ✅ DONE (#658) — merged + deployed after your Test-Mode walkthrough |
 | 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | ✅ DONE (#650) — merged + deployed |
@@ -82,39 +83,35 @@ Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deploy
 **branch protection** on `main` (requiring the CI `validate` check, admins included) is **enabled**; the
 `GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open.
 
-### ✅ 014 — shipped (#660): proxy active, client key removed
+### ✅ 014 — fully done (#660, #662): proxy active, key removed + rotated, reliability hardened
 Decision made and executed: **route Gemini through the server-side proxy** (not client-side). The
-`VITE_GEMINI_API_KEY` is no longer in the production bundle — the real B1 security win. The cold-start
-timeout (the sole reason the first attempt was reverted) is fixed with the **bump-the-timeouts** option:
-`geminiService` 30s → 90s and `geminiproxy` 60s → 120s, so the first call after idle *completes*
-(~30–50s) instead of erroring. **Min-instances was intentionally NOT used** (standing cost — "don't pay").
+`VITE_GEMINI_API_KEY` is gone from the production bundle **and the old key has been rotated** (the proxy
+secret is now version 2; the old, previously-bundle-exposed key is deleted/disabled) — **B1 is fully
+closed** (future leaks prevented *and* the exposed value is dead). Cold-start timeouts fixed
+(`geminiService` 30s→90s, `geminiproxy` 60s→120s); **min-instances intentionally NOT used** (standing
+cost — "don't pay").
 
-Verified: `geminiproxy` live at rev 00002 / `timeoutSeconds` 120 (GCP audit logs); key absent from the
-build; **1015 tests** (incl. a new no-client-key proxy test); deploy green. The **first real
-authenticated AI call** self-confirms the live cold-start latency (couldn't drive it headlessly — the
-callable is auth-gated and the browser session was closed).
+A live transient Gemini `503` ("model busy") during verification surfaced two reliability gaps, both fixed
+in **#662**:
+- **Transient retry restored** — the proxy now maps Gemini `503→unavailable` / `429→resource-exhausted`
+  and the client retries those, so momentary Gemini blips auto-recover (the direct path's resilience, lost
+  when the proxy collapsed every error to a generic "internal").
+- **403 console cascade removed** — the failure-path quota refund (`-1`, rejected by `firestore.rules`
+  which allows only `+1`) was dropped; the up-front atomic increment still caps usage. **No rules change.**
 
-**Two follow-ups:**
-1. **Rotate the Gemini key (closes B1 fully).** Removing it from the bundle stops *future* leaks, but the
-   old value was public for a long time — any copy already extracted still works. Generate a new key in
-   Google AI Studio and update the `GEMINI_API_KEY` Cloud secret; the old key dies.
-2. **AI failure-path 403** (own PR, human-watched — touches `firestore.rules`): on an AI error the client
-   *refunds* the quota (`-1`) + writes an audit log, but `firestore.rules` only allows `+1` aiUsage
-   updates → a 403. `refundAiUsage` swallows it (logs only, never user-facing), so it's non-blocking;
-   the clean fix is a rules change allowing the decrement.
+Verified end-to-end live: a real AI insight generated through the proxy on the new key; `geminiproxy` at
+rev 00004 / secret v2 / `timeoutSeconds` 120 (GCP audit logs); CI green incl. the new transient-mapping /
+retry / no-refund tests; new bundle boots with 0 console errors.
 
 **Needs you (human):**
-1. **Rotate the Gemini API key.** The bundle no longer ships it (#660), but the old value was public for a
-   long time — extracted copies still work until you rotate. Generate a new key and update the
-   `GEMINI_API_KEY` Cloud secret; the old one dies. This is what fully closes B1.
-2. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
+1. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
    opposite-signed bugs (double-count + voice invisibility); the fix is a separate MED-risk PR.
-3. Verify **007**'s first real deletion on a throwaway household before relying on it.
-4. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
+2. Verify **007**'s first real deletion on a throwaway household before relying on it.
+3. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
 
 **Claude-buildable next (fully autonomous):**
-6. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
-7. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
+4. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
+5. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
    hardening (the index pipeline is now wired, so 040's indexes deploy cleanly).
 
 ### Minor follow-ups noted during execution
