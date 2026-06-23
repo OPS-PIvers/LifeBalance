@@ -10,9 +10,6 @@ admin.initializeApp();
 // Export Quick Add HTTP functions for iOS Shortcuts
 export { quickAddHabit, quickAddExpense, quickAddReceipt, quickAddShoppingItem, quickAddNaturalLanguage } from "./quickAdd";
 
-// Export the Gemini API proxy (holds the GEMINI_API_KEY secret server-side).
-export { geminiproxy } from "./geminiProxy";
-
 const db = admin.firestore();
 const messaging = admin.messaging();
 

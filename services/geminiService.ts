@@ -519,75 +519,6 @@ const prepareImageContent = (base64Image: string, prompt: string): Part[] => {
   ];
 };
 
-// ---------------------------------------------------------------------------
-// Transport seam: direct SDK call vs. server-side geminiproxy Cloud Function
-// (roadmap B1 / Plan 014, stage 1)
-// ---------------------------------------------------------------------------
-
-/**
- * When true, the raw Gemini model call is routed through the `geminiproxy`
- * Cloud Function (which holds the GEMINI_API_KEY secret server-side) instead of
- * the client SDK (which inlines VITE_GEMINI_API_KEY into the bundle).
- *
- * Defaults OFF: with the flag unset/false the app behaves EXACTLY as before —
- * the direct SDK path is used. A human flips this to "true" (and sets the secret)
- * to activate the proxy; a later stage removes the client key entirely.
- */
-const USE_GEMINI_PROXY = import.meta.env.VITE_USE_GEMINI_PROXY === 'true';
-
-/** Minimal request shape the transport accepts — mirrors generateContent's args. */
-interface GeminiGenerateRequest {
-  model: string;
-  contents: { parts: Part[] };
-  config: {
-    responseMimeType: string;
-    responseSchema: Schema;
-  };
-}
-
-/** Minimal response shape both transports return — only `text` is consumed. */
-interface GeminiGenerateResult {
-  text: string | undefined;
-}
-
-/**
- * Calls the `geminiproxy` Cloud Function with the assembled request and adapts
- * its `{ text }` result into the same shape the direct SDK path yields. The
- * `firebase/functions` import is dynamic so it (and any proxy-only code) stays
- * out of the boot bundle when the flag is off.
- */
-const callViaProxy = async (req: GeminiGenerateRequest): Promise<GeminiGenerateResult> => {
-  const [{ httpsCallable }, { functions }] = await Promise.all([
-    import("firebase/functions"),
-    import("@/firebase.config"),
-  ]);
-  const callable = httpsCallable<GeminiGenerateRequest, GeminiGenerateResult>(
-    functions,
-    'geminiproxy',
-  );
-  const { data } = await callable(req);
-  return { text: data.text };
-};
-
-/**
- * Single transport seam for the raw model call. Branches on USE_GEMINI_PROXY:
- *  - proxy ON (and no test client injected): route through geminiproxy.
- *  - otherwise (default): the existing direct SDK call, unchanged.
- *
- * An explicitly injected `client` (test harness) always takes the direct path so
- * existing unit tests keep exercising the SDK call shape regardless of the flag.
- */
-const dispatchGenerateContent = (
-  client: Pick<typeof ai, 'models'>,
-  clientInjected: boolean,
-  req: GeminiGenerateRequest,
-): Promise<GeminiGenerateResult> => {
-  if (USE_GEMINI_PROXY && !clientInjected) {
-    return callViaProxy(req);
-  }
-  return client.models.generateContent(req);
-};
-
 /**
  * Generic helper to generate JSON content from Gemini.
  *
@@ -617,11 +548,9 @@ async function generateJsonContent<T>(
     : { parts: promptOrParts };
 
   try {
-    // 2. Call Gemini with timeout + transient-error retry. The transport (direct
-    // SDK vs. geminiproxy Cloud Function) is chosen by dispatchGenerateContent;
-    // the timeout/retry/quota logic wraps it identically either way.
+    // 2. Call Gemini with timeout + transient-error retry
     const response = await withTimeoutAndRetry(() =>
-      dispatchGenerateContent(client, _aiClient !== undefined, {
+      client.models.generateContent({
         model: modelName,
         contents,
         config: {
