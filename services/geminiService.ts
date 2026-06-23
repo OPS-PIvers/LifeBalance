@@ -224,50 +224,6 @@ const checkAndIncrementAiUsage = async (householdId: string): Promise<void> => {
 };
 
 /**
- * Best-effort refund of one AI quota unit, used when a request was counted up
- * front (by checkAndIncrementAiUsage) but then failed at the API layer. This
- * keeps the net effect "only successful requests consume quota" while the
- * up-front increment still enforces the cap atomically against concurrent
- * callers. Never throws — a refund failure must not mask the original error.
- */
-const refundAiUsage = async (householdId: string, opName?: string): Promise<void> => {
-  const householdRef = doc(db, 'households', householdId).withConverter(householdConverter);
-  const today = getLocalDateString();
-  try {
-    await runTransaction(db, async (txn) => {
-      const snap = await txn.get(householdRef);
-      if (!snap.exists()) return;
-      // Typed read via householdConverter — no unchecked `as Household` cast.
-      const usage = snap.data().aiUsage;
-      // Only refund if the counter is still for today and above zero.
-      if (!usage || usage.lastResetDate !== today || usage.dailyCount <= 0) return;
-      txn.update(householdRef, {
-        aiUsage: { dailyCount: usage.dailyCount - 1, lastResetDate: today },
-      });
-    });
-  } catch (err) {
-    // A refund failure leaves the household's quota off by one for the day; log
-    // rich context so it can be reconciled, and best-effort append to the audit
-    // log (finding 1.4). Never throws — masking the original error is worse.
-    console.warn(
-      `Failed to refund AI usage after a failed request (household=${householdId}, op=${opName ?? 'unknown'}, date=${today}):`,
-      err
-    );
-    Promise.resolve(
-      addDoc(collection(db, 'logs/ai_usage/refund_failures'), {
-        householdId,
-        op: opName ?? 'unknown',
-        date: today,
-        error: err instanceof Error ? err.message : String(err),
-        timestamp: serverTimestamp(),
-      })
-    ).catch((auditErr: unknown) => {
-      console.error("Failed to write AI refund-failure audit log:", auditErr);
-    });
-  }
-};
-
-/**
  * Fire-and-forget audit log for a SUCCESSFUL AI request. Kept separate from the
  * quota increment so the audit trail reflects successful usage only (matching
  * the original behavior) and never blocks or fails the caller.
@@ -325,6 +281,15 @@ const isTransientError = (error: unknown): boolean => {
     const asRecord = error as unknown as Record<string, unknown>;
     const status = asRecord['status'];
     if (status === 429 || status === 503) return true;
+    // Proxy path: httpsCallable surfaces a FirebaseError whose `code` carries the
+    // server's status (e.g. "functions/unavailable" / "functions/resource-exhausted").
+    // Treat those as transient so the proxy path keeps the same auto-retry
+    // resilience the direct SDK path has for Gemini 503/429 (Plan 014).
+    const code = asRecord['code'];
+    if (typeof code === 'string' &&
+        (code.includes('unavailable') || code.includes('resource-exhausted'))) {
+      return true;
+    }
   }
   return false;
 };
@@ -671,10 +636,13 @@ async function generateJsonContent<T>(
     return parsed;
   } catch (error) {
     console.error("Gemini API Error:", error);
-    // The request was counted up front for atomic cap enforcement; since it
-    // failed (timeout, transient/non-transient API error, or unparseable/
-    // invalid response), refund the quota unit so failures don't lock users out.
-    await refundAiUsage(householdId, modelName);
+    // The quota was incremented up front (atomic cap enforcement) and is
+    // intentionally NOT refunded on failure: a client-side decrement (-1) is
+    // rejected by firestore.rules (which only permits +1 aiUsage updates),
+    // producing a 403 + audit-log-permission cascade in the console. With
+    // transient Gemini errors now retried (isTransientError + the geminiproxy
+    // error mapping), genuine failures are rare, so a failed call simply consumes
+    // one unit of the daily cap rather than triggering a rules-rejected refund.
     throw error;
   }
 }

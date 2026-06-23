@@ -164,4 +164,24 @@ describe('geminiService transport switch', () => {
     expect(httpsCallableMock).toHaveBeenCalledTimes(1);
     expect(generateContentMock).not.toHaveBeenCalled();
   });
+
+  it('retries the proxy call on a transient (unavailable) error, then succeeds', async () => {
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    const { suggestMeal } = await import('./geminiService');
+
+    // The FirebaseError shape httpsCallable produces for a server-side
+    // HttpsError('unavailable', ...) — carries a `functions/unavailable` code but
+    // NO transient keyword in its message, so only the code-based path can mark it
+    // retryable. The first invocation rejects; the retry resolves.
+    const transient = Object.assign(new Error('proxy failed'), { code: 'functions/unavailable' });
+    callableInvokeMock
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({ data: { text: MEAL_JSON } });
+
+    const result = await suggestMeal('hh', { ...REQUEST });
+
+    expect(result.name).toBe('Quick Pasta');
+    // Retried once after the transient failure (2 invocations total).
+    expect(callableInvokeMock).toHaveBeenCalledTimes(2);
+  });
 });
