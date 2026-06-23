@@ -114,6 +114,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [stores, setStores] = useState<Store[]>(SEED_STORES);
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
+  const [currency, setCurrency] = useState<string>('USD');
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -133,6 +134,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
 
   const completeOnboarding = useCallback(async () => {
     toast.success('Mock: Onboarding complete');
+  }, []);
+
+  const setHouseholdCurrency = useCallback(async (newCurrency: string) => {
+    setCurrency(newCurrency);
+    toast.success('Mock: Currency updated');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -434,7 +440,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     rewardsInventory: rewards,
     coreTemplates: { expenses: [], buckets: [] },
     stores: stores,
-    groceryCategories: groceryCategories
+    groceryCategories: groceryCategories,
+    currency
 
   } as unknown as Household;
   const bucketSpentMap = new Map();
@@ -579,6 +586,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     removeMember: noOp,
     deleteHousehold,
     completeOnboarding,
+    setHouseholdCurrency,
   };
 
   // Test Mode does not need render isolation, so every slice receives the same

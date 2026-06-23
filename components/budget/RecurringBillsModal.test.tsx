@@ -92,7 +92,9 @@ describe('RecurringBillsModal', () => {
     // Monthly Income: 5000
 
     expect(screen.getByText('$124.24')).toBeInTheDocument();
-    expect(screen.getByText('$5,000.00')).toBeInTheDocument();
+    // $5,000.00 now appears twice: the Monthly Income summary and the Salary
+    // per-instance amount (both use the shared currency formatter with cents).
+    expect(screen.getAllByText('$5,000.00').length).toBeGreaterThanOrEqual(1);
   });
 
   it('calls onClose when close button is clicked', () => {

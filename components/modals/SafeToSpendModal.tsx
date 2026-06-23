@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Wallet, Receipt, CreditCard, Clock } from 'lucide-react';
 import { useFinance, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { endOfMonth, parseISO, isAfter, isBefore, format } from 'date-fns';
 import { sumMoney, addMoney, subtractMoney } from '@/utils/money';
 import { getTransactionsForBucket } from '@/utils/bucketSpentCalculator';
@@ -23,6 +24,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
     bucketSpentMap,
     currentPeriodId,
   } = useFinance();
+  const fmt = useFormatCurrency();
 
   // Re-calculate the breakdown for display (logic mirrors safeToSpendCalculator)
 
@@ -107,7 +109,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
               </div>
             </div>
             <span className="text-lg font-mono font-bold text-brand-800 dark:text-slate-100">
-              ${totalChecking.toLocaleString()}
+              {fmt(totalChecking)}
             </span>
           </div>
 
@@ -123,14 +125,14 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                     <span className="text-xxs text-brand-400 dark:text-slate-400">{rangeLabel}</span>
                   </div>
                 </div>
-                <span className="font-mono font-bold">-${totalUnpaidBills.toLocaleString()}</span>
+                <span className="font-mono font-bold">-{fmt(totalUnpaidBills)}</span>
              </div>
              {unpaidBillsItems.length > 0 && (
                <div className="pl-6 space-y-1">
                  {unpaidBillsItems.map(bill => (
                    <div key={bill.id} className="flex justify-between text-xs text-brand-400 dark:text-slate-400">
                      <span>{bill.title} ({format(parseISO(bill.date), 'MMM d')})</span>
-                     <span>${bill.amount}</span>
+                     <span>{fmt(bill.amount)}</span>
                    </div>
                  ))}
                </div>
@@ -147,7 +149,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                   <span className="text-xxs text-brand-400 dark:text-slate-400">Spent but not yet cleared</span>
                 </div>
               </div>
-              <span className="font-mono font-bold">-${pendingSpend.toLocaleString()}</span>
+              <span className="font-mono font-bold">-{fmt(pendingSpend)}</span>
             </div>
           )}
 
@@ -162,7 +164,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                   </div>
                 </div>
                 <span className="font-mono font-bold text-brand-600 dark:text-slate-300">
-                  ${totalBucketLiability.toLocaleString()}
+                  {fmt(totalBucketLiability)}
                 </span>
              </div>
 
@@ -184,7 +186,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
                              </span>
                            )}
                          </div>
-                         <span className="font-mono">${b.remaining.toFixed(2)}</span>
+                         <span className="font-mono">{fmt(b.remaining)}</span>
                        </div>
 
                        {/* Meter */}
@@ -213,7 +215,7 @@ const SafeToSpendModal: React.FC<SafeToSpendModalProps> = ({ isOpen, onClose }) 
           <div className="bg-brand-50 dark:bg-slate-700/50 rounded-xl p-4 border border-brand-100 dark:border-slate-700 flex items-center justify-between">
             <span className="font-bold text-brand-800 dark:text-slate-100">Safe to Spend</span>
             <span className={`text-2xl font-mono font-bold ${safeToSpend >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-              ${Math.abs(safeToSpend).toLocaleString()}
+              {fmt(Math.abs(safeToSpend))}
             </span>
           </div>
           

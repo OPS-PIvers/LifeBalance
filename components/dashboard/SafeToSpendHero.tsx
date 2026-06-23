@@ -2,11 +2,9 @@ import React, { useState } from 'react';
 import { ChevronDown, Wallet, Receipt, Clock, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { cn } from '@/utils/cn';
 import { haptic } from '@/utils/haptics';
-
-const currency = (n: number) =>
-  `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * Hero card surfacing the app's signature metric. Shows the big number,
@@ -15,6 +13,7 @@ const currency = (n: number) =>
  */
 export const SafeToSpendHero: React.FC = () => {
   const { safeToSpendBreakdown: breakdown } = useFinance();
+  const fmt = useFormatCurrency();
   const [expanded, setExpanded] = useState(false);
 
   // Render a loading skeleton while the context hasn't produced a breakdown yet.
@@ -57,7 +56,7 @@ export const SafeToSpendHero: React.FC = () => {
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-white/70">Safe to Spend</p>
             <p className="mt-1 text-4xl font-bold font-mono tracking-tight tabular-nums text-white">
-              {currency(safeToSpend)}
+              {fmt(safeToSpend)}
             </p>
             <p className="mt-1 text-xs font-medium text-white/70">
               {breakdown.nextPaycheckDate
@@ -83,22 +82,22 @@ export const SafeToSpendHero: React.FC = () => {
           id="sts-breakdown"
           className="mt-4 space-y-2 border-t border-white/20 pt-4 animate-in fade-in slide-in-from-top-2 duration-200"
         >
-          <Row icon={<Wallet size={14} />} label="Checking balance" value={currency(breakdown.checkingBalance)} />
+          <Row icon={<Wallet size={14} />} label="Checking balance" value={fmt(breakdown.checkingBalance)} />
           <Row
             icon={<Receipt size={14} />}
             label="Unpaid bills this period"
-            value={`- ${currency(breakdown.unpaidBills)}`}
+            value={`- ${fmt(breakdown.unpaidBills)}`}
           />
           {breakdown.pendingSpend > 0 && (
             <Row
               icon={<Clock size={14} />}
               label="Pending transactions"
-              value={`- ${currency(breakdown.pendingSpend)}`}
+              value={`- ${fmt(breakdown.pendingSpend)}`}
             />
           )}
           <div className="flex items-center justify-between border-t border-white/20 pt-2 text-sm font-bold text-white">
             <span>Safe to spend</span>
-            <span className="font-mono tabular-nums">{currency(breakdown.safeToSpend)}</span>
+            <span className="font-mono tabular-nums">{fmt(breakdown.safeToSpend)}</span>
           </div>
         </div>
       )}

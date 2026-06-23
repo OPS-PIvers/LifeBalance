@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
@@ -23,6 +24,7 @@ interface SplitItem {
 
 const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, onClose, transaction }) => {
   const { splitTransaction, buckets } = useFinance();
+  const fmt = useFormatCurrency();
   const [splits, setSplits] = useState<SplitItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -91,7 +93,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
     if (!transaction || isProcessing) return;
 
     if (!isValidTotal) {
-      toast.error(`Total must equal $${totalAmount.toFixed(2)}`);
+      toast.error(`Total must equal ${fmt(totalAmount)}`);
       return;
     }
 
@@ -149,7 +151,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
       <div className="p-4 bg-brand-50 dark:bg-slate-700/50 border-b border-brand-100 dark:border-slate-700">
         <div className="flex justify-between items-center mb-1">
           <span className="text-sm font-bold text-brand-600 dark:text-slate-300">Original Transaction</span>
-          <span className="text-lg font-bold text-brand-800 dark:text-slate-100">${totalAmount.toFixed(2)}</span>
+          <span className="text-lg font-bold text-brand-800 dark:text-slate-100">{fmt(totalAmount)}</span>
         </div>
         <div className="text-xs text-brand-400 dark:text-slate-400">
           {transaction.merchant} • {transaction.date}
@@ -241,10 +243,10 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
             <span>{isValidTotal ? 'Total Matches' : 'Total Mismatch'}</span>
           </div>
           <div className="text-right">
-             <div>Total: ${currentTotal.toFixed(2)}</div>
+             <div>Total: {fmt(currentTotal)}</div>
              {!isValidTotal && (
                <div className="text-xs opacity-80">
-                 {remaining > 0 ? `Remaining: $${remaining.toFixed(2)}` : `Over: $${Math.abs(remaining).toFixed(2)}`}
+                 {remaining > 0 ? `Remaining: ${fmt(remaining)}` : `Over: ${fmt(Math.abs(remaining))}`}
                </div>
              )}
           </div>

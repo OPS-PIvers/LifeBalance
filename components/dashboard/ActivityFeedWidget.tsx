@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Activity, Receipt, CheckSquare } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
@@ -15,6 +16,7 @@ interface ActivityItem {
 export const ActivityFeedWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
+  const fmt = useFormatCurrency();
 
   const recentActivity = useMemo(() => {
     const transactionActivities: ActivityItem[] = transactions
@@ -80,7 +82,7 @@ export const ActivityFeedWidget: React.FC = () => {
             </div>
             {activity.type === 'transaction' && activity.amount !== undefined && (
               <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                 ${activity.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                 {fmt(activity.amount, { decimals: 0 })}
               </span>
             )}
           </div>

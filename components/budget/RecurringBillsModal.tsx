@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { CalendarItem } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -16,6 +17,7 @@ interface RecurringBillsModalProps {
 
 const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClose }) => {
   const { calendarItems, updateCalendarItem, deleteCalendarItem } = useFinance();
+  const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [actionItem, setActionItem] = useState<CalendarItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -140,7 +142,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               <TrendingDown size={14} /> Monthly Expenses
             </div>
             <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              ${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {fmt(totalExpenses)}
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Estimated fixed costs</div>
           </div>
@@ -149,7 +151,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               <TrendingUp size={14} /> Monthly Income
             </div>
             <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              ${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {fmt(totalIncome)}
             </div>
             <div className="text-xs text-slate-400 dark:text-slate-500 mt-1">Estimated recurring income</div>
           </div>
@@ -229,7 +231,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
 
                     <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
                         <div className="text-right">
-                          <div className="font-mono font-bold text-slate-900 dark:text-slate-100">${item.amount.toLocaleString()}</div>
+                          <div className="font-mono font-bold text-slate-900 dark:text-slate-100">{fmt(item.amount)}</div>
                           <div className="text-xxs text-slate-400 dark:text-slate-500">per instance</div>
                         </div>
 

@@ -142,8 +142,9 @@ describe('TransactionMasterList Summary Widget', () => {
     // Count: 1
 
     expect(screen.getByText('+$0.00')).toBeInTheDocument();
-    expect(screen.getByText('-$2,000.00')).toBeInTheDocument();
-    expect(screen.getByText('-$2,000.00')).toBeInTheDocument();
+    // Expense (-$2,000.00) and Net (-$2,000.00) now render identically: the
+    // shared formatter renders negatives as "-$2,000.00" (Intl) for both lines.
+    expect(screen.getAllByText('-$2,000.00').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 

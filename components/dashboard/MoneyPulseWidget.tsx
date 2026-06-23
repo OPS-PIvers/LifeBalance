@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfWeek, subWeeks, isSameWeek, parseISO, formatDistanceToNow } from 'date-fns';
 import { roundMoney } from '@/utils/money';
 import { TrendingUp, TrendingDown, Receipt, ArrowRight, Wallet } from 'lucide-react';
@@ -7,6 +8,7 @@ import { Link } from 'react-router-dom';
 
 export const MoneyPulseWidget: React.FC = () => {
   const { transactions } = useFinance();
+  const fmt = useFormatCurrency();
 
   // 1. Calculate Spending Pulse
   const spendingStats = useMemo(() => {
@@ -81,7 +83,7 @@ export const MoneyPulseWidget: React.FC = () => {
         <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Spent This Week</p>
         <div className="flex items-baseline gap-3">
           <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            ${spendingStats.thisWeek.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+            {fmt(spendingStats.thisWeek, { decimals: 0 })}
           </p>
           <div
             className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
@@ -120,7 +122,7 @@ export const MoneyPulseWidget: React.FC = () => {
                  </div>
               </div>
               <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                 ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                 {fmt(tx.amount, { decimals: 0 })}
               </span>
             </div>
           ))}

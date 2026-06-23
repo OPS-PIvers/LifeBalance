@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
 import { sumMoney } from '@/utils/money';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
@@ -36,6 +37,7 @@ const BudgetBuckets: React.FC = () => {
     currentPeriodId,
     deleteTransaction,
   } = useFinance();
+  const fmt = useFormatCurrency();
 
   // ⚡ Bolt Optimization: Pre-calculate transactions grouped by bucket
   const transactionsByBucket = useMemo(() => {
@@ -338,7 +340,7 @@ const BudgetBuckets: React.FC = () => {
         </h3>
 
         <div className="mb-4 text-sm text-brand-600 dark:text-slate-300 bg-brand-50 dark:bg-slate-700/50 p-3 rounded-xl border border-brand-100 dark:border-slate-700">
-          Needs <strong>${amountToCover}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
+          Needs <strong>{fmt(amountToCover)}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
         </div>
 
         <div className="space-y-3">
@@ -359,7 +361,7 @@ const BudgetBuckets: React.FC = () => {
               {savingsAccounts.length > 0 && (
                 <optgroup label="Savings Accounts">
                   {savingsAccounts.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} (${a.balance})</option>
+                      <option key={a.id} value={a.id}>{a.name} ({fmt(a.balance)})</option>
                   ))}
                 </optgroup>
               )}
@@ -371,7 +373,7 @@ const BudgetBuckets: React.FC = () => {
                     const bSpent = bucketSpentMap.get(b.id)?.verified || 0;
                     const avail = b.limit - bSpent;
                     return (
-                      <option key={b.id} value={b.id}>{b.name} (${avail.toFixed(2)} avail)</option>
+                      <option key={b.id} value={b.id}>{b.name} ({fmt(avail)} avail)</option>
                     );
                   })}
                 </optgroup>
@@ -384,7 +386,7 @@ const BudgetBuckets: React.FC = () => {
             <div className="text-xs flex justify-between items-center text-brand-500 dark:text-slate-400 px-1">
                 <span>Remaining in source:</span>
                 <span className={`font-mono font-bold ${remainingAfterTransfer < 0 ? 'text-money-neg' : 'text-brand-800 dark:text-slate-200'}`}>
-                  ${remainingAfterTransfer.toLocaleString()}
+                  {fmt(remainingAfterTransfer)}
                 </span>
             </div>
           )}

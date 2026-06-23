@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFinance, useGamification, useHouseholdCore, useShopping } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Search, Filter, X, Trash2, Loader2, Download, Layers, CheckSquare, Tag, Check, Edit, Copy, Scissors, Receipt, PlusCircle } from 'lucide-react';
-import { Transaction, INCOME_CATEGORY, CURRENCY_FORMAT_OPTIONS } from '@/types/schema';
+import { Transaction, INCOME_CATEGORY } from '@/types/schema';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import SplitTransactionModal from '@/components/modals/SplitTransactionModal';
 import BatchCategorizeModal from '@/components/modals/BatchCategorizeModal';
@@ -38,6 +39,7 @@ const TransactionMasterList: React.FC = () => {
   const { householdId } = useHouseholdCore();
   const { stores } = useShopping();
   const { habits } = useGamification();
+  const fmt = useFormatCurrency();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -478,19 +480,19 @@ const TransactionMasterList: React.FC = () => {
           <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
             <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Income</p>
             <p className="text-lg font-bold text-money-pos font-mono">
-              +${summary.income.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              +{fmt(summary.income)}
             </p>
           </div>
           <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
             <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Expense</p>
             <p className="text-lg font-bold text-money-neg font-mono">
-              -${summary.expense.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              -{fmt(summary.expense)}
             </p>
           </div>
           <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
             <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Net</p>
             <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
-              {net >= 0 ? '+' : ''}${net.toLocaleString(undefined, CURRENCY_FORMAT_OPTIONS)}
+              {net >= 0 ? '+' : ''}{fmt(net)}
             </p>
           </div>
           <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
@@ -777,7 +779,7 @@ const TransactionMasterList: React.FC = () => {
           <div className="p-4 space-y-4">
             <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Confirm Delete</h3>
             <p className="text-brand-600 dark:text-slate-300">
-              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>${transactionToDelete.amount.toFixed(2)}</strong>?
+              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>?
             </p>
             <p className="text-sm text-money-neg font-bold">
               This action cannot be undone.

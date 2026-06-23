@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
@@ -19,6 +20,7 @@ import RecurringBillsModal from './RecurringBillsModal';
 const BudgetCalendar: React.FC = () => {
   const { calendarItems, addCalendarItem, updateCalendarItem, deleteCalendarItem, accounts } = useFinance();
   const { todos, completeToDo } = useTodos();
+  const fmt = useFormatCurrency();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -430,7 +432,7 @@ const BudgetCalendar: React.FC = () => {
                 
                 <div className="flex flex-col items-end gap-1">
                   <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                    ${item.amount.toLocaleString()}
+                    {fmt(item.amount)}
                   </span>
                   
                   {/* Action Buttons */}

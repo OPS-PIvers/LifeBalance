@@ -92,6 +92,7 @@ import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { roundMoney } from '@/utils/money';
+import { formatCurrency } from '@/utils/formatCurrency';
 import {
   BUCKET_HISTORY_LIMIT,
   INSIGHTS_LIMIT,
@@ -296,6 +297,9 @@ export interface HouseholdContextType {
   /** Mark the first-run onboarding wizard as finished so it is never shown again. */
   completeOnboarding: () => Promise<void>;
 
+  /** Set the household's display currency (ISO-4217 code, e.g. 'USD', 'EUR'). */
+  setHouseholdCurrency: (currency: string) => Promise<void>;
+
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -399,7 +403,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding'
+  | 'completeOnboarding' | 'setHouseholdCurrency'
 >;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -683,6 +687,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // and corrects any accumulated drift. See T1 in the optimization pass.
   const habitsRef = useRef<Habit[]>(habits);
   useEffect(() => { habitsRef.current = habits; }, [habits]);
+
+  // Mirror the latest household settings so listener callbacks (e.g. the
+  // pending-item drain's success toast) can read the configured currency without
+  // keying their effect on `householdSettings` — which is rewritten on every
+  // points delta and would otherwise re-subscribe the listener constantly.
+  const householdSettingsRef = useRef<Household | null>(householdSettings);
+  useEffect(() => { householdSettingsRef.current = householdSettings; }, [householdSettings]);
 
   // Habit Actions Hook
   const habitActions = useHabitActions(householdId, currentUser, habits, householdSettings);
@@ -1125,7 +1136,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
                 throw new Error(parsed.error);
               }
               await handleExpense(parsed);
-              toast.success(`Added expense: $${parsed.amount?.toFixed(2) || '0.00'} at ${parsed.merchant || 'Unknown'}`);
+              toast.success(`Added expense: ${formatCurrency(parsed.amount ?? 0, { currency: householdSettingsRef.current?.currency })} at ${parsed.merchant || 'Unknown'}`);
             }
 
             // Mark as processed
@@ -3106,6 +3117,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await updateDoc(doc(db, 'households', householdId), { onboardingComplete: true });
   }, [householdId]);
 
+  const setHouseholdCurrency = useCallback(async (currency: string) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { currency });
+  }, [householdId]);
+
   // --- ACTIONS: MEALS ---
 
   const addMeal = useCallback(async (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }): Promise<string> => {
@@ -3868,11 +3884,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     removeMember,
     deleteHousehold,
     completeOnboarding,
+    setHouseholdCurrency,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding,
+    completeOnboarding, setHouseholdCurrency,
   ]);
 
   return (

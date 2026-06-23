@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { roundMoney, sumMoney } from '@/utils/money';
 import { PieChart, ArrowRight } from 'lucide-react';
@@ -7,6 +8,7 @@ import { Link } from 'react-router-dom';
 
 export const CategorySpendWidget: React.FC = () => {
   const { transactions } = useFinance();
+  const fmt = useFormatCurrency();
 
   const categoryStats = useMemo(() => {
     const now = new Date();
@@ -79,7 +81,7 @@ export const CategorySpendWidget: React.FC = () => {
           <div key={item.name} className="space-y-2">
             <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
               <span>{item.name}</span>
-              <span className="font-mono text-slate-900 dark:text-slate-100">${item.amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+              <span className="font-mono text-slate-900 dark:text-slate-100">{fmt(item.amount, { decimals: 0 })}</span>
             </div>
             <div className="h-1.5 bg-slate-100/50 dark:bg-slate-700/50 rounded-full overflow-hidden">
                <div
