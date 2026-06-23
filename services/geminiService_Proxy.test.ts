@@ -148,4 +148,20 @@ describe('geminiService transport switch', () => {
     expect(injectedGenerate).toHaveBeenCalledTimes(1);
     expect(httpsCallableMock).not.toHaveBeenCalled();
   });
+
+  it('works through the proxy with no client API key in the bundle (stage-2 security state)', async () => {
+    // Simulate the production stage-2 state: proxy ON and the client key removed
+    // from the build, so geminiService's module-level apiKey resolves to "".
+    vi.stubEnv('VITE_USE_GEMINI_PROXY', 'true');
+    vi.stubEnv('VITE_GEMINI_API_KEY', '');
+    const { suggestMeal } = await import('./geminiService');
+
+    const result = await suggestMeal('hh', { ...REQUEST });
+
+    // No client key, yet the call still succeeds via the proxy — validateApiKey
+    // must NOT block the proxy path, otherwise removing the key would break AI.
+    expect(result.name).toBe('Quick Pasta');
+    expect(httpsCallableMock).toHaveBeenCalledTimes(1);
+    expect(generateContentMock).not.toHaveBeenCalled();
+  });
 });
