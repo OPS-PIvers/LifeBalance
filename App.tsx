@@ -12,6 +12,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 
 // Lazy load pages for code splitting and faster initial load
 const Login = React.lazy(() => import('./pages/Login'));
+const PrivacyPolicy = React.lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = React.lazy(() => import('./pages/TermsOfService'));
 const HouseholdSetup = React.lazy(() => import('./pages/HouseholdSetup'));
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Budget = React.lazy(() => import('./pages/Budget'));
@@ -134,6 +136,8 @@ const App: React.FC = () => {
               <Routes>
                 {/* Public Routes */}
                 <Route path="/login" element={<Login />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
                 <Route path="/setup" element={<HouseholdSetup />} />
 
                 {/* First-run onboarding wizard — full-page (no MainLayout). Gated

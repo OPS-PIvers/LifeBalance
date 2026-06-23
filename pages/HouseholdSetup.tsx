@@ -8,6 +8,52 @@ import toast from 'react-hot-toast';
 
 type ViewMode = 'choice' | 'create' | 'join';
 
+interface ConsentCheckboxProps {
+  id: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+}
+
+/**
+ * Required legal-consent checkbox (Plan 011). Links open the public legal pages
+ * in a new tab (HashRouter-correct hrefs) so the half-filled setup form is not
+ * lost. Rendered above each submit button in both the create and join forms.
+ */
+const ConsentCheckbox: React.FC<ConsentCheckboxProps> = ({ id, checked, onChange, disabled }) => (
+  <div className="flex items-start gap-3">
+    <input
+      id={id}
+      type="checkbox"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+      disabled={disabled}
+      className="mt-0.5 h-4 w-4 shrink-0 rounded border-brand-300 dark:border-slate-600 text-brand-600 focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+    />
+    <label htmlFor={id} className="text-xs text-brand-600 dark:text-slate-300 leading-relaxed">
+      I agree to the{' '}
+      <a
+        href="#/terms"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-brand-700 dark:text-brand-300 underline hover:text-brand-800 dark:hover:text-brand-200"
+      >
+        Terms of Service
+      </a>{' '}
+      and{' '}
+      <a
+        href="#/privacy"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="font-medium text-brand-700 dark:text-brand-300 underline hover:text-brand-800 dark:hover:text-brand-200"
+      >
+        Privacy Policy
+      </a>
+      .
+    </label>
+  </div>
+);
+
 const HouseholdSetup: React.FC = () => {
   const { user, householdId, loading: authLoading, setHouseholdId } = useAuth();
   const navigate = useNavigate();
@@ -24,6 +70,9 @@ const HouseholdSetup: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [householdName, setHouseholdName] = useState('');
   const [inviteCode, setInviteCode] = useState(initialInviteCode ?? '');
+  // Required legal consent (Plan 011). One flag serves both forms since only one
+  // renders at a time. Captured at signup and persisted on the member doc.
+  const [consentChecked, setConsentChecked] = useState(false);
 
   // Set just before a create/join handler navigates the user onward. Without it,
   // the "already has household" redirect below would fire on the next render
@@ -43,7 +92,7 @@ const HouseholdSetup: React.FC = () => {
 
   const handleCreateHousehold = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !householdName.trim()) return;
+    if (!user || !householdName.trim() || !consentChecked) return;
 
     setLoading(true);
     try {
@@ -68,7 +117,7 @@ const HouseholdSetup: React.FC = () => {
 
   const handleJoinHousehold = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !inviteCode.trim()) return;
+    if (!user || !inviteCode.trim() || !consentChecked) return;
 
     setLoading(true);
     try {
@@ -151,9 +200,16 @@ const HouseholdSetup: React.FC = () => {
                 />
               </div>
 
+              <ConsentCheckbox
+                id="consent-create"
+                checked={consentChecked}
+                onChange={setConsentChecked}
+                disabled={loading}
+              />
+
               <button
                 type="submit"
-                disabled={loading || !householdName.trim()}
+                disabled={loading || !householdName.trim() || !consentChecked}
                 className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 {loading ? (
@@ -202,9 +258,16 @@ const HouseholdSetup: React.FC = () => {
                 </p>
               </div>
 
+              <ConsentCheckbox
+                id="consent-join"
+                checked={consentChecked}
+                onChange={setConsentChecked}
+                disabled={loading}
+              />
+
               <button
                 type="submit"
-                disabled={loading || inviteCode.length !== 6}
+                disabled={loading || inviteCode.length !== 6 || !consentChecked}
                 className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 {loading ? (
