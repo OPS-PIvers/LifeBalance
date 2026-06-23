@@ -19,6 +19,8 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#670](https://github.com/OPS-PIvers/LifeBalance/pull/670) | **011** Privacy Policy + ToS pages (DRAFT, `[PLACEHOLDER]`s) + AI-data notice + required signup consent gate (both setup forms) persisting `consentAcceptedAt`/`consentVersion` | **MERGED + DEPLOYED** — gate is `/setup`-only (existing users unaffected); no rules change; 1040 tests. **You own the legal review + placeholders pre-launch** |
+| [#669](https://github.com/OPS-PIvers/LifeBalance/pull/669) | **013** Open-signup behind `app_config/global.openSignup` flag (mirrors the AI kill-switch); Private Alpha guard skips `beta_testers` when ON | **MERGED + DEPLOYED** — **default OFF / fail-closed** (dormant until you flip it); no rules change. Flip steps in `docs/DEPLOY_CHECKLIST.md` §3 |
 | [#667](https://github.com/OPS-PIvers/LifeBalance/pull/667) | **030** Playwright E2E skeleton — boots Test Mode (`?test=true`) + navigates Budget/Habits via the bottom nav; insulated from the required `validate` job; separate **non-required** `e2e` CI job | **MERGED + DEPLOYED** — both CI checks green (`validate` ~3m, `e2e` ~1m); 2/2 specs pass in CI; no app-bundle change |
 | [#666](https://github.com/OPS-PIvers/LifeBalance/pull/666) | **023 follow-up** Cloud Functions money strings made currency-aware (bill reminder, low-balance alert, quickAdd expense) via a server-side `formatCurrency()` twin | **MERGED + DEPLOYED** — functions deploy green; 54 functions tests pass; reads `household.currency` (USD fallback) |
 | [#664](https://github.com/OPS-PIvers/LifeBalance/pull/664) | **023** Centralize currency formatting — `formatCurrency()`/`useFormatCurrency()` + `Household.currency` (default USD) + Settings selector; ~25 money displays migrated | **MERGED + DEPLOYED + VERIFIED LIVE** — consistent `$1,234.56`; 0 console errors on dashboard + budget |
@@ -62,8 +64,8 @@ _Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mo
 | 008 | Firebase Analytics instrumentation (measurementId already in env) | 0 | C | LOW | ✅ DONE (#644) — verified live (GA4 beacons firing); `sign_up`/`login` wired, more events trivial follow-ups |
 | 009 | Remove hardcoded admin UID after claim provisioned (B2) | 0 | C→H | HIGH | TODO (blocked on Human-Checklist #3) |
 | 010 | Firestore rules unit tests (`@firebase/rules-unit-testing`) | 1 | C | LOW | ✅ DONE (#641) — 32 assertions; CI gate live (JDK 21 pinned); unblocks all rules changes |
-| 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | TODO |
-| 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | TODO |
+| 011 | Privacy Policy + ToS draft + consent + AI notice (B5) | 0 | C→H | LOW | ✅ **DONE (#670)** — /privacy + /terms (DRAFT + `[PLACEHOLDER]`s), AI-data notice, required consent gate on both `/setup` forms persisting `consentAcceptedAt`/`consentVersion`; no rules change; existing users unaffected. **Human: own the legal review + fill placeholders before public launch** |
+| 013 | Allowlist → open-signup behind a feature flag | 0/1 | C→H | MED | ✅ **DONE (#669)** — `app_config/global.openSignup` flag (default OFF / fail-closed); Private Alpha guard skips `beta_testers` when ON; no rules change. **Human: set the flag + Firebase authorized domain to open signup** (`docs/DEPLOY_CHECKLIST.md` §3) |
 | 014 | Proxy Gemini through a Cloud Function (B1 real fix) | 0 | C→H | MED | ✅ **DONE (#660, #662)** — proxy ACTIVE; client key removed **and rotated** (secret v2; old key dead) — B1 fully closed. Cold-start fix (client 90s / fn 120s); transient 503/429 auto-retry + no refund-403 cascade (#662). Live-verified end-to-end (fn rev 00004) |
 | 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
 | 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | ✅ DONE (#658) — merged + deployed after your Test-Mode walkthrough |
@@ -72,8 +74,8 @@ _Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mo
 | 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | ✅ DONE (#667) — boots Test Mode + navigates Budget/Habits; non-required `e2e` CI job; required `validate` job insulated (vitest/tsc/eslint all exclude `e2e/`) |
 | 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C→H | MED (HIGH for calendar) | 📝 **PLAN WRITTEN** ([040](./040-bound-unbounded-listeners.md)) — ready for human-watched execution; 3 PRs (grocery → meals → calendar); calendar needs an index-only PR + index-build watch first. Not auto-shipped (silent Safe-to-Spend breakage risk on an atomic-deploy prod) |
 | 023-fu | Cloud Functions money strings → currency-aware (023 follow-up) | 1 | C | LOW | ✅ DONE (#666) — server-side `formatCurrency()` twin; bill/alert/quickAdd strings read `household.currency` |
-| 050–052 | Stripe billing code + entitlements + freemium gating | 2 | C / H(keys) | MED | TODO |
-| 060–064 | Recap, proactive insights, referrals, badges, notification-scan cost fix | 3 | C | MED | TODO |
+| 050–052 | Stripe billing code + entitlements + freemium gating | 2 | C→H | MED (HIGH for 051 rules) | 📝 **PLAN WRITTEN** ([050](./050-stripe-monetization.md)) — greenfield, additive (per-household model already fits). Build dormant against test keys; entitlements server-truth; 051 rules change behind Plan 010 tests + human-watch. **Human: Stripe account + entity + bank + live keys/webhook secret.** Don't start before Phase 0/1 exit |
+| 060–064 | Recap, proactive insights, referrals, badges, notification-scan cost fix | 3 | C / C→H | MED | **064** 📝 **PLAN WRITTEN** ([064](./064-notification-scan-cost.md)) — the #1 cost item ($50→$3k at scale); `notificationsEnabled` boolean + collection-group query (improves on `todo/04`'s DST-unsafe timeslot); index+migration first, human-watched. 060/061/062/063 still TODO |
 | 070–072 | Cost-control, context split, admin panel + audit log | 4 | C | MED | TODO |
 
 Lower-severity audit findings not yet ticketed (atomicity MEDs CORRECTNESS-02/04/05/06, SEC-05/06/10/11,
@@ -84,11 +86,17 @@ nearest related plan as those files are touched.
 
 Phase-0 `[C]` safety items **004, 006, 008, 010, 012, 015** are shipped + deployed; **007**, **022**,
 **020** (onboarding), **014** (Gemini proxy — active, client key removed), **023** (currency) + its
-**Cloud Functions follow-up** (#666), and **030** (Playwright E2E skeleton, #667) are merged + deployed;
+**Cloud Functions follow-up** (#666), **030** (Playwright E2E skeleton, #667), **013** (open-signup flag,
+#669), and **011** (legal pages + signup consent, #670) are merged + deployed;
 **branch protection** on `main` (requiring the CI `validate` check, admins included) is **enabled**; the
-`GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open. **040** (bound the
-unbounded listeners) now has a [written plan](./040-bound-unbounded-listeners.md) but was **deliberately
-not auto-shipped** — see below.
+`GEMINI_API_KEY` secret + the deploy-SA Secret-Manager IAM are set. No PRs are open.
+
+**The safely-auto-shippable backlog is now empty.** Everything still open is either (a) **planned but
+deliberately not auto-shipped** because it can't go to an atomic-deploy prod unwatched — **040** (bound
+listeners), **050–052** (Stripe), **064** (notification-scan cost) — or (b) **blocked on a human** —
+**009** (admin claim), the **013** flip, the **011** legal review, and Stripe keys — or (c) lower-priority
+Phase-3/4 features (060/061/062/063, 070/071/072). The four "not auto-shipped" plans are written and
+executable; see below.
 
 ### ✅ 014 — fully done (#660, #662): proxy active, key removed + rotated, reliability hardened
 Decision made and executed: **route Gemini through the server-side proxy** (not client-side). The
@@ -110,11 +118,18 @@ Verified end-to-end live: a real AI insight generated through the proxy on the n
 rev 00004 / secret v2 / `timeoutSeconds` 120 (GCP audit logs); CI green incl. the new transient-mapping /
 retry / no-refund tests; new bundle boots with 0 console errors.
 
-**Needs you (human):**
+**Needs you (human) — the consolidated checklist:**
 1. **Decide the money-model fix** from [015's investigation](./015-money-model-investigation.md) — two
    opposite-signed bugs (double-count + voice invisibility); the fix is a separate MED-risk PR.
 2. Verify **007**'s first real deletion on a throwaway household before relying on it.
-3. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
+3. Provision the `admin` claim (B2 / #009) — unblocks the last Phase-0 rules change.
+4. **To open public signup** (when ready): set `app_config/global.openSignup = true` + add the prod
+   origin to Firebase Auth authorized domains (`docs/DEPLOY_CHECKLIST.md` §3). **011 first:** have the
+   `/privacy` + `/terms` drafts legally reviewed and replace every `[PLACEHOLDER: …]` before launch.
+5. **To start monetization** (Phase 2, after retention is proven): create the Stripe account + entity +
+   bank, set `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, and configure the webhook ([050 plan](./050-stripe-monetization.md) §human-checklist).
+6. **Watch the deploys** for the index/migration plans when executed: **040**, **064**, and **050/051**'s
+   rules change (atomic deploy, no rollback).
 
 ### 📝 040 — plan written, NOT auto-shipped (needs a human watching the deploy)
 The remaining Phase-1 hardening item, **040 (bound the 3 unbounded listeners)**, was scoped and written up
