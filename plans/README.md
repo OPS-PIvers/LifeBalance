@@ -19,6 +19,7 @@ All merged to `main`, auto-deployed to `lifebalance-26080`, and the live app was
 
 | PR | What | Status |
 |----|------|--------|
+| [#664](https://github.com/OPS-PIvers/LifeBalance/pull/664) | **023** Centralize currency formatting — `formatCurrency()`/`useFormatCurrency()` + `Household.currency` (default USD) + Settings selector; ~25 money displays migrated | **MERGED + DEPLOYED + VERIFIED LIVE** — consistent `$1,234.56`; 0 console errors on dashboard + budget |
 | [#662](https://github.com/OPS-PIvers/LifeBalance/pull/662) | **014** AI reliability — proxy retries transient Gemini 503/429; drop the rules-rejected quota refund (kills the 403 console cascade) | **MERGED + DEPLOYED + VERIFIED** — fn rev 00004; new bundle 0 console errors |
 | [#660](https://github.com/OPS-PIvers/LifeBalance/pull/660) | **014** Gemini proxy **finalized** — activated + `VITE_GEMINI_API_KEY` removed from the bundle; client 90s / fn 120s timeouts | **MERGED + DEPLOYED + VERIFIED LIVE** — proxy ACTIVE; key out of the bundle; **key rotated** (secret v2, old key dead) — B1 fully closed |
 | [#658](https://github.com/OPS-PIvers/LifeBalance/pull/658) | **020** First-run onboarding wizard (new-creator gated; seeds checking + starter habits) | **MERGED + DEPLOYED** (after your Test-Mode walkthrough) |
@@ -65,7 +66,7 @@ _Nothing open right now_ — #658 (020 onboarding) was merged after your Test-Mo
 | 015 | **Investigate** money model: pending-txn double-count + voice `handleExpense` divergence | 0 | C | — | ✅ DONE (#649) — 4 characterization tests + [investigation doc](./015-money-model-investigation.md); two opposite-signed bugs found, fix is a separate MED-risk decision |
 | 020 | Onboarding wizard + starter-data seeding | 1 | C | MED | ✅ DONE (#658) — merged + deployed after your Test-Mode walkthrough |
 | 022 | Delightful partner-invite link (share/QR/deep-link) | 1 | C | LOW | ✅ DONE (#650) — merged + deployed |
-| 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | TODO |
+| 023 | `formatCurrency()` abstraction + `currency` field | 1 | C | MED | ✅ **DONE (#664)** — `formatCurrency()` + `useFormatCurrency()` + `Household.currency` (default USD) + Settings selector; ~25 money displays migrated. Live-verified (consistent `$1,234.56`, 0 console errors). Cloud Functions notif strings are a follow-up |
 | 030 | Playwright E2E skeleton (uses Test Mode) | 1 | C | LOW | TODO |
 | 040 | Bound 3 unbounded listeners (`todo/14`) | 1 | C | MED | TODO |
 | 050–052 | Stripe billing code + entitlements + freemium gating | 2 | C / H(keys) | MED | TODO |
@@ -110,9 +111,10 @@ retry / no-refund tests; new bundle boots with 0 console errors.
 3. Remaining Human-Checklist (PRD §4): provision the `admin` claim (B2 / #009).
 
 **Claude-buildable next (fully autonomous):**
-4. **023 (`formatCurrency()`)** — bounded i18n enabler; replaces hardcoded `$`/`en-US`.
-5. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
+4. **040 (bound listeners — ship indexes first)** / **030 (Playwright E2E via Test Mode)** — Phase-1
    hardening (the index pipeline is now wired, so 040's indexes deploy cleanly).
+5. **023 follow-up:** make Cloud Functions push-notification money strings currency-aware (separate
+   `functions/` package; needs its own formatter).
 
 ### Minor follow-ups noted during execution
 - **CI deprecation warning:** `actions/setup-java@v4` + `actions/cache@v4` target the Node 20 runtime
