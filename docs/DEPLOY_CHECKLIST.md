@@ -122,6 +122,32 @@ the `VITE_GEMINI_API_KEY` from the client bundle entirely.
 
 ---
 
+## 3. Open signup beyond the Private Alpha allowlist (feature flag) 🟢
+
+**Where:** `app_config/global.openSignup` (read by [`services/appConfig.ts`](../services/appConfig.ts)
+`getOpenSignup()`, enforced in [`contexts/AuthContext.tsx`](../contexts/AuthContext.tsx)).
+
+By default the flag is **absent → OFF**: brand-new users (no existing household)
+must be an `active` doc in the `beta_testers` collection. To open signup to **any
+Google user**:
+
+1. **Add the production origin to authorized domains.** Firebase console → **Auth
+   → Settings → Authorized domains** → add your prod origin (e.g.
+   `app.example.com`). Google Sign-In is rejected from unlisted origins, so skip
+   this and new users can't sign in at all.
+2. **Flip the flag.** Firestore console → `app_config` → `global` doc → set field
+   **`openSignup` (boolean) = `true`**. No deploy needed; takes effect within
+   ~60 s (the reader caches for 60 s). Must be the boolean `true` — a string
+   `"true"` is treated as OFF.
+3. **To re-close** signup, set `openSignup = false` (or delete the field). The
+   `beta_testers` allowlist is enforced again on the next read.
+
+> Fail-safe: if the config doc is unreadable, `getOpenSignup()` returns `false`,
+> so a Firestore outage keeps the allowlist enforced rather than throwing signup
+> open. Existing household members are never gated regardless of this flag.
+
+---
+
 ## Notes
 
 - Firestore rules latent-bug fix for `CalendarItem.bucketId` (audit §3.3) is a

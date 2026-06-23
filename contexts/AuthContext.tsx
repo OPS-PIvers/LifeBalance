@@ -4,6 +4,7 @@ import { auth, db } from '@/firebase.config';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { getUserHousehold } from '@/services/householdService';
 import { signOut as authServiceSignOut, completeRedirectSignIn } from '@/services/authService';
+import { getOpenSignup } from '@/services/appConfig';
 import toast from 'react-hot-toast';
 
 interface AuthContextType {
@@ -82,29 +83,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // owner invited them), so the beta allowlist only gates brand-new users.
         if (adminUid && firebaseUser.uid !== adminUid && !hid) {
           try {
-            const testersRef = collection(db, 'beta_testers');
-            const q = query(testersRef, where('email', '==', firebaseUser.email));
-            const snapshot = await getDocs(q);
+            // Feature flag (Firestore `app_config/global.openSignup`): when ON,
+            // signup is open to any Google user and the beta_testers allowlist is
+            // skipped. It defaults to false (fail-closed for access), so absent
+            // the flag this is byte-identical to the Private Alpha behavior. A
+            // human flips it from the Firestore console — no deploy needed.
+            const openSignup = await getOpenSignup();
 
-            // Re-verify the session after the async beta lookup.
+            // Re-verify the session after the async config read (mirrors the
+            // re-check below) so we don't act on a stale account switch.
             if (auth.currentUser?.uid !== firebaseUser.uid) return;
 
-            let isAuthorized = false;
-            if (!snapshot.empty) {
-              const testerData = snapshot.docs[0]!.data(); // non-empty checked above
-              if (testerData.status === 'active') {
-                isAuthorized = true;
-              }
-            }
+            if (!openSignup) {
+              const testersRef = collection(db, 'beta_testers');
+              const q = query(testersRef, where('email', '==', firebaseUser.email));
+              const snapshot = await getDocs(q);
 
-            if (!isAuthorized) {
-              console.warn(`User ${firebaseUser.email} denied access (Private Alpha)`);
-              await authServiceSignOut();
-              setUser(null);
-              setHouseholdIdState(null);
-              setAccessDeniedEmail(firebaseUser.email);
-              setLoading(false);
-              return;
+              // Re-verify the session after the async beta lookup.
+              if (auth.currentUser?.uid !== firebaseUser.uid) return;
+
+              let isAuthorized = false;
+              if (!snapshot.empty) {
+                const testerData = snapshot.docs[0]!.data(); // non-empty checked above
+                if (testerData.status === 'active') {
+                  isAuthorized = true;
+                }
+              }
+
+              if (!isAuthorized) {
+                console.warn(`User ${firebaseUser.email} denied access (Private Alpha)`);
+                await authServiceSignOut();
+                setUser(null);
+                setHouseholdIdState(null);
+                setAccessDeniedEmail(firebaseUser.email);
+                setLoading(false);
+                return;
+              }
             }
           } catch (error) {
             console.error("Beta verification failed:", error);
