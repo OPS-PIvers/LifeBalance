@@ -44,6 +44,11 @@ export const geminiproxy = onCall(
   {
     secrets: [geminiApiKey],
     cors: true,
+    // A cold start (container init) plus a slow Gemini generation can run ~30–60s.
+    // Keep the function timeout comfortably above the 90s client timeout in
+    // geminiService.ts so the client's limit is always the binding, graceful one
+    // rather than an opaque function-side cutoff (Plan 014).
+    timeoutSeconds: 120,
   },
   async (request): Promise<GeminiProxyResult> => {
     // Only authenticated app users may spend the server-side key.

@@ -62,8 +62,13 @@ export type {
  */
 export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3-flash-preview';
 
-// Initialize Gemini Client
-// Uses Vite environment variable for the API key, falls back to process.env for testing
+// Initialize Gemini Client.
+// Reads the Vite env var for the API key, falling back to process.env for tests.
+// With the proxy active (Plan 014) the key is intentionally absent from the
+// production bundle, so this resolves to "" there — the @google/genai constructor
+// only logs a benign "API key should be set" warning for an empty key (it does
+// NOT throw), and the proxy transport never dereferences this client, so the
+// empty-key construction is safe. Local dev / the direct path still supply a key.
 const apiKey =
   import.meta.env.VITE_GEMINI_API_KEY ||
   (typeof process !== "undefined" && process.env?.VITE_GEMINI_API_KEY) ||
@@ -283,8 +288,17 @@ const logAiUsage = (householdId: string, modelName: string): void => {
 // Timeout + retry helper (fix #2)
 // ---------------------------------------------------------------------------
 
-/** Default per-request timeout in milliseconds. */
-const GEMINI_REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * Default per-request timeout in milliseconds.
+ *
+ * All AI calls route through the geminiproxy Cloud Function (Plan 014), so this
+ * must tolerate a function cold start (container init on the first call after the
+ * function idles) PLUS a slow JSON generation — together observed in the ~30–60s
+ * band. 90s leaves clean margin; the proxy's own timeout is higher (120s) so this
+ * client limit stays the binding, graceful one. (A 30s limit fired mid-cold-start
+ * during the first activation attempt and was the sole reason it was reverted.)
+ */
+const GEMINI_REQUEST_TIMEOUT_MS = 90_000;
 
 /** Maximum number of retries for transient failures (in addition to the initial attempt). */
 const GEMINI_MAX_RETRIES = 2;
@@ -605,7 +619,10 @@ async function generateJsonContent<T>(
   modelName: string = GEMINI_MODEL,
   validate?: (raw: unknown) => T,
 ): Promise<T> {
-  validateApiKey();
+  // With the proxy active the API key lives server-side in the geminiproxy Cloud
+  // Function — there is no client key in the bundle to validate (Plan 014). The
+  // direct SDK path (flag off, or an injected test client) still needs it.
+  if (!USE_GEMINI_PROXY) validateApiKey();
 
   // 1. Atomic quota check + increment (prevents TOCTOU race)
   await checkAndIncrementAiUsage(householdId);
