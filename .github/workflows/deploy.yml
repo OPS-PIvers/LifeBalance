@@ -59,9 +59,6 @@ jobs:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
           VITE_ADMIN_UID: ${{ secrets.VITE_ADMIN_UID }}
-          # Plan 014: route Gemini calls through the geminiproxy Cloud Function so
-          # the API key stays server-side. Stage 2 removes VITE_GEMINI_API_KEY above.
-          VITE_USE_GEMINI_PROXY: "true"
 
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
