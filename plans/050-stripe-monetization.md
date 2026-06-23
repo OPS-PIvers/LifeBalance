@@ -85,9 +85,11 @@ the single source of truth for entitlement, server-enforced gates, and an upgrad
    `stripeCustomerId`). **This function (Admin SDK) is the only writer of `subscription`.** Return 200
    fast; be idempotent (Stripe retries). Unit-test the handler with a mocked Stripe: signature reject,
    and each event → the right household patch.
-5. **Dormant:** none of this is reachable by users yet (no upgrade UI; `billingEnabled` false). It
-   deploys but does nothing until secrets + the webhook endpoint are configured. **No `firestore.rules`
-   change in this PR.**
+5. **Staged, not deployed:** the functions are implemented + unit-tested but intentionally NOT exported
+   from `functions/src/index.ts`, so they don't deploy — a non-interactive `firebase deploy` can't bind
+   `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` until those secrets exist (a human step). Schema +
+   entitlements ship live; the functions are wired in during activation, after the secrets are set
+   (`docs/STRIPE_SETUP_RUNBOOK.md` §1.3b). **No `firestore.rules` change in this PR.**
 6. Verify: `pnpm --filter functions run lint` + `build`; root `pnpm test` (webhook/entitlement unit
    tests); root `pnpm lint`/`build`. Confirm `stripe` is **not** in the client bundle
    (`grep -r "stripe" dist/assets || true` after build → nothing from the app graph).
