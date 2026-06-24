@@ -300,6 +300,7 @@ const KidDashboard: React.FC = () => {
                 type="password"
                 inputMode="numeric"
                 autoFocus
+                autoComplete="current-password"
                 value={pinInput}
                 onChange={(e) => {
                   setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6));

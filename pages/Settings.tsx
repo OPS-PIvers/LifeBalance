@@ -745,6 +745,7 @@ const Settings: React.FC = () => {
                 <input
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   value={pinDraft}
                   onChange={(e) => setPinDraft(sanitizePin(e.target.value))}
                   placeholder={hasKidPin ? 'New PIN (4-6 digits)' : 'PIN (4-6 digits)'}
@@ -754,6 +755,7 @@ const Settings: React.FC = () => {
                 <input
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   value={pinConfirm}
                   onChange={(e) => setPinConfirm(sanitizePin(e.target.value))}
                   placeholder="Confirm PIN"

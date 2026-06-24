@@ -16,7 +16,7 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
-  const { members, activeMemberId } = useHouseholdCore();
+  const { members, activeMemberId, isLoading } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
 
   // Active managed kid → Kid Mode. Validated against the live members list so a
@@ -29,6 +29,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         : undefined,
     [kidModeEnabled, activeMemberId, members],
   );
+
+  // On refresh while acting as a kid, the members listener hasn't resolved yet, so
+  // `activeKid` is transiently undefined. Without this guard we would briefly render
+  // the parent shell (finance headers, nav, routed parent page) before the kid view
+  // mounts — a privacy leak that defeats the sessionStorage persistence. Hold the
+  // loading fallback whenever we intend to be in Kid Mode but are still loading.
+  if (kidModeEnabled && activeMemberId && !activeKid && isLoading) {
+    return <div className="h-dvh bg-purple-50 dark:bg-slate-900" />;
+  }
 
   // Kid Mode replaces the ENTIRE parent shell (toolbar + routed page + bottom-nav)
   // with the scoped kid surface, so finance/settings/other-member data is

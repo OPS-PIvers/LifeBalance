@@ -54,14 +54,22 @@ export async function verifyKidPin(
   pin: string,
   stored: string | null | undefined,
 ): Promise<boolean> {
-  if (!stored || !isValidPinFormat(pin)) return false;
-  const parts = stored.split(':');
-  if (parts.length !== 3 || parts[0] !== SCHEME_VERSION) return false;
-  const saltHex = parts[1];
-  const expectedHex = parts[2];
-  if (!saltHex || !expectedHex) return false;
-  const actualHex = await digestHex(saltHex, pin);
-  return timingSafeEqualHex(actualHex, expectedHex);
+  try {
+    if (!stored || !isValidPinFormat(pin)) return false;
+    const parts = stored.split(':');
+    if (parts.length !== 3 || parts[0] !== SCHEME_VERSION) return false;
+    const saltHex = parts[1];
+    const expectedHex = parts[2];
+    if (!saltHex || !expectedHex) return false;
+    const actualHex = await digestHex(saltHex, pin);
+    return timingSafeEqualHex(actualHex, expectedHex);
+  } catch (error) {
+    // `crypto.subtle` is undefined in non-secure contexts (plain HTTP). Returning
+    // false rather than throwing keeps the exit flow from crashing — better a PIN
+    // that won't verify than a kid permanently locked in by an unhandled rejection.
+    console.error('[verifyKidPin] Failed to verify PIN:', error);
+    return false;
+  }
 }
 
 /** Length-constant hex comparison (both are fixed-length SHA-256 digests). */
