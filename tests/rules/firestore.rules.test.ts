@@ -250,6 +250,46 @@ describe('member access', () => {
   });
 });
 
+describe('subscription writes (Plan 051 — entitlement is server-truth)', () => {
+  // Only the Stripe webhook (Admin SDK, which bypasses these rules) may set the
+  // `subscription` block. No client write may add or change it, or a user could
+  // trivially unlock premium by editing their own household document.
+  const PREMIUM = { plan: 'premium', status: 'active' };
+
+  it('denies a member adding a subscription via household update', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1), { subscription: PREMIUM }),
+    );
+  });
+
+  it('denies even an admin changing subscription via household update', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(ALICE), 'households', H1), { subscription: PREMIUM }),
+    );
+  });
+
+  it('still allows a normal household update that does not touch subscription', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1), { name: 'Renamed Household' }),
+    );
+  });
+
+  it('denies creating a household pre-loaded with a subscription', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(DAVE), 'households', 'dave-house'), {
+        name: 'Dave House',
+        subscription: PREMIUM,
+      }),
+    );
+  });
+
+  it('still allows creating a household without a subscription', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(DAVE), 'households', 'dave-house-2'), { name: 'Dave House' }),
+    );
+  });
+});
+
 describe('input validation', () => {
   it('rejects a transaction with a non-numeric amount', async () => {
     await assertFails(

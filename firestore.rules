@@ -69,7 +69,11 @@ service cloud.firestore {
       // 🛡️ SENTINEL FIX: Validate household name on creation
       allow create: if isAuthenticated() &&
                     request.resource.data.keys().hasAny(['name']) &&
-                    isValidString(request.resource.data.name, 50);
+                    isValidString(request.resource.data.name, 50) &&
+                    // 🛡️ Plan 051: subscription state is server-truth — only the Stripe
+                    // webhook (Admin SDK, which bypasses rules) may set it. Reject any
+                    // client trying to create a household pre-loaded with a subscription.
+                    !request.resource.data.keys().hasAny(['subscription']);
 
       // 🛡️ SENTINEL SECURITY FIX: Protect AI Usage from manipulation (Quota Bypass Prevention)
       function isValidAiUsageUpdate() {
@@ -111,6 +115,10 @@ service cloud.firestore {
                         isValidOptionalString(request.resource.data.get('lastPaycheckDate', null), 10) &&
                         // Prevent modification of immutable fields
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdBy', 'createdAt', 'inviteCode']) &&
+                        // 🛡️ Plan 051: subscription state is server-truth — only the Stripe
+                        // webhook (Admin SDK, bypasses rules) may add/modify it, so deny any
+                        // client update that touches it (prevents trivially unlocking premium).
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['subscription']) &&
                         // 🛡️ SENTINEL FIX: Protect AI Usage Quota
                         isValidAiUsageUpdate() &&
                         // 🛡️ SENTINEL FIX: Restrict memberUids modifications
