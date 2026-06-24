@@ -188,6 +188,34 @@ describe('useHabitActions.addHabitSubmission', () => {
   });
 });
 
+describe('useHabitActions.addHabitSubmission (Plan 080c: assigned chores credit the assignee)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  it("credits the assignee's member doc, not the shared household pool", async () => {
+    const habit = baseHabit({ id: 'h1', completedDates: [], assignedTo: 'kid_leo' });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.addHabitSubmission('h1', 1);
+    });
+
+    const memberUpd = capturedUpdates.find(
+      u => u.ref.__path === `${householdPath}/members/kid_leo`,
+    );
+    expect(memberUpd).toBeDefined();
+    expect(memberUpd!.data['points.total']).toEqual({ __increment: 10 });
+    // The shared household pool must NOT receive the kid's chore points.
+    expect(capturedUpdates.find(u => u.ref.__path === householdPath)).toBeUndefined();
+  });
+});
+
 describe('useHabitActions.toggleHabit (T1: single points write path)', () => {
   beforeEach(() => {
     capturedUpdates.length = 0;
