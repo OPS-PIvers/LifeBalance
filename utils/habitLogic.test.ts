@@ -11,7 +11,8 @@ import {
   calculatePointsForDate,
   calculatePointsForDateRange,
   getHabitResetUpdate,
-  computeHouseholdPointsSync
+  computeHouseholdPointsSync,
+  computeManagedMemberPointsReset
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
@@ -611,6 +612,81 @@ describe('habitLogic', () => {
       expect(calculatePointsForDate([kidChore], today)).toBe(0);
       expect(calculatePointsForDateRange([shared, kidChore], today, today)).toBe(10);
       expect(calculatePointsForDateRange([kidChore], today, today)).toBe(0);
+    });
+
+    it('scopes to one member when an assignedTo uid is passed (Plan 080c-2)', () => {
+      const make = (id: string, assignedTo?: string): Habit => ({
+        ...baseHabit,
+        id,
+        scoringType: 'threshold',
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+        assignedTo,
+      });
+      const all = [make('h1'), make('h2', 'kid_leo'), make('h3', 'kid_mia')];
+
+      // Member scope counts ONLY that member's chores, ignoring shared + other kids.
+      expect(calculatePointsForDate(all, today, 'kid_leo')).toBe(10);
+      expect(calculatePointsForDateRange(all, today, today, 'kid_leo')).toBe(10);
+      // A member with no completed chore scores 0.
+      expect(calculatePointsForDate([make('h1'), make('h3', 'kid_mia')], today, 'kid_leo')).toBe(0);
+    });
+  });
+
+  describe('computeManagedMemberPointsReset (Plan 080c-2)', () => {
+    const weekStartStr = format(startOfISOWeek(new Date()), 'yyyy-MM-dd');
+    const makeChore = (id: string, assignedTo: string): Habit => ({
+      ...baseHabit,
+      id,
+      scoringType: 'threshold',
+      count: 1,
+      totalCount: 1,
+      completedDates: [today],
+      assignedTo,
+    });
+
+    it("returns each managed kid's daily/weekly from their own chores", () => {
+      const members = [
+        { uid: 'parent1', isManaged: false },
+        { uid: 'kid_leo', isManaged: true },
+        { uid: 'kid_mia', isManaged: true },
+      ];
+      const habits = [
+        makeChore('h1', 'kid_leo'),
+        makeChore('h2', 'kid_mia'),
+        makeChore('h3', 'kid_leo'),
+      ];
+
+      const result = computeManagedMemberPointsReset(members, habits, weekStartStr, today);
+
+      expect(result).toHaveLength(2);
+      // Leo has two completed chores (20), Mia one (10).
+      expect(result.find(r => r.memberUid === 'kid_leo')).toEqual({
+        memberUid: 'kid_leo',
+        daily: 20,
+        weekly: 20,
+      });
+      expect(result.find(r => r.memberUid === 'kid_mia')).toEqual({
+        memberUid: 'kid_mia',
+        daily: 10,
+        weekly: 10,
+      });
+    });
+
+    it('skips non-managed members and managed kids with no assigned chore', () => {
+      const members = [
+        { uid: 'parent1', isManaged: false },
+        { uid: 'kid_leo', isManaged: true }, // has a chore
+        { uid: 'kid_nochores', isManaged: true }, // none assigned
+      ];
+      const result = computeManagedMemberPointsReset(
+        members,
+        [makeChore('h1', 'kid_leo')],
+        weekStartStr,
+        today,
+      );
+      expect(result.map(r => r.memberUid)).toEqual(['kid_leo']);
     });
   });
 

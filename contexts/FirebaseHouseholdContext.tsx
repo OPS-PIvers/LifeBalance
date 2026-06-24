@@ -78,7 +78,7 @@ import {
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
-import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
+import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
 import { migrateBucketsToPeriods, needsMigration, migrateToPaycheckPeriods, needsPaycheckMigration } from '@/utils/migrations/payPeriodMigration';
@@ -718,6 +718,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   // and corrects any accumulated drift. See T1 in the optimization pass.
   const habitsRef = useRef<Habit[]>(habits);
   useEffect(() => { habitsRef.current = habits; }, [habits]);
+
+  // Mirror members for the points-reset path (Plan 080c-2): checkPointsReset reads
+  // the latest members via this ref to roll over each managed kid's balance without
+  // keying its callback on `members` (which changes on every points write).
+  const membersRef = useRef<HouseholdMember[]>(members);
+  useEffect(() => { membersRef.current = members; }, [members]);
 
   // Mirror the latest household settings so listener callbacks (e.g. the
   // pending-item drain's success toast) can read the configured currency without
@@ -1627,53 +1633,50 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     const now = new Date();
     const today = format(now, 'yyyy-MM-dd');
-    const householdRef = doc(db, `households/${householdId}`);
 
-    // We need to track when points were last reset
-    // These fields may not exist yet, so we handle that case
-    const lastDailyReset = lastDailyPointsReset
-      ? parseISO(lastDailyPointsReset)
-      : new Date(0); // If never set, treat as very old
+    // These fields may not exist yet, so treat "never set" as very old.
+    const lastDailyReset = lastDailyPointsReset ? parseISO(lastDailyPointsReset) : new Date(0);
+    const lastWeeklyReset = lastWeeklyPointsReset ? parseISO(lastWeeklyPointsReset) : new Date(0);
 
-    const lastWeeklyReset = lastWeeklyPointsReset
-      ? parseISO(lastWeeklyPointsReset)
-      : new Date(0);
+    const dayRolled = !isSameDay(now, lastDailyReset);
+    // weekStartsOn: 1 means Monday is day 1, Sunday is day 7.
+    const weekRolled = !isSameWeek(now, lastWeeklyReset, { weekStartsOn: 1 });
+    if (!dayRolled && !weekRolled) return;
 
-    const updates: Record<string, number | string> = {};
-
-    // Read the latest habits via ref so this callback isn't re-created on every
-    // habit change (and so the periodic scheduler always recomputes against fresh
-    // data without re-subscribing).
+    // Read the latest habits/members via refs so this callback isn't re-created on
+    // every habit/points change (the scheduler recomputes against fresh data).
     const currentHabits = habitsRef.current;
+    const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-    // Check if daily points need reset (new day since last reset)
-    if (!isSameDay(now, lastDailyReset)) {
-      // Recalculate daily points from habits completed today
-      // This handles the case where habits were completed earlier today but the user
-      // just logged in and this reset logic is running
-      const todayPoints = calculatePointsForDate(currentHabits, today);
-      updates['points.daily'] = todayPoints;
-      updates['lastDailyPointsReset'] = today;
+    // Household pool. calculatePointsForDate/Range default-exclude assigned chores —
+    // those belong to each kid's own balance, rolled over below.
+    const householdUpdates: Record<string, number | string> = {};
+    if (dayRolled) {
+      householdUpdates['points.daily'] = calculatePointsForDate(currentHabits, today);
+      householdUpdates['lastDailyPointsReset'] = today;
+    }
+    if (weekRolled) {
+      householdUpdates['points.weekly'] = calculatePointsForDateRange(currentHabits, weekStartStr, today);
+      householdUpdates['lastWeeklyPointsReset'] = today;
     }
 
-    // Check if weekly points need reset (new week since last reset)
-    // weekStartsOn: 1 means Monday is day 1, Sunday is day 7
-    if (!isSameWeek(now, lastWeeklyReset, { weekStartsOn: 1 })) {
-      // Calculate points from all days this week (Monday through today)
-      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-      const weeklyPoints = calculatePointsForDateRange(currentHabits, weekStartStr, today);
-      updates['points.weekly'] = weeklyPoints;
-      updates['lastWeeklyPointsReset'] = today;
-    }
+    // Plan 080c-2: roll over each managed kid's daily/weekly from THEIR assigned
+    // chores on the same boundary (empty for non-Kid-Mode households → no member
+    // writes, so this is a no-op there).
+    const kidResets = computeManagedMemberPointsReset(membersRef.current, currentHabits, weekStartStr, today);
 
-    // Only update if there are changes
-    if (Object.keys(updates).length > 0) {
-      try {
-        await updateDoc(householdRef, updates);
-      } catch (error) {
-        console.error('[checkPointsReset] Failed to reset points:', error);
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, `households/${householdId}`), householdUpdates);
+      for (const kid of kidResets) {
+        const kidUpdates: Record<string, number> = {};
+        if (dayRolled) kidUpdates['points.daily'] = kid.daily;
+        if (weekRolled) kidUpdates['points.weekly'] = kid.weekly;
+        batch.update(doc(db, `households/${householdId}/members`, kid.memberUid), kidUpdates);
       }
+      await batch.commit();
+    } catch (error) {
+      console.error('[checkPointsReset] Failed to reset points:', error);
     }
   }, [householdId, lastDailyPointsReset, lastWeeklyPointsReset]);
 
