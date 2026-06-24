@@ -1,9 +1,10 @@
 # Plan 080 — Kid Mode: managed family profiles + chores → rewards
 
-> **Status:** TODO · **Tag:** `[C]` end-to-end (no new secrets, no auth surface, and the
-> foundation needs **no `firestore.rules` change** — see Principle 1) · **Risk:** MED (new
-> cross-cutting concept) but **LOW on the blast-radius axis** (no rules/atomic-deploy hazard for
-> 080a–080c; only 080d's optional rule touches rules) · **Effort:** L (ship as a sequence of
+> **Status:** IN PROGRESS — 080a-1 (rules) PR open · **Tag:** mostly `[C]`, but **080a-1 + 080d carry
+> a small additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010 tests; a human
+> watches the atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
+> **MED for the two rules slices** (additive, rules-tested, human-watched; kids never enter
+> `memberUids`, so no rules *regression*) · **Effort:** L (ship as a sequence of
 > dormant-then-reveal PRs) · **Planned against commit:** `16e3ed3`
 >
 > Source: this session's bloat audit + the product-direction pass that re-classified Rewards,
@@ -16,13 +17,17 @@
 The data model is *almost there* for a family/kid loop — this is an additive layer, not a refactor:
 - **Members already have per-member points and a role.** `HouseholdMember` (`types/schema.ts:42-58`)
   carries `points: {daily, weekly, total}` and `role: Role` where `Role = 'admin' | 'member'`
-  (`schema.ts:2`). Members live as an **array on the household doc** (`Household.members`,
-  `schema.ts:334`), so adding a kid is a push into that array — no new collection.
-- **Access control is a *separate* array.** Firestore gates every household read/write on
-  `request.auth.uid in resource.data.memberUids` (`firestore.rules:63,67`), and `memberUids` is
-  **not** the same as `members[]` (it's the denormalized uid allow-list, guarded by the SENTINEL
-  rules at `firestore.rules:124-144`). This is the unlock: a managed kid is a `members[]` entry that
-  is **never added to `memberUids`**, so it has no credential and grants no access.
+  (`schema.ts:2`). Members are stored as **subcollection docs** at `households/{id}/members/{uid}` (the
+  live source is the listener at `FirebaseHouseholdContext.tsx:910`; the `Household.members` array in
+  the schema is **not** what populates state). A kid is a member doc with a synthetic uid, reusing all
+  the per-member machinery.
+- **Access control is a *separate* array.** Firestore gates the household **doc** read on
+  `request.auth.uid in resource.data.memberUids` (`firestore.rules:63,67`); *subcollection* access uses
+  `isMemberOf()` = "a member doc exists for your uid" (`firestore.rules:12`). A managed kid is a member
+  doc **never added to `memberUids`**, so it can't read the household doc and is never grantable a
+  login. **Correction:** creating that kid doc is **not** rules-free — the members-create rule requires
+  `request.auth.uid == memberId` (`firestore.rules:161`), so 080a adds one small, additive branch
+  letting a parent create/manage an `isManaged + role:'kid'` doc (see Principle 1).
 - **Rewards are thin and creation-less.** `RewardItem` is just `{id, title, cost, icon, createdBy}`
   (`schema.ts:195-201`); there is **no add/delete reward UI** (audit finding) and `redeemReward`
   redeems immediately with no approval. Today a new household sees an empty rewards modal forever.
@@ -38,11 +43,16 @@ The data model is *almost there* for a family/kid loop — this is an additive l
 Greenlight's real-money rails (see Principle 3).
 
 ## Non-negotiable principles
-1. **Managed profiles never get a credential → no rules regression.** A kid is a `members[]` entry
-   with a **synthetic, non-auth `uid`** (e.g. `kid_<id>`) and `role:'kid'`, and is **never** placed in
-   `memberUids`. Therefore no child can read or write Firestore; the existing access rules already
-   deny them. **080a–080c require zero `firestore.rules` changes.** Do not "fix" this by giving kids a
-   login or a memberUids entry — that would reopen the exact attack surface the rules close.
+1. **Managed profiles never get a credential → no rules *regression* (but one small additive rule).**
+   A kid is a member-subcollection doc with a **synthetic, non-auth `uid`** (`kid_<uuid>`) and
+   `role:'kid'`, **never** placed in `memberUids` — so it can't read the household doc and can't be
+   authenticated as. **Correction to the original plan:** the foundation is *not* rules-free — the
+   members-create rule requires `request.auth.uid == memberId` (`firestore.rules:161`), so **080a-1**
+   adds an additive branch letting an existing parent create/manage an `isManaged + role:'kid'` doc
+   (rules-first, Plan-010 tested, human-watched). **Invariant:** kid ids must be unguessable
+   `kid_<uuid>` that can never equal a real auth uid (else a principal authed as that id would pass
+   `isMemberOf()` for subcollection access — infeasible, since kids have no login). Don't give kids a
+   login or a `memberUids` entry.
 2. **Authorization is the parent; attribution is the kid.** When a parent "switches into" a kid, that
    is a **client-side active-member selection**. Habit/chore completions and redemptions set
    `createdBy`/points to the **kid's** synthetic uid, but the Firestore write is executed by the
@@ -65,8 +75,10 @@ Greenlight's real-money rails (see Principle 3).
 ## Existing infra to reuse (don't reinvent)
 - **Per-member points** (`HouseholdMember.points`) + the daily/weekly reset machinery already handle a
   kid's score — no new counter.
-- **`addMember` atomic batch** (member doc + `memberUids`, per CLAUDE.md) is the template for
-  `addKidProfile` — except it writes **only** the `members[]` entry and **skips `memberUids`**.
+- **`addMember`** (writes a `members/{uid}` subcollection doc + `arrayUnion` on `memberUids`,
+  `FirebaseHouseholdContext.tsx:3023`) is the template for `addKidProfile` — except it writes **only**
+  the member subcollection doc (synthetic `kid_<uuid>` id) and **skips `memberUids`** (relying on the
+  080a-1 rule).
 - **Notification jobs.** The hourly FCM scheduled functions (`functions/src/index.ts`) and
   `sendtestnotification` are the delivery path for "Leo wants to redeem Movie Night → approve?" push.
 - **Flag pattern** (`services/appConfig.ts` `getOpenSignup`/`getBillingEnabled`) → `getKidModeEnabled`.
@@ -78,7 +90,10 @@ Greenlight's real-money rails (see Principle 3).
 
 ## PR sequence
 
-### PR 080a — Managed-profile foundation + profile switcher (dormant; no rules change)
+### PR 080a — Managed-profile foundation + profile switcher (dormant)
+> **Split (rules never ride with code, PRD §2):** **080a-1** = the additive members rule + Plan-010
+> tests (`[C→H]`, human-watched); **080a-2** = the schema/context/switcher code (`[C]`, dormant behind
+> `kidModeEnabled`), landing *after* 080a-1's rule deploys.
 1. **Schema** (`types/schema.ts`): extend `Role` to `'admin' | 'member' | 'kid'`. Add to
    `HouseholdMember` (all optional, legacy-safe): `isManaged?: boolean` (true = login-less kid),
    `managedByUid?: string` (parent who created them), `avatarColor?: string`, `avatarEmoji?: string`,
@@ -91,8 +106,12 @@ Greenlight's real-money rails (see Principle 3).
 3. **Profile switcher UI** (in `ProfileMenu`/`TopToolbar`, gated by `getKidModeEnabled()`): list
    parents + kids; tapping a kid enters Kid Mode (free); returning requires the parent PIN
    (Netflix-Kids pattern). Set/clear the PIN in Settings.
-4. **No rules change** (Principle 1). **Verify**: `pnpm lint`/`test`/`build`; Test-Mode walkthrough
-   add-kid → switch-in → switch-out-with-PIN. Confirm an existing (flag-off) household is unchanged.
+4. **Rules (080a-1, ships first):** add the members create/update/delete branch for `isManaged +
+   role:'kid'` docs (never touching `memberUids` or the `isMemberOf` hot path), proven by Plan-010
+   tests (parent can create/rename/points/delete a kid; the path can't forge real or admin members; a
+   kid can't be escalated or read the household doc). **Verify**: `pnpm lint`; rules tests in CI;
+   Test-Mode walkthrough add-kid → switch-in → switch-out-with-PIN. Existing (flag-off) households
+   unchanged.
 
 ### PR 080b — Kid dashboard (the simplified, scoped view)
 A dedicated kid surface shown while `actAs` is a kid: today's assigned chores/habits (large tap
@@ -123,7 +142,7 @@ for. No Firestore writes that a parent session doesn't authorize (Principle 2).
    review queue (reuse the Plan 063 pending-badge pattern on the parent nav). **On approve** (one
    `writeBatch`, idempotent): deduct `cost` points from the kid; if `allowance`, credit
    `allowanceCents` to the kid's `allowanceCents`. Push notification via the existing FCM jobs.
-3. **Rules (the only rules touch in this epic — own PR, Plan 010 tests, human-watched):** if
+3. **Rules (a second rules touch, after 080a-1 — own PR, Plan 010 tests, human-watched):** if
    `redemptions` is a subcollection, add a rule allowing create/update **only** by a `memberUids`
    parent (kids have no credential anyway, but make the parent-only write explicit and tested). If
    redemptions are instead modeled on the household doc array, **no rules change** (the existing

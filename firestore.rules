@@ -155,26 +155,63 @@ service cloud.firestore {
                        request.auth.uid == memberId ||
                        (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []));
 
-        // Secure creation: Must be creator OR provide valid invite code
-        // - Household creator can create their member doc with any role.
-        // - Invite-based joins must not assign themselves an admin role.
-        allow create: if isAuthenticated() && request.auth.uid == memberId && (
-          // Case 1: Household creator (admin) - createdBy check
-          get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
-          // Case 2: Joining via Invite Code (non-creator)
+        // 🛡️ Plan 080 — Managed kid profiles. A login-less child profile is a
+        // member doc with role 'kid' + isManaged true that a PARENT creates and
+        // manages on the child's behalf. It is NEVER added to the household
+        // memberUids array, so it cannot read the household document (that gate is
+        // `uid in memberUids`, ~line 63 above).
+        // SECURITY INVARIANT: a kid's memberId MUST be an unguessable, non-auth id
+        // (the client uses `kid_<uuid>`) that can never equal a real Firebase Auth
+        // uid — otherwise a principal authenticated as that id would pass
+        // isMemberOf() for subcollection access. Kids are never grantable a
+        // credential, so this collision is infeasible in practice.
+        function isManagedKidData(data) {
+          return data.get('isManaged', false) == true && data.get('role', '') == 'kid';
+        }
+        function isValidManagedKidCreate() {
+          let data = request.resource.data;
+          return isManagedKidData(data) &&
+                 data.keys().hasOnly([
+                   'uid', 'displayName', 'role', 'isManaged', 'managedByUid',
+                   'avatarColor', 'avatarEmoji', 'points', 'allowanceCents', 'joinedAt'
+                 ]) &&
+                 isValidString(data.get('displayName', null), 50) &&
+                 isValidOptionalString(data.get('managedByUid', null), 128) &&
+                 isValidOptionalString(data.get('avatarColor', null), 30) &&
+                 isValidOptionalString(data.get('avatarEmoji', null), 30) &&
+                 isValidOptionalNumber(data.get('allowanceCents', null)) &&
+                 (data.get('points', null) == null || data.points is map);
+        }
+
+        // Secure creation: a user creating THEIR OWN real (login-backed) member doc
+        // — via creator/invite/legacy paths — OR an existing parent creating a
+        // login-less managed kid profile (Plan 080).
+        allow create: if isAuthenticated() && (
           (
-            request.resource.data.inviteCode != null &&
-            exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)) &&
-            get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.householdId == householdId &&
-            (
-              // Non-creators joining via invite cannot assign themselves admin role
-              !request.resource.data.keys().hasAny(['role']) ||
-              request.resource.data.role != 'admin'
+            request.auth.uid == memberId && (
+              // Case 1: Household creator (admin) - createdBy check
+              get(/databases/$(database)/documents/households/$(householdId)).data.createdBy == request.auth.uid ||
+              // Case 2: Joining via Invite Code (non-creator)
+              (
+                request.resource.data.inviteCode != null &&
+                exists(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)) &&
+                get(/databases/$(database)/documents/inviteCodes/$(request.resource.data.inviteCode)).data.householdId == householdId &&
+                (
+                  // Non-creators joining via invite cannot assign themselves admin role
+                  !request.resource.data.keys().hasAny(['role']) ||
+                  request.resource.data.role != 'admin'
+                )
+              ) ||
+              // Case 3: Legacy Migration (User already in memberUids)
+              // Allows existing legacy users to backfill their member document
+              (request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []))
             )
           ) ||
-          // Case 3: Legacy Migration (User already in memberUids)
-          // Allows existing legacy users to backfill their member document
-          (request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.get('memberUids', []))
+          // Case 4 (Plan 080): an existing parent (any member) creates a login-less
+          // kid profile. There is no request.auth.uid == memberId requirement (the
+          // parent's uid != the kid's synthetic id); the kid is never added to
+          // memberUids, so it gains no household credential.
+          (isMemberOf(householdId) && isValidManagedKidCreate())
         );
 
         // Security Fix: Prevent IDOR (Insecure Direct Object Reference)
@@ -210,11 +247,22 @@ service cloud.firestore {
               )
             ) ||
             // Case 2: Admin updating any member (including role)
-            isAdminOf(householdId)
+            isAdminOf(householdId) ||
+            // Case 3 (Plan 080): any parent may manage a login-less kid profile,
+            // but cannot un-manage it or change its role away from 'kid' (no
+            // escalation into a real/admin member). Both the existing and the
+            // resulting doc must remain a managed kid.
+            (
+              isManagedKidData(resource.data) &&
+              isManagedKidData(request.resource.data)
+            )
           )
         );
 
-        allow delete: if isAdminOf(householdId) || request.auth.uid == memberId;
+        allow delete: if isAdminOf(householdId) ||
+                          request.auth.uid == memberId ||
+                          // Plan 080: any parent may remove a managed kid profile.
+                          (isMemberOf(householdId) && isManagedKidData(resource.data));
       }
 
       // Habits subcollection
