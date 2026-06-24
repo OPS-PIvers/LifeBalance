@@ -29,6 +29,7 @@ import {
   getDocs,
   setDoc,
   updateDoc,
+  deleteDoc,
   setLogLevel,
   type Firestore,
 } from 'firebase/firestore';
@@ -45,6 +46,7 @@ const ALICE = 'alice-uid'; // admin + member of H1
 const BOB = 'bob-uid'; //   plain member of H1
 const CAROL = 'carol-uid'; // member of H2 (a different household)
 const DAVE = 'dave-uid'; //  authenticated but belongs to no household
+const KID = 'kid-leo'; //   managed (login-less) child profile in H1 — never in memberUids
 
 const H1 = 'household-1';
 const H2 = 'household-2';
@@ -94,6 +96,16 @@ async function seed(): Promise<void> {
     await setDoc(doc(db, 'households', H1, 'members', BOB), {
       displayName: 'Bob',
       role: 'member',
+    });
+    // Plan 080: a login-less managed kid profile (in the members subcollection but
+    // NOT in memberUids, so it holds no household credential).
+    await setDoc(doc(db, 'households', H1, 'members', KID), {
+      displayName: 'Leo',
+      role: 'kid',
+      isManaged: true,
+      managedByUid: ALICE,
+      points: { daily: 0, weekly: 0, total: 0 },
+      allowanceCents: 0,
     });
     await setDoc(doc(db, 'households', H1, 'transactions', 'txn-seed'), {
       amount: 10,
@@ -431,6 +443,98 @@ describe('joining via invite code', () => {
         inviteCode: INVITE_CODE,
       }),
     );
+  });
+});
+
+describe('managed kid profiles (Plan 080 — login-less child member docs)', () => {
+  // A kid is a member doc (role 'kid', isManaged true) a PARENT creates and
+  // manages. It is never added to memberUids, so it holds no household credential.
+  const newKid = {
+    displayName: 'Mia',
+    role: 'kid',
+    isManaged: true,
+    managedByUid: BOB,
+    points: { daily: 0, weekly: 0, total: 0 },
+    allowanceCents: 0,
+  };
+
+  it('a parent (plain member) can create a managed kid profile', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'members', 'kid-mia'), newKid),
+    );
+  });
+
+  it('a parent can update a kid’s points', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+        points: { daily: 5, weekly: 5, total: 5 },
+      }),
+    );
+  });
+
+  it('a parent can rename a kid profile', async () => {
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+        displayName: 'Leo the Great',
+      }),
+    );
+  });
+
+  it('a parent can remove a kid profile', async () => {
+    await assertSucceeds(
+      deleteDoc(doc(dbFor(BOB), 'households', H1, 'members', KID)),
+    );
+  });
+
+  it('a non-member (other household) cannot create a kid here', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(CAROL), 'households', H1, 'members', 'kid-x'), newKid),
+    );
+  });
+
+  it('the kid path cannot forge a real member doc for someone else', async () => {
+    // role 'member' + isManaged false → not a managed-kid create; and memberId is
+    // not the caller, so the self-create path does not apply either.
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'members', 'victim-uid'), {
+        displayName: 'Victim',
+        role: 'member',
+        isManaged: false,
+      }),
+    );
+  });
+
+  it('the kid path cannot mint an admin member', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'members', 'fake-admin'), {
+        displayName: 'Sneaky',
+        role: 'admin',
+        isManaged: true,
+        points: { daily: 0, weekly: 0, total: 0 },
+      }),
+    );
+  });
+
+  it('a parent cannot escalate a kid into an admin', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+        role: 'admin',
+      }),
+    );
+  });
+
+  it('a parent cannot un-manage a kid (flip isManaged off)', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), {
+        isManaged: false,
+      }),
+    );
+  });
+
+  it('a kid id is not in memberUids, so it cannot read the household document', async () => {
+    // Even if a principal somehow authenticated as the kid's id, the household-doc
+    // read gate is `uid in memberUids`, which the kid is never part of.
+    await assertFails(getDoc(doc(dbFor(KID), 'households', H1)));
   });
 });
 
