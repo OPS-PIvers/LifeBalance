@@ -175,6 +175,12 @@ export interface Habit {
   ownerId?: string; // uid if personal habit
   createdBy?: string; // uid of creator
 
+  // Plan 080 (Kid Mode): the member this habit is assigned to as a chore — a real
+  // member uid or a synthetic `kid_<uuid>`. The kid dashboard (080b) shows only
+  // habits where `assignedTo === activeKidUid`; the assignment UI + per-kid point
+  // crediting land in 080c. Absent on every existing habit (an unassigned habit).
+  assignedTo?: string;
+
   // Preset vs Custom tracking
   presetId?: string; // If from a preset, stores the preset ID
   isCustom?: boolean; // true = user-created, false/undefined = from preset
