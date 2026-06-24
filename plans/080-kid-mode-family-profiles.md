@@ -1,9 +1,13 @@
 # Plan 080 — Kid Mode: managed family profiles + chores → rewards
 
-> **Status:** IN PROGRESS — **080a shipped** (rules #680, foundation #681, rules-hardening #683, all
-> merged + deployed); **080b (kid dashboard + exit PIN) is this PR** · **Tag:** mostly `[C]`, but
-> **080a-1 + 080d carry a small additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010
-> tests; a human watches the atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
+> **Status:** IN PROGRESS — **shipped & deployed (all dormant behind `kidModeEnabled`):** 080a
+> (rules #680, foundation #681, rules-hardening #683), **080b** kid dashboard + exit PIN (#684),
+> **080c-1** per-kid points routing (#685), **080c-2** kid points reset (#686). **Remaining:** 080c-3
+> assignment UI → 080c-4 visibility + progress → 080c-5 todos→points → 080d rewards/approval/allowance
+> → 080e family challenges. (080c grew from one PR into the 080c-1…080c-5 split below — the points
+> engine was isolated for focused review.) · **Tag:** mostly `[C]`, but **080a-1 + 080d carry a small
+> additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010 tests; a human watches the
+> atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
 > **MED for the two rules slices** (additive, rules-tested, human-watched; kids never enter
 > `memberUids`, so no rules *regression*) · **Effort:** L (ship as a sequence of
 > dormant-then-reveal PRs) · **Planned against commit:** `16e3ed3`
@@ -91,7 +95,7 @@ Greenlight's real-money rails (see Principle 3).
 
 ## PR sequence
 
-### PR 080a — Managed-profile foundation + profile switcher (dormant)
+### PR 080a — Managed-profile foundation + profile switcher (dormant) ✅ shipped (#680, #681, #683)
 > **Split (rules never ride with code, PRD §2):** **080a-1** = the additive members rule + Plan-010
 > tests (`[C→H]`, human-watched); **080a-2** = the schema/context/switcher code (`[C]`, dormant behind
 > `kidModeEnabled`), landing *after* 080a-1's rule deploys.
@@ -137,26 +141,52 @@ habit engine (streaks, scoring, multipliers, completion) with no new scoring log
 chore to multiple kids creates **one habit doc per kid** (each its own streak/points — the correct
 behavior). **No rules change:** a parent creating a habit with `assignedTo` is a normal habit write
 (the `habits` rule already allows any member, `firestore.rules:227`).
-1. **Assignment + custom points.** Add `assignedTo?: string` to `Habit` (member uid / synthetic kid
-   uid), mirroring `ToDo.assignedTo`. The habit create/edit form gains an "assign to" multi-select
-   (parents + kids); when a kid is selected, a **points field** writes `basePoints`. Selecting N kids
-   spawns N per-kid habit docs.
-2. **Visibility (the three rules the owner specified):**
-   - **Kids see only their own** — the kid dashboard (080b) lists habits where `assignedTo ===
-     activeKidUid`.
-   - **Parents don't see kid chores in their own tracker** — the Habits page filters **out** habits
-     whose `assignedTo` is a managed kid; a parent sees shared + their own personal habits only.
-   - **Parents see kid progress at a glance** — a compact **Dashboard summary card** linking to a
-     fuller read-only **"Kids' chores" section** on the **Habits page** (owner choice: *both*), each
-     grouping a kid's assigned habits with today's completion, streak, and points — so a parent
-     monitors progress **without switching into the kid profile**. A parent may also mark a kid's chore
-     done on their behalf (acting-as attribution, Principle 2).
-3. **Todos award points**: add optional `points?: number` to `ToDo` (default e.g. 5). Completing an
-   assigned todo credits that member's points in the same `writeBatch` as the completion (Principle 5).
-   This is the [3] "Todos→points" item — OurHome's core chore-points mechanic.
-4. Tests: assignment filtering (kid sees only theirs; parent tracker excludes kid chores; parent
-   progress section includes them); custom `basePoints` on a kid chore; todo-completion point credit
-   (incl. the kid-uid attribution path).
+
+> **Split into five focused PRs** so the points-engine changes (080c-1/2) shipped isolated, dormant,
+> and unit-tested before the UI that exercises them. **080c-1 + 080c-2 are done; 080c-3…5 remain.**
+
+#### 080c-1 — Per-kid points routing ✅ shipped (#685)
+Assigned chores credit the assignee's own `member.points`, not the shared household pool. All five
+points-writing paths in `useHabitActions` (`toggleHabit`, `resetHabit`, `addHabitSubmission`,
+`updateHabitSubmission`, `deleteHabitSubmission`) route through a `habitPointsTargetRef()` helper;
+`calculatePointsForDate`/`Range` exclude assigned habits from the household recompute. (`Habit.assignedTo`
+itself was added in 080b.) Dormant — no habit carries `assignedTo` yet.
+
+#### 080c-2 — Kid points reset ✅ shipped (#686)
+`checkPointsReset` (runs on app-open **and** midnight) now rolls over each managed kid's daily/weekly
+from their own assigned chores via `computeManagedMemberPointsReset`, so a kid's "this week" can't
+accumulate as lifetime. The scorers gained an optional `assignedTo` scope (default = household pool,
+unchanged; a uid = only that member's), so the household paths and their tests are untouched. See the
+maintenance note for the one remaining minor gap (no same-session drift-sync for member points).
+
+#### 080c-3 — Chore assignment UI + custom points (NEXT)
+Add an "assign to" multi-select (parents + kids) to the habit create/edit form (`HabitFormModal`);
+when a kid is selected, a **points field** writes `basePoints`. Selecting N kids spawns N per-kid habit
+docs on create. Add `assignedTo` to `updateHabit`'s field whitelist (it already passes through on
+`addHabit`). Gate the control on `getKidModeEnabled()` + presence of kids so it's dormant otherwise.
+This is what finally **populates** the 080b kid dashboard's (currently empty) chore list.
+
+#### 080c-4 — Parent visibility + progress
+The first of the owner's three visibility rules — "kids see only their own" — is already satisfied by
+the 080b dashboard's `assignedTo === activeKidUid` filter. This PR adds the other two:
+- **Parents don't see kid chores in their own tracker** — the Habits page + the dashboard daily-habits
+  widget filter **out** habits whose `assignedTo` is a managed kid; a parent sees shared + their own
+  personal habits only.
+- **Parents see kid progress at a glance** — a compact **Dashboard summary card** linking to a fuller
+  read-only **"Kids' chores" section** on the **Habits page** (owner choice: *both*), each grouping a
+  kid's assigned habits with today's completion, streak, and points — so a parent monitors progress
+  **without switching into the kid profile**. (Optional: mark a kid's chore done on their behalf,
+  acting-as attribution, Principle 2.)
+
+#### 080c-5 — Todos → points
+Add optional `points?: number` to `ToDo` (default e.g. 5). Completing an assigned todo credits that
+member's points in the same `writeBatch` as the completion (Principle 5) — routed to the assignee's
+`member.points` for managed kids, mirroring 080c-1. `completeToDo` (today a single `updateDoc`) becomes
+a batch. This is the [3] "Todos→points" item — OurHome's core chore-points mechanic.
+
+**Tests (per slice):** assignment filtering (kid sees only theirs; parent tracker excludes kid chores;
+parent progress section includes them); custom `basePoints` on a kid chore; todo-completion point
+credit (incl. the kid-uid attribution path). 080c-1/2 tests already landed.
 
 ### PR 080d — Rewards CRUD + redemption approval + allowance ledger
 1. **Reward CRUD** (the missing [2] core): `addReward`/`updateReward`/`deleteReward`. Extend
