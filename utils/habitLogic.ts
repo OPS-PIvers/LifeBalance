@@ -1,4 +1,4 @@
-import { Habit } from '@/types/schema';
+import { Habit, HouseholdMember } from '@/types/schema';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import {
   format,
@@ -479,16 +479,25 @@ export const getHabitResetUpdate = (
  * Used to recalculate daily points after a reset or on login
  * @param habits - Array of all habits
  * @param targetDate - The date to check completions for (YYYY-MM-DD format)
+ * @param assignedTo - Optional scope: omit for the shared household pool (assigned
+ *   chores excluded); pass a member uid to score ONLY that member's assigned chores.
  * @returns Total points earned from habits completed on that date
  */
-export const calculatePointsForDate = (habits: Habit[], targetDate: string): number => {
+export const calculatePointsForDate = (
+  habits: Habit[],
+  targetDate: string,
+  assignedTo?: string,
+): number => {
   let totalPoints = 0;
 
   for (const habit of habits) {
-    // Plan 080c: assigned (per-member/kid chore) habits credit the assignee's own
-    // member.points on completion, NOT the shared household pool — skip them so this
-    // household-points recompute can't double-count their points.
-    if (habit.assignedTo) continue;
+    // Plan 080c scope filter. Default (assignedTo === undefined) = the shared
+    // household pool: skip assigned (per-member/kid chore) habits so this recompute
+    // can't double-count points already credited to a member. When `assignedTo` is
+    // given, score ONLY that member's chores (recomputing a kid's own balance).
+    if (assignedTo === undefined ? Boolean(habit.assignedTo) : habit.assignedTo !== assignedTo) {
+      continue;
+    }
 
     // Check if habit was completed on the target date
     if (!habit.completedDates.includes(targetDate)) continue;
@@ -526,21 +535,25 @@ export const calculatePointsForDate = (habits: Habit[], targetDate: string): num
  * @param habits - Array of all habits
  * @param startDate - Start of the range (YYYY-MM-DD format, inclusive)
  * @param endDate - End of the range (YYYY-MM-DD format, inclusive)
+ * @param assignedTo - Optional scope: omit for the shared household pool (assigned
+ *   chores excluded); pass a member uid to score ONLY that member's assigned chores.
  * @returns Total points earned from habits completed in that range
  */
 export const calculatePointsForDateRange = (
   habits: Habit[],
   startDate: string,
-  endDate: string
+  endDate: string,
+  assignedTo?: string,
 ): number => {
   let totalPoints = 0;
   const today = getLocalDateString();
 
   for (const habit of habits) {
-    // Plan 080c: assigned (per-member/kid chore) habits credit the assignee's
-    // member.points, not the shared household pool — skip them here too (see
-    // calculatePointsForDate).
-    if (habit.assignedTo) continue;
+    // Plan 080c scope filter (see calculatePointsForDate): default skips assigned
+    // chores (household pool); a given `assignedTo` scores ONLY that member's chores.
+    if (assignedTo === undefined ? Boolean(habit.assignedTo) : habit.assignedTo !== assignedTo) {
+      continue;
+    }
 
     // Find all completion dates within the range
     const completionsInRange = habit.completedDates.filter(date =>
@@ -647,4 +660,46 @@ export const computeHouseholdPointsSync = (
     currentPoints.total !== correctTotal;
 
   return { points, needsUpdate };
+};
+
+/** One managed member's recomputed daily/weekly points (Plan 080c-2). */
+export interface ManagedMemberPointsReset {
+  memberUid: string;
+  daily: number;
+  weekly: number;
+}
+
+/**
+ * Plan 080c-2: recompute each managed (kid) member's daily/weekly points from the
+ * chores assigned to THEM, for the reset that rolls over their balance on a
+ * day/week boundary (see `checkPointsReset`). Mirrors the household recompute but
+ * scoped per member via `calculatePointsForDate`/`Range`'s `assignedTo` argument.
+ *
+ * Only members that are `isManaged` AND actually have an assigned chore are
+ * returned — so for households not using Kid Mode this is an empty array and the
+ * caller writes nothing. `total` is intentionally omitted: it is a lifetime
+ * counter and never resets (only daily/weekly roll over).
+ *
+ * @param members - The household members (managed kids are filtered in)
+ * @param habits - All habits (each kid's assigned chores are selected per member)
+ * @param weekStartStr - Monday of the current week (YYYY-MM-DD)
+ * @param today - Today (YYYY-MM-DD), caller's local timezone
+ */
+export const computeManagedMemberPointsReset = (
+  members: Pick<HouseholdMember, 'uid' | 'isManaged'>[],
+  habits: Habit[],
+  weekStartStr: string,
+  today: string,
+): ManagedMemberPointsReset[] => {
+  const out: ManagedMemberPointsReset[] = [];
+  for (const member of members) {
+    if (!member.isManaged) continue;
+    if (!habits.some(h => h.assignedTo === member.uid)) continue;
+    out.push({
+      memberUid: member.uid,
+      daily: calculatePointsForDate(habits, today, member.uid),
+      weekly: calculatePointsForDateRange(habits, weekStartStr, today, member.uid),
+    });
+  }
+  return out;
 };

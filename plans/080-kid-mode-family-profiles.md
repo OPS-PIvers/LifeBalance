@@ -227,10 +227,12 @@ No new secrets, no new accounts, no Stripe, no auth-provider changes.
   double-tap. The `status` transition `pending→approved` must be a no-op if already `approved`.
 - Every new kid-facing surface checks `getKidModeEnabled()` and the active-member role — never assume
   a parent context.
-- **Per-member points sync/reset (080c-1 → 080c-2 follow-up):** 080c-1 routes assigned-chore points
-  straight to `member.points` (the toggle/submission delta is the source of truth) and excludes
-  assigned habits from the household recompute. There is deliberately **no corrective recompute for
-  member points yet**, and the daily/weekly **reset** must be extended to managed-kid member points
-  **before 080c-2 makes chores real** — otherwise a kid's "this week" balance accumulates as lifetime.
-  Mirror `computeHouseholdPointsSync` + the points-reset path for managed members in 080c-2 (use
-  `calculatePointsForDate`/`Range` over that member's `assignedTo` habits).
+- **Per-member points reset (080c-2, done):** 080c-1 routes assigned-chore points to `member.points`
+  (toggle/submission deltas are the source of truth). 080c-2 extends `checkPointsReset` (which runs on
+  app-open **and** midnight) to roll over each managed kid's daily/weekly from their assigned chores via
+  `computeManagedMemberPointsReset`, so a kid's "this week" no longer accumulates as lifetime. The
+  scorers `calculatePointsForDate`/`Range` take an optional `assignedTo` scope (default = household
+  pool, which excludes assigned chores; a uid = only that member's). **Remaining minor gap:** there is
+  no same-session (non-rollover) drift-sync for member points like `usePointsSync` provides for the
+  household — a kid's balance self-corrects at the next app-open/rollover, which is sufficient given
+  atomic toggle batches. Promote to a full member `usePointsSync` only if real drift shows up.
