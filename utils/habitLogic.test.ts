@@ -594,6 +594,24 @@ describe('habitLogic', () => {
       };
       expect(calculatePointsForDate([habit], yesterday)).toBe(0);
     });
+
+    it('excludes assigned (per-member/kid chore) habits from the household recompute (Plan 080c)', () => {
+      const shared: Habit = {
+        ...baseHabit,
+        scoringType: 'threshold',
+        count: 1,
+        totalCount: 1,
+        completedDates: [today],
+      };
+      const kidChore: Habit = { ...shared, id: 'h2', assignedTo: 'kid_leo' };
+
+      // Assigned chores credit the assignee's own member.points, so they must NOT
+      // be summed into the shared household pool (else they'd be double-counted).
+      expect(calculatePointsForDate([shared, kidChore], today)).toBe(10);
+      expect(calculatePointsForDate([kidChore], today)).toBe(0);
+      expect(calculatePointsForDateRange([shared, kidChore], today, today)).toBe(10);
+      expect(calculatePointsForDateRange([kidChore], today, today)).toBe(0);
+    });
   });
 
   // Regression for todo/10: the midnight auto-reset (`checkHabitResets`) used to

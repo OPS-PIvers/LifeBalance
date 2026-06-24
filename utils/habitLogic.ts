@@ -485,6 +485,11 @@ export const calculatePointsForDate = (habits: Habit[], targetDate: string): num
   let totalPoints = 0;
 
   for (const habit of habits) {
+    // Plan 080c: assigned (per-member/kid chore) habits credit the assignee's own
+    // member.points on completion, NOT the shared household pool — skip them so this
+    // household-points recompute can't double-count their points.
+    if (habit.assignedTo) continue;
+
     // Check if habit was completed on the target date
     if (!habit.completedDates.includes(targetDate)) continue;
 
@@ -532,6 +537,11 @@ export const calculatePointsForDateRange = (
   const today = getLocalDateString();
 
   for (const habit of habits) {
+    // Plan 080c: assigned (per-member/kid chore) habits credit the assignee's
+    // member.points, not the shared household pool — skip them here too (see
+    // calculatePointsForDate).
+    if (habit.assignedTo) continue;
+
     // Find all completion dates within the range
     const completionsInRange = habit.completedDates.filter(date =>
       date >= startDate && date <= endDate

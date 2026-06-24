@@ -33,6 +33,18 @@ import toast from 'react-hot-toast';
 import { format, parseISO, startOfWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 
+/**
+ * Plan 080c: the doc that receives a habit's points. An assigned (per-member /
+ * kid chore) habit credits the assignee's own `members/{uid}.points`; an
+ * unassigned/shared habit credits the shared household doc. Every points-writing
+ * path (toggle, reset, submission add/edit/delete) routes through this so an
+ * assigned chore's points never leak into the shared pool.
+ */
+const habitPointsTargetRef = (householdId: string, assignedTo: string | undefined) =>
+  assignedTo
+    ? doc(db, `households/${householdId}/members`, assignedTo)
+    : doc(db, `households/${householdId}`);
+
 export const useHabitActions = (
   householdId: string | null,
   currentUser: HouseholdMember | null,
@@ -184,9 +196,13 @@ export const useHabitActions = (
       lastUpdated: serverTimestamp(),
     });
 
-    // Include points update in the same batch (only when points actually change)
+    // Include points update in the same batch (only when points actually change).
+    // Plan 080c: an assigned (per-member/kid chore) habit credits the assignee's OWN
+    // member.points — their personal balance for rewards/allowance — instead of the
+    // shared household pool. Unassigned/shared habits keep crediting the household,
+    // and only those feed the household-points recompute (see habitLogic.ts).
     if (result.pointsChange !== 0) {
-      batch.update(doc(db, `households/${householdId}`), {
+      batch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
         'points.daily': increment(result.pointsChange),
         'points.weekly': increment(result.pointsChange),
         'points.total': increment(result.pointsChange),
@@ -256,7 +272,7 @@ export const useHabitActions = (
     });
 
     if (pointsToRemove !== 0) {
-      resetBatch.update(doc(db, `households/${householdId}`), {
+      resetBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), {
         'points.daily': increment(-pointsToRemove),
         'points.weekly': increment(-pointsToRemove),
         'points.total': increment(-pointsToRemove),
@@ -359,7 +375,7 @@ export const useHabitActions = (
           pointUpdates['points.weekly'] = increment(pointsEarned);
         }
 
-        addBatch.update(doc(db, `households/${householdId}`), pointUpdates);
+        addBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
       }
 
       await addBatch.commit();
@@ -474,7 +490,7 @@ export const useHabitActions = (
         pointUpdates['points.weekly'] = increment(-submission.pointsEarned);
       }
 
-      deleteBatch.update(doc(db, `households/${householdId}`), pointUpdates);
+      deleteBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
 
       await deleteBatch.commit();
 
@@ -561,7 +577,7 @@ export const useHabitActions = (
           pointUpdates['points.weekly'] = increment(pointsDelta);
         }
 
-        updateBatch.update(doc(db, `households/${householdId}`), pointUpdates);
+        updateBatch.update(habitPointsTargetRef(householdId, habit.assignedTo), pointUpdates);
       }
 
       await updateBatch.commit();

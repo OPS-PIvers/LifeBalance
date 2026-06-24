@@ -227,3 +227,10 @@ No new secrets, no new accounts, no Stripe, no auth-provider changes.
   double-tap. The `status` transition `pending→approved` must be a no-op if already `approved`.
 - Every new kid-facing surface checks `getKidModeEnabled()` and the active-member role — never assume
   a parent context.
+- **Per-member points sync/reset (080c-1 → 080c-2 follow-up):** 080c-1 routes assigned-chore points
+  straight to `member.points` (the toggle/submission delta is the source of truth) and excludes
+  assigned habits from the household recompute. There is deliberately **no corrective recompute for
+  member points yet**, and the daily/weekly **reset** must be extended to managed-kid member points
+  **before 080c-2 makes chores real** — otherwise a kid's "this week" balance accumulates as lifetime.
+  Mirror `computeHouseholdPointsSync` + the points-reset path for managed members in 080c-2 (use
+  `calculatePointsForDate`/`Range` over that member's `assignedTo` habits).
