@@ -104,6 +104,7 @@ import {
   getCompletedTodoWindowStart,
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
+import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -293,6 +294,16 @@ export interface HouseholdContextType {
   removeMember: (memberId: string) => Promise<void>;
   deleteHousehold: () => Promise<void>;
 
+  // Kid Profile Actions (Plan 080a-2)
+  addKidProfile: (input: { displayName: string; avatarColor?: string; avatarEmoji?: string }) => Promise<void>;
+  updateKidProfile: (memberId: string, updates: { displayName?: string; avatarColor?: string; avatarEmoji?: string }) => Promise<void>;
+  removeKidProfile: (memberId: string) => Promise<void>;
+
+  // Active member (kid-mode switching)
+  activeMemberId: string | null;
+  actAs: (memberId: string) => void;
+  exitToParent: () => void;
+
   // Onboarding
   /** Mark the first-run onboarding wizard as finished so it is never shown again. */
   completeOnboarding: () => Promise<void>;
@@ -404,6 +415,8 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
   | 'completeOnboarding' | 'setHouseholdCurrency'
+  | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
+  | 'activeMemberId' | 'actAs' | 'exitToParent'
 >;
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -597,6 +610,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [rewards, setRewards] = useState<RewardItem[]>([]);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
+  // Plan 080a-2: active member for kid-mode switching (null = viewing as parent)
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [insight, setInsight] = useState("Tap 'Get Insight' to analyze your habits and spending.");
   // Insights: live window (most-recent N) merged with on-demand older history.
   const [insightsWindow, setInsightsWindow] = useState<Insight[]>([]);
@@ -3110,6 +3125,66 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     window.location.reload();
   }, [householdId]);
 
+  // --- ACTIONS: KID PROFILES (Plan 080a-2) ---
+
+  const addKidProfile = useCallback(async (
+    input: { displayName: string; avatarColor?: string; avatarEmoji?: string }
+  ): Promise<void> => {
+    if (!householdId) return;
+    const parentUid = user?.uid;
+    if (!parentUid) return;
+    try {
+      const uid = newKidMemberId();
+      // Single doc write to the members subcollection ONLY — no memberUids update
+      // (no credential). A kid's synthetic uid can never be used to authenticate.
+      await setDoc(doc(db, `households/${householdId}/members`, uid), {
+        ...buildKidMemberDoc(input, parentUid, uid),
+        joinedAt: serverTimestamp(),
+      });
+      toast.success('Kid profile added');
+    } catch (error) {
+      console.error('[addKidProfile] Failed:', error);
+      toast.error('Failed to add kid profile');
+      throw error;
+    }
+  }, [householdId, user]);
+
+  const updateKidProfile = useCallback(async (
+    memberId: string,
+    updates: { displayName?: string; avatarColor?: string; avatarEmoji?: string }
+  ): Promise<void> => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}/members`, memberId), updates);
+    } catch (error) {
+      console.error('[updateKidProfile] Failed:', error);
+      toast.error('Failed to update kid profile');
+      throw error;
+    }
+  }, [householdId]);
+
+  const removeKidProfile = useCallback(async (memberId: string): Promise<void> => {
+    if (!householdId) return;
+    try {
+      // Kid was never added to memberUids — just delete the member doc.
+      await deleteDoc(doc(db, `households/${householdId}/members`, memberId));
+      if (activeMemberId === memberId) setActiveMemberId(null);
+      toast.success('Kid profile removed');
+    } catch (error) {
+      console.error('[removeKidProfile] Failed:', error);
+      toast.error('Failed to remove kid profile');
+      throw error;
+    }
+  }, [householdId, activeMemberId]);
+
+  const actAs = useCallback((memberId: string) => {
+    setActiveMemberId(memberId);
+  }, []);
+
+  const exitToParent = useCallback(() => {
+    setActiveMemberId(null);
+  }, []);
+
   // --- ACTIONS: ONBOARDING ---
 
   const completeOnboarding = useCallback(async () => {
@@ -3885,11 +3960,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    addKidProfile,
+    updateKidProfile,
+    removeKidProfile,
+    activeMemberId,
+    actAs,
+    exitToParent,
   }), [
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
     completeOnboarding, setHouseholdCurrency,
+    addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
   ]);
 
   return (

@@ -121,14 +121,33 @@ transactions), other members' data, Settings, AI capture, the bottom-nav finance
 read-only family calendar/meals. This is the "only what makes sense for them" view the owner asked
 for. No Firestore writes that a parent session doesn't authorize (Principle 2).
 
-### PR 080c — Chore assignment + Todos→points (wires the islands into the loop)
-1. Add `assignedTo?: string` to `Habit` (member uid / synthetic kid uid), mirroring `ToDo.assignedTo`.
-   Habit create/edit gains an "assign to" picker (members incl. kids). Kid dashboard filters to
-   `assignedTo === activeKidUid` (+ shared chores flagged kid-appropriate).
-2. **Todos award points**: add optional `points?: number` to `ToDo` (default e.g. 5). Completing an
+### PR 080c — Kid chores (assign + custom points + visibility) + Todos→points
+**Model decision (owner-driven):** a "kid chore" is an **ordinary `Habit` doc** with
+`assignedTo: <kidUid>` and `basePoints` = the **point total the parent sets** — reusing the whole
+habit engine (streaks, scoring, multipliers, completion) with no new scoring logic. Assigning one
+chore to multiple kids creates **one habit doc per kid** (each its own streak/points — the correct
+behavior). **No rules change:** a parent creating a habit with `assignedTo` is a normal habit write
+(the `habits` rule already allows any member, `firestore.rules:227`).
+1. **Assignment + custom points.** Add `assignedTo?: string` to `Habit` (member uid / synthetic kid
+   uid), mirroring `ToDo.assignedTo`. The habit create/edit form gains an "assign to" multi-select
+   (parents + kids); when a kid is selected, a **points field** writes `basePoints`. Selecting N kids
+   spawns N per-kid habit docs.
+2. **Visibility (the three rules the owner specified):**
+   - **Kids see only their own** — the kid dashboard (080b) lists habits where `assignedTo ===
+     activeKidUid`.
+   - **Parents don't see kid chores in their own tracker** — the Habits page filters **out** habits
+     whose `assignedTo` is a managed kid; a parent sees shared + their own personal habits only.
+   - **Parents see kid progress at a glance** — a compact **Dashboard summary card** linking to a
+     fuller read-only **"Kids' chores" section** on the **Habits page** (owner choice: *both*), each
+     grouping a kid's assigned habits with today's completion, streak, and points — so a parent
+     monitors progress **without switching into the kid profile**. A parent may also mark a kid's chore
+     done on their behalf (acting-as attribution, Principle 2).
+3. **Todos award points**: add optional `points?: number` to `ToDo` (default e.g. 5). Completing an
    assigned todo credits that member's points in the same `writeBatch` as the completion (Principle 5).
    This is the [3] "Todos→points" item — OurHome's core chore-points mechanic.
-3. Tests for assignment filtering + todo-completion point credit (incl. the kid-uid attribution path).
+4. Tests: assignment filtering (kid sees only theirs; parent tracker excludes kid chores; parent
+   progress section includes them); custom `basePoints` on a kid chore; todo-completion point credit
+   (incl. the kid-uid attribution path).
 
 ### PR 080d — Rewards CRUD + redemption approval + allowance ledger
 1. **Reward CRUD** (the missing [2] core): `addReward`/`updateReward`/`deleteReward`. Extend

@@ -102,3 +102,42 @@ export const getBillingEnabled = (): Promise<boolean> => {
 
   return billingEnabledPromise;
 };
+
+/** How long (ms) to reuse a cached kid-mode-enabled value before re-fetching. */
+const KID_MODE_ENABLED_CACHE_TTL_MS = 60_000;
+
+let kidModeEnabledPromise: Promise<boolean> | null = null;
+let kidModeEnabledFetchedAt = 0;
+
+/**
+ * Returns the current `kidModeEnabled` flag from the global app config (Plan 080).
+ *
+ * Gates the entire Kid Mode surface: the profile switcher and the kid views. It
+ * fails CLOSED (returns `false`) when the doc is missing, the field is absent, or
+ * the read throws, so Kid Mode stays **dormant** unless an operator has explicitly
+ * set the boolean `kidModeEnabled: true`. While off, no switcher or kid view shows
+ * and households behave exactly as before. A human flips it WITHOUT a deploy in the
+ * Firestore console (effective within ~60 s).
+ */
+export const getKidModeEnabled = (): Promise<boolean> => {
+  const now = Date.now();
+  if (kidModeEnabledPromise !== null && now - kidModeEnabledFetchedAt < KID_MODE_ENABLED_CACHE_TTL_MS) {
+    return kidModeEnabledPromise;
+  }
+
+  kidModeEnabledFetchedAt = now;
+  kidModeEnabledPromise = (async (): Promise<boolean> => {
+    try {
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data().kidModeEnabled === true : false;
+    } catch {
+      // Fail closed: keep Kid Mode dormant if config is unreachable. Clear the cache
+      // so the next call retries rather than caching the fallback.
+      kidModeEnabledPromise = null;
+      return false;
+    }
+  })();
+
+  return kidModeEnabledPromise;
+};

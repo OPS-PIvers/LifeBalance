@@ -1,5 +1,7 @@
 
-export type Role = 'admin' | 'member';
+// 'kid' (Plan 080) is a login-less managed child profile — a member doc a parent
+// creates/manages, never added to the household memberUids array (no credential).
+export type Role = 'admin' | 'member' | 'kid';
 
 export const INCOME_CATEGORY = 'Income';
 
@@ -55,6 +57,16 @@ export interface HouseholdMember {
   // Legal consent captured at signup — Plan 011
   consentAcceptedAt?: string; // ISO timestamp when Terms + Privacy were accepted
   consentVersion?: string; // CONSENT_VERSION accepted (see utils/legal.ts)
+
+  // --- Plan 080: managed kid profiles (login-less child member docs) ---
+  // A kid is a member doc a PARENT creates/manages; its synthetic `kid_<uuid>` uid
+  // never enters the household memberUids array, so it holds no credential. See
+  // plans/080-kid-mode-family-profiles.md.
+  isManaged?: boolean; // true = login-less managed profile (a kid)
+  managedByUid?: string; // uid of the parent who created this profile
+  avatarColor?: string; // kid-friendly avatar accent (e.g. a brand-* / habit-* token)
+  avatarEmoji?: string; // kid-friendly avatar glyph
+  allowanceCents?: number; // tracked IOU/allowance ledger (NOT an in-app payout)
 }
 
 export interface Account {
@@ -359,6 +371,12 @@ export interface Household {
   // ISO-4217 currency code (e.g. 'USD', 'EUR') used to format money throughout the
   // app. Absent on legacy households, which fall back to the default (USD).
   currency?: string;
+
+  // Plan 080 (Kid Mode): salted hash of the parent PIN required to EXIT a kid
+  // profile view back to a parent view (Netflix-Kids pattern). Absent until a
+  // parent sets one; when absent, exiting requires no PIN. Dormant until the
+  // app_config/global.kidModeEnabled flag is on.
+  kidModePinHash?: string;
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).

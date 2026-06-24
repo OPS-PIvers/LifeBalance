@@ -102,7 +102,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [challenges] = useState<Challenge[]>([]);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards] = useState<RewardItem[]>([]);
-  const [members] = useState<HouseholdMember[]>(SEED_MEMBERS);
+  const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
@@ -391,6 +392,42 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     return id;
   }, []);
 
+  // Kid profile operations (Plan 080a-2)
+  const addKidProfile = useCallback(async (input: { displayName: string; avatarColor?: string; avatarEmoji?: string }) => {
+    const newMember: HouseholdMember = {
+      uid: `kid_${crypto.randomUUID()}`,
+      displayName: input.displayName.trim() || 'Kid',
+      role: 'kid',
+      isManaged: true,
+      managedByUid: 'test-user-id',
+      avatarColor: input.avatarColor,
+      avatarEmoji: input.avatarEmoji,
+      points: { daily: 0, weekly: 0, total: 0 },
+      allowanceCents: 0,
+    };
+    setMembers(prev => [...prev, newMember]);
+    toast.success('Mock: Kid profile added');
+  }, []);
+
+  const updateKidProfile = useCallback(async (memberId: string, updates: { displayName?: string; avatarColor?: string; avatarEmoji?: string }) => {
+    setMembers(prev => prev.map(m => m.uid === memberId ? { ...m, ...updates } : m));
+    toast.success('Mock: Kid profile updated');
+  }, []);
+
+  const removeKidProfile = useCallback(async (memberId: string) => {
+    setMembers(prev => prev.filter(m => m.uid !== memberId));
+    setActiveMemberId(prev => (prev === memberId ? null : prev));
+    toast.success('Mock: Kid profile removed');
+  }, []);
+
+  const actAs = useCallback((memberId: string) => {
+    setActiveMemberId(memberId);
+  }, []);
+
+  const exitToParent = useCallback(() => {
+    setActiveMemberId(null);
+  }, []);
+
   // No-op functions for features not critical to testing
 
   const noOp = useCallback(async <T,>(..._args: unknown[]): Promise<T | void> => {
@@ -587,6 +624,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    addKidProfile,
+    updateKidProfile,
+    removeKidProfile,
+    activeMemberId,
+    actAs,
+    exitToParent,
   };
 
   // Test Mode does not need render isolation, so every slice receives the same
