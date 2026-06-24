@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
+import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 
 // Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
 // the boot bundle; preloaded on idle below so the first FAB tap is instant.
@@ -11,6 +12,14 @@ const CaptureModal = React.lazy(loadCaptureModal);
 
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Pending-items nudge (Plan 063): count transactions awaiting review so the Budget
+  // tab can show a red badge. Subscribes to the narrow finance slice only.
+  const { transactions } = useFinance();
+  const pendingReviewCount = useMemo(
+    () => transactions.filter((t) => t.status === 'pending_review').length,
+    [transactions]
+  );
 
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
@@ -57,8 +66,23 @@ const BottomNav: React.FC = () => {
             <NavLink to="/budget" className={navLinkClass}>
               {({ isActive }) => (
                 <>
-                  <Wallet className={iconClass(isActive)} />
-                  <span className="text-xs font-medium">Budget</span>
+                  <div className="relative">
+                    <Wallet className={iconClass(isActive)} />
+                    {pendingReviewCount > 0 && (
+                      <span
+                        className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-slate-800"
+                        aria-hidden="true"
+                      >
+                        {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium">
+                    Budget
+                    {pendingReviewCount > 0 && (
+                      <span className="sr-only">, {pendingReviewCount} pending review</span>
+                    )}
+                  </span>
                 </>
               )}
             </NavLink>
