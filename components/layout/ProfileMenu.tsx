@@ -28,12 +28,20 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
   const kidModeEnabled = useKidModeEnabled();
 
   const kids = kidModeEnabled ? members.filter((m) => m.isManaged === true) : [];
+  const activeKid = activeMemberId ? kids.find((k) => k.uid === activeMemberId) : undefined;
 
   const handleAddKidProfile = useCallback(async () => {
     const name = window.prompt('Kid name');
     if (!name || !name.trim()) return;
+    const trimmedName = name.trim();
+    // Match the firestore.rules displayName cap (isValidString ..., 50) so the user
+    // gets a friendly message instead of a generic permission error.
+    if (trimmedName.length > 50) {
+      toast.error('Kid name must be 50 characters or less');
+      return;
+    }
     try {
-      await addKidProfile({ displayName: name.trim() });
+      await addKidProfile({ displayName: trimmedName });
     } catch {
       // addKidProfile surfaces its own error toast.
     }
@@ -164,12 +172,12 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           </div>
 
           {/* Active-kid banner */}
-          {activeMemberId !== null && kids.find((k) => k.uid === activeMemberId) !== undefined && (
+          {activeKid && (
             <div className="mx-3 mb-1.5 flex items-center justify-between rounded-lg bg-brand-50 dark:bg-brand-900/30 px-3 py-1.5 text-xs text-brand-700 dark:text-brand-300">
               <span>
                 Viewing as{' '}
                 <span className="font-semibold">
-                  {kids.find((k) => k.uid === activeMemberId)?.displayName}
+                  {activeKid.displayName}
                 </span>
               </span>
               <button
