@@ -3168,14 +3168,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     try {
       // Kid was never added to memberUids — just delete the member doc.
       await deleteDoc(doc(db, `households/${householdId}/members`, memberId));
-      if (activeMemberId === memberId) setActiveMemberId(null);
+      // Functional update so the callback needn't depend on activeMemberId.
+      setActiveMemberId((prev) => (prev === memberId ? null : prev));
       toast.success('Kid profile removed');
     } catch (error) {
       console.error('[removeKidProfile] Failed:', error);
       toast.error('Failed to remove kid profile');
       throw error;
     }
-  }, [householdId, activeMemberId]);
+  }, [householdId]);
 
   const actAs = useCallback((memberId: string) => {
     setActiveMemberId(memberId);
