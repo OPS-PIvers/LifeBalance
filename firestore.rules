@@ -171,6 +171,8 @@ service cloud.firestore {
         function isValidManagedKidCreate() {
           let data = request.resource.data;
           return isManagedKidData(data) &&
+                 // The doc's uid field must match the doc id (prevents desynced docs).
+                 data.get('uid', null) == memberId &&
                  data.keys().hasOnly([
                    'uid', 'displayName', 'role', 'isManaged', 'managedByUid',
                    'avatarColor', 'avatarEmoji', 'points', 'allowanceCents', 'joinedAt'
@@ -180,7 +182,9 @@ service cloud.firestore {
                  isValidOptionalString(data.get('avatarColor', null), 30) &&
                  isValidOptionalString(data.get('avatarEmoji', null), 30) &&
                  isValidOptionalNumber(data.get('allowanceCents', null)) &&
-                 (data.get('points', null) == null || data.points is map);
+                 (data.get('points', null) == null || data.points is map) &&
+                 // joinedAt, if present, must be the server timestamp (no arbitrary/future values).
+                 (data.get('joinedAt', null) == null || data.joinedAt == request.time);
         }
 
         // Secure creation: a user creating THEIR OWN real (login-backed) member doc
@@ -249,12 +253,21 @@ service cloud.firestore {
             // Case 2: Admin updating any member (including role)
             isAdminOf(householdId) ||
             // Case 3 (Plan 080): any parent may manage a login-less kid profile,
-            // but cannot un-manage it or change its role away from 'kid' (no
-            // escalation into a real/admin member). Both the existing and the
-            // resulting doc must remain a managed kid.
+            // but cannot un-manage it, change its role away from 'kid', alter the
+            // immutable uid/joinedAt, add stray keys, or write bad types.
             (
               isManagedKidData(resource.data) &&
-              isManagedKidData(request.resource.data)
+              isManagedKidData(request.resource.data) &&
+              !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'joinedAt']) &&
+              request.resource.data.keys().hasOnly([
+                'uid', 'displayName', 'role', 'isManaged', 'managedByUid',
+                'avatarColor', 'avatarEmoji', 'points', 'allowanceCents', 'joinedAt'
+              ]) &&
+              isValidOptionalString(request.resource.data.get('managedByUid', null), 128) &&
+              isValidOptionalString(request.resource.data.get('avatarColor', null), 30) &&
+              isValidOptionalString(request.resource.data.get('avatarEmoji', null), 30) &&
+              isValidOptionalNumber(request.resource.data.get('allowanceCents', null)) &&
+              (request.resource.data.get('points', null) == null || request.resource.data.points is map)
             )
           )
         );

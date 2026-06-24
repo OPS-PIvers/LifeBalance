@@ -100,6 +100,7 @@ async function seed(): Promise<void> {
     // Plan 080: a login-less managed kid profile (in the members subcollection but
     // NOT in memberUids, so it holds no household credential).
     await setDoc(doc(db, 'households', H1, 'members', KID), {
+      uid: KID,
       displayName: 'Leo',
       role: 'kid',
       isManaged: true,
@@ -450,6 +451,7 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
   // A kid is a member doc (role 'kid', isManaged true) a PARENT creates and
   // manages. It is never added to memberUids, so it holds no household credential.
   const newKid = {
+    uid: 'kid-mia',
     displayName: 'Mia',
     role: 'kid',
     isManaged: true,
@@ -487,8 +489,10 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
   });
 
   it('a non-member (other household) cannot create a kid here', async () => {
+    // Override uid to match the path so the failure is specifically authorization,
+    // not the new uid==memberId check.
     await assertFails(
-      setDoc(doc(dbFor(CAROL), 'households', H1, 'members', 'kid-x'), newKid),
+      setDoc(doc(dbFor(CAROL), 'households', H1, 'members', 'kid-x'), { ...newKid, uid: 'kid-x' }),
     );
   });
 
@@ -535,6 +539,26 @@ describe('managed kid profiles (Plan 080 — login-less child member docs)', () 
     // Even if a principal somehow authenticated as the kid's id, the household-doc
     // read gate is `uid in memberUids`, which the kid is never part of.
     await assertFails(getDoc(doc(dbFor(KID), 'households', H1)));
+  });
+
+  // Plan 080a-1b hardening (gemini-code-assist review on #680): uid integrity,
+  // immutability of uid/joinedAt, and no stray keys on managed-kid writes.
+  it('rejects a kid create whose uid field does not match the doc id', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'members', 'kid-mia'), { ...newKid, uid: 'kid-mismatched' }),
+    );
+  });
+
+  it('a parent cannot change a kid’s uid', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), { uid: 'kid-hacked' }),
+    );
+  });
+
+  it('a parent cannot write a stray field to a kid doc', async () => {
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'members', KID), { junkField: 'nope' }),
+    );
   });
 });
 
