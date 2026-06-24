@@ -1,8 +1,9 @@
 # Plan 080 — Kid Mode: managed family profiles + chores → rewards
 
-> **Status:** IN PROGRESS — 080a-1 (rules) PR open · **Tag:** mostly `[C]`, but **080a-1 + 080d carry
-> a small additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010 tests; a human
-> watches the atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
+> **Status:** IN PROGRESS — **080a shipped** (rules #680, foundation #681, rules-hardening #683, all
+> merged + deployed); **080b (kid dashboard + exit PIN) is this PR** · **Tag:** mostly `[C]`, but
+> **080a-1 + 080d carry a small additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010
+> tests; a human watches the atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
 > **MED for the two rules slices** (additive, rules-tested, human-watched; kids never enter
 > `memberUids`, so no rules *regression*) · **Effort:** L (ship as a sequence of
 > dormant-then-reveal PRs) · **Planned against commit:** `16e3ed3`
@@ -113,13 +114,21 @@ Greenlight's real-money rails (see Principle 3).
    Test-Mode walkthrough add-kid → switch-in → switch-out-with-PIN. Existing (flag-off) households
    unchanged.
 
-### PR 080b — Kid dashboard (the simplified, scoped view)
+### PR 080b — Kid dashboard (the simplified, scoped view) ✅ shipped
 A dedicated kid surface shown while `actAs` is a kid: today's assigned chores/habits (large tap
-targets, `habit-*` theme), their **points** balance + streak, their **allowance** balance, and a
+targets, purple kid theme), their **points** balance, their **allowance** balance, and a
 **reward store** (request buttons). **Hidden:** all finance (Safe-to-Spend, accounts, budget,
 transactions), other members' data, Settings, AI capture, the bottom-nav finance tabs. Optional
 read-only family calendar/meals. This is the "only what makes sense for them" view the owner asked
 for. No Firestore writes that a parent session doesn't authorize (Principle 2).
+
+**Built (this PR):** `components/kid/KidDashboard.tsx` (lazy, replaces the whole shell via a gate in
+`MainLayout`); the **exit PIN** — `utils/kidPin.ts` (salted SHA-256, never stores the raw PIN) +
+`setKidModePin` on the core slice + a "Kid Mode" card in Settings to set/clear it, with the
+Netflix-Kids PIN prompt to leave the kid view; `activeMemberId` now **persists in sessionStorage**
+so a refresh can't bypass the PIN; `Habit.assignedTo` added (read-only here — the kid sees habits
+assigned to them, empty until 080c builds assignment). The reward **Request** button is a friendly
+stub — the real request → parent-approval → points/allowance flow lands in **080d**.
 
 ### PR 080c — Kid chores (assign + custom points + visibility) + Todos→points
 **Model decision (owner-driven):** a "kid chore" is an **ordinary `Habit` doc** with

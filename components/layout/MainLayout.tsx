@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { Suspense, lazy, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+
+// Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
+// it only loads when a parent actually switches into a kid.
+const KidDashboard = lazy(() => import('@/components/kid/KidDashboard'));
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -10,6 +16,33 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
+  const { members, activeMemberId } = useHouseholdCore();
+  const kidModeEnabled = useKidModeEnabled();
+
+  // Active managed kid → Kid Mode. Validated against the live members list so a
+  // stale sessionStorage value (e.g. a removed kid, or the flag turned off) falls
+  // straight back to the normal parent shell.
+  const activeKid = useMemo(
+    () =>
+      kidModeEnabled && activeMemberId
+        ? members.find((m) => m.uid === activeMemberId && m.isManaged === true)
+        : undefined,
+    [kidModeEnabled, activeMemberId, members],
+  );
+
+  // Kid Mode replaces the ENTIRE parent shell (toolbar + routed page + bottom-nav)
+  // with the scoped kid surface, so finance/settings/other-member data is
+  // structurally absent rather than merely hidden. Its own ErrorBoundary keeps a
+  // crash in the kid view from taking down the rest of the app.
+  if (activeKid) {
+    return (
+      <ErrorBoundary key="kid-dashboard">
+        <Suspense fallback={<div className="h-dvh bg-purple-50 dark:bg-slate-900" />}>
+          <KidDashboard />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-brand-50 dark:bg-brand-900 transition-colors">

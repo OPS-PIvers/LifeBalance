@@ -1,6 +1,7 @@
 import React, { useState, ReactNode, useCallback, useMemo } from 'react';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { hashKidPin } from '@/utils/kidPin';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
@@ -116,6 +117,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [groceryCategories, setGroceryCategories] = useState<string[]>([]);
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
+  const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -140,6 +142,17 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setHouseholdCurrency = useCallback(async (newCurrency: string) => {
     setCurrency(newCurrency);
     toast.success('Mock: Currency updated');
+  }, []);
+
+  const setKidModePin = useCallback(async (pin: string | null) => {
+    if (pin === null) {
+      setKidModePinHash(undefined);
+      toast.success('Mock: Kid Mode PIN removed');
+      return;
+    }
+    // Hash for real so the Test-Mode exit-PIN flow verifies like production.
+    setKidModePinHash(await hashKidPin(pin));
+    toast.success('Mock: Kid Mode PIN set');
   }, []);
 
   const updateAccountBalance = useCallback(async (id: string, newBalance: number) => {
@@ -478,7 +491,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     coreTemplates: { expenses: [], buckets: [] },
     stores: stores,
     groceryCategories: groceryCategories,
-    currency
+    currency,
+    kidModePinHash
 
   } as unknown as Household;
   const bucketSpentMap = new Map();
@@ -624,6 +638,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    setKidModePin,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,

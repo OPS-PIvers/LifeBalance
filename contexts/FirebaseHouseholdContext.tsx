@@ -91,6 +91,7 @@ import { usePointsSync, type PointsSyncUpdate } from '@/hooks/usePointsSync';
 import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { hashKidPin } from '@/utils/kidPin';
 import { roundMoney } from '@/utils/money';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
@@ -311,6 +312,9 @@ export interface HouseholdContextType {
   /** Set the household's display currency (ISO-4217 code, e.g. 'USD', 'EUR'). */
   setHouseholdCurrency: (currency: string) => Promise<void>;
 
+  /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
+  setKidModePin: (pin: string | null) => Promise<void>;
+
   // Meal Actions
   addMeal: (meal: Omit<Meal, 'id'>, options?: { suppressToast?: boolean }) => Promise<string>;
   updateMeal: (meal: Meal) => Promise<void>;
@@ -414,7 +418,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
 >;
@@ -560,6 +564,11 @@ export const HouseholdSliceProviders: React.FC<{
   </HouseholdCoreContext.Provider>
 );
 
+// Plan 080b: persist the acting-as member across a page refresh (tab-session
+// scoped). Without this a kid could simply reload to escape the scoped view back
+// to the parent surface, defeating the exit PIN. Cleared on exit and on tab close.
+const ACTIVE_MEMBER_STORAGE_KEY = 'LIFEBALANCE_ACTIVE_MEMBER';
+
 export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, householdId } = useAuth();
 
@@ -610,8 +619,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const [rewards, setRewards] = useState<RewardItem[]>([]);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [currentUser, setCurrentUser] = useState<HouseholdMember | null>(null);
-  // Plan 080a-2: active member for kid-mode switching (null = viewing as parent)
-  const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
+  // Plan 080a-2: active member for kid-mode switching (null = viewing as parent).
+  // Initialized from sessionStorage so a refresh keeps the kid view (see below).
+  const [activeMemberId, setActiveMemberId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(ACTIVE_MEMBER_STORAGE_KEY) || null;
+    } catch {
+      return null;
+    }
+  });
   const [insight, setInsight] = useState("Tap 'Get Insight' to analyze your habits and spending.");
   // Insights: live window (most-recent N) merged with on-demand older history.
   const [insightsWindow, setInsightsWindow] = useState<Insight[]>([]);
@@ -3186,6 +3202,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     setActiveMemberId(null);
   }, []);
 
+  // Persist the acting-as selection to sessionStorage so a refresh keeps the kid
+  // view (the exit PIN would be meaningless if a reload dropped back to parent).
+  useEffect(() => {
+    try {
+      if (activeMemberId) {
+        sessionStorage.setItem(ACTIVE_MEMBER_STORAGE_KEY, activeMemberId);
+      } else {
+        sessionStorage.removeItem(ACTIVE_MEMBER_STORAGE_KEY);
+      }
+    } catch {
+      // sessionStorage can be unavailable (SSR, privacy mode) — non-fatal.
+    }
+  }, [activeMemberId]);
+
   // --- ACTIONS: ONBOARDING ---
 
   const completeOnboarding = useCallback(async () => {
@@ -3196,6 +3226,19 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const setHouseholdCurrency = useCallback(async (currency: string) => {
     if (!householdId) return;
     await updateDoc(doc(db, 'households', householdId), { currency });
+  }, [householdId]);
+
+  // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
+  // (never stored plaintext); passing null removes the PIN so exiting needs none.
+  const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
+    if (!householdId) return;
+    const ref = doc(db, 'households', householdId);
+    if (pin === null) {
+      await updateDoc(ref, { kidModePinHash: deleteField() });
+      return;
+    }
+    const kidModePinHash = await hashKidPin(pin);
+    await updateDoc(ref, { kidModePinHash });
   }, [householdId]);
 
   // --- ACTIONS: MEALS ---
@@ -3961,6 +4004,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    setKidModePin,
     addKidProfile,
     updateKidProfile,
     removeKidProfile,
@@ -3971,7 +4015,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency,
+    completeOnboarding, setHouseholdCurrency, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
   ]);
 

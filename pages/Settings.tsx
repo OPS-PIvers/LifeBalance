@@ -27,7 +27,8 @@ import {
   Smartphone,
   Terminal,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  Baby
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -50,6 +51,8 @@ import { db } from '@/firebase.config';
 import DeveloperConsole from '@/components/modals/DeveloperConsole';
 import PaywallModal from '@/components/modals/PaywallModal';
 import { useBillingEnabled } from '@/hooks/useBillingEnabled';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { isValidPinFormat } from '@/utils/kidPin';
 import { getPlan } from '@/utils/entitlements';
 
 const APP_VERSION = '0.8.0-alpha';
@@ -76,6 +79,7 @@ const Settings: React.FC = () => {
     deleteHousehold,
     householdSettings,
     setHouseholdCurrency,
+    setKidModePin,
     apiKeys,
   } = useHouseholdCore();
   const {
@@ -107,6 +111,13 @@ const Settings: React.FC = () => {
   const billingEnabled = useBillingEnabled();
   const [showPaywall, setShowPaywall] = useState(false);
 
+  // Kid Mode (Plan 080) — dormant until kidModeEnabled is turned on. Manages the
+  // parent PIN required to EXIT a kid's scoped view.
+  const kidModeEnabled = useKidModeEnabled();
+  const [pinDraft, setPinDraft] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [isSavingPin, setIsSavingPin] = useState(false);
+
   // Danger zone: delete household
   const [isDeleteHouseholdOpen, setIsDeleteHouseholdOpen] = useState(false);
   const [isDeletingHousehold, setIsDeletingHousehold] = useState(false);
@@ -133,6 +144,49 @@ const Settings: React.FC = () => {
       toast.error('Failed to update currency');
     }
   };
+
+  const hasKidPin = Boolean(householdSettings?.kidModePinHash);
+
+  const handleSaveKidPin = async () => {
+    if (!isValidPinFormat(pinDraft)) {
+      toast.error('PIN must be 4-6 digits');
+      return;
+    }
+    if (pinDraft !== pinConfirm) {
+      toast.error('PINs do not match');
+      return;
+    }
+    setIsSavingPin(true);
+    try {
+      await setKidModePin(pinDraft);
+      toast.success('Kid Mode PIN saved');
+      setPinDraft('');
+      setPinConfirm('');
+    } catch (error) {
+      console.error('[Settings] Failed to set Kid Mode PIN:', error);
+      toast.error('Failed to save PIN');
+    } finally {
+      setIsSavingPin(false);
+    }
+  };
+
+  const handleRemoveKidPin = async () => {
+    setIsSavingPin(true);
+    try {
+      await setKidModePin(null);
+      toast.success('Kid Mode PIN removed');
+      setPinDraft('');
+      setPinConfirm('');
+    } catch (error) {
+      console.error('[Settings] Failed to remove Kid Mode PIN:', error);
+      toast.error('Failed to remove PIN');
+    } finally {
+      setIsSavingPin(false);
+    }
+  };
+
+  // Digits only, max 6 — keeps the PIN inputs well-formed as the user types.
+  const sanitizePin = (value: string) => value.replace(/\D/g, '').slice(0, 6);
 
   // Notification State
   const [notificationStatus, setNotificationStatus] = useState<NotificationPermission>(
@@ -654,6 +708,83 @@ const Settings: React.FC = () => {
             </div>
           </div>
         </CollapsibleCard>
+
+        {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
+        {kidModeEnabled && (
+          <CollapsibleCard
+            id="kidmode"
+            title="Kid Mode"
+            icon={<Baby className="w-5 h-5" />}
+            isOpen={openSection === 'kidmode'}
+            onToggle={() => handleToggleSection('kidmode')}
+            className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl"
+            contentClassName="space-y-5"
+          >
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 tracking-tight">
+                Exit PIN
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                Require a PIN to leave a kid&apos;s view and return to the parent view. Leave
+                unset to allow exiting freely.
+              </p>
+
+              <div className="mb-4">
+                <span
+                  className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-xs ${
+                    hasKidPin
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                      : 'text-slate-600 bg-slate-100 border border-slate-200 dark:bg-slate-700/50 dark:text-slate-300 dark:border-slate-600'
+                  }`}
+                >
+                  {hasKidPin ? 'PIN set' : 'No PIN'}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={pinDraft}
+                  onChange={(e) => setPinDraft(sanitizePin(e.target.value))}
+                  placeholder={hasKidPin ? 'New PIN (4-6 digits)' : 'PIN (4-6 digits)'}
+                  aria-label="Kid Mode PIN"
+                  className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-slate-900 dark:text-white tracking-widest outline-none focus:border-brand-500"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={pinConfirm}
+                  onChange={(e) => setPinConfirm(sanitizePin(e.target.value))}
+                  placeholder="Confirm PIN"
+                  aria-label="Confirm Kid Mode PIN"
+                  className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-slate-900 dark:text-white tracking-widest outline-none focus:border-brand-500"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveKidPin}
+                    isLoading={isSavingPin}
+                    disabled={isSavingPin || pinDraft.length === 0}
+                    variant="primary"
+                    className="flex-1"
+                  >
+                    {hasKidPin ? 'Update PIN' : 'Set PIN'}
+                  </Button>
+                  {hasKidPin && (
+                    <Button
+                      onClick={handleRemoveKidPin}
+                      isLoading={isSavingPin}
+                      disabled={isSavingPin}
+                      variant="ghost-danger"
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </CollapsibleCard>
+        )}
 
         {/* Danger Zone - admins only */}
         {currentUser?.role === 'admin' && (
