@@ -1,10 +1,11 @@
 import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, User } from 'lucide-react';
+import { ArrowLeft, LogOut, Plus, Settings, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
 interface ProfileMenuProps {
   isOpen: boolean;
@@ -14,7 +15,29 @@ interface ProfileMenuProps {
 
 const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef }) => {
   const { currentUser, logout } = useAuth();
-  const { household } = useHouseholdCore();
+  // Active-member (acting-as) state lives in the household context so the switch is
+  // app-wide (the kid view in a later slice reads it), not local to this menu.
+  const {
+    household,
+    members,
+    activeMemberId,
+    actAs,
+    exitToParent,
+    addKidProfile,
+  } = useHouseholdCore();
+  const kidModeEnabled = useKidModeEnabled();
+
+  const kids = kidModeEnabled ? members.filter((m) => m.isManaged === true) : [];
+
+  const handleAddKidProfile = useCallback(async () => {
+    const name = window.prompt('Kid name');
+    if (!name || !name.trim()) return;
+    try {
+      await addKidProfile({ displayName: name.trim() });
+    } catch {
+      // addKidProfile surfaces its own error toast.
+    }
+  }, [addKidProfile]);
   // useFocusTrap manages focus-in on open, Tab trapping, and focus restoration on close.
   const menuRef = useFocusTrap<HTMLDivElement>(isOpen);
   const navigate = useNavigate();
@@ -131,6 +154,92 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           </div>
         )}
       </div>
+
+      {/* Profiles section — only visible when Kid Mode is enabled (Plan 080, dormant by default) */}
+      {kidModeEnabled && (
+        <div className="p-2 border-b border-gray-100 dark:border-slate-700">
+          <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">
+            <Users className="w-3.5 h-3.5" />
+            Profiles
+          </div>
+
+          {/* Active-kid banner */}
+          {activeMemberId !== null && kids.find((k) => k.uid === activeMemberId) !== undefined && (
+            <div className="mx-3 mb-1.5 flex items-center justify-between rounded-lg bg-brand-50 dark:bg-brand-900/30 px-3 py-1.5 text-xs text-brand-700 dark:text-brand-300">
+              <span>
+                Viewing as{' '}
+                <span className="font-semibold">
+                  {kids.find((k) => k.uid === activeMemberId)?.displayName}
+                </span>
+              </span>
+              <button
+                onClick={() => {
+                  exitToParent();
+                  onClose();
+                }}
+                className="ml-2 flex items-center gap-1 font-medium hover:text-brand-900 dark:hover:text-brand-100 transition-colors"
+                role="menuitem"
+                tabIndex={-1}
+                aria-label="Back to parent view"
+              >
+                <ArrowLeft className="w-3 h-3" />
+                Back to parent
+              </button>
+            </div>
+          )}
+
+          {/* Parent row (active when no kid is selected) */}
+          <div
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 ${activeMemberId === null ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}
+          >
+            <div className="w-6 h-6 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 text-xs font-bold shrink-0">
+              {currentUser?.displayName ? currentUser.displayName.charAt(0) : <User className="w-3.5 h-3.5" />}
+            </div>
+            <span className="truncate">
+              {currentUser?.displayName ?? 'Parent'}{activeMemberId === null ? ' (you)' : ''}
+            </span>
+          </div>
+
+          {/* Kid rows */}
+          {kids.map((kid) => (
+            <button
+              key={kid.uid}
+              onClick={() => {
+                actAs(kid.uid);
+                onClose();
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
+              role="menuitem"
+              tabIndex={-1}
+            >
+              {kid.avatarColor ? (
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                  style={{ backgroundColor: kid.avatarColor, color: '#fff' }}
+                >
+                  {kid.avatarEmoji ?? kid.displayName.charAt(0)}
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                  <User className="w-3.5 h-3.5 text-purple-500 dark:text-purple-300" />
+                </div>
+              )}
+              <span className="truncate">{kid.displayName}</span>
+            </button>
+          ))}
+
+          {/* Add kid profile */}
+          <button
+            onClick={handleAddKidProfile}
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
+            role="menuitem"
+            tabIndex={-1}
+          >
+            <Plus className="w-4 h-4" />
+            Add kid profile
+          </button>
+        </div>
+      )}
 
       {/* Menu Actions */}
       <div className="p-2">
