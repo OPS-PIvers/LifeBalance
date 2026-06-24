@@ -217,3 +217,38 @@ describe('useHabitActions.toggleHabit (T1: single points write path)', () => {
     expect(commitCount).toBe(1);
   });
 });
+
+describe('useHabitActions.toggleHabit (Plan 080c: assigned chores credit the assignee)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+  });
+
+  const KID = 'kid_leo';
+  const memberPath = `${householdPath}/members/${KID}`;
+
+  it("credits the assignee's member.points, not the shared household pool", async () => {
+    const habit = baseHabit({ completedDates: [], count: 0, assignedTo: KID });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.toggleHabit('h1', 'up');
+    });
+
+    // The kid's own member doc receives the points delta.
+    const memberUpdates = capturedUpdates.filter(u => u.ref.__path === memberPath);
+    expect(memberUpdates).toHaveLength(1);
+    expect(memberUpdates[0]!.data['points.total']).toEqual({ __increment: 10 });
+    expect(memberUpdates[0]!.data['points.daily']).toEqual({ __increment: 10 });
+    expect(memberUpdates[0]!.data['points.weekly']).toEqual({ __increment: 10 });
+
+    // The shared household pool must NOT be touched for an assigned chore.
+    const householdUpdates = capturedUpdates.filter(u => u.ref.__path === householdPath);
+    expect(householdUpdates).toHaveLength(0);
+    expect(commitCount).toBe(1);
+  });
+});

@@ -184,9 +184,16 @@ export const useHabitActions = (
       lastUpdated: serverTimestamp(),
     });
 
-    // Include points update in the same batch (only when points actually change)
+    // Include points update in the same batch (only when points actually change).
+    // Plan 080c: an assigned (per-member/kid chore) habit credits the assignee's OWN
+    // member.points — their personal balance for rewards/allowance — instead of the
+    // shared household pool. Unassigned/shared habits keep crediting the household,
+    // and only those feed the household-points recompute (see habitLogic.ts).
     if (result.pointsChange !== 0) {
-      batch.update(doc(db, `households/${householdId}`), {
+      const pointsTarget = habit.assignedTo
+        ? doc(db, `households/${householdId}/members`, habit.assignedTo)
+        : doc(db, `households/${householdId}`);
+      batch.update(pointsTarget, {
         'points.daily': increment(result.pointsChange),
         'points.weekly': increment(result.pointsChange),
         'points.total': increment(result.pointsChange),
