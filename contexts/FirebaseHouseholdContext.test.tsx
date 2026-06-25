@@ -538,6 +538,64 @@ describe('FirebaseHouseholdContext — reward CRUD (Plan 080d)', () => {
       cost: 75,
       active: false,
     });
+    // A realWorld reward with no target clears both optional fields rather than
+    // leaving them stale: the mocked deleteField() returns the '__deleteField'
+    // sentinel (see the firebase/firestore vi.mock above).
+    expect(updates).toMatchObject({
+      allowanceCents: '__deleteField',
+      targetMemberId: '__deleteField',
+    });
+  });
+
+  it('updateReward switching allowance → realWorld issues deleteField() for allowanceCents', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.updateReward({
+        id: 'rw1',
+        title: 'Used To Be Allowance',
+        cost: 100,
+        icon: '🎁',
+        createdBy: 'u1',
+        type: 'realWorld', // switched away from 'allowance'
+        allowanceCents: 500, // stale value on the incoming object — must NOT be written
+        active: true,
+      });
+    });
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [, updates] = updateDocMock.mock.calls[0]!;
+    // allowanceCents must be removed (deleteField sentinel), not carried over.
+    expect(updates).toMatchObject({
+      type: 'realWorld',
+      allowanceCents: '__deleteField',
+    });
+    expect(updates).not.toMatchObject({ allowanceCents: 500 });
+  });
+
+  it('updateReward writes the numeric allowanceCents and target for an allowance reward', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.updateReward({
+        id: 'rw2',
+        title: '$5 Allowance',
+        cost: 100,
+        icon: '💵',
+        createdBy: 'u1',
+        type: 'allowance',
+        allowanceCents: 500,
+        targetMemberId: 'kid_leo',
+        active: true,
+      });
+    });
+
+    const [, updates] = updateDocMock.mock.calls[0]!;
+    expect(updates).toMatchObject({
+      type: 'allowance',
+      allowanceCents: 500,
+      targetMemberId: 'kid_leo',
+    });
   });
 
   it('deleteReward deletes the reward doc by id', async () => {

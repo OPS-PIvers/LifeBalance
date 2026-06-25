@@ -512,6 +512,79 @@ describe('rewards (Plan 080d — additive Kid-Mode reward fields)', () => {
       }),
     );
   });
+
+  it('a reward with a non-numeric allowanceCents is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bad-cents'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'allowance',
+        allowanceCents: 'lots', // not a number → isValidOptionalNumber fails
+      }),
+    );
+  });
+
+  it('a reward with a non-bool active is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bad-active'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        active: 'yes', // not a bool → `active is bool` fails
+      }),
+    );
+  });
+
+  it('a reward with an over-128-char targetMemberId is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-long-target'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        targetMemberId: 'k'.repeat(129), // exceeds the 128-char optional-string cap
+      }),
+    );
+  });
+
+  it('a member can update an existing reward’s active/type', async () => {
+    // Seed a reward (rules-allowed create), then mutate the additive kid fields.
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-upd'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'realWorld',
+        active: true,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-upd'), {
+        type: 'allowance',
+        active: false,
+      }),
+    );
+  });
+
+  it('an update that changes createdBy is rejected (immutable)', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-immutable'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-immutable'), {
+        createdBy: ALICE, // touching the immutable owner field → rejected
+      }),
+    );
+  });
 });
 
 describe('managed kid profiles (Plan 080 — login-less child member docs)', () => {

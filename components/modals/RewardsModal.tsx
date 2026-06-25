@@ -5,46 +5,17 @@ import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { RewardItem, HouseholdMember } from '@/types/schema';
+import {
+  type RewardDraft,
+  type RewardType,
+  EMPTY_REWARD_DRAFT,
+  draftFromReward,
+  buildRewardPayload,
+} from '@/utils/rewardDraft';
 
 interface RewardsModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-type RewardType = NonNullable<RewardItem['type']>;
-
-/** Draft shape for the create/edit form (allowanceCents tracked as a dollar string for the input). */
-interface RewardDraft {
-  title: string;
-  cost: string;
-  icon: string;
-  type: RewardType;
-  allowanceDollars: string;
-  targetMemberId: string;
-  active: boolean;
-}
-
-const EMPTY_DRAFT: RewardDraft = {
-  title: '',
-  cost: '',
-  icon: '🎁',
-  type: 'realWorld',
-  allowanceDollars: '',
-  targetMemberId: '',
-  active: true,
-};
-
-function draftFromReward(reward: RewardItem): RewardDraft {
-  return {
-    title: reward.title,
-    cost: String(reward.cost),
-    icon: reward.icon,
-    type: reward.type ?? 'realWorld',
-    allowanceDollars:
-      reward.allowanceCents !== undefined ? (reward.allowanceCents / 100).toFixed(2) : '',
-    targetMemberId: reward.targetMemberId ?? '',
-    active: reward.active ?? true,
-  };
 }
 
 const inputClass =
@@ -59,14 +30,14 @@ const labelClass =
  */
 const RewardManagementPanel: React.FC<{ kids: HouseholdMember[] }> = ({ kids }) => {
   const { rewardsInventory, addReward, updateReward, deleteReward } = useGamification();
-  const [draft, setDraft] = useState<RewardDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<RewardDraft>(EMPTY_REWARD_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<RewardItem | null>(null);
   const formTitleId = useId();
 
   const resetForm = () => {
-    setDraft(EMPTY_DRAFT);
+    setDraft(EMPTY_REWARD_DRAFT);
     setEditingId(null);
   };
 
@@ -75,33 +46,9 @@ const RewardManagementPanel: React.FC<{ kids: HouseholdMember[] }> = ({ kids }) 
     setEditingId(reward.id);
   };
 
-  const buildPayload = (): Omit<RewardItem, 'id' | 'createdBy'> | null => {
-    const title = draft.title.trim();
-    const cost = Number(draft.cost);
-    const icon = draft.icon.trim() || '🎁';
-    if (!title || !Number.isFinite(cost) || cost < 0) return null;
-
-    const payload: Omit<RewardItem, 'id' | 'createdBy'> = {
-      title,
-      cost,
-      icon,
-      type: draft.type,
-      active: draft.active,
-    };
-    if (draft.type === 'allowance') {
-      const dollars = Number(draft.allowanceDollars);
-      // Convert dollars to integer cents; default to 0 when blank/invalid.
-      payload.allowanceCents = Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0;
-    }
-    if (draft.targetMemberId) {
-      payload.targetMemberId = draft.targetMemberId;
-    }
-    return payload;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = buildPayload();
+    const payload = buildRewardPayload(draft);
     if (!payload) return;
 
     setSubmitting(true);

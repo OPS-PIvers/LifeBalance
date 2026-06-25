@@ -2935,12 +2935,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   const updateReward = useCallback(async (reward: RewardItem) => {
     if (!householdId) return;
 
-    // Strip the synthetic id and the immutable createdBy from the write payload —
-    // the rules block createdBy changes, and id is not a Firestore field.
-    const { id, createdBy: _createdBy, ...updates } = reward;
+    // Build the FULL desired state so a type/target switch can't leave orphaned
+    // data behind. Strip the synthetic id and the immutable createdBy (the rules
+    // block createdBy changes, and id is not a Firestore field). Optional kid
+    // fields that no longer apply are removed with deleteField() rather than left
+    // stale — e.g. switching 'allowance' → 'realWorld' drops allowanceCents, and
+    // clearing the target kid drops targetMemberId. Deleting optional keys still
+    // satisfies the rule's hasOnly()/isValidReward() (title/cost/icon stay present).
+    const updates = {
+      title: reward.title,
+      cost: reward.cost,
+      icon: reward.icon,
+      type: reward.type,
+      active: reward.active,
+      allowanceCents: reward.type === 'allowance' ? reward.allowanceCents : deleteField(),
+      targetMemberId: reward.targetMemberId ? reward.targetMemberId : deleteField(),
+    };
 
     try {
-      await updateDoc(doc(db, `households/${householdId}/rewards`, id), updates);
+      await updateDoc(doc(db, `households/${householdId}/rewards`, reward.id), updates);
       toast.success('Reward updated');
     } catch (error) {
       console.error('[updateReward] Failed:', error);
