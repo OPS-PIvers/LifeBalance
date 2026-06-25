@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import React from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { MockHouseholdProvider } from './MockHouseholdContext';
-import { useFinance, useHousehold } from './FirebaseHouseholdContext';
+import { useFinance, useGamification, useHousehold } from './FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -353,5 +353,65 @@ describe('MockHouseholdContext reward redemption (Plan 080d-2)', () => {
     expect(result.current.household?.pendingRedemptions ?? []).toHaveLength(0);
     expect(kid(result).points.total).toBe(before.total);
     expect(kid(result).allowanceCents ?? 0).toBe(beforeAllowance);
+  });
+});
+
+// Plan 080e: family challenges. The mock seeds ONE active family challenge and
+// exposes addChallenge so the dormant creation flow + the kid challenge card are
+// walkable in Test Mode. These exercise the REAL mock wiring through the provider
+// and assert the new challenge is DECOUPLED from yearly goals.
+describe('MockHouseholdContext family challenges (Plan 080e)', () => {
+  const captureGamification = () => renderHook(() => useGamification(), { wrapper });
+
+  it('seeds one active family challenge as the active challenge, decoupled from yearly goals', () => {
+    const { result } = captureGamification();
+    expect(result.current.challenges).toHaveLength(1);
+    const active = result.current.activeChallenge;
+    expect(active).not.toBeNull();
+    expect(active!.status).toBe('active');
+    expect(active!.isFamilyChallenge).toBe(true);
+    // Decoupled: no yearly-goal link on a family challenge.
+    expect(active!.yearlyGoalId).toBeUndefined();
+    expect(active!.relatedHabitIds.length).toBeGreaterThan(0);
+  });
+
+  it('addChallenge creates a new active challenge with no yearly coupling', async () => {
+    const { result } = captureGamification();
+    const before = result.current.challenges.length;
+
+    await act(async () => {
+      await result.current.addChallenge({
+        title: 'Reading Marathon',
+        description: 'Read every night',
+        relatedHabitIds: ['h1'],
+        targetValue: 30,
+      });
+    });
+
+    expect(result.current.challenges).toHaveLength(before + 1);
+    const created = result.current.challenges.find((c) => c.title === 'Reading Marathon');
+    expect(created).toBeDefined();
+    expect(created!.status).toBe('active');
+    expect(created!.targetType).toBe('count');
+    expect(created!.targetValue).toBe(30);
+    expect(created!.relatedHabitIds).toEqual(['h1']);
+    // No yearly-goal coupling on the created challenge (the whole point of 080e).
+    expect(created!.yearlyGoalId).toBeUndefined();
+    expect(created!.isFamilyChallenge).toBe(true);
+  });
+
+  it('addChallenge omits an empty/zero target rather than storing a junk value', async () => {
+    const { result } = captureGamification();
+
+    await act(async () => {
+      await result.current.addChallenge({
+        title: 'No Target Challenge',
+        relatedHabitIds: [],
+      });
+    });
+
+    const created = result.current.challenges.find((c) => c.title === 'No Target Challenge');
+    expect(created).toBeDefined();
+    expect(created!.targetValue).toBeUndefined();
   });
 });

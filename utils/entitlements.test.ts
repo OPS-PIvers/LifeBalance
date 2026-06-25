@@ -4,6 +4,7 @@ import {
   getPlan,
   isPremium,
   getLimits,
+  kidProfileLimitReached,
   FREE_LIMITS,
   PREMIUM_LIMITS,
 } from './entitlements';
@@ -74,5 +75,34 @@ describe('limit tables', () => {
     // once billing is live; geminiService falls back to the legacy 100/day cap while
     // billing is off, so current users are unaffected (tested in geminiService.test).
     expect(FREE_LIMITS.aiDailyCap).toBe(3);
+  });
+
+  it('caps managed kid profiles with premium granting strictly more (Plan 080)', () => {
+    expect(FREE_LIMITS.maxKidProfiles).toBe(2);
+    expect(PREMIUM_LIMITS.maxKidProfiles).toBe(10);
+    expect(PREMIUM_LIMITS.maxKidProfiles).toBeGreaterThan(FREE_LIMITS.maxKidProfiles);
+  });
+});
+
+describe('kidProfileLimitReached', () => {
+  it('is false while under the free cap', () => {
+    expect(kidProfileLimitReached(hh(undefined), 0)).toBe(false);
+    expect(kidProfileLimitReached(hh(undefined), FREE_LIMITS.maxKidProfiles - 1)).toBe(false);
+  });
+
+  it('is true exactly at the free cap (uses >=, so the next add is blocked)', () => {
+    expect(kidProfileLimitReached(hh(undefined), FREE_LIMITS.maxKidProfiles)).toBe(true);
+  });
+
+  it('is true over the free cap', () => {
+    expect(kidProfileLimitReached(hh(undefined), FREE_LIMITS.maxKidProfiles + 5)).toBe(true);
+  });
+
+  it('uses the premium cap for an active premium household', () => {
+    const premium = hh({ plan: 'premium', status: 'active' });
+    // Above the free cap but under premium → still allowed.
+    expect(kidProfileLimitReached(premium, FREE_LIMITS.maxKidProfiles)).toBe(false);
+    expect(kidProfileLimitReached(premium, PREMIUM_LIMITS.maxKidProfiles - 1)).toBe(false);
+    expect(kidProfileLimitReached(premium, PREMIUM_LIMITS.maxKidProfiles)).toBe(true);
   });
 });

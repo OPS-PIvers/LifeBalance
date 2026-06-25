@@ -611,6 +611,62 @@ describe('FirebaseHouseholdContext — reward CRUD (Plan 080d)', () => {
   });
 });
 
+describe('FirebaseHouseholdContext — addChallenge (Plan 080e family challenges)', () => {
+  it('creates a challenge in the challenges subcollection, decoupled from yearly goals', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addChallenge({
+        title: 'Family Fitness Month',
+        description: 'Everyone moves every day',
+        relatedHabitIds: ['hb1', 'hb2'],
+        targetValue: 60,
+      });
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [collRef, data] = addDocMock.mock.calls[0]!;
+    expect(pathOf(collRef)).toBe(`${householdPath}/challenges`);
+    expect(data).toMatchObject({
+      title: 'Family Fitness Month',
+      description: 'Everyone moves every day',
+      relatedHabitIds: ['hb1', 'hb2'],
+      targetType: 'count',
+      targetValue: 60,
+      status: 'active',
+      createdBy: AUTH_USER.uid,
+    });
+    // Decoupled from yearly goals: NO yearlyGoalId is written.
+    expect(data).not.toHaveProperty('yearlyGoalId');
+    // Rules-safe: a non-empty yearlyRewardLabel is present (the existing
+    // /challenges create rule requires it) and createdAt is an ISO string, not a
+    // serverTimestamp sentinel.
+    expect(typeof (data as Record<string, unknown>).yearlyRewardLabel).toBe('string');
+    expect(((data as Record<string, unknown>).yearlyRewardLabel as string).length).toBeGreaterThan(0);
+    expect(typeof (data as Record<string, unknown>).createdAt).toBe('string');
+    // isFamilyChallenge is intentionally NOT persisted (not in the firestore.rules
+    // allowlist) — the kid surfaces key off the active challenge, not the flag.
+    expect(data).not.toHaveProperty('isFamilyChallenge');
+  });
+
+  it('omits an undefined description and a non-positive target from the write', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addChallenge({
+        title: 'No Frills',
+        relatedHabitIds: [],
+        // no description, no targetValue
+      });
+    });
+
+    const [, data] = addDocMock.mock.calls[0]!;
+    expect(data).not.toHaveProperty('description');
+    expect(data).not.toHaveProperty('targetValue');
+    expect(data).toMatchObject({ title: 'No Frills', status: 'active', relatedHabitIds: [] });
+  });
+});
+
 describe('FirebaseHouseholdContext — cross-mutation invariant', () => {
   it('every committed batch performs all of its writes atomically (one commit each)', async () => {
     // A meta-assertion: after exercising the multi-doc mutations, every batch we

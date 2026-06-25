@@ -28,6 +28,8 @@ export interface PlanLimits {
   historyMonths: number;
   /** Whether the weekly recap (Plan 060) is available. */
   recapEnabled: boolean;
+  /** Max managed kid profiles (Plan 080) allowed in the household. */
+  maxKidProfiles: number;
 }
 
 /**
@@ -45,6 +47,11 @@ export const FREE_LIMITS: PlanLimits = {
   aiDailyCap: 3,
   historyMonths: 13,
   recapEnabled: false,
+  // Managed kid profiles (Plan 080). Like every other free limit, this cap is
+  // INERT until billing goes live: `addKidProfile` only enforces it while
+  // `billingEnabled` is on (Plan 080 Principle 6 — gate the count, not the
+  // mechanics). Tune freely; it's a product knob.
+  maxKidProfiles: 2,
 };
 
 export const PREMIUM_LIMITS: PlanLimits = {
@@ -52,6 +59,7 @@ export const PREMIUM_LIMITS: PlanLimits = {
   aiDailyCap: 500,
   historyMonths: 120,
   recapEnabled: true,
+  maxKidProfiles: 10,
 };
 
 /**
@@ -74,3 +82,17 @@ export const isPremium = (household: Pick<Household, 'subscription'>): boolean =
 /** The active limit table for a household's effective plan. */
 export const getLimits = (household: Pick<Household, 'subscription'>): PlanLimits =>
   isPremium(household) ? PREMIUM_LIMITS : FREE_LIMITS;
+
+/**
+ * Whether a household has reached its managed-kid-profile cap (Plan 080).
+ *
+ * Pure predicate over the plan's `maxKidProfiles` limit. Like all entitlement
+ * checks this is CLIENT product logic for UX only — the caller
+ * (`addKidProfile`) enforces it solely while billing is live, so it never fires
+ * for the current free-tier-permissive (billing-off) world. `>=` (not `>`) so a
+ * household sitting exactly at the cap can't add one more.
+ */
+export const kidProfileLimitReached = (
+  household: Pick<Household, 'subscription'>,
+  managedKidCount: number,
+): boolean => managedKidCount >= getLimits(household).maxKidProfiles;

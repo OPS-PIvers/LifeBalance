@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check, Plus, Users } from 'lucide-react';
 import { Challenge, CreateChallengePayload } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
@@ -21,6 +22,7 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     activeChallenge,
     habits,
     addHabit,
+    addChallenge,
     updateChallenge,
     yearlyGoals,
     activeYearlyGoals,
@@ -28,8 +30,22 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     useFreezeBankToken: consumeFreezeBankToken,
   } = useGamification();
 
+  // Plan 080e — the "New family challenge" creation affordance below is DORMANT:
+  // it only renders while Kid Mode is on. With it off, this modal behaves exactly
+  // as before (display/edit of the active challenge only).
+  const kidModeEnabled = useKidModeEnabled();
+
   const [activeTab, setActiveTab] = useState<TabType>('challenge');
   const [isYearlyGoalFormOpen, setIsYearlyGoalFormOpen] = useState(false);
+
+  // Family-challenge creation form state (separate from the edit form below so
+  // the existing challenge display/edit path is untouched).
+  const [showFamilyForm, setShowFamilyForm] = useState(false);
+  const [familyTitle, setFamilyTitle] = useState('');
+  const [familyDescription, setFamilyDescription] = useState('');
+  const [familyTarget, setFamilyTarget] = useState('');
+  const [familyHabitIds, setFamilyHabitIds] = useState<string[]>([]);
+  const [savingFamily, setSavingFamily] = useState(false);
 
   // Challenge Tab State
   const [title, setTitle] = useState('');
@@ -172,6 +188,41 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
     onClose();
   };
 
+  const toggleFamilyHabit = (habitId: string) => {
+    setFamilyHabitIds((prev) =>
+      prev.includes(habitId) ? prev.filter((id) => id !== habitId) : [...prev, habitId]
+    );
+  };
+
+  const resetFamilyForm = () => {
+    setFamilyTitle('');
+    setFamilyDescription('');
+    setFamilyTarget('');
+    setFamilyHabitIds([]);
+    setShowFamilyForm(false);
+  };
+
+  const handleCreateFamilyChallenge = async () => {
+    const title = familyTitle.trim();
+    if (!title || savingFamily) return;
+
+    const parsedTarget = parseInt(familyTarget, 10);
+    setSavingFamily(true);
+    try {
+      await addChallenge({
+        title,
+        description: familyDescription.trim() || undefined,
+        relatedHabitIds: familyHabitIds,
+        targetValue: Number.isFinite(parsedTarget) && parsedTarget > 0 ? parsedTarget : undefined,
+      });
+      resetFamilyForm();
+    } catch {
+      // addChallenge surfaces its own error toast.
+    } finally {
+      setSavingFamily(false);
+    }
+  };
+
   const handleUseFreeze = async () => {
     if (!selectedDate || !selectedHabitForFreeze) return;
 
@@ -210,6 +261,138 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
           <div className="flex-1 scroll-contain-y p-6">
               {/* Challenge Tab */}
               <TabsContent value="challenge" className="space-y-4">
+                {/* Plan 080e — DORMANT "New family challenge" creation affordance.
+                    Only rendered when Kid Mode is on; purple kid-surface accents.
+                    Leaves the existing edit form (below) untouched when off. */}
+                {kidModeEnabled && (
+                  <div className="rounded-2xl border-2 border-purple-200 dark:border-purple-500/40 bg-purple-50 dark:bg-purple-500/10 p-4">
+                    {!showFamilyForm ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowFamilyForm(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-500 px-4 py-3 text-sm font-bold text-white shadow-sm active:scale-95 transition-transform"
+                      >
+                        <Users size={18} />
+                        New family challenge
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Users size={18} className="text-purple-500" />
+                          <h3 className="text-sm font-bold text-purple-700 dark:text-purple-200">
+                            New family challenge
+                          </h3>
+                        </div>
+
+                        {/* Title */}
+                        <div>
+                          <label className="text-xxs font-bold text-purple-500 dark:text-purple-300 uppercase">
+                            Title
+                          </label>
+                          <input
+                            type="text"
+                            value={familyTitle}
+                            onChange={(e) => setFamilyTitle(e.target.value)}
+                            placeholder="e.g., Family Fitness Month"
+                            className="w-full mt-1 p-3 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-500/40 rounded-xl focus:border-purple-400 outline-hidden text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                          <label className="text-xxs font-bold text-purple-500 dark:text-purple-300 uppercase">
+                            Description (Optional)
+                          </label>
+                          <textarea
+                            value={familyDescription}
+                            onChange={(e) => setFamilyDescription(e.target.value)}
+                            placeholder="What is the whole family working toward?"
+                            className="w-full mt-1 p-3 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-500/40 rounded-xl resize-none h-16 focus:border-purple-400 outline-hidden text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        {/* Optional Target */}
+                        <div>
+                          <label className="text-xxs font-bold text-purple-500 dark:text-purple-300 uppercase">
+                            Target completions (Optional)
+                          </label>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            value={familyTarget}
+                            onChange={(e) => setFamilyTarget(e.target.value)}
+                            placeholder="e.g., 60"
+                            className="w-full mt-1 p-3 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-500/40 rounded-xl focus:border-purple-400 outline-hidden text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        {/* Habit multi-select */}
+                        <div>
+                          <label className="text-xxs font-bold text-purple-500 dark:text-purple-300 uppercase mb-2 block">
+                            Linked habits
+                          </label>
+                          {habits.length === 0 ? (
+                            <p className="text-xs text-purple-500 dark:text-purple-300">
+                              Add a habit first to link it to a challenge.
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-44 scroll-contain-y">
+                              {habits.map((habit) => {
+                                const isSelected = familyHabitIds.includes(habit.id);
+                                return (
+                                  <button
+                                    key={habit.id}
+                                    type="button"
+                                    onClick={() => toggleFamilyHabit(habit.id)}
+                                    className={`flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-all ${
+                                      isSelected
+                                        ? 'bg-white dark:bg-slate-800 border-purple-400 shadow-xs'
+                                        : 'bg-transparent border-transparent hover:bg-white/60 dark:hover:bg-slate-800/60'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`flex h-5 w-5 items-center justify-center rounded ${
+                                        isSelected
+                                          ? 'bg-purple-500 text-white'
+                                          : 'border border-purple-300 dark:border-purple-500/50 bg-white dark:bg-slate-800'
+                                      }`}
+                                    >
+                                      {isSelected && <Check size={14} strokeWidth={3} />}
+                                    </span>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                      {habit.title}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={resetFamilyForm}
+                            className="flex-1 rounded-xl bg-purple-100 dark:bg-purple-500/20 px-4 py-2.5 text-sm font-bold text-purple-700 dark:text-purple-200 active:scale-95 transition-transform"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCreateFamilyChallenge}
+                            disabled={!familyTitle.trim() || savingFamily}
+                            className="flex-1 rounded-xl bg-purple-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {savingFamily ? 'Creating…' : 'Create'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Title */}
                 <div>
                   <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">
