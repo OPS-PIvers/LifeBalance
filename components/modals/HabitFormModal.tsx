@@ -42,8 +42,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
   // the relevant one at save time, so neither leaks into the other mode.
   const [assignedKidUids, setAssignedKidUids] = useState<string[]>([]);
+  // Pre-seed the EDIT single-select ONLY when the habit's existing assignee is
+  // STILL a managed kid. A stale uid (the kid was removed, or the field points at
+  // a non-kid) must not pre-select a now-absent chip — it would let the save path
+  // silently re-write a dangling assignedTo. Reused at the render-edge re-seed below.
+  const seedEditAssignedUid = (habit: Habit | undefined): string | undefined =>
+    habit && managedKids.some(k => k.uid === habit.assignedTo) ? habit.assignedTo : undefined;
   const [editAssignedUid, setEditAssignedUid] = useState<string | undefined>(
-    () => editingHabit?.assignedTo,
+    () => seedEditAssignedUid(editingHabit),
   );
 
   // Re-populate (or reset to defaults) the form when the habit being edited or
@@ -62,7 +68,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPeriod(editingHabit.period);
       setBasePoints(editingHabit.basePoints.toString());
       setTargetCount(editingHabit.targetCount.toString());
-      setEditAssignedUid(editingHabit.assignedTo);
+      setEditAssignedUid(seedEditAssignedUid(editingHabit));
       setAssignedKidUids([]);
     } else {
       // Reset defaults

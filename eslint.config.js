@@ -9,7 +9,10 @@ export default tseslint.config(
   // e2e/ + playwright.config.ts are linted/transpiled by Playwright's own
   // pipeline (and type-checked via e2e/tsconfig.json), so keep them out of the
   // required `validate` job's `eslint .` run.
-  { ignores: ['dist', 'functions', 'coverage', 'e2e', 'playwright.config.ts'] },
+  // .claude/ holds the Claude Code harness's git-ignored agent worktrees (full
+  // repo copies); linting them double-counts errors from throwaway scratch code,
+  // so keep them out of `eslint .` (mirrors the vitest exclude in vite.config.ts).
+  { ignores: ['dist', 'functions', 'coverage', 'e2e', 'playwright.config.ts', '.claude'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

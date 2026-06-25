@@ -172,9 +172,15 @@ const Habits: React.FC = () => {
   );
 
   // Group Habits by Category (with Sorting)
-  // Sort habits by order first
+  // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
+  // category HEADINGS below derive from the same parent-visible set as the grouped
+  // rows — otherwise a category holding only kid chores would render an empty
+  // heading once Kid Mode is on. `assignedTo` is set only for managed-kid chores,
+  // so this is a no-op for normal households (the parent tracker is unchanged).
   const sortedHabits = useMemo(
-    () => [...habits].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+    () => habits
+      .filter(h => !h.assignedTo)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
     [habits]
   );
 
