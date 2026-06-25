@@ -138,6 +138,13 @@ import {
   useFinance,
   useGamification,
 } from './FirebaseHouseholdContext';
+// Plan 080d reward CRUD writes through these single-doc APIs (not a batch), so we
+// read their captured call args to assert path + payload.
+import { addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+
+const addDocMock = vi.mocked(addDoc);
+const updateDocMock = vi.mocked(updateDoc);
+const deleteDocMock = vi.mocked(deleteDoc);
 
 // --- Snapshot seeding helpers --------------------------------------------
 
@@ -218,6 +225,9 @@ beforeEach(() => {
   snapshotCallbacks.clear();
   captured.value = null;
   incrementMock.mockClear();
+  addDocMock.mockClear();
+  updateDocMock.mockClear();
+  deleteDocMock.mockClear();
 });
 
 describe('FirebaseHouseholdContext — updateTransactionCategory atomicity', () => {
@@ -447,6 +457,157 @@ describe('FirebaseHouseholdContext — habit+points toggle atomicity', () => {
     const hhOps = opsForPath(batch, householdPath);
     expect(hhOps).toHaveLength(1);
     expect(hhOps[0]!.data!['points.total']).toEqual({ __increment: 10 });
+  });
+});
+
+describe('FirebaseHouseholdContext — reward CRUD (Plan 080d)', () => {
+  it('addReward writes to the rewards subcollection with createdBy = current user', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addReward({
+        title: 'Movie Night',
+        cost: 50,
+        icon: '🎬',
+        type: 'realWorld',
+        active: true,
+      });
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [collRef, data] = addDocMock.mock.calls[0]!;
+    expect(pathOf(collRef)).toBe(`${householdPath}/rewards`);
+    expect(data).toMatchObject({
+      title: 'Movie Night',
+      cost: 50,
+      icon: '🎬',
+      type: 'realWorld',
+      active: true,
+      createdBy: AUTH_USER.uid,
+    });
+  });
+
+  it('addReward forwards the allowance fields for allowance-type rewards', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addReward({
+        title: '$5 Allowance',
+        cost: 100,
+        icon: '💵',
+        type: 'allowance',
+        allowanceCents: 500,
+        targetMemberId: 'kid_leo',
+        active: true,
+      });
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [, data] = addDocMock.mock.calls[0]!;
+    expect(data).toMatchObject({
+      type: 'allowance',
+      allowanceCents: 500,
+      targetMemberId: 'kid_leo',
+      createdBy: AUTH_USER.uid,
+    });
+  });
+
+  it('updateReward writes to the reward doc and strips id + immutable createdBy', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.updateReward({
+        id: 'rw1',
+        title: 'Movie Night Deluxe',
+        cost: 75,
+        icon: '🎬',
+        createdBy: 'someone-else',
+        type: 'realWorld',
+        active: false,
+      });
+    });
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [ref, updates] = updateDocMock.mock.calls[0]!;
+    expect(pathOf(ref)).toBe(`${householdPath}/rewards/rw1`);
+    // createdBy and id must NOT be in the update payload (immutable / synthetic).
+    expect(updates).not.toHaveProperty('createdBy');
+    expect(updates).not.toHaveProperty('id');
+    expect(updates).toMatchObject({
+      title: 'Movie Night Deluxe',
+      cost: 75,
+      active: false,
+    });
+    // A realWorld reward with no target clears both optional fields rather than
+    // leaving them stale: the mocked deleteField() returns the '__deleteField'
+    // sentinel (see the firebase/firestore vi.mock above).
+    expect(updates).toMatchObject({
+      allowanceCents: '__deleteField',
+      targetMemberId: '__deleteField',
+    });
+  });
+
+  it('updateReward switching allowance → realWorld issues deleteField() for allowanceCents', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.updateReward({
+        id: 'rw1',
+        title: 'Used To Be Allowance',
+        cost: 100,
+        icon: '🎁',
+        createdBy: 'u1',
+        type: 'realWorld', // switched away from 'allowance'
+        allowanceCents: 500, // stale value on the incoming object — must NOT be written
+        active: true,
+      });
+    });
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const [, updates] = updateDocMock.mock.calls[0]!;
+    // allowanceCents must be removed (deleteField sentinel), not carried over.
+    expect(updates).toMatchObject({
+      type: 'realWorld',
+      allowanceCents: '__deleteField',
+    });
+    expect(updates).not.toMatchObject({ allowanceCents: 500 });
+  });
+
+  it('updateReward writes the numeric allowanceCents and target for an allowance reward', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.updateReward({
+        id: 'rw2',
+        title: '$5 Allowance',
+        cost: 100,
+        icon: '💵',
+        createdBy: 'u1',
+        type: 'allowance',
+        allowanceCents: 500,
+        targetMemberId: 'kid_leo',
+        active: true,
+      });
+    });
+
+    const [, updates] = updateDocMock.mock.calls[0]!;
+    expect(updates).toMatchObject({
+      type: 'allowance',
+      allowanceCents: 500,
+      targetMemberId: 'kid_leo',
+    });
+  });
+
+  it('deleteReward deletes the reward doc by id', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.deleteReward('rw1');
+    });
+
+    expect(deleteDocMock).toHaveBeenCalledTimes(1);
+    const [ref] = deleteDocMock.mock.calls[0]!;
+    expect(pathOf(ref)).toBe(`${householdPath}/rewards/rw1`);
   });
 });
 

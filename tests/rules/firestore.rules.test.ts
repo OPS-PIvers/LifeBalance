@@ -447,6 +447,146 @@ describe('joining via invite code', () => {
   });
 });
 
+describe('rewards (Plan 080d — additive Kid-Mode reward fields)', () => {
+  // The reward rule's isValidReward() was expanded additively to permit the
+  // optional kid-reward fields (type/allowanceCents/targetMemberId/active)
+  // alongside the original 4. Ownership (createdBy == auth.uid) and the
+  // create-time hasOnly() allow-list are still enforced.
+  it('a member can create a reward with the new kid fields', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-allowance'), {
+        title: '$5 Allowance',
+        cost: 100,
+        icon: 'piggy-bank',
+        createdBy: BOB,
+        type: 'allowance',
+        allowanceCents: 500,
+        targetMemberId: KID,
+        active: true,
+      }),
+    );
+  });
+
+  it('a legacy 4-field reward still validates', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-legacy'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('a reward with a stray unlisted field is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-stray'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        junkField: 'nope',
+      }),
+    );
+  });
+
+  it('a reward whose createdBy is not the caller is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-spoof'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: ALICE,
+      }),
+    );
+  });
+
+  it('a reward with an invalid type is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bogus-type'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'bogus',
+      }),
+    );
+  });
+
+  it('a reward with a non-numeric allowanceCents is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bad-cents'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'allowance',
+        allowanceCents: 'lots', // not a number → isValidOptionalNumber fails
+      }),
+    );
+  });
+
+  it('a reward with a non-bool active is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bad-active'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        active: 'yes', // not a bool → `active is bool` fails
+      }),
+    );
+  });
+
+  it('a reward with an over-128-char targetMemberId is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-long-target'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        targetMemberId: 'k'.repeat(129), // exceeds the 128-char optional-string cap
+      }),
+    );
+  });
+
+  it('a member can update an existing reward’s active/type', async () => {
+    // Seed a reward (rules-allowed create), then mutate the additive kid fields.
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-upd'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'realWorld',
+        active: true,
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-upd'), {
+        type: 'allowance',
+        active: false,
+      }),
+    );
+  });
+
+  it('an update that changes createdBy is rejected (immutable)', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-immutable'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-immutable'), {
+        createdBy: ALICE, // touching the immutable owner field → rejected
+      }),
+    );
+  });
+});
+
 describe('managed kid profiles (Plan 080 — login-less child member docs)', () => {
   // A kid is a member doc (role 'kid', isManaged true) a PARENT creates and
   // manages. It is never added to memberUids, so it holds no household credential.

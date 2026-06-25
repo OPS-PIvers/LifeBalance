@@ -387,6 +387,44 @@ describe('rewardItemConverter', () => {
     const partial = { title: 'Game', cost: 50, icon: 'gamepad', createdBy: 'u2' };
     expect(() => rewardItemConverter.fromFirestore(fakeSnap('rw-2', partial))).not.toThrow();
   });
+
+  it('(c) Plan 080d optional fields pass through fromFirestore', () => {
+    const withKidFields = {
+      title: '$5 Allowance',
+      cost: 100,
+      icon: 'piggy-bank',
+      createdBy: 'user-1',
+      type: 'allowance',
+      allowanceCents: 500,
+      targetMemberId: 'kid_leo',
+      active: false,
+    };
+    const result = rewardItemConverter.fromFirestore(fakeSnap('rw-3', withKidFields));
+    expect(result.type).toBe('allowance');
+    expect(result.allowanceCents).toBe(500);
+    expect(result.targetMemberId).toBe('kid_leo');
+    expect(result.active).toBe(false);
+  });
+
+  it('(c) Plan 080d optional fields survive toFirestore (only id stripped)', () => {
+    const reward = {
+      id: 'rw-3',
+      title: '$5 Allowance',
+      cost: 100,
+      icon: 'piggy-bank',
+      createdBy: 'user-1',
+      type: 'allowance' as const,
+      allowanceCents: 500,
+      targetMemberId: 'kid_leo',
+      active: true,
+    };
+    const out = callToFirestore(rewardItemConverter, reward);
+    expect('id' in out).toBe(false);
+    expect(out['type']).toBe('allowance');
+    expect(out['allowanceCents']).toBe(500);
+    expect(out['targetMemberId']).toBe('kid_leo');
+    expect(out['active']).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

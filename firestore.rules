@@ -730,14 +730,29 @@ service cloud.firestore {
       match /rewards/{rewardId} {
         allow read: if isMemberOf(householdId);
 
-        // Validation helper for Rewards
+        // Validation helper for Rewards.
+        // 🛡️ Plan 080d — ADDITIVE: the optional Kid-Mode reward fields
+        // (type/allowanceCents/targetMemberId/active) are now permitted alongside
+        // the original four. A legacy 4-field reward still validates because every
+        // new field is optional and `data.get(..., default)` passes when absent.
         function isValidReward() {
-          return request.resource.data.keys().hasOnly([
-                   'title', 'cost', 'icon', 'createdBy'
+          let data = request.resource.data;
+          return data.keys().hasOnly([
+                   'title', 'cost', 'icon', 'createdBy',
+                   'type', 'allowanceCents', 'targetMemberId', 'active'
                  ]) &&
-                 isValidString(request.resource.data.title, 100) &&
-                 isValidNumber(request.resource.data.cost) &&
-                 isValidString(request.resource.data.icon, 50);
+                 isValidString(data.title, 100) &&
+                 isValidNumber(data.cost) &&
+                 isValidString(data.icon, 50) &&
+                 // type: optional string in the kid-reward enum (passes when absent).
+                 isValidOptionalString(data.get('type', null), 20) &&
+                 data.get('type', 'realWorld') in ['realWorld', 'allowance'] &&
+                 // allowanceCents: optional number (for allowance rewards).
+                 isValidOptionalNumber(data.get('allowanceCents', null)) &&
+                 // targetMemberId: optional kid uid.
+                 isValidOptionalString(data.get('targetMemberId', null), 128) &&
+                 // active: optional bool (treated as true when absent).
+                 data.get('active', true) is bool;
         }
 
         allow create: if isMemberOf(householdId) &&

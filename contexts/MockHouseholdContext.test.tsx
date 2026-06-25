@@ -153,3 +153,66 @@ describe('MockHouseholdContext completeToDo → kid point credit', () => {
     expect(after).toEqual(before);
   });
 });
+
+// Plan 080d: the mock rewards store is now stateful (seeded with 2 rewards) and
+// exposes addReward/updateReward/deleteReward so the parent management UI is
+// walkable in Test Mode. These exercise the REAL mock wiring through the provider.
+describe('MockHouseholdContext reward CRUD (Plan 080d)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+
+  it('seeds two rewards (one realWorld, one allowance) in the store', () => {
+    const { result } = captureHousehold();
+    const rewards = result.current.rewardsInventory;
+    expect(rewards).toHaveLength(2);
+    const allowance = rewards.find(r => r.type === 'allowance');
+    expect(allowance).toBeDefined();
+    expect(allowance!.allowanceCents).toBe(500);
+    expect(rewards.some(r => r.type === 'realWorld')).toBe(true);
+  });
+
+  it('addReward appends a reward with a generated id and createdBy', async () => {
+    const { result } = captureHousehold();
+    const before = result.current.rewardsInventory.length;
+
+    await act(async () => {
+      await result.current.addReward({
+        title: 'Ice Cream',
+        cost: 30,
+        icon: '🍦',
+        type: 'realWorld',
+        active: true,
+      });
+    });
+
+    const rewards = result.current.rewardsInventory;
+    expect(rewards).toHaveLength(before + 1);
+    const created = rewards.find(r => r.title === 'Ice Cream');
+    expect(created).toBeDefined();
+    expect(created!.id).toBeTruthy();
+    expect(created!.createdBy).toBe('test-user-id');
+  });
+
+  it('updateReward replaces a reward by id', async () => {
+    const { result } = captureHousehold();
+    const target = result.current.rewardsInventory[0]!;
+
+    await act(async () => {
+      await result.current.updateReward({ ...target, title: 'Renamed', cost: 999 });
+    });
+
+    const updated = result.current.rewardsInventory.find(r => r.id === target.id);
+    expect(updated!.title).toBe('Renamed');
+    expect(updated!.cost).toBe(999);
+  });
+
+  it('deleteReward removes a reward by id', async () => {
+    const { result } = captureHousehold();
+    const target = result.current.rewardsInventory[0]!;
+
+    await act(async () => {
+      await result.current.deleteReward(target.id);
+    });
+
+    expect(result.current.rewardsInventory.find(r => r.id === target.id)).toBeUndefined();
+  });
+});

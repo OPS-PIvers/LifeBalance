@@ -116,6 +116,15 @@ const SEED_GROCERY_CATALOG: GroceryCatalogItem[] = [
   { id: 'gc3', name: 'Bread', category: 'Bakery', defaultQuantity: '1', defaultStore: 'Safeway', purchaseCount: 8, lastPurchased: new Date().toISOString() },
 ];
 
+// Plan 080d Test-Mode harness: two rewards so the store + the parent-facing
+// "Manage rewards" UI (shown when Kid Mode is on) are walkable. One realWorld,
+// one allowance reward (allowanceCents in integer cents). Dormant for normal
+// households — the store renders read-only when Kid Mode is off.
+const SEED_REWARDS: RewardItem[] = [
+  { id: 'rw1', title: 'Movie Night', cost: 50, icon: '🎬', type: 'realWorld', active: true, createdBy: 'test-user-id' },
+  { id: 'rw2', title: '$5 Allowance', cost: 100, icon: '💵', type: 'allowance', allowanceCents: 500, active: true, createdBy: 'test-user-id' },
+];
+
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -125,7 +134,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
   const [challenges] = useState<Challenge[]>([]);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
-  const [rewards] = useState<RewardItem[]>([]);
+  const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
@@ -477,6 +486,24 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Kid profile removed');
   }, []);
 
+  // Reward CRUD operations (Plan 080d) — mutate the stateful rewards store so the
+  // parent-facing "Manage rewards" UI is walkable in Test Mode.
+  const addReward = useCallback(async (input: Omit<RewardItem, 'id' | 'createdBy'>) => {
+    const newReward = { ...input, id: generateId(), createdBy: 'test-user-id' } as RewardItem;
+    setRewards(prev => [...prev, newReward]);
+    toast.success('Mock: Reward added');
+  }, []);
+
+  const updateReward = useCallback(async (reward: RewardItem) => {
+    setRewards(prev => prev.map(r => r.id === reward.id ? reward : r));
+    toast.success('Mock: Reward updated');
+  }, []);
+
+  const deleteReward = useCallback(async (id: string) => {
+    setRewards(prev => prev.filter(r => r.id !== id));
+    toast.success('Mock: Reward deleted');
+  }, []);
+
   const actAs = useCallback((memberId: string) => {
     setActiveMemberId(memberId);
   }, []);
@@ -696,6 +723,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateChallenge: noOp,
     markChallengeComplete: noOp,
     redeemReward: noOp,
+    addReward,
+    updateReward,
+    deleteReward,
     refreshInsight: noOp,
     createYearlyGoal: noOp,
     updateYearlyGoal: noOp,
