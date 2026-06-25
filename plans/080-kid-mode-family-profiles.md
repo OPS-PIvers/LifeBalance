@@ -1,21 +1,20 @@
 # Plan 080 — Kid Mode: managed family profiles + chores → rewards
 
-> **Status:** IN PROGRESS — **shipped & deployed (all dormant behind `kidModeEnabled`):** 080a
-> (rules #680, foundation #681, rules-hardening #683), **080b** kid dashboard + exit PIN (#684),
+> **Status:** ✅ CODE-COMPLETE — **all slices shipped & deployed, dormant behind `kidModeEnabled`:**
+> 080a (rules #680, foundation #681, rules-hardening #683), **080b** kid dashboard + exit PIN (#684),
 > **080c-1** per-kid points routing (#685), **080c-2** kid points reset (#686), **080c-3/4/5** kid
-> chores (assignment UI + parent visibility + todos→points) built in parallel and shipped together in
-> one combined, reviewed PR (#688) + a dev-only Test-Mode kid harness (the loop is now walkable at
-> `/#/login?test=true`). **Remaining:** 080d rewards/approval/allowance → 080e family challenges.
-> (080c grew from one PR into the 080c-1…080c-5 split below — the points engine was isolated for
-> focused review; 080c-3/4/5 were then recombined into one reviewed PR.) **Rules note:** 080c-3/4/5
-> needed **no `firestore.rules` change** — verified: the habits create/update rule has no field
-> whitelist (so `assignedTo` is allowed) and the managed-kid members update rule already permits a
-> parent to write the kid `points` map. · **Tag:** mostly `[C]`, but **080a-1 + 080d carry a small
-> additive `firestore.rules` change → `[C→H]`** (Claude builds + Plan-010 tests; a human watches the
-> atomic deploy, like Plan 051) · **Risk:** MED — blast-radius **LOW for the code slices**,
-> **MED for the two rules slices** (additive, rules-tested, human-watched; kids never enter
-> `memberUids`, so no rules *regression*) · **Effort:** L (ship as a sequence of
-> dormant-then-reveal PRs) · **Planned against commit:** `16e3ed3`
+> chores — assignment UI + parent visibility + todos→points + a dev-only Test-Mode kid harness (#688),
+> **080d-1** reward CRUD + additive rewards rule (#689), **080d-2** redemption request → parent approval
+> → points/allowance IOU (#690), **080e** family challenges + entitlements kid cap (#691). The whole Kid
+> Mode loop is walkable in Test Mode at `/#/login?test=true`. **Remaining = the human gate only:** do a
+> Test-Mode walkthrough, then flip `app_config/global.kidModeEnabled = true` in the Firestore console (no
+> deploy needed, effective in ~60s) to reveal it. **Rules:** the ONLY `firestore.rules` changes were
+> 080a-1's managed-kid members branch and 080d-1's additive rewards-field whitelist — both additive,
+> Plan-010 rules-tested in CI, co-deployed with no regression (kids never enter `memberUids`); 080c,
+> 080d-2, and 080e are rules-free (verified). · **Tag:** `[C]` (the two additive rules touches rode
+> with their CI-tested code) · **Risk:** LOW (everything dormant + adversarially reviewed + 1200+ tests
+> green) · **Effort:** L (shipped as a sequence of dormant-then-reveal PRs) · **Planned against commit:**
+> `16e3ed3`
 >
 > Source: this session's bloat audit + the product-direction pass that re-classified Rewards,
 > Todos→points, and Challenges from "cut candidates" to **under-built core**. This epic **absorbs**
@@ -193,7 +192,17 @@ a batch. This is the [3] "Todos→points" item — OurHome's core chore-points m
 parent progress section includes them); custom `basePoints` on a kid chore; todo-completion point
 credit (incl. the kid-uid attribution path). 080c-1/2 tests already landed.
 
-### PR 080d — Rewards CRUD + redemption approval + allowance ledger
+### PR 080d — Rewards CRUD + redemption approval + allowance ledger ✅ shipped (split: #689 + #690)
+> **Shipped as two PRs.** **080d-1 (#689):** reward CRUD (`addReward`/`updateReward`/`deleteReward`) +
+> the `RewardItem` `type`/`allowanceCents`/`targetMemberId`/`active` fields + a parent management panel,
+> with the one additive `firestore.rules` change (rewards `hasOnly` whitelist expansion, Plan-010 tested).
+> **080d-2 (#690):** redemption request → parent approval/deny → deduct kid points + credit allowance IOU.
+> **Storage decision (item 3): chose the bounded `pendingRedemptions` ARRAY on the household doc (pending-only,
+> removed on resolve), NOT a subcollection — so 080d-2 is rules-free** (the household update rule is
+> field-permissive and the managed-kid member points/allowanceCents writes are already allowed). Approval is
+> a single `runTransaction`: idempotent (find-or-return), atomic, **rejects when unaffordable** (no negative
+> points), and dedupes duplicate requests. **FCM push on request was deferred** (the in-app review queue +
+> TopToolbar count badge give parents the signal; push is a clean follow-up needing a function trigger).
 1. **Reward CRUD** (the missing [2] core): `addReward`/`updateReward`/`deleteReward`. Extend
    `RewardItem`: `type?: 'realWorld' | 'allowance'` (default `realWorld`), `allowanceCents?: number`
    (for `allowance`), `targetMemberId?: string` (a specific kid, or absent = all kids), `active?:boolean`.
@@ -214,7 +223,16 @@ credit (incl. the kid-uid attribution path). 080c-1/2 tests already landed.
 4. Tests: reward CRUD; request→approve point deduction; allowance credit; idempotent re-approve;
    deny path leaves points untouched.
 
-### PR 080e — Family challenges (simplify the existing Challenge) + optional billing tie-in
+### PR 080e — Family challenges (simplify the existing Challenge) + optional billing tie-in ✅ shipped (#691)
+> **Shipped (#691):** added `addChallenge` (the missing creation path) + a dormant "New family challenge"
+> form (gated on kidMode) + a kid-dashboard family-challenge card; **decoupled from YearlyGoal** by making
+> `Challenge.yearlyRewardLabel` optional (YearlyGoal itself left intact to avoid breakage). `maxKidProfiles`
+> added to `PlanLimits` (FREE 2, PREMIUM 10) + `kidProfileLimitReached` helper, enforced in `addKidProfile`
+> **only when `getBillingEnabled()`** (dormant — billing is off). **Rules-free:** to avoid touching the
+> `/challenges` rule (which still requires a non-empty `yearlyRewardLabel` and excludes `isFamilyChallenge`
+> from its `hasOnly`), the prod write defaults `yearlyRewardLabel: 'Family goal'` and does NOT persist
+> `isFamilyChallenge` — kid surfaces key off the *active* challenge. (A future slice wanting a persisted
+> `isFamilyChallenge` / optional label would be the one to expand that rule.)
 1. Reshape `Challenge` (`schema.ts:203`) into a **shared family challenge** with a creation path
    (today there is no `addChallenge`): "everyone logs habit X this month." **Drop the half-built
    `YearlyGoal` coupling** (audit finding). Per-kid contribution shows on the kid dashboard.
