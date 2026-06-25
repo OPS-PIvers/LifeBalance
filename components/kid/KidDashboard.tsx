@@ -68,9 +68,12 @@ const KidDashboard: React.FC = () => {
     [activeChallenge, challengeHabits],
   );
 
-  // The kid's own contribution: how many of the challenge's linked habits they've
-  // completed during the challenge month. Simple, friendly encouragement only.
-  const myContribution = useMemo(() => {
+  // Total completions logged toward the challenge this month, across its shared
+  // (household-wide) habits. Challenge/family habits aren't assigned per-kid, so
+  // this is a FAMILY total — not the acting kid's individual count — and the badge
+  // below is labelled truthfully as such (it would be misleading to show it as
+  // "You: N"). Simple, friendly encouragement only.
+  const familyCompletions = useMemo(() => {
     if (!activeChallenge) return 0;
     const monthKey = activeChallenge.month;
     return challengeHabits.reduce(
@@ -230,10 +233,10 @@ const KidDashboard: React.FC = () => {
               </div>
               <div className="mt-2 flex items-center justify-between text-xs font-semibold text-purple-100">
                 <span>{Math.round(challengeProgress.progress)}% as a family</span>
-                {myContribution > 0 && (
+                {familyCompletions > 0 && (
                   <span className="inline-flex items-center gap-1">
                     <Star className="h-3.5 w-3.5 fill-current" />
-                    You: {myContribution}
+                    {familyCompletions} done together
                   </span>
                 )}
               </div>
