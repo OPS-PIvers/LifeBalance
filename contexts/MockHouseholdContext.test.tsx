@@ -216,3 +216,142 @@ describe('MockHouseholdContext reward CRUD (Plan 080d)', () => {
     expect(result.current.rewardsInventory.find(r => r.id === target.id)).toBeUndefined();
   });
 });
+
+// Plan 080d-2: reward REDEMPTION through the mock provider. Seeds one pending
+// request (redemption_seed_1, allowance reward rw2, cost 100, allowanceCents 500)
+// for kid_leo (starting total 220, allowance 0). Exercises the real mock wiring:
+// request appends, approve deducts points + credits allowance and is idempotent,
+// deny removes without any member change.
+describe('MockHouseholdContext reward redemption (Plan 080d-2)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+
+  const kid = (result: ReturnType<typeof captureHousehold>['result']) =>
+    result.current.members.find(m => m.uid === 'kid_leo')!;
+
+  it('seeds one pending redemption for the kid on the household doc', () => {
+    const { result } = captureHousehold();
+    const pending = result.current.household?.pendingRedemptions ?? [];
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ memberId: 'kid_leo', type: 'allowance', cost: 100, allowanceCents: 500 });
+  });
+
+  it('requestRedemption appends a pending request', async () => {
+    const { result } = captureHousehold();
+    const before = result.current.household?.pendingRedemptions?.length ?? 0;
+
+    await act(async () => {
+      await result.current.requestRedemption('rw1', 'kid_leo'); // realWorld Movie Night
+    });
+
+    const pending = result.current.household?.pendingRedemptions ?? [];
+    expect(pending).toHaveLength(before + 1);
+    const added = pending.find(r => r.rewardId === 'rw1');
+    expect(added).toMatchObject({ memberId: 'kid_leo', type: 'realWorld', cost: 50 });
+    expect(added).not.toHaveProperty('allowanceCents');
+  });
+
+  it('requestRedemption is a no-op the second time for the same (memberId, rewardId)', async () => {
+    const { result } = captureHousehold();
+
+    // First request for rw1 → appended.
+    await act(async () => {
+      await result.current.requestRedemption('rw1', 'kid_leo');
+    });
+    const afterFirst = (result.current.household?.pendingRedemptions ?? []).filter(r => r.rewardId === 'rw1');
+    expect(afterFirst).toHaveLength(1);
+
+    // Second request for the SAME reward + member (double-tap) → skipped.
+    await act(async () => {
+      await result.current.requestRedemption('rw1', 'kid_leo');
+    });
+    const afterSecond = (result.current.household?.pendingRedemptions ?? []).filter(r => r.rewardId === 'rw1');
+    expect(afterSecond).toHaveLength(1); // still exactly one pending entry
+  });
+
+  it('approveRedemption deducts the kid points.total and credits the allowance IOU, then removes the request', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kid(result).points };
+    const beforeAllowance = kid(result).allowanceCents ?? 0;
+
+    await act(async () => {
+      await result.current.approveRedemption('redemption_seed_1');
+    });
+
+    const after = kid(result);
+    expect(after.points.total).toBe(before.total - 100); // cost deducted
+    expect(after.allowanceCents).toBe(beforeAllowance + 500); // allowance credited
+    // Request removed from the queue.
+    expect(result.current.household?.pendingRedemptions ?? []).toHaveLength(0);
+  });
+
+  it('approveRedemption is idempotent: a second approve does not deduct again', async () => {
+    const { result } = captureHousehold();
+
+    await act(async () => {
+      await result.current.approveRedemption('redemption_seed_1');
+    });
+    const totalAfterFirst = kid(result).points.total;
+    const allowanceAfterFirst = kid(result).allowanceCents ?? 0;
+
+    await act(async () => {
+      await result.current.approveRedemption('redemption_seed_1'); // already resolved
+    });
+
+    expect(kid(result).points.total).toBe(totalAfterFirst);
+    expect(kid(result).allowanceCents ?? 0).toBe(allowanceAfterFirst);
+  });
+
+  it('approveRedemption rejects (no deduction, request stays pending) when the kid cannot afford the cost', async () => {
+    const { result } = captureHousehold();
+
+    // The kid starts at 220 points; the seeded request costs 100. Member points
+    // aren't directly settable in the mock, so drain the balance below 100 by
+    // approving two allowance redemptions (each -100), then attempt a third while
+    // the balance (20) is under the cost. Each rw2 entry is request→approve→stripped
+    // before the next request, so the per-(member,reward) dedup never blocks us.
+    await act(async () => {
+      await result.current.approveRedemption('redemption_seed_1'); // 220 → 120
+    });
+    await act(async () => {
+      await result.current.requestRedemption('rw2', 'kid_leo');
+    });
+    const second = (result.current.household?.pendingRedemptions ?? []).find(r => r.rewardId === 'rw2')!;
+    await act(async () => {
+      await result.current.approveRedemption(second.id); // 120 → 20
+    });
+    expect(kid(result).points.total).toBe(20);
+
+    // Third request: at total 20, cost 100 is unaffordable → approval must no-op.
+    await act(async () => {
+      await result.current.requestRedemption('rw2', 'kid_leo');
+    });
+    const third = (result.current.household?.pendingRedemptions ?? []).find(r => r.rewardId === 'rw2')!;
+    const totalBefore = kid(result).points.total;
+    const allowanceBefore = kid(result).allowanceCents ?? 0;
+    const pendingCountBefore = (result.current.household?.pendingRedemptions ?? []).length;
+
+    await act(async () => {
+      await result.current.approveRedemption(third.id);
+    });
+
+    // No deduction, no allowance credit, and the request remains in the queue.
+    expect(kid(result).points.total).toBe(totalBefore);
+    expect(kid(result).allowanceCents ?? 0).toBe(allowanceBefore);
+    expect(result.current.household?.pendingRedemptions ?? []).toHaveLength(pendingCountBefore);
+    expect((result.current.household?.pendingRedemptions ?? []).some(r => r.id === third.id)).toBe(true);
+  });
+
+  it('denyRedemption removes the request WITHOUT changing kid points or allowance', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kid(result).points };
+    const beforeAllowance = kid(result).allowanceCents ?? 0;
+
+    await act(async () => {
+      await result.current.denyRedemption('redemption_seed_1');
+    });
+
+    expect(result.current.household?.pendingRedemptions ?? []).toHaveLength(0);
+    expect(kid(result).points.total).toBe(before.total);
+    expect(kid(result).allowanceCents ?? 0).toBe(beforeAllowance);
+  });
+});

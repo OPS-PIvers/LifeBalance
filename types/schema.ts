@@ -227,6 +227,28 @@ export interface RewardItem {
   active?: boolean;
 }
 
+/**
+ * RewardRedemption (Plan 080d-2): a kid's request to redeem a reward, awaiting
+ * parent approval. Lives ONLY while `status === 'pending'` in the bounded
+ * `Household.pendingRedemptions` array (removed on approve/deny), so the array
+ * never accumulates resolved requests. A kid never has a credential — the request
+ * write executes in the acting-as parent's session (Principle 2). On approval the
+ * kid's point cost is deducted and, for allowance rewards, the allowance IOU is
+ * credited (see utils/redemption.ts — the single source of truth for the delta).
+ */
+export interface RewardRedemption {
+  id: string;
+  rewardId: string;
+  rewardTitle: string; // Snapshot of the reward title (reward may be edited/deleted later)
+  memberId: string; // The kid uid the redemption is for
+  cost: number; // Point cost deducted from the kid on approval
+  type: 'realWorld' | 'allowance';
+  allowanceCents?: number; // For allowance rewards: the IOU amount credited on approval
+  status: 'pending';
+  requestedAt: string; // ISO timestamp
+  requestedByUid: string; // uid of the (parent) session that submitted the request
+}
+
 export interface Challenge {
   id: string;
   month: string; // YYYY-MM format
@@ -392,6 +414,13 @@ export interface Household {
   // parent sets one; when absent, exiting requires no PIN. Dormant until the
   // app_config/global.kidModeEnabled flag is on.
   kidModePinHash?: string;
+
+  // Plan 080d-2 (Kid Mode): kid reward-redemption requests awaiting parent
+  // approval. Only PENDING requests live here — each is removed on approve/deny,
+  // so the array stays bounded. Absent on every legacy + non-kid household
+  // (treat absent as empty). The household-doc update rule is field-permissive,
+  // so writing this array needs no firestore.rules change.
+  pendingRedemptions?: RewardRedemption[];
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).

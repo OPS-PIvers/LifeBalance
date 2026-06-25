@@ -27,7 +27,7 @@ import type { Habit, RewardItem } from '@/types/schema';
  */
 const KidDashboard: React.FC = () => {
   const { members, activeMemberId, exitToParent, household } = useHouseholdCore();
-  const { habits, toggleHabit, rewardsInventory } = useGamification();
+  const { habits, toggleHabit, rewardsInventory, requestRedemption } = useGamification();
 
   const activeKid = useMemo(
     () => members.find((m) => m.uid === activeMemberId),
@@ -35,6 +35,16 @@ const KidDashboard: React.FC = () => {
   );
 
   const today = useMemo(() => getLocalDateString(), []);
+
+  // Reward ids this kid already has a pending request for, so the store can show
+  // a "Requested" state and not let them double-request the same reward.
+  const pendingRewardIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of household?.pendingRedemptions ?? []) {
+      if (r.memberId === activeKid?.uid) ids.add(r.rewardId);
+    }
+    return ids;
+  }, [household?.pendingRedemptions, activeKid?.uid]);
 
   const myChores = useMemo(
     () => (activeKid ? habits.filter((h) => h.assignedTo === activeKid.uid) : []),
@@ -85,10 +95,23 @@ const KidDashboard: React.FC = () => {
     [toggleHabit, today],
   );
 
-  const handleRequestReward = useCallback((r: RewardItem) => {
-    // 080d replaces this with a real RewardRedemption request → parent approval.
-    toast.success(`Nice pick! Ask a grown-up to approve "${r.title}" 🎁`);
-  }, []);
+  const handleRequestReward = useCallback(
+    async (r: RewardItem) => {
+      if (!activeKid) return;
+      // Guard against a double-request for the same reward (the button is also
+      // swapped to a non-interactive "Requested" pill below).
+      if (pendingRewardIds.has(r.id)) {
+        toast(`You already asked for "${r.title}" — hang tight! ⏳`, { icon: '⏳' });
+        return;
+      }
+      try {
+        await requestRedemption(r.id, activeKid.uid);
+      } catch {
+        // requestRedemption surfaces its own error toast.
+      }
+    },
+    [activeKid, pendingRewardIds, requestRedemption],
+  );
 
   // The gate in MainLayout guarantees a kid is active, but guard anyway so a stale
   // activeMemberId (e.g. a just-removed kid) can't crash the surface.
@@ -235,6 +258,7 @@ const KidDashboard: React.FC = () => {
             <ul className="space-y-3">
               {rewardsInventory.map((r) => {
                 const canAfford = points.total >= r.cost;
+                const alreadyRequested = pendingRewardIds.has(r.id);
                 return (
                   <li
                     key={r.id}
@@ -252,7 +276,11 @@ const KidDashboard: React.FC = () => {
                         {r.cost} pts
                       </p>
                     </div>
-                    {canAfford ? (
+                    {alreadyRequested ? (
+                      <span className="rounded-full bg-purple-100 dark:bg-purple-500/20 px-3 py-2 text-center text-xs font-bold text-purple-600 dark:text-purple-300">
+                        Requested
+                      </span>
+                    ) : canAfford ? (
                       <button
                         onClick={() => handleRequestReward(r)}
                         className="rounded-full bg-purple-500 px-4 py-2 text-sm font-bold text-white shadow-sm active:scale-95 transition-transform"

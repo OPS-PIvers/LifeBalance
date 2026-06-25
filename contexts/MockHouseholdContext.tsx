@@ -3,6 +3,7 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { redemptionMemberDelta } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
@@ -13,6 +14,7 @@ import {
   HabitSubmission,
   Challenge,
   RewardItem,
+  RewardRedemption,
   HouseholdMember,
   Meal,
   ShoppingItem,
@@ -125,6 +127,26 @@ const SEED_REWARDS: RewardItem[] = [
   { id: 'rw2', title: '$5 Allowance', cost: 100, icon: '💵', type: 'allowance', allowanceCents: 500, active: true, createdBy: 'test-user-id' },
 ];
 
+// Plan 080d-2 Test-Mode harness: one PENDING redemption request from the seeded
+// kid so the parent review queue (in RewardsModal) + the rose badge on the
+// rewards control are both walkable in Test Mode. It targets the allowance reward
+// so approving it exercises BOTH the point deduction and the allowance IOU credit.
+// Dormant for normal households — the queue/badge are gated on Kid Mode being on.
+const SEED_PENDING_REDEMPTIONS: RewardRedemption[] = [
+  {
+    id: 'redemption_seed_1',
+    rewardId: 'rw2',
+    rewardTitle: '$5 Allowance',
+    memberId: 'kid_leo',
+    cost: 100,
+    type: 'allowance',
+    allowanceCents: 500,
+    status: 'pending',
+    requestedAt: new Date().toISOString(),
+    requestedByUid: 'test-user-id',
+  },
+];
+
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -135,7 +157,14 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [challenges] = useState<Challenge[]>([]);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
+  const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
   const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
+  // Mirror the latest members so approveRedemption can read the kid's current
+  // points.total for the affordability check deterministically, without coupling
+  // to the execution order of two separate setState updaters. Updated during
+  // render, which is safe for a plain mirror ref (no state change, no effect).
+  const membersRef = useRef(members);
+  membersRef.current = members;
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
@@ -504,6 +533,83 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Reward deleted');
   }, []);
 
+  // Reward REDEMPTION (Plan 080d-2) — the mock actually mutates so the kid request
+  // → parent approve/deny flow (queue + badge) is walkable in Test Mode. Approval
+  // uses the SAME redemptionMemberDelta helper as production for parity: it
+  // deducts the kid's points.total and credits allowanceCents for allowance rewards.
+  const requestRedemption = useCallback(async (rewardId: string, memberId: string) => {
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) {
+      toast.error('Mock: Reward not found');
+      return;
+    }
+    const redemption: RewardRedemption = {
+      id: generateId(),
+      rewardId: reward.id,
+      rewardTitle: reward.title,
+      memberId,
+      cost: reward.cost,
+      type: reward.type ?? 'realWorld',
+      ...(reward.type === 'allowance' && reward.allowanceCents !== undefined
+        ? { allowanceCents: reward.allowanceCents }
+        : {}),
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      requestedByUid: 'test-user-id',
+    };
+    // Mirror the live-context dedup: skip if a pending entry for the same
+    // (memberId, rewardId) already exists, so a double-tap can't queue two.
+    let alreadyPending = false;
+    setPendingRedemptions(prev => {
+      if (prev.some(p => p.memberId === memberId && p.rewardId === rewardId)) {
+        alreadyPending = true;
+        return prev;
+      }
+      return [...prev, redemption];
+    });
+    toast.success(alreadyPending ? 'Mock: Already requested' : 'Mock: Redemption requested');
+  }, [rewards]);
+
+  const approveRedemption = useCallback(async (redemptionId: string) => {
+    // Resolve the request and read the kid's CURRENT points.total from the mirror
+    // ref so neither the affordability check nor the member credit depends on
+    // setState ordering. Idempotent: if it's already gone, this is a no-op.
+    const resolved = pendingRedemptions.find(r => r.id === redemptionId);
+    if (!resolved) {
+      toast.success('Mock: Redemption approved');
+      return;
+    }
+
+    // AFFORDABILITY: reject (leave pending, no member mutation) when the kid can no
+    // longer afford it — mirrors the live context; kids' rewards carry no debt.
+    const currentTotal = membersRef.current.find(m => m.uid === resolved.memberId)?.points.total ?? 0;
+    if (currentTotal < resolved.cost) {
+      toast.error('Mock: Not enough points');
+      return;
+    }
+
+    const delta = redemptionMemberDelta(resolved);
+    // Strip ALL entries for this (memberId, rewardId) so a stray duplicate can't be
+    // approved twice; the member is still credited exactly once (one delta below).
+    setPendingRedemptions(prev =>
+      prev.filter(r => !(r.memberId === resolved.memberId && r.rewardId === resolved.rewardId))
+    );
+    setMembers(prev => prev.map(m => m.uid === resolved.memberId
+      ? {
+          ...m,
+          points: { ...m.points, total: m.points.total + delta.pointsDelta },
+          allowanceCents: (m.allowanceCents ?? 0) + delta.allowanceDelta,
+        }
+      : m));
+    toast.success('Mock: Redemption approved');
+  }, [pendingRedemptions]);
+
+  const denyRedemption = useCallback(async (redemptionId: string) => {
+    // Remove the request with no points/allowance change. Idempotent.
+    setPendingRedemptions(prev => prev.filter(r => r.id !== redemptionId));
+    toast.success('Mock: Redemption denied');
+  }, []);
+
   const actAs = useCallback((memberId: string) => {
     setActiveMemberId(memberId);
   }, []);
@@ -563,7 +669,8 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     stores: stores,
     groceryCategories: groceryCategories,
     currency,
-    kidModePinHash
+    kidModePinHash,
+    pendingRedemptions,
 
   } as unknown as Household;
   const bucketSpentMap = new Map();
@@ -726,6 +833,9 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     addReward,
     updateReward,
     deleteReward,
+    requestRedemption,
+    approveRedemption,
+    denyRedemption,
     refreshInsight: noOp,
     createYearlyGoal: noOp,
     updateYearlyGoal: noOp,

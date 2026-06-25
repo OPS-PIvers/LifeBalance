@@ -1,11 +1,12 @@
 import React, { useId, useState } from 'react';
 import toast from 'react-hot-toast';
-import { X, Plus, Pencil, Trash2 } from 'lucide-react';
+import { X, Plus, Pencil, Trash2, Check, Inbox } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { RewardItem, HouseholdMember } from '@/types/schema';
+import { formatCurrency } from '@/utils/formatCurrency';
+import type { RewardItem, HouseholdMember, RewardRedemption } from '@/types/schema';
 import {
   type RewardDraft,
   type RewardType,
@@ -23,6 +24,95 @@ const inputClass =
   'w-full rounded-xl border border-purple-200 dark:border-purple-500/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30';
 const labelClass =
   'block text-xs font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-300 mb-1';
+
+/**
+ * Parent review queue for kid reward-redemption requests (Plan 080d-2). Rendered
+ * only when Kid Mode is enabled AND there is at least one pending request (so it
+ * is fully dormant otherwise). Approving deducts the kid's points + credits the
+ * allowance IOU; denying just dismisses. Both are idempotent in the context.
+ */
+const PendingRedemptionsPanel: React.FC<{
+  pending: RewardRedemption[];
+  kids: HouseholdMember[];
+  currency?: string;
+}> = ({ pending, kids, currency }) => {
+  const { approveRedemption, denyRedemption } = useGamification();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const headingId = useId();
+
+  const kidName = (memberId: string) =>
+    kids.find((k) => k.uid === memberId)?.displayName ?? 'A kid';
+
+  const resolve = async (id: string, action: (id: string) => Promise<void>) => {
+    setBusyId(id);
+    try {
+      await action(id);
+    } catch {
+      // approve/deny surface their own error toast; just clear the busy state.
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="border-t border-purple-200 dark:border-purple-500/30 bg-purple-50/60 dark:bg-purple-500/10 px-6 py-5"
+    >
+      <h3
+        id={headingId}
+        className="flex items-center gap-2 text-sm font-bold text-purple-700 dark:text-purple-200 mb-3"
+      >
+        <Inbox size={16} />
+        Pending requests ({pending.length})
+      </h3>
+
+      <ul className="space-y-2">
+        {pending.map((req) => {
+          const isAllowance = req.type === 'allowance' && req.allowanceCents !== undefined;
+          const busy = busyId === req.id;
+          return (
+            <li
+              key={req.id}
+              className="flex items-center gap-3 rounded-xl bg-white dark:bg-slate-800 border border-purple-100 dark:border-purple-500/20 px-3 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+                  {kidName(req.memberId)} · {req.rewardTitle}
+                </p>
+                <p className="text-xs text-purple-500 dark:text-purple-300">
+                  {req.cost} pts
+                  {isAllowance
+                    ? ` · ${formatCurrency((req.allowanceCents ?? 0) / 100, { currency })} allowance`
+                    : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => resolve(req.id, approveRedemption)}
+                disabled={busy}
+                aria-label={`Approve ${req.rewardTitle} for ${kidName(req.memberId)}`}
+                className="flex items-center gap-1 rounded-lg bg-purple-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-transform active:scale-95 disabled:opacity-50"
+              >
+                <Check size={14} />
+                Approve
+              </button>
+              <button
+                type="button"
+                onClick={() => resolve(req.id, denyRedemption)}
+                disabled={busy}
+                aria-label={`Deny ${req.rewardTitle} for ${kidName(req.memberId)}`}
+                className="rounded-lg border border-purple-300 dark:border-purple-500/40 px-3 py-1.5 text-xs font-bold text-purple-600 dark:text-purple-300 transition-transform active:scale-95 disabled:opacity-50"
+              >
+                Deny
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+};
 
 /**
  * Parent-facing reward management panel (Plan 080d). Only rendered when Kid Mode
@@ -291,11 +381,12 @@ const RewardManagementPanel: React.FC<{ kids: HouseholdMember[] }> = ({ kids }) 
 
 const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, totalPoints, redeemReward } = useGamification();
-  const { members } = useHouseholdCore();
+  const { members, household } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const titleId = useId();
 
   const kids = members.filter((m) => m.role === 'kid');
+  const pendingRedemptions = household?.pendingRedemptions ?? [];
 
   return (
     <Modal
@@ -353,6 +444,16 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
             );
           })}
       </div>
+
+      {/* Plan 080d-2 — parent review queue for kid redemption requests. Doubly
+          dormant: only when Kid Mode is on AND there are pending requests. */}
+      {kidModeEnabled && pendingRedemptions.length > 0 && (
+        <PendingRedemptionsPanel
+          pending={pendingRedemptions}
+          kids={kids}
+          currency={household?.currency}
+        />
+      )}
 
       {/* Plan 080d — parent-facing reward management. Dormant: only shown when
           Kid Mode is enabled; otherwise the modal is the read-only store above. */}
