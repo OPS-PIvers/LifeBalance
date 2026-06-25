@@ -2907,7 +2907,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           description: input.description?.trim() || undefined,
           relatedHabitIds: input.relatedHabitIds,
           targetType: 'count' as const,
-          targetValue: input.targetValue,
+          // Defensive: only persist a positive target; 0/negative are dropped
+          // (omitted via the undefined filter below) rather than written.
+          targetValue: input.targetValue != null && input.targetValue > 0 ? input.targetValue : undefined,
           status: 'active' as const,
           // Default reward label — keeps the write within the existing /challenges
           // create rule (which requires a non-empty yearlyRewardLabel). The family
