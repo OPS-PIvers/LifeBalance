@@ -660,22 +660,27 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       // gate the real Firebase context uses (computeTodoCompletionCredit) decides
       // whether a managed kid is credited.
       const completedTodo = todosRef.current.find(t => t.id === id);
+      if (!completedTodo) {
+        toast.error('Mock: ToDo not found');
+        return;
+      }
+      if (completedTodo.isCompleted) {
+        return; // already completed — avoid duplicate points
+      }
       setTodos(prev => prev.map(t =>
         t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
       ));
-      if (completedTodo) {
-        setMembers(prev => {
-          const credit = computeTodoCompletionCredit(completedTodo, prev);
-          if (!credit) return prev;
-          return prev.map(m => m.uid === credit.memberUid
-            ? { ...m, points: {
-                daily: m.points.daily + credit.points,
-                weekly: m.points.weekly + credit.points,
-                total: m.points.total + credit.points,
-              } }
-            : m);
-        });
-      }
+      setMembers(prev => {
+        const credit = computeTodoCompletionCredit(completedTodo, prev);
+        if (!credit) return prev;
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + credit.points,
+              weekly: m.points.weekly + credit.points,
+              total: m.points.total + credit.points,
+            } }
+          : m);
+      });
       toast.success('Mock: ToDo completed');
     }, []),
     addStore,

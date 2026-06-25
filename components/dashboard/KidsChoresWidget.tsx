@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import type { Habit, HouseholdMember } from '@/types/schema';
 import { Star, Sparkles } from 'lucide-react';
@@ -54,7 +55,7 @@ export const KidsChoresWidget: React.FC = () => {
       <div className="space-y-3">
         {kidsWithChores.map(({ kid, chores }) => {
           const total = chores.length;
-          const done = chores.filter(h => h.completedDates.includes(today)).length;
+          const done = chores.filter(h => isHabitCompletedInCurrentPeriod(h, today)).length;
           const allDone = done === total;
           const points = kid.points?.daily ?? 0;
 

@@ -14,6 +14,7 @@ import { HabitCoach } from '@/components/habits/HabitCoach';
 import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -82,7 +83,7 @@ const HabitsSkeleton: React.FC = () => (
  */
 const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ kid, chores }) => {
   const today = getLocalDateString();
-  const doneCount = chores.filter(h => h.completedDates.includes(today)).length;
+  const doneCount = chores.filter(h => isHabitCompletedInCurrentPeriod(h, today)).length;
 
   return (
     <div className="rounded-2xl bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 p-4">
@@ -105,7 +106,7 @@ const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ k
       {/* Read-only chore rows */}
       <ul className="space-y-2">
         {chores.map(h => {
-          const done = h.completedDates.includes(today);
+          const done = isHabitCompletedInCurrentPeriod(h, today);
           return (
             <li
               key={h.id}

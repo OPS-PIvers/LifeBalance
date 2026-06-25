@@ -3770,7 +3770,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const todoRef = doc(db, `households/${householdId}/todos`, id);
       const snap = await getDoc(todoRef);
       const todo = snap.data() as ToDo | undefined;
-      const credit = todo ? computeTodoCompletionCredit(todo, membersRef.current) : null;
+      if (!todo) {
+        throw new Error('To-Do not found');
+      }
+      if (todo.isCompleted) {
+        return; // already completed — idempotent, no duplicate points
+      }
+      const credit = computeTodoCompletionCredit(todo, membersRef.current);
 
       const batch = writeBatch(db);
       batch.update(todoRef, {
