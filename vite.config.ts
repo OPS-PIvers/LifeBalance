@@ -22,7 +22,12 @@ export default defineConfig(({ command }) => {
         // e2e/** holds Playwright specs (*.spec.ts) — exclude them too, or
         // vitest's default glob would try to run them under jsdom (they are
         // driven by `pnpm test:e2e` against the dev server instead).
-        exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**'],
+        // .claude/** holds the Claude Code harness's temporary, git-ignored agent
+        // worktrees (.claude/worktrees/**), each a full repo copy WITH its own
+        // node_modules. Without this exclude, vitest globs their *.test.tsx too and
+        // they fail en masse with "Invalid hook call" (a second, duplicate React
+        // copy). They are scratch space, never part of this package's test suite.
+        exclude: [...configDefaults.exclude, 'tests/rules/**', 'e2e/**', '.claude/**'],
         coverage: {
           provider: 'v8',
           include: ['**/*.{ts,tsx}'],

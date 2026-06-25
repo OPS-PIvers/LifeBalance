@@ -261,6 +261,33 @@ export const streakEndingOnForHabit = (
     : streakEndingOn(habit.completedDates, date);
 
 /**
+ * Period-aware "is this habit completed in the current period?" check.
+ *
+ * Daily habits are done iff `today` itself is in `completedDates`. Weekly habits
+ * are done iff ANY completion falls in `today`'s Monday-anchored ISO week — so a
+ * weekly chore completed earlier in the week still reads as done on later days of
+ * the same week (rather than only on the exact day it was checked off).
+ *
+ * `today` is the reference (a `getLocalDateString()` yyyy-MM-dd string) and is
+ * parsed with `parseISO` for determinism — we never read `new Date()` here, so
+ * the result is stable and matches the app's local-date convention.
+ *
+ * @param habit - The habit (only `period` and `completedDates` are read)
+ * @param today - "Today" in YYYY-MM-DD (caller's local timezone)
+ * @returns true if the habit is complete for the current day/week
+ */
+export const isHabitCompletedInCurrentPeriod = (
+  habit: Pick<Habit, 'period' | 'completedDates'>,
+  today: string,
+): boolean => {
+  if (habit.period === 'weekly') {
+    const ref = parseISO(today);
+    return habit.completedDates.some(d => isSameWeek(parseISO(d), ref, { weekStartsOn: 1 }));
+  }
+  return habit.completedDates.includes(today);
+};
+
+/**
  * Get the point multiplier based on streak, habit type, and period.
  *
  * Thresholds per period (positive habits only):

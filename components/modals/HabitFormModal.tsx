@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Habit } from '@/types/schema';
-import { useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
 
 interface HabitFormModalProps {
@@ -13,6 +14,19 @@ const CATEGORIES = ['Health', 'Finance', 'Personal', 'Home', 'Work'];
 
 const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editingHabit }) => {
   const { addHabit, updateHabit } = useGamification();
+  const { members } = useHouseholdCore();
+  const kidModeEnabled = useKidModeEnabled();
+
+  // Plan 080c-3: chore assignment targets MANAGED KIDS only (isManaged === true).
+  // Parents are never in this list, so a habit with assignedTo set is, by
+  // construction, a kid chore. The assign control renders ONLY when Kid Mode is on
+  // AND at least one managed kid exists — otherwise it's absent and the save path
+  // below is byte-for-byte the pre-080c behavior (dormant).
+  const managedKids = useMemo(
+    () => members.filter(m => m.isManaged === true),
+    [members],
+  );
+  const showAssignControl = kidModeEnabled && managedKids.length > 0;
 
   // Form State — lazy initializers so the first render is already populated for
   // the edit case; the defaults match the reset branch below for the new case.
@@ -23,6 +37,20 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
   const [period, setPeriod] = useState<'daily' | 'weekly'>(() => editingHabit?.period ?? 'daily');
   const [basePoints, setBasePoints] = useState(() => editingHabit ? editingHabit.basePoints.toString() : '10');
   const [targetCount, setTargetCount] = useState(() => editingHabit ? editingHabit.targetCount.toString() : '1');
+
+  // Kid assignment selection. CREATE mode is a multi-select (one chore per kid);
+  // EDIT mode is a single-select (0 or 1 kid). We keep both states and read only
+  // the relevant one at save time, so neither leaks into the other mode.
+  const [assignedKidUids, setAssignedKidUids] = useState<string[]>([]);
+  // Pre-seed the EDIT single-select ONLY when the habit's existing assignee is
+  // STILL a managed kid. A stale uid (the kid was removed, or the field points at
+  // a non-kid) must not pre-select a now-absent chip — it would let the save path
+  // silently re-write a dangling assignedTo. Reused at the render-edge re-seed below.
+  const seedEditAssignedUid = (habit: Habit | undefined): string | undefined =>
+    habit && managedKids.some(k => k.uid === habit.assignedTo) ? habit.assignedTo : undefined;
+  const [editAssignedUid, setEditAssignedUid] = useState<string | undefined>(
+    () => seedEditAssignedUid(editingHabit),
+  );
 
   // Re-populate (or reset to defaults) the form when the habit being edited or
   // the open state changes. Done during render on that change edge rather than
@@ -40,6 +68,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPeriod(editingHabit.period);
       setBasePoints(editingHabit.basePoints.toString());
       setTargetCount(editingHabit.targetCount.toString());
+      setEditAssignedUid(seedEditAssignedUid(editingHabit));
+      setAssignedKidUids([]);
     } else {
       // Reset defaults
       setTitle('');
@@ -49,10 +79,23 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       setPeriod('daily');
       setBasePoints('10');
       setTargetCount('1');
+      setEditAssignedUid(undefined);
+      setAssignedKidUids([]);
     }
   }
 
   const [isSaving, setIsSaving] = useState(false);
+
+  const toggleKidSelection = (uid: string) => {
+    setAssignedKidUids(prev =>
+      prev.includes(uid) ? prev.filter(u => u !== uid) : [...prev, uid],
+    );
+  };
+
+  // EDIT single-select: clicking the already-selected kid unassigns (toggles off).
+  const selectEditKid = (uid: string) => {
+    setEditAssignedUid(prev => (prev === uid ? undefined : uid));
+  };
 
   const handleSave = async () => {
     if (!title || !basePoints || !targetCount || isSaving) return;
@@ -60,7 +103,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     // Enforce non-empty category
     const finalCategory = category.trim() || CATEGORIES[0] || 'Health';
 
-    const habitData: Habit = {
+    const baseHabitData: Habit = {
       id: editingHabit ? editingHabit.id : crypto.randomUUID(),
       title,
       category: finalCategory,
@@ -85,9 +128,30 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
     setIsSaving(true);
     try {
       if (editingHabit) {
-        await updateHabit(habitData);
+        // EDIT: only let the assign control influence assignedTo when it's shown.
+        // When hidden, omit assignedTo entirely so an existing chore keeps its
+        // current assignment untouched (dormant — matches pre-080c behavior).
+        const updatePayload: Habit = showAssignControl
+          ? { ...baseHabitData, assignedTo: editAssignedUid }
+          : baseHabitData;
+        await updateHabit(updatePayload);
+      } else if (showAssignControl && assignedKidUids.length >= 1) {
+        // CREATE + at least one kid selected: spawn one chore per kid. Each is a
+        // per-kid chore (assignedTo set, isShared:false), not a shared household
+        // habit. basePoints is the chore's point value. Distinct ids per chore.
+        await Promise.all(
+          assignedKidUids.map(uid =>
+            addHabit({
+              ...baseHabitData,
+              id: crypto.randomUUID(),
+              assignedTo: uid,
+              isShared: false,
+            }),
+          ),
+        );
       } else {
-        await addHabit(habitData);
+        // CREATE, no kid selected (or control hidden): exactly today's behavior.
+        await addHabit(baseHabitData);
       }
       onClose();
     } catch (error) {
@@ -173,6 +237,44 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           </div>
         </div>
 
+        {/* Assign to kid (Plan 080c-3) — dormant unless Kid Mode is on AND there is
+            at least one managed kid. CREATE = multi-select; EDIT = single-select. */}
+        {showAssignControl && (
+          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50">
+            <span className="text-xs font-bold text-purple-600 dark:text-purple-300 uppercase" id="assign-kid-label">
+              {editingHabit ? 'Assign to kid' : 'Assign to kid(s)'}
+            </span>
+            <p className="text-xxs text-purple-500/80 dark:text-purple-300/70 mt-0.5 mb-2">
+              {editingHabit
+                ? 'A chore shows on that kid’s dashboard and credits their points.'
+                : 'Creates one chore per selected kid, each crediting that kid’s points.'}
+            </p>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="assign-kid-label">
+              {managedKids.map(kid => {
+                const selected = editingHabit
+                  ? editAssignedUid === kid.uid
+                  : assignedKidUids.includes(kid.uid);
+                return (
+                  <button
+                    key={kid.uid}
+                    type="button"
+                    onClick={() => (editingHabit ? selectEditKid(kid.uid) : toggleKidSelection(kid.uid))}
+                    disabled={isSaving}
+                    aria-pressed={selected}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all disabled:opacity-50 ${
+                      selected
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-800 border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30'
+                    }`}
+                  >
+                    {kid.displayName}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Scoring Logic */}
         <div className="bg-brand-50 dark:bg-slate-700/50 p-4 rounded-xl border border-brand-100 dark:border-slate-700">
           <h3 className="text-sm font-bold text-brand-700 dark:text-slate-200 mb-3">Scoring Strategy</h3>
@@ -202,7 +304,9 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-points">Points</label>
+              <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-points">
+                {showAssignControl ? 'Chore Points' : 'Points'}
+              </label>
               <input
                 id="habit-points"
                 type="number"

@@ -58,6 +58,11 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import { useHabitActions } from './useHabitActions';
+// The mocked updateDoc — updateHabit writes via updateDoc(ref, data), not a batch,
+// so we read its captured call args to assert on the whitelisted update payload.
+import { updateDoc } from 'firebase/firestore';
+
+const updateDocMock = vi.mocked(updateDoc);
 
 const HOUSEHOLD_ID = 'house1';
 const householdPath = `households/${HOUSEHOLD_ID}`;
@@ -278,5 +283,57 @@ describe('useHabitActions.toggleHabit (Plan 080c: assigned chores credit the ass
     const householdUpdates = capturedUpdates.filter(u => u.ref.__path === householdPath);
     expect(householdUpdates).toHaveLength(0);
     expect(commitCount).toBe(1);
+  });
+});
+
+describe('useHabitActions.updateHabit (Plan 080c-3: assignedTo round-trips through the whitelist)', () => {
+  beforeEach(() => {
+    capturedUpdates.length = 0;
+    capturedSets.length = 0;
+    commitCount = 0;
+    incrementMock.mockClear();
+    updateDocMock.mockClear();
+  });
+
+  // Pull the data payload from the single updateDoc(ref, data) call updateHabit makes.
+  const lastUpdatePayload = (): Record<string, unknown> => {
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const call = updateDocMock.mock.calls[0];
+    if (!call) throw new Error('expected updateDoc to have been called');
+    // updateDoc's typed overloads widen arg 1 to string | FieldPath; the real call
+    // passes a plain data object, so cast through unknown to read it back.
+    return call[1] as unknown as Record<string, unknown>;
+  };
+
+  it('includes assignedTo in the written update when the chore is assigned to a kid', async () => {
+    const habit = baseHabit({ id: 'h1', assignedTo: 'kid_leo' });
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect(payload.assignedTo).toBe('kid_leo');
+  });
+
+  it('drops assignedTo (dormancy) when the habit is unassigned', async () => {
+    // assignedTo is undefined on every existing habit; the undefined-filter must
+    // strip it so an unassigned habit writes no assignedTo field at all.
+    const habit = baseHabit({ id: 'h1' });
+    expect(habit.assignedTo).toBeUndefined();
+
+    const { result } = renderHook(() =>
+      useHabitActions(HOUSEHOLD_ID, currentUser, [habit], householdSettings)
+    );
+
+    await act(async () => {
+      await result.current.updateHabit(habit);
+    });
+
+    const payload = lastUpdatePayload();
+    expect('assignedTo' in payload).toBe(false);
   });
 });

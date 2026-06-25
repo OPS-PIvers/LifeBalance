@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Habit } from '@/types/schema';
+import { Habit, HouseholdMember } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import HabitCategoryList from '@/components/habits/HabitCategoryList';
-import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar, ListChecks } from 'lucide-react';
+import { Settings, Database, ArrowRight, Download, Sparkles, LayoutList, GraduationCap, ListOrdered, Calendar, ListChecks, Check, Flame, Star } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
@@ -12,6 +12,9 @@ import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
 import SmartHabitReorderModal from '@/components/modals/SmartHabitReorderModal';
 import { HabitCoach } from '@/components/habits/HabitCoach';
 import HabitHistoryCalendar from '@/components/habits/HabitHistoryCalendar';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { getLocalDateString } from '@/utils/dateHelpers';
+import { isHabitCompletedInCurrentPeriod } from '@/utils/habitLogic';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -71,10 +74,92 @@ const HabitsSkeleton: React.FC = () => (
   </div>
 );
 
+/**
+ * KidChoresGroup — a read-only summary of one managed kid's assigned chores,
+ * shown to the parent on the Habits page (Plan 080c-4). There is intentionally
+ * no toggle here; parents track kid chores from inside the kid view. Purple
+ * accents match KidDashboard. Rendered only when Kid Mode is on and the kid has
+ * at least one chore, so it is dormant by default.
+ */
+const KidChoresGroup: React.FC<{ kid: HouseholdMember; chores: Habit[] }> = ({ kid, chores }) => {
+  const today = getLocalDateString();
+  const doneCount = chores.filter(h => isHabitCompletedInCurrentPeriod(h, today)).length;
+
+  return (
+    <div className="rounded-2xl bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 p-4">
+      {/* Kid header: avatar + name + today's completion summary */}
+      <div className="flex items-center gap-3 mb-3">
+        <div
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-extrabold text-white shrink-0"
+          style={{ backgroundColor: kid.avatarColor ?? '#7c3aed' }}
+        >
+          {kid.avatarEmoji ?? kid.displayName.charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{kid.displayName}</p>
+          <p className="text-xs font-medium text-purple-500 dark:text-purple-300">
+            {doneCount}/{chores.length} done today
+          </p>
+        </div>
+      </div>
+
+      {/* Read-only chore rows */}
+      <ul className="space-y-2">
+        {chores.map(h => {
+          const done = isHabitCompletedInCurrentPeriod(h, today);
+          return (
+            <li
+              key={h.id}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 border ${
+                done
+                  ? 'bg-purple-50/60 border-purple-100/60 dark:bg-purple-500/10 dark:border-purple-500/20'
+                  : 'bg-white border-transparent dark:bg-slate-800/50'
+              }`}
+            >
+              <span
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                  done
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-slate-100 text-slate-300 dark:bg-slate-700 dark:text-slate-500'
+                }`}
+                aria-hidden="true"
+              >
+                <Check size={14} strokeWidth={3} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-semibold truncate ${done ? 'text-purple-800 dark:text-purple-200' : 'text-slate-700 dark:text-slate-200'}`}>
+                  {h.title}
+                </p>
+                <div className="flex items-center gap-2 text-xxs font-medium text-slate-400 dark:text-slate-500">
+                  <span className="inline-flex items-center gap-0.5">
+                    <Star size={10} className="fill-current text-amber-500" aria-hidden="true" />
+                    {h.basePoints} pts
+                  </span>
+                  {h.streakDays > 0 && (
+                    <span className="inline-flex items-center gap-0.5 text-orange-500">
+                      <Flame size={10} aria-hidden="true" />
+                      <span aria-hidden="true">{h.streakDays}</span>
+                      <span className="sr-only">{h.streakDays} day streak</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <span className={`text-xxs font-bold uppercase tracking-wide ${done ? 'text-purple-500 dark:text-purple-300' : 'text-slate-400 dark:text-slate-500'}`}>
+                {done ? 'Done' : 'To do'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+
 const Habits: React.FC = () => {
   const navigate = useNavigate();
   const { habits } = useGamification();
-  const { isLoading } = useHouseholdCore();
+  const { isLoading, members } = useHouseholdCore();
+  const kidModeEnabled = useKidModeEnabled();
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
@@ -88,9 +173,15 @@ const Habits: React.FC = () => {
   );
 
   // Group Habits by Category (with Sorting)
-  // Sort habits by order first
+  // Sort habits by order first. Exclude kid chores (assignedTo set) up front so the
+  // category HEADINGS below derive from the same parent-visible set as the grouped
+  // rows — otherwise a category holding only kid chores would render an empty
+  // heading once Kid Mode is on. `assignedTo` is set only for managed-kid chores,
+  // so this is a no-op for normal households (the parent tracker is unchanged).
   const sortedHabits = useMemo(
-    () => [...habits].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+    () => habits
+      .filter(h => !h.assignedTo)
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
     [habits]
   );
 
@@ -105,10 +196,29 @@ const Habits: React.FC = () => {
       // Sort habits within category too
       acc[category] = habits
         .filter(h => h.category === category)
+        .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
         .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
       return acc;
     }, {} as Record<string, Habit[]>),
     [categories, habits]
+  );
+
+  // --- Kids chores (read-only parent view, Plan 080c-4) ---
+  // Assignment is kids-only, so any habit with `assignedTo` set is a kid chore.
+  // This whole section is dormant: in a normal household no member is managed
+  // and no habit is assigned, so `kidsWithChores` is empty and nothing renders.
+  const kidsWithChores = useMemo<{ kid: HouseholdMember; chores: Habit[] }[]>(
+    () =>
+      members
+        .filter(m => m.isManaged === true)
+        .map(kid => ({
+          kid,
+          chores: habits
+            .filter(h => h.assignedTo === kid.uid)
+            .sort((a, b) => (a.order ?? 999) - (b.order ?? 999)),
+        }))
+        .filter(entry => entry.chores.length > 0),
+    [members, habits]
   );
 
   if (isLoading) {
@@ -287,6 +397,23 @@ const Habits: React.FC = () => {
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Kids chores — read-only parent overview (Plan 080c-4).
+          Gated on Kid Mode + at least one managed kid with at least one chore,
+          so it stays fully dormant in a normal household. */}
+      {kidModeEnabled && kidsWithChores.length > 0 && (
+        <section className="px-4 pb-6" aria-label="Kids chores">
+          <h2 className="flex items-center gap-2 text-xs font-bold text-purple-500 dark:text-purple-300 uppercase tracking-wider mb-3 ml-2">
+            <Star size={14} className="fill-current" />
+            Kids&apos; chores
+          </h2>
+          <div className="space-y-5">
+            {kidsWithChores.map(({ kid, chores }) => (
+              <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <HabitCreatorWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
       <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />

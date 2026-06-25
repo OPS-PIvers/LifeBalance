@@ -21,6 +21,7 @@ export const DailyHabitsWidget: React.FC = () => {
   const dailyHabits = useMemo(() => {
     return habits
       .filter(h => h.period === 'daily') // Show all daily habits (presets and custom)
+      .filter(h => !h.assignedTo) // Hide kid chores from the parent tracker (assignedTo is set only for managed-kid chores; dormant by default)
       .map(habit => {
         const isStale = isHabitStale(habit);
         // Build a Set to get O(1) lookups instead of O(N) Array.includes per habit.

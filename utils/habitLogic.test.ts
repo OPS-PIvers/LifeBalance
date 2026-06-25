@@ -12,7 +12,8 @@ import {
   calculatePointsForDateRange,
   getHabitResetUpdate,
   computeHouseholdPointsSync,
-  computeManagedMemberPointsReset
+  computeManagedMemberPointsReset,
+  isHabitCompletedInCurrentPeriod
 } from './habitLogic';
 import { Habit } from '@/types/schema';
 import { format, subDays, subWeeks, startOfISOWeek } from 'date-fns';
@@ -1059,6 +1060,49 @@ describe('habitLogic', () => {
       );
       expect(result.needsUpdate).toBe(true);
       expect(result.points).toEqual({ daily: 0, weekly: 0, total: 100 });
+    });
+  });
+
+  describe('isHabitCompletedInCurrentPeriod', () => {
+    // Deterministic Monday-anchored week: 2026-06-22 (Mon) .. 2026-06-28 (Sun).
+    // The previous ISO week's Monday is 2026-06-15.
+    const MONDAY = '2026-06-22';
+    const WEDNESDAY = '2026-06-24';
+    const PREV_WEEK_WED = '2026-06-17';
+
+    it('daily habit: done when today is in completedDates', () => {
+      const habit = { period: 'daily', completedDates: [WEDNESDAY] } as Pick<
+        Habit,
+        'period' | 'completedDates'
+      >;
+      expect(isHabitCompletedInCurrentPeriod(habit, WEDNESDAY)).toBe(true);
+    });
+
+    it('daily habit: not done when today is not in completedDates', () => {
+      const habit = { period: 'daily', completedDates: [MONDAY] } as Pick<
+        Habit,
+        'period' | 'completedDates'
+      >;
+      // Completed Monday, but "today" is Wednesday → daily check is exact-day.
+      expect(isHabitCompletedInCurrentPeriod(habit, WEDNESDAY)).toBe(false);
+    });
+
+    it('weekly habit: completed earlier this week reads as done on a later day', () => {
+      const habit = { period: 'weekly', completedDates: [MONDAY] } as Pick<
+        Habit,
+        'period' | 'completedDates'
+      >;
+      // Completed Monday; asking on Wednesday of the SAME Mon-anchored week → done.
+      expect(isHabitCompletedInCurrentPeriod(habit, WEDNESDAY)).toBe(true);
+    });
+
+    it('weekly habit: completed last week reads as not done this week', () => {
+      const habit = { period: 'weekly', completedDates: [PREV_WEEK_WED] } as Pick<
+        Habit,
+        'period' | 'completedDates'
+      >;
+      // Last week's completion does not satisfy the current week.
+      expect(isHabitCompletedInCurrentPeriod(habit, WEDNESDAY)).toBe(false);
     });
   });
 });

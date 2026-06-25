@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import React from 'react';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { MockHouseholdProvider } from './MockHouseholdContext';
-import { useFinance } from './FirebaseHouseholdContext';
+import { useFinance, useHousehold } from './FirebaseHouseholdContext';
 import { calculateSafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // Finding 4.4: MockHouseholdContext must expose a well-formed
 // `safeToSpendBreakdown` so the Test Mode finance slice is in parity with the
@@ -72,5 +74,82 @@ describe('MockHouseholdContext finance slice parity', () => {
     // Seed transactions are all `verified`, so pending spend should be 0.
     const { safeToSpendBreakdown: breakdown } = captureFinance();
     expect(breakdown?.pendingSpend).toBe(0);
+  });
+});
+
+// Plan 080c-5: the reviewer flagged that the only coverage of the todo→points
+// wiring was the pure dormancy gate (utils/todoPoints.test.ts). This exercises the
+// REAL wiring end-to-end through the provider — completeToDo must credit a managed
+// kid's points map, AND must NOT credit anything for a non-managed (parent)
+// assignee (the dormant path for normal households).
+describe('MockHouseholdContext completeToDo → kid point credit', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+
+  const kidPoints = (result: ReturnType<typeof captureHousehold>['result']) =>
+    result.current.members.find(m => m.uid === 'kid_leo')!.points;
+
+  it('credits the seeded managed kid the todo points on completion (daily/weekly/total)', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+    // The seeded kid todo (todo_kid_1) is assigned to kid_leo with points: 5.
+    expect(result.current.todos.find(t => t.id === 'todo_kid_1')?.points).toBe(5);
+
+    await act(async () => {
+      await result.current.completeToDo('todo_kid_1');
+    });
+
+    const after = kidPoints(result);
+    expect(after.daily).toBe(before.daily + 5);
+    expect(after.weekly).toBe(before.weekly + 5);
+    expect(after.total).toBe(before.total + 5);
+    // The todo is now marked complete.
+    expect(result.current.todos.find(t => t.id === 'todo_kid_1')?.isCompleted).toBe(true);
+  });
+
+  it('credits DEFAULT_TODO_POINTS to a managed kid when the todo has no explicit points', async () => {
+    const { result } = captureHousehold();
+    const before = { ...kidPoints(result) };
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Feed the fox',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'kid_leo',
+        isCompleted: false,
+        // no explicit points → should fall back to DEFAULT_TODO_POINTS
+      });
+    });
+    const created = result.current.todos.find(t => t.text === 'Feed the fox');
+    expect(created).toBeDefined();
+
+    await act(async () => {
+      await result.current.completeToDo(created!.id);
+    });
+
+    expect(kidPoints(result).total).toBe(before.total + DEFAULT_TODO_POINTS);
+  });
+
+  it('does NOT change any member points when completing a non-managed (parent) assignee todo', async () => {
+    const { result } = captureHousehold();
+    const before = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
+
+    await act(async () => {
+      await result.current.addToDo({
+        text: 'Pay the electric bill',
+        completeByDate: getLocalDateString(),
+        assignedTo: 'test-user-id', // the parent/admin — not a managed kid
+        isCompleted: false,
+        points: 50,
+      });
+    });
+    const created = result.current.todos.find(t => t.text === 'Pay the electric bill');
+    expect(created).toBeDefined();
+
+    await act(async () => {
+      await result.current.completeToDo(created!.id);
+    });
+
+    const after = result.current.members.map(m => ({ uid: m.uid, ...m.points }));
+    expect(after).toEqual(before);
   });
 });

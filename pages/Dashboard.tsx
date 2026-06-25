@@ -14,6 +14,7 @@ import { EmptyChallengeWidget } from '@/components/dashboard/EmptyChallengeWidge
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
 import { MoneyPulseWidget } from '@/components/dashboard/MoneyPulseWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
+import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
 import { UpcomingBillsWidget } from '@/components/dashboard/UpcomingBillsWidget';
 import { CategorySpendWidget } from '@/components/dashboard/CategorySpendWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
@@ -148,6 +149,10 @@ const Dashboard: React.FC = () => {
 
         {/* Widget: Daily Habits */}
         <DailyHabitsWidget />
+
+        {/* Widget: Kids' Chores (parent overview) — self-nulls unless Kid Mode is
+            on and a managed kid has a chore, so this is dormant by default. */}
+        <KidsChoresWidget />
 
         {/* Widget: Money Pulse */}
         <MoneyPulseWidget />

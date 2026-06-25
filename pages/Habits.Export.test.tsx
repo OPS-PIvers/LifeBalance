@@ -64,8 +64,14 @@ const mockHabits = [
   },
 ];
 
+// Habits.tsx (Plan 080c-4) reads `members` from useHouseholdCore to derive the
+// read-only Kids'-chores section. This export-focused test doesn't exercise kid
+// chores, so an empty members array is the faithful default — it keeps that
+// section dormant (no managed kids) while satisfying the `members.filter(...)`
+// the page runs on mount.
 const mockUseHousehold = vi.fn(() => ({
   habits: mockHabits,
+  members: [],
 }));
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => {
@@ -152,6 +158,8 @@ describe('Habits Page Export', () => {
     mockUseHousehold.mockReturnValueOnce({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       habits: [] as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      members: [] as any,
     });
 
     render(<Habits />);

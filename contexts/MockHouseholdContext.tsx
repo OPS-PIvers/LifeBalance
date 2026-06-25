@@ -1,7 +1,8 @@
-import React, { useState, ReactNode, useCallback, useMemo } from 'react';
+import React, { useState, ReactNode, useCallback, useMemo, useRef } from 'react';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
+import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
@@ -73,12 +74,34 @@ const SEED_HABITS: Habit[] = [
     totalCount: 0, count: 0, completedDates: [], streakDays: 0,
     createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
   },
+  // Plan 080c-3 Test-Mode harness: one kid-assigned chore so the kid dashboard
+  // chore list and the parent read-only KidChoresGroup both render live data.
+  // assignedTo targets the seeded managed kid; isShared:false marks it a per-kid
+  // chore (not a shared household habit). Dormant for normal households.
+  {
+    id: 'h3', title: 'Clear the Dinner Table', category: 'Chores', type: 'positive',
+    basePoints: 5, scoringType: 'threshold', period: 'daily', targetCount: 1,
+    totalCount: 0, count: 0, completedDates: [], streakDays: 0,
+    assignedTo: 'kid_leo', isShared: false,
+    createdBy: 'test-user-id', lastUpdated: new Date().toISOString(), weatherSensitive: false
+  },
 ];
 
 const SEED_MEMBERS: HouseholdMember[] = [
   {
     uid: 'test-user-id', displayName: 'Test User', email: 'test@example.com',
     role: 'admin', points: { daily: 30, weekly: 150, total: 500 }
+  },
+  // Plan 080 (Kid Mode) Test-Mode harness: one managed kid so the dormant kid
+  // surfaces are walkable in Test Mode. Mirrors the EXACT object shape the mock's
+  // own addKidProfile builds (login-less, isManaged, managedByUid, no email), so
+  // the kid dashboard, the parent KidsChoresWidget, and the +pts todo badge all
+  // show live data without a real backend.
+  {
+    uid: 'kid_leo', displayName: 'Leo', role: 'kid',
+    isManaged: true, managedByUid: 'test-user-id',
+    avatarColor: '#7c3aed', avatarEmoji: '🦊',
+    points: { daily: 15, weekly: 60, total: 220 }, allowanceCents: 0
   }
 ];
 
@@ -108,7 +131,28 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
   const [mealPlan, setMealPlan] = useState<MealPlanItem[]>([]);
-  const [todos, setTodos] = useState<ToDo[]>([]);
+  // Plan 080c-5 Test-Mode harness: one kid-assigned todo so the +pts badge and
+  // the completeToDo → kid-points credit path are walkable. assignedTo targets the
+  // seeded managed kid and points:5 is the explicit chore reward. Inert (credits
+  // nothing) for a normal, non-managed assignee — see utils/todoPoints.ts.
+  const [todos, setTodos] = useState<ToDo[]>(() => [
+    {
+      id: 'todo_kid_1',
+      text: 'Make your bed',
+      completeByDate: getLocalDateString(),
+      assignedTo: 'kid_leo',
+      isCompleted: false,
+      points: 5,
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    },
+  ]);
+  // Keep a ref in sync with the latest todos so completeToDo can resolve the
+  // completed to-do DETERMINISTICALLY (for the points credit) without depending on
+  // the execution order of two separate setState updaters. Updated during render,
+  // which is safe for a plain mirror ref (no state change, no effect needed).
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
   const [groceryCatalog, setGroceryCatalog] = useState<GroceryCatalogItem[]>(SEED_GROCERY_CATALOG);
   const [bucketHistory] = useState<BucketPeriodSnapshot[]>([]); // Mock empty history
   const [insightsHistory] = useState<Insight[]>([]);
@@ -609,7 +653,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateToDo,
     deleteToDo,
     completeToDo: useCallback(async (id: string) => {
-      setTodos(prev => prev.map(t => t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t));
+      // Resolve the to-do being completed from the live ref (NOT a value leaked out
+      // of the setTodos updater) so the points credit can't depend on the execution
+      // order of two separate setState updaters — that coupling silently dropped the
+      // credit when the to-do was added earlier in the same flush. The SAME dormancy
+      // gate the real Firebase context uses (computeTodoCompletionCredit) decides
+      // whether a managed kid is credited.
+      const completedTodo = todosRef.current.find(t => t.id === id);
+      if (!completedTodo) {
+        toast.error('Mock: ToDo not found');
+        return;
+      }
+      if (completedTodo.isCompleted) {
+        return; // already completed — avoid duplicate points
+      }
+      setTodos(prev => prev.map(t =>
+        t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t,
+      ));
+      setMembers(prev => {
+        const credit = computeTodoCompletionCredit(completedTodo, prev);
+        if (!credit) return prev;
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + credit.points,
+              weekly: m.points.weekly + credit.points,
+              total: m.points.total + credit.points,
+            } }
+          : m);
+      });
       toast.success('Mock: ToDo completed');
     }, []),
     addStore,

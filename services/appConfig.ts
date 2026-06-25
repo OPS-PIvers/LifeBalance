@@ -120,6 +120,23 @@ let kidModeEnabledFetchedAt = 0;
  * Firestore console (effective within ~60 s).
  */
 export const getKidModeEnabled = (): Promise<boolean> => {
+  // DEV + TEST-MODE ONLY short-circuit. In Test Mode the mock backend can't reach
+  // `app_config/global`, so the real read below would fail closed and the entire
+  // Kid Mode surface would be unreachable for an AI agent walking the app. When we
+  // detect the same session signal the rest of the app uses to swap in the mock
+  // providers (`sessionStorage['LIFEBALANCE_TEST_MODE'] === 'true'`, set by
+  // pages/Login.tsx and read in App.tsx), enable Kid Mode. The whole branch is
+  // guarded by `import.meta.env.DEV`, so Vite/Rollup dead-code-eliminates it from
+  // production builds — it can NEVER be true in prod, preserving dormancy. We early
+  // -return WITHOUT touching the cache vars so production reads stay unaffected.
+  if (
+    import.meta.env.DEV &&
+    typeof sessionStorage !== 'undefined' &&
+    sessionStorage.getItem('LIFEBALANCE_TEST_MODE') === 'true'
+  ) {
+    return Promise.resolve(true);
+  }
+
   const now = Date.now();
   if (kidModeEnabledPromise !== null && now - kidModeEnabledFetchedAt < KID_MODE_ENABLED_CACHE_TTL_MS) {
     return kidModeEnabledPromise;

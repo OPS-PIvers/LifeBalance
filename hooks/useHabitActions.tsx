@@ -102,6 +102,10 @@ export const useHabitActions = (
           isCustom: habit.isCustom,
           effortLevel: habit.effortLevel,
           presetId: habit.presetId,
+          // Plan 080c: persist the chore assignee so a re-assignment sticks. The
+          // .filter below drops it when undefined, so an unassigned habit (every
+          // existing one) writes nothing new here — this stays dormant.
+          assignedTo: habit.assignedTo,
         }).filter(([, value]) => value !== undefined)
       );
 
