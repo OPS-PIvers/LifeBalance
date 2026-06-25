@@ -278,6 +278,11 @@ export interface HouseholdContextType {
   updateChallenge: (challenge: Challenge) => Promise<void>;
   markChallengeComplete: (challengeId: string, success: boolean) => Promise<void>;
   redeemReward: (rewardId: string) => Promise<void>;
+  // Plan 080d — Reward CRUD (parent-managed rewards store). createdBy is set
+  // server-side from the authenticated user on create.
+  addReward: (input: Omit<RewardItem, 'id' | 'createdBy'>) => Promise<void>;
+  updateReward: (reward: RewardItem) => Promise<void>;
+  deleteReward: (id: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
 
   // Yearly Goal Actions
@@ -385,6 +390,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'updateChallenge' | 'markChallengeComplete' | 'redeemReward'
+  | 'addReward' | 'updateReward' | 'deleteReward'
   | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
   | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
 >;
@@ -2906,6 +2912,54 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, rewards]);
 
+  // --- ACTIONS: REWARD CRUD (Plan 080d) ---
+  // Writes to the households/{hid}/rewards subcollection (the live store). The
+  // deprecated Household.rewardsInventory array is NOT touched. createdBy is set
+  // from the authenticated user so it satisfies the rules' ownership check.
+
+  const addReward = useCallback(async (input: Omit<RewardItem, 'id' | 'createdBy'>) => {
+    if (!householdId || !user) return;
+
+    try {
+      await addDoc(collection(db, `households/${householdId}/rewards`), {
+        ...input,
+        createdBy: user.uid,
+      });
+      toast.success('Reward added');
+    } catch (error) {
+      console.error('[addReward] Failed:', error);
+      toast.error('Failed to add reward');
+    }
+  }, [householdId, user]);
+
+  const updateReward = useCallback(async (reward: RewardItem) => {
+    if (!householdId) return;
+
+    // Strip the synthetic id and the immutable createdBy from the write payload —
+    // the rules block createdBy changes, and id is not a Firestore field.
+    const { id, createdBy: _createdBy, ...updates } = reward;
+
+    try {
+      await updateDoc(doc(db, `households/${householdId}/rewards`, id), updates);
+      toast.success('Reward updated');
+    } catch (error) {
+      console.error('[updateReward] Failed:', error);
+      toast.error('Failed to update reward');
+    }
+  }, [householdId]);
+
+  const deleteReward = useCallback(async (id: string) => {
+    if (!householdId) return;
+
+    try {
+      await deleteDoc(doc(db, `households/${householdId}/rewards`, id));
+      toast.success('Reward deleted');
+    } catch (error) {
+      console.error('[deleteReward] Failed:', error);
+      toast.error('Failed to delete reward');
+    }
+  }, [householdId]);
+
   // --- ACTIONS: FREEZE BANK ---
 
   const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
@@ -3938,6 +3992,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateChallenge,
     markChallengeComplete,
     redeemReward,
+    addReward,
+    updateReward,
+    deleteReward,
     createYearlyGoal,
     updateYearlyGoal,
     updateYearlyGoalProgress,
@@ -3948,6 +4005,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, habitActions,
     updateChallenge, markChallengeComplete, redeemReward,
+    addReward, updateReward, deleteReward,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
     useFreezeBankToken, rolloverFreezeBankTokens,
   ]);

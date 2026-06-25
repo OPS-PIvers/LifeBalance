@@ -447,6 +447,73 @@ describe('joining via invite code', () => {
   });
 });
 
+describe('rewards (Plan 080d — additive Kid-Mode reward fields)', () => {
+  // The reward rule's isValidReward() was expanded additively to permit the
+  // optional kid-reward fields (type/allowanceCents/targetMemberId/active)
+  // alongside the original 4. Ownership (createdBy == auth.uid) and the
+  // create-time hasOnly() allow-list are still enforced.
+  it('a member can create a reward with the new kid fields', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-allowance'), {
+        title: '$5 Allowance',
+        cost: 100,
+        icon: 'piggy-bank',
+        createdBy: BOB,
+        type: 'allowance',
+        allowanceCents: 500,
+        targetMemberId: KID,
+        active: true,
+      }),
+    );
+  });
+
+  it('a legacy 4-field reward still validates', async () => {
+    await assertSucceeds(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-legacy'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+      }),
+    );
+  });
+
+  it('a reward with a stray unlisted field is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-stray'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        junkField: 'nope',
+      }),
+    );
+  });
+
+  it('a reward whose createdBy is not the caller is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-spoof'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: ALICE,
+      }),
+    );
+  });
+
+  it('a reward with an invalid type is rejected', async () => {
+    await assertFails(
+      setDoc(doc(dbFor(BOB), 'households', H1, 'rewards', 'rw-bogus-type'), {
+        title: 'Movie Night',
+        cost: 50,
+        icon: 'film',
+        createdBy: BOB,
+        type: 'bogus',
+      }),
+    );
+  });
+});
+
 describe('managed kid profiles (Plan 080 — login-less child member docs)', () => {
   // A kid is a member doc (role 'kid', isManaged true) a PARENT creates and
   // manages. It is never added to memberUids, so it holds no household credential.

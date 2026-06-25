@@ -216,6 +216,15 @@ export interface RewardItem {
   cost: number;
   icon: string;
   createdBy: string;
+  // Plan 080d — Kid-Mode reward kinds (all optional/legacy-safe; absent = realWorld).
+  /** 'realWorld' = a physical/experiential reward; 'allowance' = credits a cash allowance. Defaults to 'realWorld' when absent. */
+  type?: 'realWorld' | 'allowance';
+  /** For allowance rewards: the cash amount credited, in integer cents. */
+  allowanceCents?: number;
+  /** A specific kid's uid this reward targets; absent = available to all kids. */
+  targetMemberId?: string;
+  /** Whether the reward is shown in the store. Treated as true when absent. */
+  active?: boolean;
 }
 
 export interface Challenge {

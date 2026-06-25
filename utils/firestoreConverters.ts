@@ -190,6 +190,9 @@ export const yearlyGoalConverter: FirestoreDataConverter<YearlyGoal> = {
 
 // ---------------------------------------------------------------------------
 // RewardItem
+// The spread-all behaviour passes the optional Plan 080d Kid-Mode fields
+// (type, allowanceCents, targetMemberId, active) straight through in both
+// directions — no field is dropped — while still only stripping the synthetic id.
 // ---------------------------------------------------------------------------
 export const rewardItemConverter: FirestoreDataConverter<RewardItem> = {
   toFirestore(reward: RewardItem): DocumentData {
