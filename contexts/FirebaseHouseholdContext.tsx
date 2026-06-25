@@ -3023,12 +3023,32 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     };
 
     try {
-      // Append to the household doc's pendingRedemptions (arrayUnion creates the
-      // field if absent — legacy-safe). The parent session executes the write.
-      await updateDoc(doc(db, `households/${householdId}`), {
-        pendingRedemptions: arrayUnion(redemption),
+      // Append to the household doc's pendingRedemptions inside a transaction so a
+      // fast double-tap / two tabs can't create TWO pending entries for the same
+      // (memberId, rewardId) — which would let a parent approve both and
+      // double-deduct points / double-credit allowance. We read the current queue
+      // and skip the write when a matching pending entry already exists, rather
+      // than arrayUnion-ing a fresh unique-id entry blindly.
+      let alreadyPending = false;
+      await runTransaction(db, async (transaction) => {
+        const householdRef = doc(db, `households/${householdId}`);
+        const householdDoc = await transaction.get(householdRef);
+        if (!householdDoc.exists()) throw new Error('Household not found');
+
+        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
+        if (pending.some(p => p.memberId === memberId && p.rewardId === rewardId)) {
+          // A request for this reward by this member is already queued — no-op.
+          alreadyPending = true;
+          return;
+        }
+        transaction.update(householdRef, { pendingRedemptions: [...pending, redemption] });
       });
-      toast.success(`Sent! A grown-up will review "${reward.title}" 🎁`);
+
+      if (alreadyPending) {
+        toast.success('Already requested!');
+      } else {
+        toast.success(`Sent! A grown-up will review "${reward.title}" 🎁`);
+      }
     } catch (error) {
       console.error('[requestRedemption] Failed:', error);
       toast.error('Could not send your request. Try again.');
@@ -3040,8 +3060,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
 
     try {
+      // `notEnough` short-circuits approval when the kid can no longer afford the
+      // reward (their points.total fell below the cost between request and
+      // approval). We leave the request pending so the parent can retry later, and
+      // surface a distinct toast after the transaction resolves.
+      let notEnough = false;
       await runTransaction(db, async (transaction) => {
         const householdRef = doc(db, `households/${householdId}`);
+        // ALL reads first (Firestore requires reads before writes): household doc,
+        // then — once we know the target member — the kid's member doc.
         const householdDoc = await transaction.get(householdRef);
         if (!householdDoc.exists()) throw new Error('Household not found');
 
@@ -3051,19 +3078,41 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         // so a double-tap can't deduct points twice.
         if (!redemption) return;
 
-        const delta = redemptionMemberDelta(redemption);
-        const remaining = pending.filter(r => r.id !== redemptionId);
+        const memberRef = doc(db, `households/${householdId}/members`, redemption.memberId);
+        const memberDoc = await transaction.get(memberRef);
+        const currentTotal = (memberDoc.data() as HouseholdMember | undefined)?.points?.total ?? 0;
 
-        // Remove the request from the queue AND apply the member delta in ONE
+        // AFFORDABILITY: never let approval drive the kid's points negative. If they
+        // can't afford it now, reject (leave pending) — kids' rewards carry no debt.
+        if (currentTotal < redemption.cost) {
+          notEnough = true;
+          return;
+        }
+
+        const delta = redemptionMemberDelta(redemption);
+        // DEFENSE-IN-DEPTH: strip ALL entries for this (memberId, rewardId), not
+        // just the matched id, so a stray duplicate that slipped past the request
+        // dedup can never be approved a second time. The member is still credited
+        // exactly ONCE (one delta below).
+        const remaining = pending.filter(
+          r => !(r.memberId === redemption.memberId && r.rewardId === redemption.rewardId)
+        );
+
+        // Remove the request(s) from the queue AND apply the member delta in ONE
         // transaction, so the kid's points/allowance can never diverge from the
         // resolved queue.
         transaction.update(householdRef, { pendingRedemptions: remaining });
-        transaction.update(doc(db, `households/${householdId}/members`, redemption.memberId), {
+        transaction.update(memberRef, {
           'points.total': increment(delta.pointsDelta),
           ...(delta.allowanceDelta ? { allowanceCents: increment(delta.allowanceDelta) } : {}),
         });
       });
-      toast.success('Approved! 🎉');
+
+      if (notEnough) {
+        toast.error('Not enough points');
+      } else {
+        toast.success('Approved! 🎉');
+      }
     } catch (error) {
       console.error('[approveRedemption] Failed:', error);
       toast.error('Could not approve the request. Try again.');

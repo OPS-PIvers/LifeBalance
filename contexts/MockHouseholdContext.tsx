@@ -159,6 +159,12 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
   const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
+  // Mirror the latest members so approveRedemption can read the kid's current
+  // points.total for the affordability check deterministically, without coupling
+  // to the execution order of two separate setState updaters. Updated during
+  // render, which is safe for a plain mirror ref (no state change, no effect).
+  const membersRef = useRef(members);
+  membersRef.current = members;
   const [activeMemberId, setActiveMemberId] = useState<string | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
   const [shoppingList, setShoppingList] = useState<ShoppingItem[]>([]);
@@ -551,32 +557,52 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
       requestedAt: new Date().toISOString(),
       requestedByUid: 'test-user-id',
     };
-    setPendingRedemptions(prev => [...prev, redemption]);
-    toast.success('Mock: Redemption requested');
+    // Mirror the live-context dedup: skip if a pending entry for the same
+    // (memberId, rewardId) already exists, so a double-tap can't queue two.
+    let alreadyPending = false;
+    setPendingRedemptions(prev => {
+      if (prev.some(p => p.memberId === memberId && p.rewardId === rewardId)) {
+        alreadyPending = true;
+        return prev;
+      }
+      return [...prev, redemption];
+    });
+    toast.success(alreadyPending ? 'Mock: Already requested' : 'Mock: Redemption requested');
   }, [rewards]);
 
   const approveRedemption = useCallback(async (redemptionId: string) => {
-    // Resolve the request from the live ref-free state inside the updater so the
-    // member credit can't depend on setState ordering. Idempotent: if it's already
-    // gone, both updaters are no-ops.
-    let resolved: RewardRedemption | undefined;
-    setPendingRedemptions(prev => {
-      resolved = prev.find(r => r.id === redemptionId);
-      return prev.filter(r => r.id !== redemptionId);
-    });
-    setMembers(prev => {
-      if (!resolved) return prev;
-      const delta = redemptionMemberDelta(resolved);
-      return prev.map(m => m.uid === resolved!.memberId
-        ? {
-            ...m,
-            points: { ...m.points, total: m.points.total + delta.pointsDelta },
-            allowanceCents: (m.allowanceCents ?? 0) + delta.allowanceDelta,
-          }
-        : m);
-    });
+    // Resolve the request and read the kid's CURRENT points.total from the mirror
+    // ref so neither the affordability check nor the member credit depends on
+    // setState ordering. Idempotent: if it's already gone, this is a no-op.
+    const resolved = pendingRedemptions.find(r => r.id === redemptionId);
+    if (!resolved) {
+      toast.success('Mock: Redemption approved');
+      return;
+    }
+
+    // AFFORDABILITY: reject (leave pending, no member mutation) when the kid can no
+    // longer afford it — mirrors the live context; kids' rewards carry no debt.
+    const currentTotal = membersRef.current.find(m => m.uid === resolved.memberId)?.points.total ?? 0;
+    if (currentTotal < resolved.cost) {
+      toast.error('Mock: Not enough points');
+      return;
+    }
+
+    const delta = redemptionMemberDelta(resolved);
+    // Strip ALL entries for this (memberId, rewardId) so a stray duplicate can't be
+    // approved twice; the member is still credited exactly once (one delta below).
+    setPendingRedemptions(prev =>
+      prev.filter(r => !(r.memberId === resolved.memberId && r.rewardId === resolved.rewardId))
+    );
+    setMembers(prev => prev.map(m => m.uid === resolved.memberId
+      ? {
+          ...m,
+          points: { ...m.points, total: m.points.total + delta.pointsDelta },
+          allowanceCents: (m.allowanceCents ?? 0) + delta.allowanceDelta,
+        }
+      : m));
     toast.success('Mock: Redemption approved');
-  }, []);
+  }, [pendingRedemptions]);
 
   const denyRedemption = useCallback(async (redemptionId: string) => {
     // Remove the request with no points/allowance change. Idempotent.

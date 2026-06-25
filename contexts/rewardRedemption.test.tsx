@@ -32,6 +32,10 @@ let updateDocCalls: CapturedUpdate[] = [];
 // The household doc the mocked transaction.get() returns. Tests seed
 // pendingRedemptions here before invoking approve/deny.
 let householdDocData: Record<string, unknown> = {};
+// Member docs the mocked transaction.get() returns, keyed by full path
+// (e.g. "households/h1/members/kid_leo"). approveRedemption reads the kid's
+// member doc for the affordability check; tests seed the kid's points here.
+let memberDocs: Record<string, Record<string, unknown>> = {};
 
 const incrementMock = vi.fn((n: number) => ({ __increment: n }));
 const arrayUnionMock = vi.fn((...args: unknown[]) => ({ __arrayUnion: args }));
@@ -93,11 +97,17 @@ vi.mock('firebase/firestore', () => {
     setDoc: vi.fn(async () => undefined),
     runTransaction: vi.fn(async (_db: unknown, updater: (tx: unknown) => Promise<void>) => {
       const tx = {
-        get: vi.fn(async (ref: unknown) => ({
-          exists: () => true,
-          // Only the household doc is read by approve/deny.
-          data: () => (pathOf(ref).endsWith('/__autoId') ? {} : householdDocData),
-        })),
+        get: vi.fn(async (ref: unknown) => {
+          const path = pathOf(ref);
+          // Member-doc reads (affordability check) resolve from memberDocs; the
+          // household doc resolves from householdDocData; autoId refs are empty.
+          const data = path.includes('/members/')
+            ? (memberDocs[path] ?? {})
+            : path.endsWith('/__autoId')
+              ? {}
+              : householdDocData;
+          return { exists: () => true, data: () => data };
+        }),
         update: vi.fn((ref: unknown, data: Record<string, unknown>) => {
           txUpdates.push({ path: pathOf(ref), data });
         }),
@@ -198,6 +208,7 @@ beforeEach(() => {
   txUpdates = [];
   updateDocCalls = [];
   householdDocData = {};
+  memberDocs = {};
   snapshotCallbacks.clear();
   captured.value = null;
   incrementMock.mockClear();
@@ -205,7 +216,7 @@ beforeEach(() => {
 });
 
 describe('requestRedemption', () => {
-  it('appends a pending RewardRedemption to the household doc via arrayUnion', async () => {
+  it('appends a pending RewardRedemption to the household doc transactionally', async () => {
     renderProvider();
     // Seed the rewards listener so the reward can be found by id.
     emitCollection(`${householdPath}/rewards`, [docSnap('rw2', allowanceReward)]);
@@ -214,12 +225,14 @@ describe('requestRedemption', () => {
       await captured.value!.requestRedemption('rw2', 'kid_leo');
     });
 
-    expect(updateDocCalls).toHaveLength(1);
-    const call = updateDocCalls[0]!;
+    // The request now runs in a transaction: read the queue, then update the
+    // household doc with the appended redemption (no arrayUnion blind-append).
+    expect(txUpdates).toHaveLength(1);
+    const call = txUpdates[0]!;
     expect(call.path).toBe(householdPath);
-    // The pendingRedemptions field is an arrayUnion of the new redemption.
-    expect(arrayUnionMock).toHaveBeenCalledTimes(1);
-    const appended = arrayUnionMock.mock.calls[0]![0] as RewardRedemption;
+    const queue = call.data.pendingRedemptions as RewardRedemption[];
+    expect(queue).toHaveLength(1);
+    const appended = queue[0]!;
     expect(appended).toMatchObject({
       rewardId: 'rw2',
       rewardTitle: '$5 Allowance',
@@ -234,6 +247,38 @@ describe('requestRedemption', () => {
     expect(typeof appended.requestedAt).toBe('string');
   });
 
+  it('preserves existing pending entries when appending a new request', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
+    // A pending request for a DIFFERENT reward already exists.
+    householdDocData = { pendingRedemptions: [seedRedemption({ id: 'existing', rewardId: 'rw2' })] };
+
+    await act(async () => {
+      await captured.value!.requestRedemption('rw1', 'kid_leo');
+    });
+
+    const queue = txUpdates[0]!.data.pendingRedemptions as RewardRedemption[];
+    // Existing entry kept + the new one appended.
+    expect(queue.map(r => r.rewardId).sort()).toEqual(['rw1', 'rw2']);
+  });
+
+  it('is a no-op when a pending request for the same (memberId, rewardId) already exists', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw2', allowanceReward)]);
+    // Same member + same reward already pending — a fast double-tap / two tabs.
+    householdDocData = {
+      pendingRedemptions: [seedRedemption({ id: 'first', rewardId: 'rw2', memberId: 'kid_leo' })],
+    };
+
+    await act(async () => {
+      await captured.value!.requestRedemption('rw2', 'kid_leo');
+    });
+
+    // No write at all — the duplicate is skipped, so approval can never
+    // double-deduct points / double-credit allowance.
+    expect(txUpdates).toHaveLength(0);
+  });
+
   it('omits allowanceCents for a realWorld reward request', async () => {
     renderProvider();
     emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
@@ -242,7 +287,8 @@ describe('requestRedemption', () => {
       await captured.value!.requestRedemption('rw1', 'kid_leo');
     });
 
-    const appended = arrayUnionMock.mock.calls[0]![0] as RewardRedemption;
+    const queue = txUpdates[0]!.data.pendingRedemptions as RewardRedemption[];
+    const appended = queue[0]!;
     expect(appended.type).toBe('realWorld');
     expect(appended).not.toHaveProperty('allowanceCents');
   });
@@ -255,14 +301,22 @@ describe('requestRedemption', () => {
       await captured.value!.requestRedemption('does-not-exist', 'kid_leo');
     });
 
+    expect(txUpdates).toHaveLength(0);
     expect(updateDocCalls).toHaveLength(0);
   });
 });
 
 describe('approveRedemption', () => {
+  // The affordability guard (FIX 2) reads the kid's member doc; seed it with
+  // enough points so the happy-path approvals proceed past the check.
+  const seedKidPoints = (total: number) => {
+    memberDocs[`${householdPath}/members/kid_leo`] = { points: { daily: 0, weekly: 0, total } };
+  };
+
   it('removes the request AND deducts points + credits allowance in one transaction', async () => {
     renderProvider();
     householdDocData = { pendingRedemptions: [seedRedemption()] };
+    seedKidPoints(220); // >= cost 100
 
     await act(async () => {
       await captured.value!.approveRedemption('redemption_1');
@@ -290,6 +344,7 @@ describe('approveRedemption', () => {
         seedRedemption({ id: 'r_real', rewardId: 'rw1', rewardTitle: 'Movie Night', cost: 50, type: 'realWorld', allowanceCents: undefined }),
       ],
     };
+    seedKidPoints(220); // >= cost 50
 
     await act(async () => {
       await captured.value!.approveRedemption('r_real');
@@ -298,6 +353,62 @@ describe('approveRedemption', () => {
     const memberUpdate = txUpdates.find(u => u.path === `${householdPath}/members/kid_leo`)!;
     expect(memberUpdate.data['points.total']).toEqual({ __increment: -50 });
     expect(memberUpdate.data).not.toHaveProperty('allowanceCents');
+  });
+
+  it('rejects (no writes, request stays pending) when the kid can no longer afford the cost', async () => {
+    renderProvider();
+    householdDocData = { pendingRedemptions: [seedRedemption()] }; // cost 100
+    seedKidPoints(50); // < cost → approval must not drive points negative
+
+    await act(async () => {
+      await captured.value!.approveRedemption('redemption_1');
+    });
+
+    // No deduction, no queue removal — neither the household nor the member is
+    // written, so the request remains pending for a later retry.
+    expect(txUpdates).toHaveLength(0);
+  });
+
+  it('approves when the kid has EXACTLY the cost (boundary, not unaffordable)', async () => {
+    renderProvider();
+    householdDocData = { pendingRedemptions: [seedRedemption()] }; // cost 100
+    seedKidPoints(100); // exactly affordable
+
+    await act(async () => {
+      await captured.value!.approveRedemption('redemption_1');
+    });
+
+    expect(txUpdates).toHaveLength(2);
+    const memberUpdate = txUpdates.find(u => u.path === `${householdPath}/members/kid_leo`)!;
+    expect(memberUpdate.data['points.total']).toEqual({ __increment: -100 });
+  });
+
+  it('strips ALL pending entries for the same (memberId, rewardId) but credits once', async () => {
+    renderProvider();
+    // A stray duplicate for the same kid+reward slipped past the request dedup.
+    householdDocData = {
+      pendingRedemptions: [
+        seedRedemption({ id: 'redemption_1' }),
+        seedRedemption({ id: 'dup_same' }),
+        seedRedemption({ id: 'keep_other_reward', rewardId: 'rw1' }),
+      ],
+    };
+    seedKidPoints(500);
+
+    await act(async () => {
+      await captured.value!.approveRedemption('redemption_1');
+    });
+
+    const hhUpdate = txUpdates.find(u => u.path === householdPath)!;
+    const remaining = hhUpdate.data.pendingRedemptions as RewardRedemption[];
+    // Both rw2 entries (the approved one AND the stray duplicate) are removed; the
+    // unrelated rw1 request is preserved.
+    expect(remaining.map(r => r.id)).toEqual(['keep_other_reward']);
+
+    // The member is credited exactly ONCE despite two stripped entries.
+    const memberUpdates = txUpdates.filter(u => u.path === `${householdPath}/members/kid_leo`);
+    expect(memberUpdates).toHaveLength(1);
+    expect(memberUpdates[0]!.data['points.total']).toEqual({ __increment: -100 });
   });
 
   it('is idempotent: approving an already-resolved request is a no-op (no member write)', async () => {
