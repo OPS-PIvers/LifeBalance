@@ -106,6 +106,7 @@ import {
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
+import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -3761,10 +3762,30 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       throw new Error('Household not selected');
     }
     try {
-      await updateDoc(doc(db, `households/${householdId}/todos`, id), {
+      // Plan 080c-5: completing a to-do assigned to a MANAGED KID credits that
+      // kid's own member.points (allowance-style). For every other assignee the
+      // dormancy gate (computeTodoCompletionCredit) returns null, so the only
+      // write is the todo update — byte-for-byte the prior behaviour for normal
+      // households with no managed-kid members.
+      const todoRef = doc(db, `households/${householdId}/todos`, id);
+      const snap = await getDoc(todoRef);
+      const todo = snap.data() as ToDo | undefined;
+      const credit = todo ? computeTodoCompletionCredit(todo, membersRef.current) : null;
+
+      const batch = writeBatch(db);
+      batch.update(todoRef, {
         isCompleted: true,
-        completedAt: serverTimestamp()
+        completedAt: serverTimestamp(),
       });
+      if (credit) {
+        // Atomic points credit on the kid member doc (Firestore increment()).
+        batch.update(doc(db, `households/${householdId}/members`, credit.memberUid), {
+          'points.daily': increment(credit.points),
+          'points.weekly': increment(credit.points),
+          'points.total': increment(credit.points),
+        });
+      }
+      await batch.commit();
       // Note: Toast removed to allow UI-specific messaging (consistent with other CRUD operations)
     } catch (error) {
       console.error('[completeToDo] Failed:', error);
