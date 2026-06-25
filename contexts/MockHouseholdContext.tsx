@@ -112,6 +112,28 @@ const SEED_STORES: Store[] = [
   { id: 's2', name: 'Costco', icon: 'Store' },
 ];
 
+// Plan 080e Test-Mode harness: ONE active family challenge so the dormant
+// "Family Challenge" card on the kid dashboard renders live data and the
+// addChallenge creation flow has something to add alongside. Linked to the two
+// seeded shared habits (h1, h2) so calculateChallengeProgress has inputs.
+// Decoupled from yearly goals (no yearlyGoalId); isFamilyChallenge marks it.
+const SEED_CHALLENGES: Challenge[] = [
+  {
+    id: 'fc1',
+    month: getLocalDateString().slice(0, 7), // current YYYY-MM, local
+    title: 'Family Fitness Month',
+    description: 'Everyone moves every day!',
+    relatedHabitIds: ['h1', 'h2'],
+    targetType: 'count',
+    targetValue: 60,
+    status: 'active',
+    isFamilyChallenge: true,
+    yearlyRewardLabel: 'Family goal',
+    createdBy: 'test-user-id',
+    createdAt: new Date().toISOString(),
+  },
+];
+
 const SEED_GROCERY_CATALOG: GroceryCatalogItem[] = [
   { id: 'gc1', name: 'Milk', category: 'Dairy', defaultQuantity: '1', defaultStore: 'Safeway', purchaseCount: 10, lastPurchased: new Date().toISOString() },
   { id: 'gc2', name: 'Eggs', category: 'Dairy', defaultQuantity: '12', defaultStore: 'Costco', purchaseCount: 5, lastPurchased: new Date().toISOString() },
@@ -154,7 +176,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [transactions, setTransactions] = useState<Transaction[]>(SEED_TRANSACTIONS);
   const [habits, setHabits] = useState<Habit[]>(SEED_HABITS);
   const [calendarItems, setCalendarItems] = useState<CalendarItem[]>([]);
-  const [challenges] = useState<Challenge[]>([]);
+  const [challenges, setChallenges] = useState<Challenge[]>(SEED_CHALLENGES);
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
@@ -307,6 +329,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const updateHabit = useCallback(async (habit: Habit) => {
     setHabits(prev => prev.map(h => h.id === habit.id ? habit : h));
     toast.success('Mock: Habit updated');
+  }, []);
+
+  // Plan 080e — mock the family-challenge creation path so the dormant "New
+  // family challenge" form is walkable in Test Mode. Mirrors the real
+  // addChallenge: a new active challenge, decoupled from yearly goals.
+  const addChallenge = useCallback(async (input: {
+    title: string;
+    description?: string;
+    relatedHabitIds: string[];
+    targetValue?: number;
+    month?: string;
+  }) => {
+    const newChallenge: Challenge = {
+      id: generateId(),
+      month: input.month ?? getLocalDateString().slice(0, 7),
+      title: input.title.trim(),
+      description: input.description?.trim() || undefined,
+      relatedHabitIds: input.relatedHabitIds,
+      targetType: 'count',
+      targetValue: input.targetValue,
+      status: 'active',
+      isFamilyChallenge: true,
+      yearlyRewardLabel: 'Family goal',
+      createdBy: 'test-user-id',
+      createdAt: new Date().toISOString(),
+    };
+    setChallenges(prev => [...prev, newChallenge]);
+    toast.success('Mock: Family challenge created');
   }, []);
 
   const deleteHabit = useCallback(async (id: string) => {
@@ -828,6 +878,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateGroceryCatalogItem: noOp,
     deleteGroceryCatalogItem: noOp,
     updateChallenge: noOp,
+    addChallenge,
     markChallengeComplete: noOp,
     redeemReward: noOp,
     addReward,

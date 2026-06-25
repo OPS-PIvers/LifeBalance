@@ -264,7 +264,14 @@ export interface Challenge {
 
   // Yearly Goal Connection
   yearlyGoalId?: string; // Link to specific yearly goal
-  yearlyRewardLabel: string;
+  // DECOUPLED from yearly goals in Plan 080e: optional so a challenge can exist
+  // without a yearly-reward coupling. Legacy + yearly-linked challenges keep
+  // their stored value; family challenges (created via addChallenge) omit it.
+  yearlyRewardLabel?: string;
+
+  // Plan 080e (Kid Mode): marks a challenge created through the dormant
+  // "New family challenge" flow. Absent on all legacy/yearly challenges.
+  isFamilyChallenge?: boolean;
 
   status: 'active' | 'success' | 'failed';
 

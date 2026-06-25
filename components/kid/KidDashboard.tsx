@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Check, Flame, Gift, Lock, LogOut, PiggyBank, Sparkles, Star } from 'lucide-react';
+import { Check, Flame, Gift, Lock, LogOut, PiggyBank, Sparkles, Star, Trophy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useHouseholdCore, useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
 import type { Habit, RewardItem } from '@/types/schema';
 
@@ -27,7 +28,8 @@ import type { Habit, RewardItem } from '@/types/schema';
  */
 const KidDashboard: React.FC = () => {
   const { members, activeMemberId, exitToParent, household } = useHouseholdCore();
-  const { habits, toggleHabit, rewardsInventory, requestRedemption } = useGamification();
+  const { habits, toggleHabit, rewardsInventory, requestRedemption, activeChallenge } =
+    useGamification();
 
   const activeKid = useMemo(
     () => members.find((m) => m.uid === activeMemberId),
@@ -50,6 +52,35 @@ const KidDashboard: React.FC = () => {
     () => (activeKid ? habits.filter((h) => h.assignedTo === activeKid.uid) : []),
     [habits, activeKid],
   );
+
+  // Plan 080e — the shared Family Challenge. Shows the active challenge's overall
+  // progress (via the same util the parent widget uses) so a kid sees the family
+  // goal. Renders nothing when there is no active challenge. Doubly dormant: this
+  // whole surface only mounts under Kid Mode + acting-as-kid.
+  const challengeHabits = useMemo(
+    () =>
+      activeChallenge ? habits.filter((h) => activeChallenge.relatedHabitIds.includes(h.id)) : [],
+    [activeChallenge, habits],
+  );
+
+  const challengeProgress = useMemo(
+    () => (activeChallenge ? calculateChallengeProgress(activeChallenge, challengeHabits) : null),
+    [activeChallenge, challengeHabits],
+  );
+
+  // Total completions logged toward the challenge this month, across its shared
+  // (household-wide) habits. Challenge/family habits aren't assigned per-kid, so
+  // this is a FAMILY total — not the acting kid's individual count — and the badge
+  // below is labelled truthfully as such (it would be misleading to show it as
+  // "You: N"). Simple, friendly encouragement only.
+  const familyCompletions = useMemo(() => {
+    if (!activeChallenge) return 0;
+    const monthKey = activeChallenge.month;
+    return challengeHabits.reduce(
+      (sum, h) => sum + h.completedDates.filter((d) => d.startsWith(monthKey)).length,
+      0,
+    );
+  }, [activeChallenge, challengeHabits]);
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -172,6 +203,46 @@ const KidDashboard: React.FC = () => {
             <p className="text-xs font-semibold text-emerald-50/90">your allowance</p>
           </div>
         </section>
+
+        {/* Family Challenge (Plan 080e) — only when one is active */}
+        {activeChallenge && challengeProgress && (
+          <section>
+            <div className="rounded-3xl bg-linear-to-br from-purple-500 to-indigo-600 p-5 text-white shadow-lg">
+              <div className="flex items-center gap-2 text-purple-100">
+                <Trophy className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wide">Family challenge</span>
+              </div>
+              <h2 className="mt-1 text-lg font-extrabold leading-tight">{activeChallenge.title}</h2>
+              {activeChallenge.description && (
+                <p className="mt-0.5 text-sm text-purple-100/90">{activeChallenge.description}</p>
+              )}
+
+              {/* Overall progress bar */}
+              <div
+                className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/20"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(challengeProgress.progress)}
+                aria-label={`Family challenge progress: ${Math.round(challengeProgress.progress)}% complete`}
+              >
+                <div
+                  className="h-full rounded-full bg-linear-to-r from-amber-300 to-orange-400 transition-all duration-700"
+                  style={{ width: `${challengeProgress.progress}%` }}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs font-semibold text-purple-100">
+                <span>{Math.round(challengeProgress.progress)}% as a family</span>
+                {familyCompletions > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 fill-current" />
+                    {familyCompletions} done together
+                  </span>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Chores */}
         <section>

@@ -107,6 +107,8 @@ import {
 } from '@/utils/listenerWindows';
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
+import { getBillingEnabled } from '@/services/appConfig';
+import { kidProfileLimitReached } from '@/utils/entitlements';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { redemptionMemberDelta } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
@@ -278,6 +280,15 @@ export interface HouseholdContextType {
 
   // Challenge & Reward Actions
   updateChallenge: (challenge: Challenge) => Promise<void>;
+  // Plan 080e — create a NEW family challenge, decoupled from yearly goals (no
+  // yearlyGoalId required). createdBy/createdAt/month are filled in server-side.
+  addChallenge: (input: {
+    title: string;
+    description?: string;
+    relatedHabitIds: string[];
+    targetValue?: number;
+    month?: string;
+  }) => Promise<void>;
   markChallengeComplete: (challengeId: string, success: boolean) => Promise<void>;
   redeemReward: (rewardId: string) => Promise<void>;
   // Plan 080d — Reward CRUD (parent-managed rewards store). createdBy is set
@@ -398,7 +409,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'rewardsInventory' | 'freezeBank'
   | 'addHabit' | 'updateHabit' | 'deleteHabit' | 'reorderHabits' | 'toggleHabit' | 'resetHabit'
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
-  | 'updateChallenge' | 'markChallengeComplete' | 'redeemReward'
+  | 'updateChallenge' | 'addChallenge' | 'markChallengeComplete' | 'redeemReward'
   | 'addReward' | 'updateReward' | 'deleteReward'
   | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'
   | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
@@ -2861,6 +2872,63 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success('Challenge Updated');
   }, [householdId, habits, activeChallenge, user]);
 
+  // Plan 080e — create a NEW family challenge. Unlike the legacy inline-create
+  // path inside `updateChallenge`, this is DECOUPLED from yearly goals: it never
+  // sets `yearlyGoalId`. It is the write behind the dormant "New family
+  // challenge" form (gated on kidModeEnabled at the call site), so this method is
+  // inert for every non-kid-mode surface — nothing calls it while Kid Mode is off.
+  //
+  // Firestore-rules note (no rules change per Plan 080e): the existing
+  // /challenges create rule requires a non-empty `yearlyRewardLabel`
+  // (isValidString) and its `hasOnly` allowlist does NOT include
+  // `isFamilyChallenge`. So we (a) write a sensible default label to stay
+  // rules-valid, and (b) deliberately do NOT persist `isFamilyChallenge` — the
+  // kid surfaces key off the *active* challenge, not that flag, so persistence
+  // isn't needed. createdAt is an ISO string (the rule expects a string, not a
+  // serverTimestamp sentinel).
+  const addChallenge = useCallback(async (input: {
+    title: string;
+    description?: string;
+    relatedHabitIds: string[];
+    targetValue?: number;
+    month?: string;
+  }): Promise<void> => {
+    if (!householdId) return;
+    const title = input.title.trim();
+    if (!title) return;
+
+    try {
+      // Build with Object.fromEntries so an absent description/targetValue is
+      // omitted entirely (Firestore rejects `undefined`).
+      const data = Object.fromEntries(
+        Object.entries({
+          month: input.month ?? format(new Date(), 'yyyy-MM'),
+          title,
+          description: input.description?.trim() || undefined,
+          relatedHabitIds: input.relatedHabitIds,
+          targetType: 'count' as const,
+          // Defensive: only persist a positive target; 0/negative are dropped
+          // (omitted via the undefined filter below) rather than written.
+          targetValue: input.targetValue != null && input.targetValue > 0 ? input.targetValue : undefined,
+          status: 'active' as const,
+          // Default reward label — keeps the write within the existing /challenges
+          // create rule (which requires a non-empty yearlyRewardLabel). The family
+          // challenge has no yearly-goal coupling; this is just a display label.
+          yearlyRewardLabel: 'Family goal',
+          createdBy: user?.uid,
+          createdAt: new Date().toISOString(),
+        }).filter(([, value]) => value !== undefined)
+      );
+
+      await addDoc(collection(db, `households/${householdId}/challenges`), data);
+      toast.success('Family challenge created');
+    } catch (error) {
+      console.error('[addChallenge] Failed:', error);
+      toast.error('Failed to create challenge');
+      throw error;
+    }
+  }, [householdId, user]);
+
   const markChallengeComplete = useCallback(async (challengeId: string, success: boolean) => {
     if (!householdId) return;
 
@@ -3393,6 +3461,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId) return;
     const parentUid = user?.uid;
     if (!parentUid) return;
+
+    // Plan 080e — managed-kid-profile cap. Per Plan 080 Principle 6 we gate the
+    // COUNT, never the mechanics: the cap is enforced ONLY while billing is live.
+    // While `billingEnabled` is off (current prod state) this whole block is
+    // skipped, so behavior is identical to before (ZERO change). getBillingEnabled
+    // is cheap/cached (60s TTL) and fails closed to `false`, keeping the gate
+    // dormant if config is unreachable. The cap is client-side PRODUCT logic for
+    // UX — never a security boundary (member creates for kids stay rules-allowed).
+    if (await getBillingEnabled()) {
+      const managedKidCount = membersRef.current.filter((m) => m.isManaged === true).length;
+      if (householdSettings && kidProfileLimitReached(householdSettings, managedKidCount)) {
+        toast.error('Kid profile limit reached. Upgrade to add more.');
+        throw new Error('Kid profile limit reached');
+      }
+    }
+
     try {
       const uid = newKidMemberId();
       // Single doc write to the members subcollection ONLY — no memberUids update
@@ -3407,7 +3491,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to add kid profile');
       throw error;
     }
-  }, [householdId, user]);
+  }, [householdId, user, householdSettings]);
 
   const updateKidProfile = useCallback(async (
     memberId: string,
@@ -4176,6 +4260,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     freezeBank,
     ...habitActions,
     updateChallenge,
+    addChallenge,
     markChallengeComplete,
     redeemReward,
     addReward,
@@ -4193,7 +4278,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
   }), [
     dailyPoints, weeklyPoints, totalPoints, habits, activeChallenge, challenges, yearlyGoals, activeYearlyGoals,
     primaryYearlyGoal, rewards, freezeBank, habitActions,
-    updateChallenge, markChallengeComplete, redeemReward,
+    updateChallenge, addChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
     requestRedemption, approveRedemption, denyRedemption,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,

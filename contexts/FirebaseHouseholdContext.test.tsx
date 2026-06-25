@@ -133,18 +133,31 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: AUTH_USER, householdId: HOUSEHOLD_ID }),
 }));
 
+// Plan 080e: addKidProfile reads getBillingEnabled() to decide whether the managed
+// -kid cap is enforced (billing on) or skipped entirely (billing off — current prod
+// state). It's the ONLY appConfig export the context imports. Mock it so both states
+// are deterministic; the default (set in beforeEach) is `false`, matching the dormant
+// behaviour every other test in this file relies on. (vitest hoists vi.mock/vi.hoisted.)
+const { getBillingEnabledMock } = vi.hoisted(() => ({ getBillingEnabledMock: vi.fn() }));
+vi.mock('@/services/appConfig', () => ({
+  getBillingEnabled: getBillingEnabledMock,
+}));
+
 import {
   FirebaseHouseholdProvider,
   useFinance,
   useGamification,
+  useHouseholdCore,
 } from './FirebaseHouseholdContext';
 // Plan 080d reward CRUD writes through these single-doc APIs (not a batch), so we
-// read their captured call args to assert path + payload.
-import { addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+// read their captured call args to assert path + payload. Plan 080e: addKidProfile
+// writes the managed-kid member via setDoc(), so we assert it was/wasn't called.
+import { addDoc, updateDoc, deleteDoc, setDoc } from 'firebase/firestore';
 
 const addDocMock = vi.mocked(addDoc);
 const updateDocMock = vi.mocked(updateDoc);
 const deleteDocMock = vi.mocked(deleteDoc);
+const setDocMock = vi.mocked(setDoc);
 
 // --- Snapshot seeding helpers --------------------------------------------
 
@@ -174,6 +187,7 @@ function emitDoc(path: string, id: string, data: Record<string, unknown>) {
 interface Captured {
   finance: ReturnType<typeof useFinance>;
   gamification: ReturnType<typeof useGamification>;
+  core: ReturnType<typeof useHouseholdCore>;
 }
 
 const captured: { value: Captured | null } = { value: null };
@@ -181,10 +195,11 @@ const captured: { value: Captured | null } = { value: null };
 const Capture: React.FC = () => {
   const finance = useFinance();
   const gamification = useGamification();
+  const core = useHouseholdCore();
   // Write to the module-scope holder from an effect (mutating it during render
   // is disallowed by the react-hooks/immutability lint rule).
   React.useEffect(() => {
-    captured.value = { finance, gamification };
+    captured.value = { finance, gamification, core };
   });
   return null;
 };
@@ -228,6 +243,12 @@ beforeEach(() => {
   addDocMock.mockClear();
   updateDocMock.mockClear();
   deleteDocMock.mockClear();
+  setDocMock.mockClear();
+  // Default: billing OFF (dormant prod state). The cap-enforcement tests opt in
+  // per-test with mockResolvedValueOnce(true); every other test keeps this default
+  // so addKidProfile's cap block is skipped exactly as it is in production.
+  getBillingEnabledMock.mockReset();
+  getBillingEnabledMock.mockResolvedValue(false);
 });
 
 describe('FirebaseHouseholdContext — updateTransactionCategory atomicity', () => {
@@ -608,6 +629,151 @@ describe('FirebaseHouseholdContext — reward CRUD (Plan 080d)', () => {
     expect(deleteDocMock).toHaveBeenCalledTimes(1);
     const [ref] = deleteDocMock.mock.calls[0]!;
     expect(pathOf(ref)).toBe(`${householdPath}/rewards/rw1`);
+  });
+});
+
+describe('FirebaseHouseholdContext — addChallenge (Plan 080e family challenges)', () => {
+  it('creates a challenge in the challenges subcollection, decoupled from yearly goals', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addChallenge({
+        title: 'Family Fitness Month',
+        description: 'Everyone moves every day',
+        relatedHabitIds: ['hb1', 'hb2'],
+        targetValue: 60,
+      });
+    });
+
+    expect(addDocMock).toHaveBeenCalledTimes(1);
+    const [collRef, data] = addDocMock.mock.calls[0]!;
+    expect(pathOf(collRef)).toBe(`${householdPath}/challenges`);
+    expect(data).toMatchObject({
+      title: 'Family Fitness Month',
+      description: 'Everyone moves every day',
+      relatedHabitIds: ['hb1', 'hb2'],
+      targetType: 'count',
+      targetValue: 60,
+      status: 'active',
+      createdBy: AUTH_USER.uid,
+    });
+    // Decoupled from yearly goals: NO yearlyGoalId is written.
+    expect(data).not.toHaveProperty('yearlyGoalId');
+    // Rules-safe: a non-empty yearlyRewardLabel is present (the existing
+    // /challenges create rule requires it) and createdAt is an ISO string, not a
+    // serverTimestamp sentinel.
+    expect(typeof (data as Record<string, unknown>).yearlyRewardLabel).toBe('string');
+    expect(((data as Record<string, unknown>).yearlyRewardLabel as string).length).toBeGreaterThan(0);
+    expect(typeof (data as Record<string, unknown>).createdAt).toBe('string');
+    // isFamilyChallenge is intentionally NOT persisted (not in the firestore.rules
+    // allowlist) — the kid surfaces key off the active challenge, not the flag.
+    expect(data).not.toHaveProperty('isFamilyChallenge');
+  });
+
+  it('omits an undefined description and a non-positive target from the write', async () => {
+    renderProvider();
+
+    await act(async () => {
+      await captured.value!.gamification.addChallenge({
+        title: 'No Frills',
+        relatedHabitIds: [],
+        // no description, no targetValue
+      });
+    });
+
+    const [, data] = addDocMock.mock.calls[0]!;
+    expect(data).not.toHaveProperty('description');
+    expect(data).not.toHaveProperty('targetValue');
+    expect(data).toMatchObject({ title: 'No Frills', status: 'active', relatedHabitIds: [] });
+  });
+});
+
+describe('FirebaseHouseholdContext — addKidProfile cap enforcement (Plan 080e)', () => {
+  // Seed the parent + `managedKidCount` managed-kid members so addKidProfile's
+  // membersRef.current.filter(isManaged) sees a real count, plus a household doc so
+  // householdSettings is non-null. No `subscription` => free plan (maxKidProfiles 2).
+  function seedHousehold(managedKidCount: number) {
+    const members = [
+      // The acting parent — NOT managed, so it never counts toward the kid cap.
+      docSnap('user1', {
+        uid: 'user1',
+        displayName: 'Tester',
+        role: 'admin',
+        points: { daily: 0, weekly: 0, total: 0 },
+      }),
+      ...Array.from({ length: managedKidCount }, (_, i) =>
+        docSnap(`kid_${i}`, {
+          uid: `kid_${i}`,
+          displayName: `Kid ${i}`,
+          role: 'kid',
+          isManaged: true,
+          managedByUid: 'user1',
+          points: { daily: 0, weekly: 0, total: 0 },
+          allowanceCents: 0,
+        }),
+      ),
+    ];
+    emitCollection(`${householdPath}/members`, members);
+    // Household doc => householdSettings non-null, free plan (no subscription block).
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+  }
+
+  it('blocks the add and writes nothing when billing is ON and the free kid cap (2) is reached', async () => {
+    getBillingEnabledMock.mockResolvedValueOnce(true);
+    renderProvider();
+    // Free plan caps managed kids at 2; seed exactly 2 so the household is AT the cap.
+    seedHousehold(2);
+
+    await act(async () => {
+      await expect(
+        captured.value!.core.addKidProfile({ displayName: 'Third Kid' }),
+      ).rejects.toThrow(/limit reached/i);
+    });
+
+    // The members-subcollection write must NOT happen when the cap blocks the add.
+    expect(setDocMock).not.toHaveBeenCalled();
+  });
+
+  it('proceeds (one members write) when billing is ON but the household is under the cap', async () => {
+    getBillingEnabledMock.mockResolvedValueOnce(true);
+    renderProvider();
+    // Only 1 managed kid => under the free cap of 2, so the add is allowed.
+    seedHousehold(1);
+
+    await act(async () => {
+      await captured.value!.core.addKidProfile({ displayName: 'Second Kid' });
+    });
+
+    expect(setDocMock).toHaveBeenCalledTimes(1);
+    const [ref, data] = setDocMock.mock.calls[0]!;
+    // Written to the members subcollection as a managed kid (login-less kid id).
+    expect(pathOf(ref)).toMatch(new RegExp(`^${householdPath}/members/kid_`));
+    expect(data).toMatchObject({
+      displayName: 'Second Kid',
+      role: 'kid',
+      isManaged: true,
+      managedByUid: AUTH_USER.uid,
+    });
+  });
+
+  it('skips the cap entirely (DORMANT) when billing is OFF, even with many managed kids', async () => {
+    // Default getBillingEnabled => false (see beforeEach). With billing dormant the
+    // count is never checked, so an over-cap household can still add a kid — the
+    // pre-080e behaviour, preserved (Plan 080 Principle 6: gate the count, not the
+    // mechanics).
+    renderProvider();
+    seedHousehold(5); // well over the free cap of 2
+
+    await act(async () => {
+      await captured.value!.core.addKidProfile({ displayName: 'Another Kid' });
+    });
+
+    expect(setDocMock).toHaveBeenCalledTimes(1);
+    const [, data] = setDocMock.mock.calls[0]!;
+    expect(data).toMatchObject({ displayName: 'Another Kid', isManaged: true });
   });
 });
 

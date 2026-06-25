@@ -69,10 +69,13 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
           <p className="text-xs text-brand-200 mb-2">{activeChallenge.description}</p>
         )}
 
-        {/* Reward Label */}
-        <p className="text-xs text-brand-300 mb-3">
-          Complete to unlock {activeChallenge.yearlyRewardLabel}
-        </p>
+        {/* Reward Label — yearlyRewardLabel is optional (Plan 080e decoupled it
+            from yearly goals), so only render the unlock line when one is set. */}
+        {activeChallenge.yearlyRewardLabel && (
+          <p className="text-xs text-brand-300 mb-3">
+            Complete to unlock {activeChallenge.yearlyRewardLabel}
+          </p>
+        )}
 
         {/* Progress Bar */}
         <div
