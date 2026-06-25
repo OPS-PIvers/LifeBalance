@@ -2,6 +2,7 @@ import React, { useState, ReactNode, useCallback, useMemo } from 'react';
 import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseholdContext';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
+import { computeTodoCompletionCredit } from '@/utils/todoPoints';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
@@ -609,7 +610,27 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateToDo,
     deleteToDo,
     completeToDo: useCallback(async (id: string) => {
-      setTodos(prev => prev.map(t => t.id === id ? { ...t, isCompleted: true, completedAt: new Date().toISOString() } : t));
+      // Capture the to-do being completed so the SAME dormancy gate the real
+      // Firebase context uses (computeTodoCompletionCredit) can credit a managed
+      // kid's points in Test Mode. Read from the functional updater's `prev` to
+      // avoid a stale closure (deps stay []).
+      let completedTodo: ToDo | undefined;
+      setTodos(prev => prev.map(t => {
+        if (t.id !== id) return t;
+        completedTodo = t;
+        return { ...t, isCompleted: true, completedAt: new Date().toISOString() };
+      }));
+      setMembers(prev => {
+        const credit = completedTodo ? computeTodoCompletionCredit(completedTodo, prev) : null;
+        if (!credit) return prev;
+        return prev.map(m => m.uid === credit.memberUid
+          ? { ...m, points: {
+              daily: m.points.daily + credit.points,
+              weekly: m.points.weekly + credit.points,
+              total: m.points.total + credit.points,
+            } }
+          : m);
+      });
       toast.success('Mock: ToDo completed');
     }, []),
     addStore,

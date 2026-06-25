@@ -5,6 +5,7 @@ import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Down
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
+import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -1049,6 +1050,14 @@ const TodoRow = React.memo(function TodoRow({
                 )}
                 <span>{assignee.displayName?.split(' ')[0] ?? 'User'}</span>
               </div>
+            )}
+
+            {/* Plan 080c-5: points-on-completion badge — kid chores only. Dormant for
+                normal households: only shown when the assignee is a managed kid. */}
+            {assignee?.isManaged === true && (
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
+                +{item.points ?? DEFAULT_TODO_POINTS} pts
+              </span>
             )}
           </div>
         </div>

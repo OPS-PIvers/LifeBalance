@@ -448,6 +448,12 @@ export interface ToDo {
   priority?: 'low' | 'medium' | 'high'; // Priority level (defaults to 'medium')
   notes?: string; // Additional task details
   source?: 'manual' | 'voice' | 'shortcut'; // How the todo was created
+
+  // Plan 080c (Kid Mode): points credited to a MANAGED-KID assignee on completion
+  // (defaults to DEFAULT_TODO_POINTS, see utils/todoPoints.ts). Absent on every
+  // existing todo. Dormant for normal households: a non-managed assignee earns
+  // nothing, so this field is inert unless the assignee is a managed kid.
+  points?: number;
 }
 
 export interface UpdateBucketPayload {
