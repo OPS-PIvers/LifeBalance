@@ -230,7 +230,7 @@ credit (incl. the kid-uid attribution path). 080c-1/2 tests already landed.
 > added to `PlanLimits` (FREE 2, PREMIUM 10) + `kidProfileLimitReached` helper, enforced in `addKidProfile`
 > **only when `getBillingEnabled()`** (dormant — billing is off). **Rules-free:** to avoid touching the
 > `/challenges` rule (which still requires a non-empty `yearlyRewardLabel` and excludes `isFamilyChallenge`
-> from its `hasOnly`), the prod write defaults `yearlyRewardLabel:'Family goal'` and does NOT persist
+> from its `hasOnly`), the prod write defaults `yearlyRewardLabel: 'Family goal'` and does NOT persist
 > `isFamilyChallenge` — kid surfaces key off the *active* challenge. (A future slice wanting a persisted
 > `isFamilyChallenge` / optional label would be the one to expand that rule.)
 1. Reshape `Challenge` (`schema.ts:203`) into a **shared family challenge** with a creation path
