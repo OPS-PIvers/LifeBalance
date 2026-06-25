@@ -58,6 +58,7 @@ import {
   HabitSubmission,
   Challenge,
   RewardItem,
+  RewardRedemption,
   HouseholdMember,
   Household,
   BucketPeriodSnapshot,
@@ -107,6 +108,7 @@ import {
 import { ParsedShoppingList, ParsedTodoList, ParsedExpense } from '@/services/geminiService.types';
 import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
+import { redemptionMemberDelta } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -283,6 +285,13 @@ export interface HouseholdContextType {
   addReward: (input: Omit<RewardItem, 'id' | 'createdBy'>) => Promise<void>;
   updateReward: (reward: RewardItem) => Promise<void>;
   deleteReward: (id: string) => Promise<void>;
+  // Plan 080d-2 — Reward REDEMPTION (kid requests → parent approves/denies).
+  // requestRedemption appends a pending RewardRedemption to the household doc.
+  // approveRedemption/denyRedemption resolve it (transactional + idempotent);
+  // approval deducts the kid's points and credits the allowance IOU.
+  requestRedemption: (rewardId: string, memberId: string) => Promise<void>;
+  approveRedemption: (redemptionId: string) => Promise<void>;
+  denyRedemption: (redemptionId: string) => Promise<void>;
   refreshInsight: () => Promise<void>;
 
   // Yearly Goal Actions
@@ -391,6 +400,7 @@ export type GamificationContextValue = Pick<HouseholdContextType,
   | 'addHabitSubmission' | 'updateHabitSubmission' | 'deleteHabitSubmission' | 'getHabitSubmissions'
   | 'updateChallenge' | 'markChallengeComplete' | 'redeemReward'
   | 'addReward' | 'updateReward' | 'deleteReward'
+  | 'requestRedemption' | 'approveRedemption' | 'denyRedemption'
   | 'createYearlyGoal' | 'updateYearlyGoal' | 'updateYearlyGoalProgress' | 'deleteYearlyGoal'
   | 'useFreezeBankToken' | 'rolloverFreezeBankTokens'
 >;
@@ -2976,6 +2986,117 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
+  // --- ACTIONS: REWARD REDEMPTION (Plan 080d-2) ---
+  // A kid requests a reward → a parent approves (deduct points + credit allowance
+  // IOU) or denies. Pending requests live in the household doc's bounded
+  // `pendingRedemptions` array (removed on resolve). The kid never has a
+  // credential — every write here runs in the acting-as parent's session
+  // (Principle 2), so member/household rules pass. The household-doc update rule
+  // is field-permissive, so this needs no firestore.rules change.
+
+  const requestRedemption = useCallback(async (rewardId: string, memberId: string) => {
+    if (!householdId || !user) return;
+
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) {
+      toast.error('That reward is no longer available');
+      return;
+    }
+
+    // Capture a SNAPSHOT of the reward's redemption-relevant fields so a later
+    // edit/delete of the reward can't change what was requested. allowanceCents
+    // is only carried for allowance rewards (omit the key otherwise — Firestore
+    // rejects undefined). type defaults to 'realWorld' when absent on a legacy reward.
+    const redemption: RewardRedemption = {
+      id: crypto.randomUUID(),
+      rewardId: reward.id,
+      rewardTitle: reward.title,
+      memberId,
+      cost: reward.cost,
+      type: reward.type ?? 'realWorld',
+      ...(reward.type === 'allowance' && reward.allowanceCents !== undefined
+        ? { allowanceCents: reward.allowanceCents }
+        : {}),
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      requestedByUid: user.uid,
+    };
+
+    try {
+      // Append to the household doc's pendingRedemptions (arrayUnion creates the
+      // field if absent — legacy-safe). The parent session executes the write.
+      await updateDoc(doc(db, `households/${householdId}`), {
+        pendingRedemptions: arrayUnion(redemption),
+      });
+      toast.success(`Sent! A grown-up will review "${reward.title}" 🎁`);
+    } catch (error) {
+      console.error('[requestRedemption] Failed:', error);
+      toast.error('Could not send your request. Try again.');
+      throw error;
+    }
+  }, [householdId, user, rewards]);
+
+  const approveRedemption = useCallback(async (redemptionId: string) => {
+    if (!householdId) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const householdRef = doc(db, `households/${householdId}`);
+        const householdDoc = await transaction.get(householdRef);
+        if (!householdDoc.exists()) throw new Error('Household not found');
+
+        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
+        const redemption = pending.find(r => r.id === redemptionId);
+        // IDEMPOTENT: already resolved (removed by a prior approve/deny) → no-op,
+        // so a double-tap can't deduct points twice.
+        if (!redemption) return;
+
+        const delta = redemptionMemberDelta(redemption);
+        const remaining = pending.filter(r => r.id !== redemptionId);
+
+        // Remove the request from the queue AND apply the member delta in ONE
+        // transaction, so the kid's points/allowance can never diverge from the
+        // resolved queue.
+        transaction.update(householdRef, { pendingRedemptions: remaining });
+        transaction.update(doc(db, `households/${householdId}/members`, redemption.memberId), {
+          'points.total': increment(delta.pointsDelta),
+          ...(delta.allowanceDelta ? { allowanceCents: increment(delta.allowanceDelta) } : {}),
+        });
+      });
+      toast.success('Approved! 🎉');
+    } catch (error) {
+      console.error('[approveRedemption] Failed:', error);
+      toast.error('Could not approve the request. Try again.');
+      throw error;
+    }
+  }, [householdId]);
+
+  const denyRedemption = useCallback(async (redemptionId: string) => {
+    if (!householdId) return;
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const householdRef = doc(db, `households/${householdId}`);
+        const householdDoc = await transaction.get(householdRef);
+        if (!householdDoc.exists()) throw new Error('Household not found');
+
+        const pending = (householdDoc.data().pendingRedemptions as RewardRedemption[] | undefined) ?? [];
+        const redemption = pending.find(r => r.id === redemptionId);
+        // IDEMPOTENT: already resolved → no-op. Deny touches no points/allowance.
+        if (!redemption) return;
+
+        transaction.update(householdRef, {
+          pendingRedemptions: pending.filter(r => r.id !== redemptionId),
+        });
+      });
+      toast.success('Request dismissed');
+    } catch (error) {
+      console.error('[denyRedemption] Failed:', error);
+      toast.error('Could not dismiss the request. Try again.');
+      throw error;
+    }
+  }, [householdId]);
+
   // --- ACTIONS: FREEZE BANK ---
 
   const useFreezeBankToken = useCallback(async (habitId: string, targetDate: string) => {
@@ -4011,6 +4132,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addReward,
     updateReward,
     deleteReward,
+    requestRedemption,
+    approveRedemption,
+    denyRedemption,
     createYearlyGoal,
     updateYearlyGoal,
     updateYearlyGoalProgress,
@@ -4022,6 +4146,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     primaryYearlyGoal, rewards, freezeBank, habitActions,
     updateChallenge, markChallengeComplete, redeemReward,
     addReward, updateReward, deleteReward,
+    requestRedemption, approveRedemption, denyRedemption,
     createYearlyGoal, updateYearlyGoal, updateYearlyGoalProgress, deleteYearlyGoal,
     useFreezeBankToken, rolloverFreezeBankTokens,
   ]);

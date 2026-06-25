@@ -1,8 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
-import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
@@ -20,8 +21,16 @@ const FeedbackModal = React.lazy(loadFeedbackModal);
 const TopToolbar: React.FC = () => {
   const { safeToSpend } = useFinance();
   const { dailyPoints, weeklyPoints } = useGamification();
+  const { household } = useHouseholdCore();
   const { currentUser } = useAuth();
+  const kidModeEnabled = useKidModeEnabled();
   const fmt = useFormatCurrency();
+
+  // Plan 080d-2: count of kid redemption requests awaiting parent review, badged
+  // on the rewards (points) control. Dormant: only counts when Kid Mode is on.
+  const pendingRedemptionCount = kidModeEnabled
+    ? household?.pendingRedemptions?.length ?? 0
+    : 0;
   const [isRewardsOpen, setIsRewardsOpen] = useState(false);
   const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -72,10 +81,25 @@ const TopToolbar: React.FC = () => {
             {/* Points Container - Clickable to open Rewards Modal */}
             <button
               type="button"
-              aria-label="View Rewards and Points breakdown"
-              className="flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
+              aria-label={
+                pendingRedemptionCount > 0
+                  ? `View Rewards and Points breakdown, ${pendingRedemptionCount} pending request${pendingRedemptionCount === 1 ? '' : 's'}`
+                  : 'View Rewards and Points breakdown'
+              }
+              className="relative flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
               onClick={() => setIsRewardsOpen(true)}
             >
+              {/* Plan 080d-2 — pending kid-redemption-request badge (rose pill,
+                  matching the Plan 063 Budget-tab badge). Dormant unless Kid Mode
+                  is on and there is at least one request awaiting review. */}
+              {pendingRedemptionCount > 0 && (
+                <span
+                  className="absolute -top-2 -right-2 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none ring-2 ring-brand-800"
+                  aria-hidden="true"
+                >
+                  {pendingRedemptionCount > 9 ? '9+' : pendingRedemptionCount}
+                </span>
+              )}
               {/* Daily Points (Gold Star) */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
