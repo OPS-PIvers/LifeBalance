@@ -2929,6 +2929,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[addReward] Failed:', error);
       toast.error('Failed to add reward');
+      throw error;
     }
   }, [householdId, user]);
 
@@ -2958,6 +2959,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[updateReward] Failed:', error);
       toast.error('Failed to update reward');
+      throw error;
     }
   }, [householdId]);
 
@@ -2970,6 +2972,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     } catch (error) {
       console.error('[deleteReward] Failed:', error);
       toast.error('Failed to delete reward');
+      throw error;
     }
   }, [householdId]);
 

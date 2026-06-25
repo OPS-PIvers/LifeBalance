@@ -58,8 +58,14 @@ describe('buildRewardPayload', () => {
       expect(cents('5.005')).toBe(Math.round(5.005 * 100));
     });
 
-    it("invalid (non-numeric) → 0", () => {
-      expect(cents('abc')).toBe(0);
+    it("invalid (non-numeric) aborts the submit → null", () => {
+      // An unparseable allowance is now treated like an invalid cost: the whole
+      // payload is rejected rather than silently coerced to $0.
+      expect(buildRewardPayload(makeDraft({ type: 'allowance', allowanceDollars: 'abc' }))).toBeNull();
+    });
+
+    it("negative amount aborts the submit → null", () => {
+      expect(buildRewardPayload(makeDraft({ type: 'allowance', allowanceDollars: '-5' }))).toBeNull();
     });
   });
 

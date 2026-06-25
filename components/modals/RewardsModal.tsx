@@ -1,4 +1,5 @@
 import React, { useId, useState } from 'react';
+import toast from 'react-hot-toast';
 import { X, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
@@ -51,17 +52,33 @@ const RewardManagementPanel: React.FC<{ kids: HouseholdMember[] }> = ({ kids }) 
     const payload = buildRewardPayload(draft);
     if (!payload) return;
 
+    // Guard the edit lookup: if the reward we were editing has since vanished
+    // (e.g. deleted on another device), abort rather than calling updateReward
+    // with an empty/undefined createdBy.
+    let editTarget: RewardItem | undefined;
+    if (editingId) {
+      editTarget = rewardsInventory.find((r) => r.id === editingId);
+      if (!editTarget) {
+        toast.error('That reward no longer exists');
+        resetForm();
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
-      if (editingId) {
+      if (editingId && editTarget) {
         // Preserve the original createdBy (the live context ignores it on update —
         // it's immutable per the rules — but the mock store keeps the full object).
-        const existing = rewardsInventory.find((r) => r.id === editingId);
-        await updateReward({ ...payload, id: editingId, createdBy: existing?.createdBy ?? '' });
+        await updateReward({ ...payload, id: editingId, createdBy: editTarget.createdBy });
       } else {
         await addReward(payload);
       }
+      // Only clear/close on success — the context re-throws on failure (and has
+      // already shown an error toast), so we keep the form open for a retry.
       resetForm();
+    } catch {
+      // Error toast is surfaced by the context method; keep the form populated.
     } finally {
       setSubmitting(false);
     }
@@ -254,7 +271,9 @@ const RewardManagementPanel: React.FC<{ kids: HouseholdMember[] }> = ({ kids }) 
         onClose={() => setPendingDelete(null)}
         onConfirm={() => {
           if (pendingDelete) {
-            void deleteReward(pendingDelete.id);
+            // deleteReward re-throws on failure (after toasting); swallow here so
+            // there's no unhandled rejection — the user already sees the error.
+            void deleteReward(pendingDelete.id).catch(() => {});
           }
           setPendingDelete(null);
         }}

@@ -54,13 +54,16 @@ export function draftFromReward(reward: RewardItem): RewardDraft {
 /**
  * Build the Firestore reward payload from a draft (dollars → integer cents).
  *
- * Returns `null` when the draft is invalid (empty title, or a non-finite/negative
- * cost) so the caller can abort the submit. Conversion semantics, preserved
- * exactly from the prior inline implementation:
+ * Returns `null` when the draft is invalid so the caller can abort the submit.
+ * A draft is invalid when the title is empty, the `cost` is non-finite/negative,
+ * or (for `allowance` rewards) the allowance amount is non-finite/negative.
+ * Conversion semantics, preserved exactly from the prior inline implementation:
  * - `cost` is `Number(draft.cost)`; rejected when not finite or negative.
  * - `icon` defaults to '🎁' when blank.
  * - `allowanceCents` is only included for `type === 'allowance'`, computed as
- *   `Math.round(dollars * 100)`, defaulting to `0` when blank/invalid/≤ 0.
+ *   `Math.round(dollars * 100)`. A blank string parses to `0` (a $0 allowance is
+ *   allowed); a genuinely invalid or negative amount aborts the submit (returns
+ *   `null`), mirroring the `cost` validation rather than silently coercing to 0.
  * - `targetMemberId` is only included when truthy.
  */
 export function buildRewardPayload(draft: RewardDraft): Omit<RewardItem, 'id' | 'createdBy'> | null {
@@ -78,8 +81,10 @@ export function buildRewardPayload(draft: RewardDraft): Omit<RewardItem, 'id' | 
   };
   if (draft.type === 'allowance') {
     const dollars = Number(draft.allowanceDollars);
-    // Convert dollars to integer cents; default to 0 when blank/invalid.
-    payload.allowanceCents = Number.isFinite(dollars) && dollars > 0 ? Math.round(dollars * 100) : 0;
+    // Abort on a genuinely invalid/negative amount (consistent with `cost`).
+    // Blank → Number('') === 0, which is finite and ≥ 0, so a $0 allowance is allowed.
+    if (!Number.isFinite(dollars) || dollars < 0) return null;
+    payload.allowanceCents = Math.round(dollars * 100);
   }
   if (draft.targetMemberId) {
     payload.targetMemberId = draft.targetMemberId;
