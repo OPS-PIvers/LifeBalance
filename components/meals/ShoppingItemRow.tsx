@@ -176,7 +176,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         {/* Content */}
         <div className="flex-1 min-w-0">
             <div className={clsx(
-                "font-medium truncate transition-all",
+                "font-medium break-words transition-colors",
                 item.isPurchased ? "text-slate-500 dark:text-slate-400 line-through decoration-slate-400 dark:decoration-slate-600" : "text-slate-900 dark:text-slate-100"
             )}>
                 {item.name}
