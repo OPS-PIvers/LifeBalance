@@ -629,7 +629,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                     </div>
 
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -tranbrand-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-500" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-500" />
                       <input
                         type="text"
                         value={itemSearch}

@@ -279,7 +279,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                             <button
                                 onClick={handleAddTag}
                                 disabled={!tagInput.trim()}
-                                className="absolute right-1 top-1/2 -tranbrand-y-1/2 p-1 bg-white rounded-full text-brand-600 disabled:opacity-50 hover:bg-brand-50 dark:bg-brand-800 dark:text-brand-300 dark:hover:bg-brand-700"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 p-1 bg-white rounded-full text-brand-600 disabled:opacity-50 hover:bg-brand-50 dark:bg-brand-800 dark:text-brand-300 dark:hover:bg-brand-700"
                                 aria-label="Add custom tag"
                             >
                                 <Plus className="w-3 h-3" />

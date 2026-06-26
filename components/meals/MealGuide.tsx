@@ -284,7 +284,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
         <ul className="space-y-1.5">
           {meal.ingredients.map((ing, i) => (
             <li key={i} className="text-sm text-brand-700 dark:text-brand-300 flex items-baseline gap-2">
-              <span className="w-1 h-1 rounded-full bg-brand-400 shrink-0 tranbrand-y-1.5" />
+              <span className="w-1 h-1 rounded-full bg-brand-400 shrink-0 translate-y-1.5" />
               {ing}
             </li>
           ))}
