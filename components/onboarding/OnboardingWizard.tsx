@@ -189,16 +189,16 @@ const OnboardingWizard: React.FC = () => {
   const stepIndex = STEPS.indexOf(step);
 
   return (
-    <div className="min-h-dvh bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-6 sm:p-8" role="dialog" aria-labelledby={titleId} aria-modal="true">
+    <div className="min-h-dvh bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-6 sm:p-8 shadow-raised" role="dialog" aria-labelledby={titleId} aria-modal="true">
         {/* Progress dots */}
         <div className="flex items-center justify-center gap-2 mb-6" aria-hidden="true">
           {STEPS.map((s, i) => (
             <span
               key={s}
               className={cn(
-                'h-1.5 rounded-full transition-all duration-300',
-                i === stepIndex ? 'w-6 bg-brand-600 dark:bg-brand-400' : 'w-1.5 bg-brand-200 dark:bg-slate-700',
+                'h-1.5 rounded-full transition-all duration-(--duration-base) ease-(--ease-standard)',
+                i === stepIndex ? 'w-6 bg-accent-600 dark:bg-accent-400' : 'w-1.5 bg-brand-200 dark:bg-brand-700',
               )}
             />
           ))}
@@ -210,7 +210,7 @@ const OnboardingWizard: React.FC = () => {
             id={titleId}
             ref={headingRef}
             tabIndex={-1}
-            className="text-2xl font-bold text-brand-800 dark:text-slate-100 outline-hidden"
+            className="font-display text-3xl font-semibold tracking-tight text-brand-800 dark:text-brand-100 outline-hidden"
           >
             {STEP_TITLES[step]}
           </h1>
@@ -220,11 +220,11 @@ const OnboardingWizard: React.FC = () => {
         {step === 'welcome' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-warm-500 dark:bg-warm-500 rounded-2xl">
                 <Home className="w-8 h-8 text-white" aria-hidden="true" />
               </div>
-              <p className="text-brand-600 dark:text-slate-300">
-                Welcome! Let&apos;s set up <span className="font-semibold text-brand-800 dark:text-slate-100">{householdName}</span> in
+              <p className="text-brand-600 dark:text-brand-300">
+                Welcome! Let&apos;s set up <span className="font-semibold text-brand-800 dark:text-brand-100">{householdName}</span> in
                 about a minute. We&apos;ll add a starting balance and a couple of habits so your dashboard isn&apos;t empty.
               </p>
             </div>
@@ -246,7 +246,7 @@ const OnboardingWizard: React.FC = () => {
               <div className="inline-flex items-center justify-center w-14 h-14 bg-money-pos/15 text-money-pos rounded-2xl">
                 <Wallet className="w-7 h-7" aria-hidden="true" />
               </div>
-              <p className="text-brand-600 dark:text-slate-300 text-sm">
+              <p className="text-brand-600 dark:text-brand-300 text-sm">
                 What&apos;s the current balance of your main checking account? This powers your Safe-to-Spend number. You can
                 change it anytime.
               </p>
@@ -281,7 +281,7 @@ const OnboardingWizard: React.FC = () => {
               <div className="inline-flex items-center justify-center w-14 h-14 bg-habit-streak/15 text-habit-streak rounded-2xl">
                 <Sparkles className="w-7 h-7" aria-hidden="true" />
               </div>
-              <p className="text-brand-600 dark:text-slate-300 text-sm">
+              <p className="text-brand-600 dark:text-brand-300 text-sm">
                 Pick up to {MAX_STARTER_HABITS} habits to track. You can add, edit, or remove habits anytime.
               </p>
             </div>
@@ -294,10 +294,10 @@ const OnboardingWizard: React.FC = () => {
                   <label
                     key={preset.id}
                     className={cn(
-                      'flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors',
+                      'flex items-center gap-3 p-3 rounded-card border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard)',
                       checked
-                        ? 'border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-700/30'
-                        : 'border-brand-100 dark:border-slate-700 hover:bg-brand-50/50 dark:hover:bg-slate-700/40',
+                        ? 'border-accent-500 bg-accent-50 dark:border-accent-400 dark:bg-accent-800/30'
+                        : 'border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/40',
                     )}
                   >
                     <input
@@ -308,20 +308,20 @@ const OnboardingWizard: React.FC = () => {
                     />
                     <span
                       className={cn(
-                        'w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors',
+                        'w-5 h-5 shrink-0 rounded-sm border flex items-center justify-center transition-colors duration-(--duration-fast) ease-(--ease-standard)',
                         checked
-                          ? 'bg-money-pos border-money-pos text-white'
-                          : 'border-brand-200 dark:border-slate-600 text-transparent',
+                          ? 'bg-accent-600 border-accent-600 text-white dark:bg-accent-500 dark:border-accent-500'
+                          : 'border-brand-300 dark:border-brand-600 text-transparent',
                       )}
                       aria-hidden="true"
                     >
                       <Check size={12} strokeWidth={3} />
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block font-medium text-sm text-brand-800 dark:text-slate-100 truncate">
+                      <span className="block font-medium text-sm text-brand-800 dark:text-brand-100 truncate">
                         {preset.title}
                       </span>
-                      <span className="block text-xxs text-brand-400 dark:text-slate-400">{preset.category} · {preset.period}</span>
+                      <span className="block text-xxs text-brand-400 dark:text-brand-500">{preset.category} · {preset.period}</span>
                     </span>
                   </label>
                 );
@@ -343,10 +343,10 @@ const OnboardingWizard: React.FC = () => {
         {step === 'invite' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-3">
-              <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 rounded-2xl">
+              <div className="inline-flex items-center justify-center w-14 h-14 bg-warm-100 dark:bg-warm-500/15 text-warm-600 dark:text-warm-200 rounded-2xl">
                 <Users className="w-7 h-7" aria-hidden="true" />
               </div>
-              <p className="text-brand-600 dark:text-slate-300 text-sm">
+              <p className="text-brand-600 dark:text-brand-300 text-sm">
                 LifeBalance is better together. Share this code so your partner can join {householdName}.
               </p>
             </div>
@@ -354,7 +354,7 @@ const OnboardingWizard: React.FC = () => {
             {inviteCode ? (
               <HouseholdInviteCard inviteCode={inviteCode} />
             ) : (
-              <p className="text-center text-sm text-brand-400 dark:text-slate-400">
+              <p className="text-center text-sm text-brand-400 dark:text-brand-500">
                 Your invite code will be available in Settings.
               </p>
             )}
@@ -374,10 +374,10 @@ const OnboardingWizard: React.FC = () => {
         {step === 'done' && (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center gap-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-money-pos rounded-2xl">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-accent-600 dark:bg-accent-500 rounded-2xl">
                 <PartyPopper className="w-8 h-8 text-white" aria-hidden="true" />
               </div>
-              <p className="text-brand-600 dark:text-slate-300">
+              <p className="text-brand-600 dark:text-brand-300">
                 You&apos;re all set! Your dashboard is ready. You can fine-tune accounts, budgets, and habits anytime.
               </p>
             </div>
@@ -394,7 +394,7 @@ const OnboardingWizard: React.FC = () => {
               type="button"
               onClick={finish}
               disabled={isSubmitting}
-              className="text-xs font-medium text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 disabled:opacity-50"
+              className="text-xs font-medium text-brand-400 dark:text-brand-500 hover:text-accent-600 dark:hover:text-accent-300 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
             >
               Skip setup
             </button>

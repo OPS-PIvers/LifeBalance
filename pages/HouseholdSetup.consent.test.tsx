@@ -47,14 +47,14 @@ describe('HouseholdSetup — consent gate (Plan 011)', () => {
 
   it('keeps the Create button disabled until consent is checked', async () => {
     render(<HouseholdSetup />);
-    fireEvent.click(screen.getByText('Create New Household'));
+    fireEvent.click(screen.getByText('Create new household'));
 
     // Fill a valid household name so only consent gates the button.
     fireEvent.change(screen.getByPlaceholderText('e.g., Smith Family'), {
       target: { value: 'Smith Family' },
     });
 
-    const submit = screen.getByRole('button', { name: /Create Household/i });
+    const submit = screen.getByRole('button', { name: /Create household/i });
     expect(submit).toBeDisabled();
 
     // Checking consent enables it.
@@ -64,7 +64,7 @@ describe('HouseholdSetup — consent gate (Plan 011)', () => {
 
   it('does not call createHousehold while consent is unchecked', async () => {
     render(<HouseholdSetup />);
-    fireEvent.click(screen.getByText('Create New Household'));
+    fireEvent.click(screen.getByText('Create new household'));
 
     fireEvent.change(screen.getByPlaceholderText('e.g., Smith Family'), {
       target: { value: 'Smith Family' },
@@ -72,26 +72,26 @@ describe('HouseholdSetup — consent gate (Plan 011)', () => {
 
     // Submit the form directly (bypassing the disabled button) to prove the
     // handler guard also blocks the service call.
-    fireEvent.submit(screen.getByRole('button', { name: /Create Household/i }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: /Create household/i }).closest('form')!);
     await waitFor(() => expect(createHousehold).not.toHaveBeenCalled());
 
     // With consent checked, the handler proceeds.
     vi.mocked(createHousehold).mockResolvedValue('hh-1');
     fireEvent.click(screen.getByLabelText(/I agree to the/i));
-    fireEvent.click(screen.getByRole('button', { name: /Create Household/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Create household/i }));
     await waitFor(() => expect(createHousehold).toHaveBeenCalledWith('user-1', 'Smith Family'));
   });
 
   it('keeps the Join button disabled until consent is checked', async () => {
     render(<HouseholdSetup />);
-    fireEvent.click(screen.getByText('Join Existing Household'));
+    fireEvent.click(screen.getByText('Join existing household'));
 
     // Enter a full 6-char invite code so only consent gates the button.
     fireEvent.change(screen.getByPlaceholderText('ABC123'), {
       target: { value: 'ABC123' },
     });
 
-    const submit = screen.getByRole('button', { name: /Join Household/i });
+    const submit = screen.getByRole('button', { name: /Join household/i });
     expect(submit).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/I agree to the/i));
@@ -100,18 +100,18 @@ describe('HouseholdSetup — consent gate (Plan 011)', () => {
 
   it('does not call joinHousehold while consent is unchecked', async () => {
     render(<HouseholdSetup />);
-    fireEvent.click(screen.getByText('Join Existing Household'));
+    fireEvent.click(screen.getByText('Join existing household'));
 
     fireEvent.change(screen.getByPlaceholderText('ABC123'), {
       target: { value: 'ABC123' },
     });
 
-    fireEvent.submit(screen.getByRole('button', { name: /Join Household/i }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: /Join household/i }).closest('form')!);
     await waitFor(() => expect(joinHousehold).not.toHaveBeenCalled());
 
     vi.mocked(joinHousehold).mockResolvedValue('hh-1');
     fireEvent.click(screen.getByLabelText(/I agree to the/i));
-    fireEvent.click(screen.getByRole('button', { name: /Join Household/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Join household/i }));
     await waitFor(() => expect(joinHousehold).toHaveBeenCalledWith('user-1', 'ABC123'));
   });
 });

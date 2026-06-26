@@ -74,7 +74,7 @@ describe('UpcomingBillsWidget', () => {
       </BrowserRouter>
     );
 
-    expect(screen.getByText('Upcoming Bills')).toBeInTheDocument();
+    expect(screen.getByText('Upcoming bills')).toBeInTheDocument();
     expect(screen.getByText('Rent')).toBeInTheDocument();
     expect(screen.getByText('$1,200')).toBeInTheDocument();
     expect(screen.getByText('Netflix')).toBeInTheDocument();

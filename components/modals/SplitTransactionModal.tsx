@@ -148,27 +148,27 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
       disableClose={isProcessing}
       noPadding={true}
     >
-      <div className="p-4 bg-brand-50 dark:bg-slate-700/50 border-b border-brand-100 dark:border-slate-700">
+      <div className="p-4 bg-brand-50 dark:bg-brand-700/50 border-b border-brand-200 dark:border-brand-700">
         <div className="flex justify-between items-center mb-1">
-          <span className="text-sm font-bold text-brand-600 dark:text-slate-300">Original Transaction</span>
-          <span className="text-lg font-bold text-brand-800 dark:text-slate-100">{fmt(totalAmount)}</span>
+          <span className="text-sm font-bold text-brand-600 dark:text-brand-300">Original Transaction</span>
+          <span className="text-lg font-bold text-brand-800 dark:text-brand-100">{fmt(totalAmount)}</span>
         </div>
-        <div className="text-xs text-brand-400 dark:text-slate-400">
+        <div className="text-xs text-brand-400 dark:text-brand-400">
           {transaction.merchant} • {transaction.date}
         </div>
       </div>
 
       <div className="p-4 space-y-4">
         {splits.map((split, index) => (
-          <div key={split.id} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-200 dark:border-slate-700 shadow-xs relative group">
-            <div className="absolute top-2 left-2 text-xs font-bold text-brand-300 dark:text-slate-500">
+          <div key={split.id} className="p-4 bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 relative group">
+            <div className="absolute top-2 left-2 text-xs font-bold text-brand-300 dark:text-brand-500">
               Split #{index + 1}
             </div>
 
             {splits.length > 2 && (
               <button
                 onClick={() => handleRemoveSplit(split.id)}
-                className="absolute top-2 right-2 text-gray-300 dark:text-slate-600 hover:text-money-neg p-1 hover:bg-rose-50 dark:hover:bg-rose-500/20 rounded-sm transition-colors"
+                className="absolute top-2 right-2 text-brand-300 dark:text-brand-600 hover:text-money-neg p-1 hover:bg-money-neg/10 rounded-sm transition-colors"
                 title="Remove split"
                 aria-label={`Remove split ${index + 1}`}
               >
@@ -229,15 +229,15 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         <button
           onClick={handleAddSplit}
           disabled={isProcessing}
-          className="w-full py-3 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl text-brand-400 dark:text-slate-400 font-bold text-sm hover:border-brand-400 dark:hover:border-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-xl text-brand-400 dark:text-brand-400 font-bold text-sm hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-all flex items-center justify-center gap-2"
         >
           <Plus size={16} /> Add Another Split
         </button>
       </div>
 
-      <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-brand-100 dark:border-slate-700 p-4 space-y-3">
+      <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-3">
         {/* Validation Status */}
-        <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-emerald-600 dark:text-emerald-300' : 'text-money-neg'}`}>
+        <div className={`flex items-center justify-between text-sm font-bold px-1 ${isValidTotal ? 'text-money-pos' : 'text-money-neg'}`}>
           <div className="flex items-center gap-2">
             {!isValidTotal && <AlertCircle size={16} />}
             <span>{isValidTotal ? 'Total Matches' : 'Total Mismatch'}</span>
@@ -256,14 +256,14 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
           <button
             onClick={onClose}
             disabled={isProcessing}
-            className="flex-1 py-3 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSplit}
             disabled={isProcessing || !isValidTotal}
-            className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
+            className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
           >
             {isProcessing ? (
               <>

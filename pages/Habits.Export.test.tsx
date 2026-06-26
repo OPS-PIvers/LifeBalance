@@ -5,9 +5,11 @@ import Habits from './Habits';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Habit } from '@/types/schema';
 
-// Mock dependencies
+// Mock dependencies. useLocation is consumed by the page's tab deep-link hook
+// (useDeepLinkTab); a stable empty-state location keeps the default tab active.
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ key: 'default', pathname: '/habits', state: null }),
 }));
 
 vi.mock('@/utils/exportUtils', () => ({
@@ -89,6 +91,13 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => {
   };
 });
 
+// The Export action now lives inside the page's single overflow menu (the
+// redesign collapsed the old four-button header into one menu). Open the menu
+// first, then query the Export menu item.
+const openHeaderMenu = () => {
+  fireEvent.click(screen.getByRole('button', { name: /habit actions menu/i }));
+};
+
 describe('Habits Page Export', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,14 +105,16 @@ describe('Habits Page Export', () => {
 
   it('renders the export button', () => {
     render(<Habits />);
-    const exportButton = screen.getByRole('button', { name: /export habits to csv/i });
+    openHeaderMenu();
+    const exportButton = screen.getByRole('menuitem', { name: /export habits to csv/i });
     expect(exportButton).toBeInTheDocument();
     expect(exportButton).not.toBeDisabled();
   });
 
   it('calls generateCsvExport with correct data when export button is clicked', () => {
     render(<Habits />);
-    const exportButton = screen.getByRole('button', { name: /export habits to csv/i });
+    openHeaderMenu();
+    const exportButton = screen.getByRole('menuitem', { name: /export habits to csv/i });
     fireEvent.click(exportButton);
 
     expect(generateCsvExport).toHaveBeenCalledTimes(1);
@@ -155,15 +166,23 @@ describe('Habits Page Export', () => {
   });
 
   it('disables export button when there are no habits', () => {
-    mockUseHousehold.mockReturnValueOnce({
+    // The page reads `habits` via one aliased hook and `members` via another, so
+    // every call must see the empty state (mockReturnValueOnce would only cover
+    // the first hook call). Restore the default impl afterward.
+    mockUseHousehold.mockReturnValue({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       habits: [] as any,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       members: [] as any,
     });
 
-    render(<Habits />);
-    const exportButton = screen.getByRole('button', { name: /export habits to csv/i });
-    expect(exportButton).toBeDisabled();
+    try {
+      render(<Habits />);
+      openHeaderMenu();
+      const exportButton = screen.getByRole('menuitem', { name: /export habits to csv/i });
+      expect(exportButton).toBeDisabled();
+    } finally {
+      mockUseHousehold.mockReturnValue({ habits: mockHabits, members: [] });
+    }
   });
 });

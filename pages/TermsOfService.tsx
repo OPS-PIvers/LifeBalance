@@ -11,13 +11,13 @@ import { CONSENT_VERSION } from '@/utils/legal';
  */
 const TermsOfService: React.FC = () => {
   return (
-    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 py-10 px-4">
+    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-brand-900 py-10 px-4">
       <div className="w-full max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white dark:bg-brand-800 rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Back link */}
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+            className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200 font-medium text-sm"
           >
             <ArrowLeft size={16} />
             <span>Back</span>
@@ -28,10 +28,10 @@ const TermsOfService: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
               <FileText className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 dark:text-slate-100 mb-1">
+            <h1 className="text-2xl font-bold text-brand-800 dark:text-brand-100 mb-1">
               Terms of Service
             </h1>
-            <p className="text-brand-500 dark:text-slate-400 text-sm">
+            <p className="text-brand-500 dark:text-brand-400 text-sm">
               The agreement for using LifeBalance
             </p>
           </div>
@@ -47,9 +47,9 @@ const TermsOfService: React.FC = () => {
           </div>
 
           {/* Body */}
-          <div className="space-y-6 text-sm leading-relaxed text-brand-700 dark:text-slate-300">
+          <div className="space-y-6 text-sm leading-relaxed text-brand-700 dark:text-brand-300">
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 1. Acceptance of these terms
               </h2>
               <p>
@@ -68,7 +68,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 2. The Service
               </h2>
               <p>
@@ -82,7 +82,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 3. Your account
               </h2>
               <p>
@@ -94,7 +94,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 4. Households &amp; shared data
               </h2>
               <p>
@@ -107,7 +107,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 5. Acceptable use
               </h2>
               <ul className="list-disc pl-5 space-y-1">
@@ -119,7 +119,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 6. AI features
               </h2>
               <p>
@@ -138,7 +138,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 7. Your content
               </h2>
               <p>
@@ -150,7 +150,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 8. Disclaimers &amp; limitation of liability
               </h2>
               <p>
@@ -163,7 +163,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 9. Termination
               </h2>
               <p>
@@ -174,7 +174,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 10. Changes to these terms
               </h2>
               <p>
@@ -185,7 +185,7 @@ const TermsOfService: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 11. Contact &amp; governing law
               </h2>
               <p>
@@ -200,7 +200,7 @@ const TermsOfService: React.FC = () => {
           <div className="pt-2 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+              className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200 font-medium text-sm"
             >
               <ArrowLeft size={16} />
               <span>Back to sign in</span>

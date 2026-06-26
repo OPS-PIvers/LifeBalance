@@ -25,11 +25,11 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
       <div className="space-y-4">
         {insightsHistory.length === 0 ? (
           <div className="text-center py-12">
-            <div className="w-16 h-16 bg-slate-50 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 dark:text-slate-600">
+            <div className="w-16 h-16 bg-brand-50 dark:bg-brand-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-300 dark:text-brand-600">
               <Sparkles size={32} />
             </div>
-            <h3 className="text-slate-600 dark:text-slate-300 font-bold mb-1">No insights yet</h3>
-            <p className="text-slate-400 dark:text-slate-500 text-sm">Generate your first insight from the dashboard!</p>
+            <h3 className="font-display text-brand-700 dark:text-brand-200 font-semibold mb-1">No insights yet</h3>
+            <p className="text-brand-400 dark:text-brand-500 text-sm">Generate your first insight from the dashboard!</p>
           </div>
         ) : (
           insightsHistory.map((insight) => {
@@ -45,13 +45,13 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
             }
 
             return (
-              <div key={insight.id} className="bg-indigo-50/50 rounded-2xl p-5 border border-indigo-100/50">
+              <div key={insight.id} className="bg-warm-50 dark:bg-warm-900/20 rounded-2xl p-5 border border-warm-200 dark:border-warm-800/60">
                 <div className="flex justify-between items-start mb-2">
-                    <span className="text-xxs font-bold uppercase tracking-wider text-indigo-400 dark:text-indigo-300 bg-white dark:bg-slate-800 px-2 py-1 rounded-lg border border-indigo-50">
+                    <span className="text-xxs font-bold uppercase tracking-wider text-warm-600 dark:text-warm-300 bg-white dark:bg-brand-800 px-2 py-1 rounded-btn border border-warm-200 dark:border-warm-800/60">
                         {formattedDate}
                     </span>
                 </div>
-                <p className="text-indigo-900 dark:text-indigo-200 font-medium leading-relaxed">
+                <p className="text-brand-800 dark:text-brand-100 font-medium leading-relaxed">
                   &quot;{insight.text}&quot;
                 </p>
               </div>

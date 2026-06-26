@@ -61,20 +61,20 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         aria-expanded={isOpen}
         aria-controls={contentId}
         className={cn(
-          "w-full flex items-center justify-between p-5 hover:bg-slate-50/50 dark:hover:bg-slate-700/50 transition-all duration-300 group text-left",
+          "w-full flex items-center justify-between p-5 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-base) ease-(--ease-standard) group text-left",
           headerClassName
         )}
       >
         <div className="flex items-center gap-4">
-          {icon && <div className="text-brand-500 group-hover:text-brand-600 transition-colors">{icon}</div>}
-          <h3 id={headerId} className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100 group-hover:text-brand-900 dark:group-hover:text-brand-300 transition-colors">
+          {icon && <div className="text-accent-600 group-hover:text-accent-700 transition-colors dark:text-accent-400 dark:group-hover:text-accent-300">{icon}</div>}
+          <h3 id={headerId} className="font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-100 group-hover:text-accent-700 dark:group-hover:text-accent-300 transition-colors">
             {title}
           </h3>
         </div>
         <ChevronDown
           className={cn(
-            "w-5 h-5 text-slate-400 dark:text-slate-500 transition-transform duration-300 ease-spring",
-            isOpen && "rotate-180 text-brand-500 dark:text-brand-400"
+            "w-5 h-5 text-brand-400 dark:text-brand-500 transition-transform duration-(--duration-base) ease-spring",
+            isOpen && "rotate-180 text-accent-600 dark:text-accent-400"
           )}
         />
       </button>
@@ -88,7 +88,7 @@ export const CollapsibleCard: React.FC<CollapsibleCardProps> = ({
         )}
       >
         <div className="overflow-hidden">
-          <div className={cn("p-5 pt-0 border-t border-slate-100/50 dark:border-slate-700/70", contentClassName)}>
+          <div className={cn("p-5 pt-0 border-t border-brand-200 dark:border-brand-700", contentClassName)}>
             <div className="pt-4">
               {children}
             </div>

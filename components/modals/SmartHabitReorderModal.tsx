@@ -115,20 +115,20 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       ariaLabelledBy={titleId}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-indigo-100 dark:border-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/15 shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-warm-200 dark:border-warm-800/60 bg-warm-50 dark:bg-warm-900/20 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-xs">
+          <div className="p-2 bg-white dark:bg-brand-800 rounded-xl text-warm-700 dark:text-warm-300 border border-warm-200 dark:border-warm-800/60">
             <ListOrdered size={20} />
           </div>
           <div>
-            <h2 id={titleId} className="text-lg font-bold text-indigo-900 dark:text-indigo-200">Smart Reorder</h2>
-            <p className="text-xs text-indigo-600 dark:text-indigo-300 font-medium">AI-powered organization</p>
+            <h2 id={titleId} className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">Smart Reorder</h2>
+            <p className="text-xs text-warm-700 dark:text-warm-300 font-medium">AI-powered organization</p>
           </div>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full text-indigo-400 dark:text-indigo-300 hover:bg-white/50 dark:hover:bg-slate-700/50 hover:text-indigo-600 dark:hover:text-indigo-300"
+          className="rounded-full text-warm-500 dark:text-warm-300 hover:bg-white/60 dark:hover:bg-brand-700/50 hover:text-warm-700 dark:hover:text-warm-300"
           onClick={onClose}
           aria-label="Close"
         >
@@ -140,31 +140,31 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       <div className="p-6 scroll-contain-y max-h-[70vh]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Loader size={32} className="text-indigo-600 dark:text-indigo-300 animate-spin mb-4" />
-            <p className="text-indigo-900 dark:text-indigo-200 font-bold">Analyzing your routine...</p>
-            <p className="text-sm text-indigo-500 dark:text-indigo-300 mt-1 max-w-xs">
+            <Loader size={32} className="text-warm-700 dark:text-warm-300 animate-spin mb-4" />
+            <p className="text-brand-800 dark:text-brand-100 font-bold">Analyzing your routine...</p>
+            <p className="text-sm text-warm-600 dark:text-warm-300 mt-1 max-w-xs">
               Gemini is finding the best flow for your day.
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-red-500 dark:text-red-400">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
             <button
               onClick={onClose}
-              className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+              className="mt-4 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg text-sm font-bold hover:bg-brand-200 dark:hover:bg-brand-700"
             >
               Close
             </button>
           </div>
         ) : plan && previewHabits ? (
           <div className="space-y-6">
-            <div className="bg-indigo-50 dark:bg-indigo-500/15 border border-indigo-100 dark:border-indigo-500/30 p-4 rounded-xl">
+            <div className="bg-warm-50 dark:bg-warm-900/20 border border-warm-200 dark:border-warm-800/60 p-4 rounded-xl">
                <div className="flex items-start gap-3">
-                 <Sparkles size={20} className="text-indigo-500 dark:text-indigo-300 shrink-0 mt-0.5" />
+                 <Sparkles size={20} className="text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
                  <div>
-                   <h3 className="font-bold text-indigo-900 dark:text-indigo-200 text-sm">Proposed Plan</h3>
-                   <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">{plan.reasoning}</p>
+                   <h3 className="font-bold text-brand-800 dark:text-brand-100 text-sm">Proposed Plan</h3>
+                   <p className="text-sm text-brand-700 dark:text-brand-300 mt-1">{plan.reasoning}</p>
                  </div>
                </div>
             </div>
@@ -172,20 +172,20 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
             <div className="space-y-4">
               {previewHabits.categories.map(category => (
                 <div key={category} className="space-y-2">
-                  <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider ml-2">{category}</h3>
-                  <div className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl overflow-hidden divide-y divide-slate-50">
+                  <h3 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider ml-2">{category}</h3>
+                  <div className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden divide-y divide-brand-200">
                     {(previewHabits.grouped[category] ?? []).map(habit => (
-                      <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                      <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}
-                           <span className="font-medium text-slate-700 dark:text-slate-200 text-sm">{habit.title}</span>
+                           <span className="font-medium text-brand-700 dark:text-brand-200 text-sm">{habit.title}</span>
                         </div>
                         {/* Show if category changed */}
                         {(() => {
                             const original = habits.find(h => h.id === habit.id);
                             if (original && original.category !== habit.category) {
                                 return (
-                                    <div className="flex items-center gap-1.5 text-xs bg-orange-50 dark:bg-orange-500/15 text-orange-600 dark:text-orange-300 px-2 py-1 rounded-full border border-orange-100 dark:border-orange-500/30">
+                                    <div className="flex items-center gap-1.5 text-xs bg-warm-50 dark:bg-warm-900/30 text-warm-700 dark:text-warm-300 px-2 py-1 rounded-full border border-warm-200 dark:border-warm-800/60">
                                         <span className="opacity-75 line-through">{original.category}</span>
                                         <ArrowRight size={10} />
                                         <span className="font-bold">{habit.category}</span>
@@ -206,16 +206,16 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
 
       {/* Footer */}
       {plan && !isLoading && (
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 rounded-b-3xl flex gap-3">
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 rounded-b-card flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 text-slate-500 dark:text-slate-400 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+            className="flex-1 py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-xl transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleApply}
-            className="flex-1 py-3 bg-indigo-600 text-white font-bold text-sm rounded-xl hover:bg-indigo-700 shadow-xs active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-warm-500 text-white font-semibold text-sm rounded-btn hover:bg-warm-600 shadow-btn-primary active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
           >
             <Check size={18} />
             Apply Changes

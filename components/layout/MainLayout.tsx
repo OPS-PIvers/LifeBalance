@@ -36,7 +36,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   // mounts — a privacy leak that defeats the sessionStorage persistence. Hold the
   // loading fallback whenever we intend to be in Kid Mode but are still loading.
   if (kidModeEnabled && activeMemberId && !activeKid && isLoading) {
-    return <div className="h-dvh bg-purple-50 dark:bg-slate-900" />;
+    return <div className="h-dvh bg-warm-50 dark:bg-brand-900" />;
   }
 
   // Kid Mode replaces the ENTIRE parent shell (toolbar + routed page + bottom-nav)
@@ -46,7 +46,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   if (activeKid) {
     return (
       <ErrorBoundary key="kid-dashboard">
-        <Suspense fallback={<div className="h-dvh bg-purple-50 dark:bg-slate-900" />}>
+        <Suspense fallback={<div className="h-dvh bg-warm-50 dark:bg-brand-900" />}>
           <KidDashboard />
         </Suspense>
       </ErrorBoundary>

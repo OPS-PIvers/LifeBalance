@@ -101,19 +101,19 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       ariaLabelledBy={titleId}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-purple-100 bg-purple-50 dark:bg-purple-500/15 shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-warm-200 dark:border-warm-800/60 bg-warm-50 dark:bg-warm-900/20 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-slate-800 rounded-xl text-purple-600 dark:text-purple-300 shadow-xs">
+          <div className="p-2 bg-white dark:bg-brand-800 rounded-xl text-warm-700 dark:text-warm-300 border border-warm-200 dark:border-warm-800/60">
             <Sparkles size={20} />
           </div>
           <div>
-            <h2 id={titleId} className="text-lg font-bold text-purple-900 dark:text-purple-200">Smart Adjustments</h2>
-            <p className="text-xs text-purple-600 dark:text-purple-300 font-medium">AI-powered optimization for your habits</p>
+            <h2 id={titleId} className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">Smart Adjustments</h2>
+            <p className="text-xs text-warm-700 dark:text-warm-300 font-medium">AI-powered optimization for your habits</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-2 text-purple-400 dark:text-purple-300 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-full transition-colors"
+          className="p-2 text-warm-500 dark:text-warm-300 hover:bg-white/60 dark:hover:bg-brand-700/50 rounded-full transition-colors"
           aria-label="Close"
         >
           <X size={20} />
@@ -124,56 +124,56 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       <div className="p-6 scroll-contain-y max-h-[70vh]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Loader size={32} className="text-purple-600 dark:text-purple-300 animate-spin mb-4" />
-            <p className="text-purple-900 dark:text-purple-200 font-bold">Analyzing your habits...</p>
-            <p className="text-sm text-purple-500 dark:text-purple-300 mt-1 max-w-xs">
+            <Loader size={32} className="text-warm-700 dark:text-warm-300 animate-spin mb-4" />
+            <p className="text-brand-800 dark:text-brand-100 font-bold">Analyzing your habits...</p>
+            <p className="text-sm text-warm-600 dark:text-warm-300 mt-1 max-w-xs">
               Gemini is reviewing your streaks and completion rates to optimize your point system.
             </p>
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-red-500 dark:text-red-400">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
             <button
               onClick={onClose}
-              className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 rounded-lg text-sm font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+              className="mt-4 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg text-sm font-bold hover:bg-brand-200 dark:hover:bg-brand-700"
             >
               Close
             </button>
           </div>
         ) : suggestions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-slate-400 dark:text-slate-500">
+          <div className="flex flex-col items-center justify-center py-12 text-center text-brand-400 dark:text-brand-500">
             <Sparkles size={32} className="mb-3 opacity-30" />
-            <p className="font-bold text-slate-600 dark:text-slate-300">No adjustments needed!</p>
+            <p className="font-bold text-brand-600 dark:text-brand-300">No adjustments needed!</p>
             <p className="text-sm mt-1 max-w-xs">
               Your habit point values look balanced based on your current performance. Keep it up!
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-              Found <span className="font-bold text-purple-600 dark:text-purple-300">{suggestions.length}</span> suggestions to improve your system:
+            <p className="text-sm text-brand-500 dark:text-brand-400 mb-2">
+              Found <span className="font-bold text-warm-700 dark:text-warm-300">{suggestions.length}</span> suggestions to improve your system:
             </p>
 
             {suggestions.map((suggestion) => (
               <div
                 key={suggestion.habitId}
-                className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 shadow-xs hover:shadow-md transition-shadow animate-in slide-in-from-bottom-2 fade-in duration-300"
+                className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/40 animate-in slide-in-from-bottom-2 fade-in duration-300"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
                   {/* Info */}
                   <div className="flex-1">
                     <div className="flex items-center justify-between sm:justify-start sm:gap-4 mb-2">
-                      <h3 className="font-bold text-slate-800 dark:text-slate-100 text-lg">{suggestion.habitTitle}</h3>
-                      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-700/50 px-3 py-1 rounded-full border border-slate-100 dark:border-slate-700">
-                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">{suggestion.currentPoints}</span>
-                        <ArrowRight size={14} className="text-slate-300 dark:text-slate-600" />
-                        <span className="text-sm font-bold text-purple-600 dark:text-purple-300">{suggestion.suggestedPoints} pts</span>
+                      <h3 className="font-bold text-brand-800 dark:text-brand-100 text-lg">{suggestion.habitTitle}</h3>
+                      <div className="flex items-center gap-2 bg-brand-50 dark:bg-brand-700/50 px-3 py-1 rounded-full border border-brand-200 dark:border-brand-700">
+                        <span className="text-sm font-bold text-brand-500 dark:text-brand-400">{suggestion.currentPoints}</span>
+                        <ArrowRight size={14} className="text-brand-300 dark:text-brand-600" />
+                        <span className="text-sm font-bold text-warm-700 dark:text-warm-300">{suggestion.suggestedPoints} pts</span>
                       </div>
                     </div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-700/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                      <Sparkles size={12} className="inline mr-1.5 text-purple-500 dark:text-purple-300 -mt-0.5" />
+                    <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed bg-brand-50 dark:bg-brand-700/50 p-3 rounded-xl border border-brand-200 dark:border-brand-700">
+                      <Sparkles size={12} className="inline mr-1.5 text-warm-600 dark:text-warm-300 -mt-0.5" />
                       {suggestion.reasoning}
                     </p>
                   </div>
@@ -182,7 +182,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
                   <div className="flex items-center gap-2 sm:flex-col shrink-0">
                     <button
                       onClick={() => handleAccept(suggestion)}
-                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl font-bold shadow-xs hover:bg-purple-700 active:scale-95 transition-all"
+                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-warm-500 text-white rounded-btn font-semibold hover:bg-warm-600 active:scale-95 transition-all"
                       title="Accept Change"
                     >
                       <Check size={18} />
@@ -190,7 +190,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
                     </button>
                     <button
                       onClick={() => handleIgnore(suggestion.habitId)}
-                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 rounded-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-500 dark:text-brand-400 rounded-xl font-bold hover:bg-brand-200 dark:hover:bg-brand-700 active:scale-95 transition-all"
                       title="Ignore"
                     >
                       <X size={18} />
@@ -207,10 +207,10 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
 
       {/* Footer */}
       {suggestions.length > 0 && !isLoading && (
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50 rounded-b-3xl">
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 rounded-b-card">
           <button
             onClick={onClose}
-            className="w-full py-3 text-slate-500 dark:text-slate-400 font-bold text-sm hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+            className="w-full py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:text-brand-700 dark:hover:text-brand-200 transition-colors"
           >
             Done Reviewing
           </button>

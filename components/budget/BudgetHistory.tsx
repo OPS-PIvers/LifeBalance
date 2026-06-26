@@ -5,8 +5,8 @@ import { BucketPeriodSnapshot } from '@/types/schema';
 import { format, parseISO } from 'date-fns';
 import { roundMoney } from '@/utils/money';
 import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react';
-import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Section } from '@/components/ui/Section';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 
@@ -110,15 +110,30 @@ const BudgetHistory: React.FC = () => {
     if (limit === 0) return 'bg-money-neg';
     const ratio = spent / limit;
     if (ratio >= 1) return 'bg-money-neg';
-    if (ratio >= 0.85) return 'bg-amber-500';
-    return 'bg-money-safe';
+    if (ratio >= 0.85) return 'bg-warm-500';
+    return 'bg-money-pos';
   };
 
+  if (historyGroups.length === 0) {
+    return (
+      <Section title="Period history">
+        <div className="surface-section flex flex-col items-center justify-center text-center py-12 px-6">
+          <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
+            <History size={28} className="text-brand-400 dark:text-brand-500" />
+          </div>
+          <h3 className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">No history yet</h3>
+          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
+            Budget snapshots are created automatically when you approve a new paycheck.
+          </p>
+        </div>
+      </Section>
+    );
+  }
+
   return (
-    <div className="space-y-4 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
-      <div className="flex justify-between items-center px-1">
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">History</h2>
+    <Section
+      title="Period history"
+      action={
         <Button
           onClick={handleExport}
           disabled={bucketHistory.length === 0}
@@ -128,126 +143,117 @@ const BudgetHistory: React.FC = () => {
         >
           Export CSV
         </Button>
-      </div>
+      }
+    >
+      <div className="space-y-3">
+        {historyGroups.map(group => {
+          const isExpanded = expandedPeriodId === group.periodId;
+          const savings = group.totalLimit - group.totalSpent;
+          const percentUsed = group.totalLimit > 0
+            ? Math.min(100, Math.max(0, (group.totalSpent / group.totalLimit) * 100))
+            : 100;
 
-      {historyGroups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-brand-400 dark:text-slate-500">
-          <div className="w-16 h-16 bg-brand-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mb-4">
-            <History size={32} className="text-brand-300 dark:text-slate-500" />
-          </div>
-          <h3 className="text-lg font-bold text-brand-600 dark:text-slate-200">No History Yet</h3>
-          <p className="text-center max-w-xs mt-2 text-sm">
-            Budget snapshots are created automatically when you approve a new paycheck.
-          </p>
-        </div>
-      ) : (
-        historyGroups.map(group => {
-        const isExpanded = expandedPeriodId === group.periodId;
-        const savings = group.totalLimit - group.totalSpent;
-        const percentUsed = group.totalLimit > 0
-          ? Math.min(100, Math.max(0, (group.totalSpent / group.totalLimit) * 100))
-          : 100;
+          return (
+            <div key={group.periodId} className="surface-section overflow-hidden">
+              <button
+                onClick={() => toggleExpand(group.periodId)}
+                className="w-full text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-2xl"
+                aria-expanded={isExpanded}
+              >
+                <div className="p-5 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <h3 className="font-semibold text-brand-900 dark:text-brand-100 text-base">
+                        {format(parseISO(group.startDate), 'MMM d')} – {format(parseISO(group.endDate), 'MMM d, yyyy')}
+                      </h3>
+                      <p className="text-xs text-brand-400 dark:text-brand-500 font-medium mt-0.5">
+                        {group.transactionCount} transactions
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className={`font-mono text-base font-bold tabular-nums ${savings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                        {savings >= 0 ? '+' : ''}{fmt(savings)}
+                      </div>
+                      <p className="text-xxs text-brand-400 dark:text-brand-500">
+                        {savings >= 0 ? 'saved' : 'overspent'}
+                      </p>
+                    </div>
+                  </div>
 
-        return (
-          <Card key={group.periodId} className="overflow-hidden ring-1 ring-black/5 shadow-glass bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl">
-            <button
-              onClick={() => toggleExpand(group.periodId)}
-              className="w-full text-left"
+                  {/* Progress bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs font-medium text-brand-600 dark:text-brand-300">
+                      <span className="font-mono tabular-nums">{fmt(group.totalSpent)} spent</span>
+                      <span className="font-mono tabular-nums">{fmt(group.totalLimit)} limit</span>
+                    </div>
+                    <div className="h-2 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-(--duration-slow) ease-(--ease-standard) ${getProgressColor(group.totalSpent, group.totalLimit)}`}
+                        style={{ width: `${percentUsed}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center pt-3 text-brand-400 dark:text-brand-500">
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </div>
+              </button>
+
+              {/* Expanded content */}
+              {isExpanded && (
+                <div className="border-t border-brand-200 dark:border-brand-700 p-5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
+                  <h4 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
+                    Bucket breakdown
+                  </h4>
+                  {group.snapshots
+                    .slice()
+                    .sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent))
+                    .map(bucket => {
+                      const bucketSavings = bucket.limit - bucket.totalSpent;
+                      const bucketPercent = bucket.limit > 0
+                        ? Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100))
+                        : 100;
+
+                      return (
+                        <div key={bucket.id} className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-semibold text-brand-700 dark:text-brand-200">{bucket.bucketName}</span>
+                            <span className={`text-sm font-mono tabular-nums font-bold ${bucketSavings >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+                              {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-500 font-normal">/ {fmt(bucket.limit)}</span>
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full ${getProgressColor(bucket.totalSpent, bucket.limit)}`}
+                              style={{ width: `${bucketPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Load older periods beyond the live window */}
+        {hasMoreBucketHistory && (
+          <div className="pt-1 flex justify-center">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={loadAllBucketHistory}
+              disabled={isLoadingOlderBucketHistory}
+              leftIcon={isLoadingOlderBucketHistory ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
             >
-              <div className="p-6 bg-transparent hover:bg-white/50 dark:hover:bg-slate-700/50 transition-colors">
-                <div className="flex justify-between items-center mb-2">
-                  <div>
-                    <h3 className="font-bold text-brand-800 dark:text-slate-100 text-lg">
-                      {format(parseISO(group.startDate), 'MMM d')} - {format(parseISO(group.endDate), 'MMM d, yyyy')}
-                    </h3>
-                    <p className="text-xs text-brand-400 dark:text-slate-500 font-medium">
-                      {group.transactionCount} transactions
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-bold ${savings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
-                      {savings >= 0 ? '+' : ''}{fmt(savings)}
-                    </div>
-                    <p className="text-xs text-brand-400 dark:text-slate-500">
-                      {savings >= 0 ? 'saved' : 'overspent'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs font-medium text-brand-600 dark:text-slate-300">
-                    <span>{fmt(group.totalSpent)} spent</span>
-                    <span>{fmt(group.totalLimit)} limit</span>
-                  </div>
-                  <div className="h-3 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${getProgressColor(group.totalSpent, group.totalLimit)}`}
-                      style={{ width: `${percentUsed}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="px-6 py-2 bg-slate-50/50 dark:bg-slate-700/50 border-t border-slate-100/60 dark:border-slate-700 flex justify-center">
-                {isExpanded ? (
-                  <ChevronUp size={16} className="text-slate-400 dark:text-slate-500" />
-                ) : (
-                  <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" />
-                )}
-              </div>
-            </button>
-
-            {/* Expanded Content */}
-            {isExpanded && (
-              <div className="bg-slate-50/50 dark:bg-slate-700/50 p-6 border-t border-slate-100/60 dark:border-slate-700 space-y-3">
-                <h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
-                  Bucket Breakdown
-                </h4>
-                {group.snapshots.sort((a, b) => (b.limit - b.totalSpent) - (a.limit - a.totalSpent)).map(bucket => {
-                  const bucketSavings = bucket.limit - bucket.totalSpent;
-                  const bucketPercent = bucket.limit > 0
-                    ? Math.min(100, Math.max(0, (bucket.totalSpent / bucket.limit) * 100))
-                    : 100;
-
-                  return (
-                    <div key={bucket.id} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-md p-3 rounded-xl ring-1 ring-black/5 shadow-xs">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-brand-700 dark:text-slate-200">{bucket.bucketName}</span>
-                        <span className={`text-sm font-bold ${bucketSavings >= 0 ? 'text-money-safe' : 'text-money-neg'}`}>
-                          {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-slate-500 font-normal">/ {fmt(bucket.limit)}</span>
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${getProgressColor(bucket.totalSpent, bucket.limit)}`}
-                          style={{ width: `${bucketPercent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-        );
-      }))}
-
-      {/* Load older periods beyond the live window */}
-      {hasMoreBucketHistory && historyGroups.length > 0 && (
-        <div className="pt-2 flex justify-center">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={loadAllBucketHistory}
-            disabled={isLoadingOlderBucketHistory}
-            leftIcon={isLoadingOlderBucketHistory ? <Loader2 size={16} className="animate-spin" /> : <History size={16} />}
-          >
-            {isLoadingOlderBucketHistory ? 'Loading…' : 'Load older periods'}
-          </Button>
-        </div>
-      )}
-    </div>
+              {isLoadingOlderBucketHistory ? 'Loading…' : 'Load older periods'}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Section>
   );
 };
 

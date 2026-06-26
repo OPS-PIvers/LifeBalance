@@ -260,24 +260,24 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
       ariaLabelledBy={titleId}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-100 dark:border-slate-700 shrink-0">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700 shrink-0">
         <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
                 onClick={() => setView('main')}
-                className="p-1 text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 -ml-1"
+                className="p-1 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 -ml-1"
                 aria-label="Back to main view"
               >
                 <ChevronRight size={20} className="rotate-180" />
               </button>
             )}
-            <h2 id={titleId} className="text-lg font-bold text-brand-800 dark:text-slate-100">
+            <h2 id={titleId} className="text-lg font-bold text-brand-800 dark:text-brand-100">
               {VIEW_TITLES[view]}
             </h2>
           </div>
           <button
             onClick={handleClose}
-            className="p-2 text-brand-400 dark:text-slate-400 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-full"
+            className="p-2 text-brand-400 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-full"
             aria-label="Close habit manager"
           >
             <X size={20} />
@@ -294,18 +294,18 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               {/* Create Custom Button */}
               <button
                 onClick={openCreateCustom}
-                className="w-full flex items-center justify-between p-4 bg-linear-to-r from-brand-50 to-indigo-50 dark:from-slate-700/50 dark:to-indigo-500/10 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl hover:border-brand-400 dark:hover:border-slate-500 transition-colors group"
+                className="w-full flex items-center justify-between p-4 bg-warm-50 dark:bg-warm-900/20 border border-dashed border-warm-300 dark:border-warm-800/60 rounded-xl hover:border-warm-400 dark:hover:border-warm-700 hover:bg-warm-100 dark:hover:bg-warm-900/30 transition-colors duration-(--duration-fast) ease-(--ease-standard) group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-brand-100 dark:bg-slate-700/50 rounded-xl flex items-center justify-center text-brand-600 dark:text-slate-300 group-hover:bg-brand-200 transition-colors">
+                  <div className="w-10 h-10 bg-warm-100 dark:bg-warm-900/40 rounded-xl flex items-center justify-center text-warm-700 dark:text-warm-300 transition-colors">
                     <Plus size={20} />
                   </div>
                   <div className="text-left">
-                    <p className="font-bold text-brand-800 dark:text-slate-100">Create Custom Habit</p>
-                    <p className="text-xs text-brand-400 dark:text-slate-400">Define your own habit with custom settings</p>
+                    <p className="font-bold text-brand-800 dark:text-brand-100">Create Custom Habit</p>
+                    <p className="text-xs text-brand-400 dark:text-brand-400">Define your own habit with custom settings</p>
                   </div>
                 </div>
-                <ChevronRight size={18} className="text-brand-400 dark:text-slate-400" />
+                <ChevronRight size={18} className="text-brand-400 dark:text-brand-400" />
               </button>
 
               {/* Custom Habits List */}
@@ -338,18 +338,18 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-100 dark:border-slate-700 shrink-0">
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 shrink-0">
           {view === 'main' ? (
             <button
               onClick={handleClose}
-              className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
             >
               Done
             </button>
           ) : (
             <button
               onClick={handleSaveCustom}
-              className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition-transform"
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
             >
               {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
             </button>

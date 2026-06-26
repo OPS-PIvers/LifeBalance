@@ -42,14 +42,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {label ? (
               <label
                 htmlFor={inputId}
-                className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block"
+                className="text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider block"
               >
                 {label}
-                {props.required && <span className="text-rose-500 ml-1" aria-hidden="true">*</span>}
+                {props.required && <span className="text-money-neg ml-1" aria-hidden="true">*</span>}
               </label>
             ) : <span />}
             {showCount && props.maxLength && (
-              <span className="text-xs text-slate-400 dark:text-slate-500 font-medium leading-none mb-0.5">
+              <span className="text-xs text-brand-400 dark:text-brand-500 font-medium leading-none mb-0.5">
                 {length}/{props.maxLength}
               </span>
             )}
@@ -57,7 +57,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 pointer-events-none">
               {icon}
             </div>
           )}
@@ -68,16 +68,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={error ? errorId : undefined}
             onChange={handleChange}
             className={cn(
-              "w-full p-3 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xs border border-slate-200/60 dark:border-slate-700 rounded-xl outline-hidden text-slate-900 dark:text-slate-100 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 transition-all shadow-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:opacity-50 disabled:bg-slate-50 dark:disabled:bg-slate-700/50",
+              "w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard) placeholder:text-brand-400 dark:placeholder:text-brand-500 disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50",
               icon && "pl-10",
-              error && "border-rose-500 focus:border-rose-500 focus:ring-rose-500/10",
+              error && "border-money-neg focus:border-money-neg focus:ring-money-neg/20",
               className
             )}
             {...props}
           />
         </div>
         {error && (
-          <p id={errorId} className="mt-1 text-sm text-rose-500 font-medium">{error}</p>
+          <p id={errorId} className="mt-1 text-sm text-money-neg font-medium">{error}</p>
         )}
       </div>
     );

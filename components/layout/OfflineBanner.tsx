@@ -41,10 +41,10 @@ const OfflineBanner: React.FC = () => {
         'fixed left-0 right-0 z-dropdown',
         // Position above BottomNav
         'bottom-[calc(4rem+env(safe-area-inset-bottom,0px))]',
-        // Visual style: amber warning, consistent with app palette
-        'bg-amber-500 dark:bg-amber-600',
+        // Visual style: warm-amber warning, consistent with the app palette
+        'bg-warm-500 dark:bg-warm-600',
         'text-white text-xs font-semibold text-center',
-        'px-4 py-2 shadow-lg',
+        'px-4 py-2 shadow-raised',
         // No animation by default; keep it simple and motion-safe
       ].join(' ')}
     >

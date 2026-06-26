@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,13 +10,11 @@ import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
 
-// Lazy-loaded so these drawers (and framer-motion via Drawer) stay out of the
+// Lazy-loaded so this drawer (and framer-motion via Drawer) stays out of the
 // boot bundle; preloaded on idle below so the first tap is still instant.
-const loadRewardsModal = () => import('@/components/modals/RewardsModal');
-const loadSafeToSpendModal = () => import('@/components/modals/SafeToSpendModal');
+// The Safe-to-Spend and Rewards glances no longer open modals — they deep-link
+// into Money → Overview and Habits → Rewards respectively (redesign IA).
 const loadFeedbackModal = () => import('@/components/modals/FeedbackModal');
-const RewardsModal = React.lazy(loadRewardsModal);
-const SafeToSpendModal = React.lazy(loadSafeToSpendModal);
 const FeedbackModal = React.lazy(loadFeedbackModal);
 
 const TopToolbar: React.FC = () => {
@@ -25,45 +24,38 @@ const TopToolbar: React.FC = () => {
   const { currentUser } = useAuth();
   const kidModeEnabled = useKidModeEnabled();
   const fmt = useFormatCurrency();
+  const navigate = useNavigate();
 
   // Plan 080d-2: count of kid redemption requests awaiting parent review, badged
   // on the rewards (points) control. Dormant: only counts when Kid Mode is on.
   const pendingRedemptionCount = kidModeEnabled
     ? household?.pendingRedemptions?.length ?? 0
     : 0;
-  const [isRewardsOpen, setIsRewardsOpen] = useState(false);
-  const [isSafeSpendOpen, setIsSafeSpendOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(
-    () =>
-      preloadOnIdle(() =>
-        Promise.all([loadRewardsModal(), loadSafeToSpendModal(), loadFeedbackModal()])
-      ),
-    []
-  );
+  useEffect(() => preloadOnIdle(loadFeedbackModal), []);
 
   const isPositive = safeToSpend >= 0;
 
   return (
     <>
       <div className="relative z-dropdown">
-        <header className="z-sticky w-full bg-brand-800/95 backdrop-blur-md shadow-xs border-b border-white/5 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800 dark:bg-brand-900 border-b border-brand-700 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
           {/* Left Container: Safe-to-Spend */}
           <button
             type="button"
             aria-label="View Safe to Spend details"
-            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
-            onClick={() => setIsSafeSpendOpen(true)}
+            className="flex flex-col text-left cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
+            onClick={() => navigate('/budget', { state: { tab: 'overview' } })}
           >
             <span
               className={`text-2xl font-mono font-bold tracking-tight tabular-nums ${isPositive ? 'text-money-pos' : 'text-money-neg'}`}
             >
               {fmt(Math.abs(safeToSpend))}
             </span>
-            <span className="text-xs text-brand-400 uppercase tracking-wider font-bold leading-tight">
+            <span className="font-display text-xs text-brand-300 uppercase tracking-wider font-semibold leading-tight">
               Safe to Spend
             </span>
           </button>
@@ -72,7 +64,7 @@ const TopToolbar: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsFeedbackOpen(true)}
-              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors"
+              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard)"
               aria-label="Send Feedback"
             >
               <AlertCircle size={18} />
@@ -86,21 +78,20 @@ const TopToolbar: React.FC = () => {
                   ? `View Rewards and Points breakdown, ${pendingRedemptionCount} pending request${pendingRedemptionCount === 1 ? '' : 's'}`
                   : 'View Rewards and Points breakdown'
               }
-              className="relative flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:rounded-lg"
-              onClick={() => setIsRewardsOpen(true)}
+              className="relative flex items-center gap-2 sm:gap-4 cursor-pointer active:opacity-80 transition-opacity focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:rounded-lg"
+              onClick={() => navigate('/habits', { state: { tab: 'rewards' } })}
             >
-              {/* Plan 080d-2 — pending kid-redemption-request badge (rose pill,
-                  matching the Plan 063 Budget-tab badge). Dormant unless Kid Mode
-                  is on and there is at least one request awaiting review. */}
+              {/* Plan 080d-2 — pending kid-redemption-request badge. Dormant unless
+                  Kid Mode is on and there is at least one request awaiting review. */}
               {pendingRedemptionCount > 0 && (
                 <span
-                  className="absolute -top-2 -right-2 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none ring-2 ring-brand-800"
+                  className="absolute -top-2 -right-2 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-brand-800"
                   aria-hidden="true"
                 >
                   {pendingRedemptionCount > 9 ? '9+' : pendingRedemptionCount}
                 </span>
               )}
-              {/* Daily Points (Gold Star) */}
+              {/* Daily Points (warm gold star) */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-gold tabular-nums">
@@ -108,13 +99,13 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <Star className="w-4 h-4 fill-habit-gold text-habit-gold" />
                 </div>
-                <span className="text-xs text-brand-400 uppercase tracking-wider">Today</span>
+                <span className="text-xs text-brand-300 uppercase tracking-wider">Today</span>
               </div>
 
               {/* Vertical Divider */}
               <div className="h-8 w-px bg-brand-600"></div>
 
-              {/* Weekly Points (Blue TrendingUp) */}
+              {/* Weekly Points (slate-teal trend) */}
               <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1">
                   <span className="text-xl font-bold text-habit-blue tabular-nums">
@@ -122,7 +113,7 @@ const TopToolbar: React.FC = () => {
                   </span>
                   <TrendingUp className="w-4 h-4 text-habit-blue" />
                 </div>
-                <span className="text-xs text-brand-400 uppercase tracking-wider">Week</span>
+                <span className="text-xs text-brand-300 uppercase tracking-wider">Week</span>
               </div>
             </button>
 
@@ -131,7 +122,7 @@ const TopToolbar: React.FC = () => {
               ref={profileButtonRef}
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
               aria-label="Open Profile Menu"
               aria-expanded={isProfileOpen}
               aria-haspopup="menu"
@@ -152,12 +143,6 @@ const TopToolbar: React.FC = () => {
         <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} anchorRef={profileButtonRef} />
       </div>
 
-      <LazyMount when={isRewardsOpen}>
-        <RewardsModal isOpen={isRewardsOpen} onClose={() => setIsRewardsOpen(false)} />
-      </LazyMount>
-      <LazyMount when={isSafeSpendOpen}>
-        <SafeToSpendModal isOpen={isSafeSpendOpen} onClose={() => setIsSafeSpendOpen(false)} />
-      </LazyMount>
       <LazyMount when={isFeedbackOpen}>
         <FeedbackModal isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
       </LazyMount>

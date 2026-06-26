@@ -18,7 +18,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({ className, ...props }) => (
   <div
     role="presentation"
     aria-hidden="true"
-    className={cn('skeleton rounded-md bg-slate-200/70 dark:bg-slate-700/50', className)}
+    className={cn('skeleton rounded-sm bg-brand-200 dark:bg-brand-700/60', className)}
     {...props}
   />
 );
@@ -39,8 +39,9 @@ export const SkeletonText: React.FC<{ lines?: number; className?: string }> = ({
 );
 
 /**
- * Glass-card shaped skeleton matching the app's widget container
- * (bg-white/80 backdrop-blur-sm rounded-3xl). Wrap arbitrary skeleton content.
+ * Card-shaped skeleton matching the app's grounded widget container
+ * (solid bg + hairline border + radius-card, no glass/shadow). Wrap arbitrary
+ * skeleton content.
  */
 export const SkeletonCard: React.FC<{ className?: string; children?: React.ReactNode }> = ({
   className,
@@ -48,7 +49,7 @@ export const SkeletonCard: React.FC<{ className?: string; children?: React.React
 }) => (
   <div
     className={cn(
-      'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 rounded-3xl p-6',
+      'bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card p-6',
       className
     )}
   >

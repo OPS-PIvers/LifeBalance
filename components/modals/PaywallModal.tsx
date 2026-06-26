@@ -70,10 +70,10 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
     <Drawer isOpen={isOpen} onClose={onClose} title="Upgrade to Premium">
       <div className="space-y-5">
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-brand-600 shrink-0">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-card bg-warm-500 shrink-0">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-brand-600 dark:text-brand-300">
             Unlock more AI, more members, and premium features for your whole household.
           </p>
         </div>
@@ -82,9 +82,9 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
           {BENEFITS.map((benefit) => (
             <li
               key={benefit}
-              className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-200"
+              className="flex items-start gap-2.5 text-sm text-brand-700 dark:text-brand-200"
             >
-              <Check className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" aria-hidden="true" />
+              <Check className="w-4 h-4 mt-0.5 text-money-pos shrink-0" aria-hidden="true" />
               <span>{benefit}</span>
             </li>
           ))}

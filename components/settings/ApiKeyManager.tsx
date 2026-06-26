@@ -42,7 +42,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
   if (!isAdmin) {
     return (
-      <div className="text-center py-6 text-brand-500">
+      <div className="text-center py-6 text-brand-500 dark:text-brand-400">
         <Shield className="w-8 h-8 mx-auto mb-2 opacity-50" />
         <p>Only household admins can manage API keys.</p>
       </div>
@@ -127,18 +127,18 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
     <div className="space-y-4">
       {/* Newly Created Key Warning */}
       {newlyCreatedKey && (
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 space-y-3">
+        <div className="bg-warm-50 border border-warm-200 rounded-card p-4 space-y-3 dark:bg-warm-500/10 dark:border-warm-500/30">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold text-amber-800">Copy your API key now!</p>
-              <p className="text-sm text-amber-700">
+              <p className="font-bold text-warm-800 dark:text-warm-200">Copy your API key now!</p>
+              <p className="text-sm text-warm-700 dark:text-warm-300">
                 This is the only time you will see this key. Store it securely.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 bg-white px-3 py-2 rounded-lg border border-amber-200 text-sm font-mono break-all">
+            <code className="flex-1 bg-white dark:bg-brand-900 px-3 py-2 rounded-btn border border-warm-200 dark:border-warm-500/30 text-sm font-mono break-all text-brand-900 dark:text-brand-100">
               {newlyCreatedKey}
             </code>
             <Button
@@ -164,16 +164,16 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {/* Active Keys */}
       {activeKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-brand-700">Active Keys</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Active Keys</h4>
           {activeKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-white border border-brand-100 rounded-xl p-3 space-y-2"
+              className="surface-section p-3 space-y-2"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-brand-500" />
-                  <span className="font-semibold text-brand-800">{key.name}</span>
+                  <Key className="w-4 h-4 text-brand-500 dark:text-brand-400" />
+                  <span className="font-semibold text-brand-900 dark:text-brand-100">{key.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -187,29 +187,29 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-xs text-brand-500">
-                <code className="bg-brand-50 px-2 py-0.5 rounded-sm">{key.keyPrefix}...</code>
+              <div className="flex items-center gap-4 text-xs text-brand-500 dark:text-brand-400">
+                <code className="bg-brand-100 dark:bg-brand-700 px-2 py-0.5 rounded-sm font-mono text-brand-700 dark:text-brand-200">{key.keyPrefix}...</code>
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {key.lastUsedAt
                     ? `Used ${formatDistanceToNow(new Date(key.lastUsedAt))} ago`
                     : 'Never used'}
                 </span>
-                <span>{key.usageCount} calls</span>
+                <span className="tabular-nums">{key.usageCount} calls</span>
               </div>
               <div className="flex flex-wrap gap-1">
                 {key.permissions.habits && (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-warm-50 text-warm-700 border border-warm-200 px-2 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
                     Habits
                   </span>
                 )}
                 {key.permissions.expenses && (
-                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-accent-50 text-accent-700 border border-accent-200 px-2 py-0.5 rounded-full dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30">
                     Expenses
                   </span>
                 )}
                 {key.permissions.shoppingList && (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-habit-blue/15 text-habit-blue border border-habit-blue/30 px-2 py-0.5 rounded-full">
                     Shopping
                   </span>
                 )}
@@ -221,11 +221,11 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
 
       {/* Create New Key Form */}
       {isCreating ? (
-        <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 space-y-4">
-          <h4 className="font-semibold text-brand-800">Create New API Key</h4>
+        <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-4">
+          <h4 className="font-display font-semibold text-brand-900 dark:text-brand-100">Create New API Key</h4>
 
           <div>
-            <label className="block text-sm font-medium text-brand-700 mb-1">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1.5">
               Key Name
             </label>
             <input
@@ -233,12 +233,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               placeholder="e.g., iPhone Shortcut"
-              className="w-full px-3 py-2 border border-brand-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand-500"
+              className="w-full px-3 py-2 bg-white dark:bg-brand-900 border border-brand-200 dark:border-brand-700 rounded-btn text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-brand-700 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2">
               Permissions
             </label>
             <div className="space-y-2">
@@ -249,9 +249,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, habits: e.target.checked })
                   }
-                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
                 />
-                <span className="text-sm text-brand-700">Habits (toggle habits)</span>
+                <span className="text-sm text-brand-700 dark:text-brand-200">Habits (toggle habits)</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -260,9 +260,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, expenses: e.target.checked })
                   }
-                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
                 />
-                <span className="text-sm text-brand-700">Expenses (add transactions)</span>
+                <span className="text-sm text-brand-700 dark:text-brand-200">Expenses (add transactions)</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -271,9 +271,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   onChange={(e) =>
                     setPermissions({ ...permissions, shoppingList: e.target.checked })
                   }
-                  className="rounded-sm border-brand-300 text-brand-600 focus:ring-brand-500"
+                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
                 />
-                <span className="text-sm text-brand-700">Shopping List (add items)</span>
+                <span className="text-sm text-brand-700 dark:text-brand-200">Shopping List (add items)</span>
               </label>
             </div>
           </div>
@@ -304,9 +304,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       )}
 
       {/* Endpoint URLs */}
-      <div className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 space-y-2">
-        <h4 className="text-sm font-semibold text-slate-700">Endpoint URLs</h4>
-        <p className="text-xs text-slate-500">
+      <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-2">
+        <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Endpoint URLs</h4>
+        <p className="text-xs text-brand-500 dark:text-brand-400">
           Use these URLs in your iOS Shortcuts with your API key.
         </p>
         <div className="space-y-1">
@@ -314,12 +314,12 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             <button
               key={endpoint}
               onClick={() => handleCopyEndpoint(endpoint)}
-              className="w-full flex items-center justify-between px-2 py-1.5 bg-white rounded-sm border border-slate-100/50 hover:bg-slate-50/50 text-left"
+              className="w-full flex items-center justify-between px-2 py-1.5 bg-white dark:bg-brand-900 rounded-sm border border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) text-left"
             >
-              <span className="text-xs font-mono text-slate-600 truncate">
+              <span className="text-xs font-mono text-brand-600 dark:text-brand-300 truncate">
                 {getQuickAddEndpointUrl(endpoint)}
               </span>
-              <Copy className="w-3 h-3 text-slate-400 shrink-0 ml-2" />
+              <Copy className="w-3 h-3 text-brand-400 dark:text-brand-500 shrink-0 ml-2" />
             </button>
           ))}
         </div>
@@ -328,19 +328,19 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       {/* Revoked Keys */}
       {revokedKeys.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-slate-500">Revoked Keys</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">Revoked Keys</h4>
           {revokedKeys.map((key) => (
             <div
               key={key.id}
-              className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-3 opacity-60"
+              className="surface-section bg-brand-50 dark:bg-brand-800 p-3 opacity-60"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-slate-400" />
-                  <span className="font-semibold text-slate-600 line-through">
+                  <Key className="w-4 h-4 text-brand-400 dark:text-brand-500" />
+                  <span className="font-semibold text-brand-600 dark:text-brand-300 line-through">
                     {key.name}
                   </span>
-                  <span className="text-xs bg-slate-200/50 text-slate-600 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-brand-200 dark:bg-brand-700 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full">
                     Revoked
                   </span>
                 </div>
@@ -360,9 +360,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       )}
 
       {/* Security Warning */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-        <p className="text-xs text-amber-700">
+      <div className="bg-warm-50 border border-warm-200 rounded-btn p-3 flex items-start gap-2 dark:bg-warm-500/10 dark:border-warm-500/30">
+        <AlertTriangle className="w-4 h-4 text-warm-600 dark:text-warm-300 shrink-0 mt-0.5" />
+        <p className="text-xs text-warm-700 dark:text-warm-300">
           API keys bypass normal authentication. Only share with trusted devices
           and revoke keys if your device is lost or compromised.
         </p>

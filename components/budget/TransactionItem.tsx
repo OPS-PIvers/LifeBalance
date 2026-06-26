@@ -9,8 +9,8 @@ import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 // --- Helper Functions ---
 
 const getSourceIcon = (source: string, isRecurring: boolean) => {
-  if (isRecurring) return <History size={12} className="text-purple-500" />;
-  if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-blue-500" />;
+  if (isRecurring) return <History size={12} className="text-warm-500" />;
+  if (source === 'camera-scan' || source === 'file-upload') return <FileText size={12} className="text-habit-blue" />;
   return null;
 };
 
@@ -50,10 +50,10 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           onToggleSelection(tx.id);
         }
       } : undefined}
-      className={`p-5 rounded-2xl ring-1 ring-black/5 shadow-glass-sm backdrop-blur-xs flex items-center justify-between transition-all group cursor-pointer ${
+      className={`p-4 rounded-card border flex items-center justify-between transition-colors duration-(--duration-fast) ease-(--ease-standard) group cursor-pointer ${
         isSelected
-          ? 'bg-slate-50 dark:bg-slate-700/50 border-slate-300 ring-1 ring-slate-300 dark:ring-slate-600'
-          : 'bg-white/80 dark:bg-slate-800/60 border-transparent hover:ring-slate-200 dark:hover:ring-slate-700 hover:shadow-glass'
+          ? 'bg-brand-50 dark:bg-brand-700/40 border-accent-300 dark:border-accent-700'
+          : 'bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 hover:border-brand-300 dark:hover:border-brand-600'
       }`}
     >
       <div className="flex items-center gap-4 overflow-hidden">
@@ -62,33 +62,33 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
           <div
             aria-label="Select transaction"
             aria-hidden="true"
-            className={`shrink-0 transition-colors ${isSelected ? 'text-slate-900 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}
+            className={`shrink-0 transition-colors ${isSelected ? 'text-accent-700 dark:text-accent-300' : 'text-brand-300 dark:text-brand-600'}`}
           >
             {isSelected ? <CheckSquare size={20} /> : <div className="w-5 h-5 border-2 border-current rounded-md" />}
           </div>
         )}
 
-        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ring-1 ring-black/5 shadow-xs ${
+        <div className={`w-11 h-11 rounded-card flex items-center justify-center shrink-0 border ${
            tx.category === INCOME_CATEGORY
-            ? 'bg-linear-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/15 dark:to-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-            : 'bg-linear-to-br from-slate-50 to-slate-100 dark:from-slate-700/50 dark:to-slate-700/50 text-slate-500 dark:text-slate-400'
+            ? 'bg-money-bgPos dark:bg-money-pos/15 border-money-pos/20 text-money-pos'
+            : 'bg-brand-100 dark:bg-brand-700/50 border-brand-200 dark:border-brand-700 text-brand-500 dark:text-brand-400'
         }`}>
           {tx.category === INCOME_CATEGORY ? <ArrowDownLeft size={20} /> : <ArrowUpRight size={20} />}
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate text-base">{tx.merchant}</p>
+            <p className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 truncate text-base">{tx.merchant}</p>
             {getSourceIcon(tx.source, tx.isRecurring)}
           </div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+          <p className="text-xs font-medium text-brand-500 dark:text-brand-400 truncate flex items-center gap-1.5 mt-0.5">
             {format(parseISO(tx.date), 'MMM d, yyyy')}
-            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-            <span className="font-medium text-slate-600 dark:text-slate-300">{tx.category}</span>
+            <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+            <span className="font-medium text-brand-600 dark:text-brand-300">{tx.category}</span>
             {tx.store && (
               <>
-                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-                <span className="font-medium text-slate-600 dark:text-slate-300">{tx.store}</span>
+                <span className="w-1 h-1 rounded-full bg-brand-300 dark:bg-brand-600" />
+                <span className="font-medium text-brand-600 dark:text-brand-300">{tx.store}</span>
               </>
             )}
           </p>
@@ -97,8 +97,8 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
 
       <div className="flex items-center gap-3 pl-2">
         <div className="text-right">
-          <p className={`font-mono font-bold tracking-tight text-base ${
-            tx.category === INCOME_CATEGORY ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'
+          <p className={`font-mono font-bold tabular-nums tracking-tight text-base ${
+            tx.category === INCOME_CATEGORY ? 'text-money-pos' : 'text-brand-900 dark:text-brand-100'
           }`}>
             {tx.category === INCOME_CATEGORY ? '+' : ''}{fmt(tx.amount)}
           </p>
@@ -118,7 +118,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
+                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
                 aria-label={getSanitizedLabel(tx.merchant, 'Edit')}
               >
                 <Edit size={16} />
@@ -127,7 +127,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDuplicate(tx); }}
-                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
+                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
                 aria-label={getSanitizedLabel(tx.merchant, 'Duplicate')}
               >
                 <Copy size={16} />
@@ -136,7 +136,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onSplit(tx); }}
-                className="text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
+                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-btn"
                 aria-label={getSanitizedLabel(tx.merchant, 'Split')}
               >
                 <Scissors size={16} />
@@ -145,7 +145,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                 variant="ghost-destructive"
                 size="icon"
                 onClick={(e) => { e.stopPropagation(); onDelete(tx); }}
-                className="text-brand-400 dark:text-slate-500 hover:text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 rounded-lg"
+                className="text-brand-400 dark:text-brand-500 hover:text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-btn"
                 aria-label={getSanitizedLabel(tx.merchant, 'Delete')}
               >
                 <Trash2 size={16} />
@@ -159,7 +159,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
                   variant="ghost"
                   size="icon"
                   onClick={(e) => { e.stopPropagation(); onMore(tx); }}
-                  className="text-brand-400 dark:text-slate-500 active:bg-brand-100 dark:active:bg-slate-700/50 rounded-lg"
+                  className="text-brand-400 dark:text-brand-500 active:bg-brand-100 dark:active:bg-brand-700/50 rounded-btn"
                   aria-label={getSanitizedLabel(tx.merchant, 'More options')}
                 >
                   <MoreVertical size={20} />

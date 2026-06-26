@@ -23,7 +23,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
   const normalizeInsightText = (text: string | null | undefined): string =>
     (text ?? '').replace(/\s+/g, ' ').trim();
 
-  // Get actions from the latest insight if it matches the current display text
   const latestInsight = insightsHistory.length > 0 ? insightsHistory[0] : null;
   const insightActions =
     latestInsight && normalizeInsightText(latestInsight.text) === normalizeInsightText(insight)
@@ -41,18 +40,18 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
   };
 
   return (
-    <div className="bg-linear-to-br from-indigo-50/80 to-white/80 dark:from-indigo-500/10 dark:to-slate-800/60 backdrop-blur-md border border-indigo-100/50 dark:border-indigo-500/20 shadow-xs rounded-3xl p-6">
+    <div className="surface-section p-5">
       <div className="flex items-start gap-4">
-        <div className="p-2.5 bg-white/80 dark:bg-slate-800/70 backdrop-blur-xs rounded-xl shadow-xs text-indigo-500 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-500/20">
+        <div className="p-2.5 rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/40 dark:text-warm-300 shrink-0">
           <Sparkles size={20} />
         </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-bold text-indigo-400 dark:text-indigo-300 uppercase tracking-wider">AI Insight</h3>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-warm-600 dark:text-warm-300">AI Insight</h3>
             <div className="flex gap-2">
               <button
                 onClick={onOpenArchive}
-                className="flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all hover:bg-indigo-50 dark:hover:bg-slate-700"
+                className="flex items-center gap-1.5 px-3 min-h-11 bg-white dark:bg-brand-700/50 text-brand-600 dark:text-brand-200 border border-brand-200 dark:border-brand-700 rounded-btn text-xs font-semibold active:scale-95 transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700"
               >
                 <History size={12} />
                 History
@@ -60,30 +59,29 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
               <button
                 onClick={refreshInsight}
                 disabled={isGeneratingInsight}
-                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                className="flex items-center gap-1.5 px-3 min-h-11 bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400 text-white rounded-btn text-xs font-semibold shadow-btn-primary active:scale-95 transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 <Wand2 size={12} />
-                {isGeneratingInsight ? 'Generating...' : 'Get Insight'}
+                {isGeneratingInsight ? 'Generating…' : 'Get Insight'}
               </button>
             </div>
           </div>
           {isGeneratingInsight ? (
-            // "Generating" shimmer so a live AI call feels live.
-            <div className="mb-3 space-y-2" aria-live="polite" aria-busy="true">
+            <div className="mb-1 space-y-2" aria-live="polite" aria-busy="true">
               <span className="sr-only">Generating insight…</span>
-              <Skeleton className="h-4 w-full bg-indigo-200/60 dark:bg-indigo-500/20" />
-              <Skeleton className="h-4 w-11/12 bg-indigo-200/60 dark:bg-indigo-500/20" />
-              <Skeleton className="h-4 w-2/3 bg-indigo-200/60 dark:bg-indigo-500/20" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-2/3" />
             </div>
           ) : (
-            <p className="text-indigo-900 dark:text-indigo-100 font-medium leading-relaxed mb-3">
-              &quot;{insight}&quot;
+            <p className="font-display text-brand-800 dark:text-brand-100 leading-relaxed mb-3">
+              &ldquo;{insight}&rdquo;
             </p>
           )}
 
           {/* Action Pills */}
           {!isGeneratingInsight && insightActions && insightActions.length > 0 && (
-            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2">
+            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
               {insightActions.map((action, idx) => (
                 <button
                   key={idx}
@@ -94,7 +92,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
                       handleAction(action);
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-300 dark:border-indigo-500/20 rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all"
+                  className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-accent-50 text-accent-700 border border-brand-200 dark:bg-brand-700/50 dark:hover:bg-brand-700 dark:text-accent-200 dark:border-brand-700 rounded-btn text-xs font-semibold active:scale-95 transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard)"
                 >
                   {getActionIcon(action.type)}
                   {action.label}

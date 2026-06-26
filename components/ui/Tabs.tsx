@@ -109,7 +109,7 @@ export const TabsList: React.FC<{ children: React.ReactNode; className?: string 
   return (
     <div
       className={cn(
-        'bg-slate-100/80 dark:bg-slate-700/50 p-1.5 rounded-xl flex flex-nowrap gap-1 overflow-x-auto',
+        'bg-brand-100 dark:bg-brand-800 p-1 rounded-xl flex flex-nowrap gap-1 overflow-x-auto no-scrollbar border border-brand-200 dark:border-brand-700',
         className
       )}
       role="tablist"
@@ -150,10 +150,10 @@ export const TabsTrigger: React.FC<{
       onClick={() => !disabled && context.onValueChange(value)}
       disabled={disabled}
       className={cn(
-        'inline-flex flex-none items-center justify-center gap-2 px-3 py-2 text-sm font-semibold tracking-tight rounded-lg transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500',
+        'inline-flex flex-none items-center justify-center gap-2 px-3 py-2 text-sm font-semibold tracking-tight rounded-sm transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40',
         isActive
-          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-black/5 dark:bg-slate-800 dark:text-slate-100 dark:ring-white/10'
-          : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/50',
+          ? 'bg-white text-accent-700 border border-brand-200 dark:bg-brand-700 dark:text-accent-200 dark:border-brand-600'
+          : 'text-brand-500 hover:text-brand-700 hover:bg-white/60 dark:text-brand-400 dark:hover:text-brand-200 dark:hover:bg-brand-700/50',
         disabled && 'opacity-50 cursor-not-allowed',
         className
       )}
@@ -180,7 +180,7 @@ export const TabsContent: React.FC<{
       id={panelId}
       role="tabpanel"
       aria-labelledby={triggerId}
-      className={cn('animate-in fade-in duration-300', className)}
+      className={cn('animate-in fade-in duration-(--duration-base)', className)}
     >
       {children}
     </div>

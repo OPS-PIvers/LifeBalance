@@ -85,7 +85,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
-            className="fixed inset-0 z-modal bg-slate-900/60 backdrop-blur-xs"
+            className="fixed inset-0 z-modal bg-brand-900/60"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
             aria-hidden="true"
@@ -103,7 +103,7 @@ export const Drawer: React.FC<DrawerProps> = ({
               // `dvh` tracks the *visible* viewport, so the sheet (and its CTA)
               // isn't hidden behind the iOS software keyboard. `vh` is kept as a
               // fallback for browsers without dvh support.
-              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-slate-800 rounded-t-2xl shadow-xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col outline-hidden",
+              "fixed bottom-0 left-0 right-0 z-modal bg-white dark:bg-brand-800 border-t border-x border-brand-200 dark:border-brand-700 rounded-t-card shadow-raised max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col outline-hidden",
               // Fixed detent: stable frame that scrolls internally instead of
               // resizing as content changes between tabs/steps.
               height === 'tall' && "h-[90vh] supports-[height:100dvh]:h-[90dvh]",
@@ -125,14 +125,14 @@ export const Drawer: React.FC<DrawerProps> = ({
           >
              {/* Handle bar for visual cue */}
              <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
-               <div className="w-12 h-1.5 bg-gray-300 dark:bg-slate-600 rounded-full" />
+               <div className="w-12 h-1.5 bg-brand-300 dark:bg-brand-600 rounded-full" />
              </div>
 
              {/* Header */}
              {title && (
-               <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 dark:border-slate-700 shrink-0">
-                 <h3 id={titleId} className="font-bold text-lg text-slate-800 dark:text-slate-100">{title}</h3>
-                 <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 dark:text-slate-500 dark:hover:text-slate-200 dark:hover:bg-slate-700" aria-label="Close drawer" disabled={disableClose}>
+               <div className="px-4 py-3 flex items-center justify-between border-b border-brand-200 dark:border-brand-700 shrink-0">
+                 <h3 id={titleId} className="font-display font-semibold text-lg text-brand-800 dark:text-brand-100">{title}</h3>
+                 <button onClick={onClose} className="p-2 text-brand-400 hover:text-brand-600 rounded-full hover:bg-brand-100 dark:text-brand-500 dark:hover:text-brand-200 dark:hover:bg-brand-700" aria-label="Close drawer" disabled={disableClose}>
                    <X size={20} />
                  </button>
                </div>

@@ -121,7 +121,7 @@ describe('Input', () => {
     render(<Input label="Required Field" required />);
     const indicator = screen.getByText('*');
     expect(indicator).toBeInTheDocument();
-    expect(indicator).toHaveClass('text-rose-500');
+    expect(indicator).toHaveClass('text-money-neg');
     expect(indicator).toHaveAttribute('aria-hidden', 'true');
   });
 

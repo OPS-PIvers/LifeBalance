@@ -47,17 +47,14 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
       aria-label="Open Challenge Hub"
       onClick={onOpenModal}
       onKeyDown={handleKeyDown}
-      className="w-full text-left bg-linear-to-br from-brand-800 to-indigo-900 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform focus:outline-hidden focus-visible:ring-2 focus-visible:ring-white/50"
+      className="w-full text-left bg-brand-800 dark:bg-brand-900 border border-brand-700 rounded-lg p-5 text-white shadow-raised relative overflow-hidden cursor-pointer active:scale-[0.98] transition-transform duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-400/60"
     >
-      {/* Background decoration */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
-
       <div className="relative z-10">
         {/* Header with Day Indicator */}
         <div className="flex items-center justify-between mb-1">
-          <h2 className="font-bold text-lg">{activeChallenge.title}</h2>
+          <h2 className="font-display font-semibold text-lg">{activeChallenge.title}</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs bg-white/10 px-2 py-1 rounded-lg font-medium">
+            <span className="text-xs bg-white/10 px-2 py-1 rounded-btn font-medium">
               Day {todayDayOfMonth} of 30
             </span>
             <Pencil size={14} className="text-brand-300 opacity-70" />
@@ -72,14 +69,14 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
         {/* Reward Label — yearlyRewardLabel is optional (Plan 080e decoupled it
             from yearly goals), so only render the unlock line when one is set. */}
         {activeChallenge.yearlyRewardLabel && (
-          <p className="text-xs text-brand-300 mb-3">
+          <p className="text-xs text-warm-300 mb-3">
             Complete to unlock {activeChallenge.yearlyRewardLabel}
           </p>
         )}
 
         {/* Progress Bar */}
         <div
-          className="h-2 w-full bg-brand-900 rounded-full overflow-hidden mb-2"
+          className="h-2 w-full bg-brand-700 rounded-full overflow-hidden mb-2"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
@@ -87,7 +84,7 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
           aria-label={`Challenge progress: ${Math.round(challengeProgress)}% complete`}
         >
           <div
-            className="h-full bg-linear-to-r from-habit-gold to-orange-400 rounded-full transition-all duration-1000"
+            className="h-full bg-habit-gold rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)"
             style={{ width: `${challengeProgress}%` }}
           />
         </div>
@@ -110,11 +107,11 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
                 <span className="text-xs font-bold">{primaryYearlyGoal.title}</span>
               </div>
               <div
-                className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                className={`text-xs font-bold px-2 py-1 rounded-btn ${
                   primaryYearlyGoal.successfulMonths.length >=
                   primaryYearlyGoal.requiredMonths - 2
-                    ? 'bg-emerald-500/20 text-emerald-300'
-                    : 'bg-orange-500/20 text-orange-300'
+                    ? 'bg-money-pos/20 text-money-pos'
+                    : 'bg-warm-500/20 text-warm-300'
                 }`}
               >
                 {primaryYearlyGoal.successfulMonths.length >=

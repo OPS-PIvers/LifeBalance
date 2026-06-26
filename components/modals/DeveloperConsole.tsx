@@ -222,11 +222,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
       {/* Fill the sheet on mobile; keep a comfortable fixed height on desktop. */}
       <div className="flex flex-col h-full sm:h-[70vh]">
         {/* Sticky header so the title + close stay reachable while the body scrolls. */}
-        <div className="sticky top-0 z-10 shrink-0 px-4 py-3 sm:p-4 border-b border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800 flex justify-between items-center">
-            <h2 id="dev-console-title" className="text-lg sm:text-xl font-bold">Developer Console</h2>
+        <div className="sticky top-0 z-10 shrink-0 px-4 py-3 sm:p-4 border-b border-brand-200 dark:border-brand-700/60 bg-white dark:bg-brand-800 flex justify-between items-center">
+            <h2 id="dev-console-title" className="font-display text-lg sm:text-xl font-semibold">Developer Console</h2>
             <button
               onClick={onClose}
-              className="flex h-11 w-11 items-center justify-center -mr-2 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              className="flex h-11 w-11 items-center justify-center -mr-2 hover:bg-brand-100/50 dark:hover:bg-brand-700/50 rounded-full text-brand-500 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-200 transition-colors"
               aria-label="Close"
             >
               <X size={22} />
@@ -238,7 +238,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         <div
           role="tablist"
           aria-label="Developer Console sections"
-          className="shrink-0 flex gap-1.5 overflow-x-auto no-scrollbar px-3 py-2 sm:px-4 border-b border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-700/30 [scroll-snap-type:x_proximity]"
+          className="shrink-0 flex gap-1.5 overflow-x-auto no-scrollbar px-3 py-2 sm:px-4 border-b border-brand-200 dark:border-brand-700/60 bg-brand-50/50 dark:bg-brand-700/30 [scroll-snap-type:x_proximity]"
         >
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
@@ -248,10 +248,10 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors [scroll-snap-align:start] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
+                className={`flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors [scroll-snap-align:start] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 ${
                   isActive
-                    ? 'bg-brand-600 text-white shadow-sm dark:bg-brand-500'
-                    : 'bg-white text-slate-600 border border-slate-200/60 hover:bg-slate-100/70 hover:text-slate-800 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700/50 dark:hover:text-slate-200'
+                    ? 'bg-accent-600 text-white dark:bg-accent-500'
+                    : 'bg-white text-brand-600 border border-brand-200 hover:bg-brand-100/70 hover:text-brand-800 dark:bg-brand-800 dark:text-brand-400 dark:border-brand-700 dark:hover:bg-brand-700/50 dark:hover:text-brand-200'
                 }`}
               >
                 {tab.label}
@@ -261,10 +261,10 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         </div>
 
         {/* Content */}
-        <div className="flex-1 scroll-contain-y p-4 sm:p-6 bg-white dark:bg-slate-800">
+        <div className="flex-1 scroll-contain-y p-4 sm:p-6 bg-white dark:bg-brand-800">
           {loading ? (
             <div className="flex justify-center py-10">
-              <Loader2 className="w-8 h-8 text-brand-600 dark:text-slate-300 animate-spin" />
+              <Loader2 className="w-8 h-8 text-brand-600 dark:text-brand-300 animate-spin" />
             </div>
           ) : (
             <>
@@ -273,46 +273,46 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                   {/* Add form stacks on mobile so neither the input nor the button overflows. */}
                   <form
                     onSubmit={e => { e.preventDefault(); handleAddTester(); }}
-                    className="flex flex-col sm:flex-row gap-2 p-4 bg-slate-50/50 dark:bg-slate-700/30 rounded-xl border border-slate-200/60 dark:border-slate-700/60"
+                    className="flex flex-col sm:flex-row gap-2 p-4 bg-brand-50/50 dark:bg-brand-700/30 rounded-xl border border-brand-200 dark:border-brand-700/60"
                   >
                     <input
                       type="email"
                       required
                       placeholder="new@tester.com"
-                      className="flex-1 min-w-0 h-11 px-3 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                      className="flex-1 min-w-0 h-11 px-3 border border-brand-200 dark:border-brand-600 rounded-lg bg-white dark:bg-brand-800 text-brand-900 dark:text-brand-100 placeholder:text-brand-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
                       value={newTesterEmail}
                       onChange={e => setNewTesterEmail(e.target.value)}
                     />
-                    <button type="submit" className="h-11 bg-brand-600 text-white px-4 rounded-lg flex items-center justify-center gap-2 font-semibold hover:bg-brand-700 active:scale-[0.98] transition shrink-0">
+                    <button type="submit" className="h-11 bg-accent-600 dark:bg-accent-500 text-white px-4 rounded-btn flex items-center justify-center gap-2 font-semibold hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98] transition-colors duration-(--duration-fast) ease-(--ease-standard) shrink-0 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40">
                       <Plus size={16} /> Add Tester
                     </button>
                   </form>
 
                   {testers.length === 0 && (
-                    <div className="text-center py-12 text-slate-400 dark:text-slate-500">No beta testers yet.</div>
+                    <div className="text-center py-12 text-brand-400 dark:text-brand-500">No beta testers yet.</div>
                   )}
 
                   {/* Mobile: stacked cards (no cramped horizontal table). */}
                   <div className="space-y-3 md:hidden">
                     {testers.map(t => (
-                      <div key={t.id} className="p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60 bg-white dark:bg-slate-800">
+                      <div key={t.id} className="p-4 rounded-xl border border-brand-200 dark:border-brand-700/60 bg-white dark:bg-brand-800">
                         <div className="flex items-start justify-between gap-3">
-                          <p className="font-semibold text-slate-800 dark:text-slate-100 break-all min-w-0">{t.email}</p>
+                          <p className="font-semibold text-brand-800 dark:text-brand-100 break-all min-w-0">{t.email}</p>
                           <Badge variant={t.status === 'active' ? 'success' : 'danger'} size="sm">
                             {t.status}
                           </Badge>
                         </div>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Added {new Date(t.addedAt).toLocaleDateString()}</p>
+                        <p className="mt-1 text-xs text-brand-500 dark:text-brand-400">Added {new Date(t.addedAt).toLocaleDateString()}</p>
                         <div className="mt-3 flex items-center gap-2">
                           <button
                             onClick={() => toggleTesterStatus(t.id, t.status)}
-                            className="flex-1 min-h-[44px] rounded-lg text-sm font-bold border border-slate-200 dark:border-slate-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/15 active:scale-[0.98] transition"
+                            className="flex-1 min-h-[44px] rounded-lg text-sm font-bold border border-brand-200 dark:border-brand-600 text-habit-blue hover:bg-habit-blue/10 active:scale-[0.98] transition"
                           >
                             {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                           </button>
                           <button
                             onClick={() => deleteTester(t.id)}
-                            className="flex h-11 w-11 items-center justify-center shrink-0 rounded-lg text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 active:scale-[0.98] transition"
+                            className="flex h-11 w-11 items-center justify-center shrink-0 rounded-lg text-money-neg hover:bg-money-neg/10 active:scale-[0.98] transition"
                             aria-label={`Delete tester ${t.email}`}
                           >
                             <Trash2 size={18} />
@@ -325,7 +325,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                   {/* Desktop (md+): the compact table. */}
                   <div className="hidden md:block border rounded-xl overflow-hidden">
                     <table className="w-full text-sm text-left">
-                      <thead className="bg-slate-100/50 dark:bg-slate-700/30 text-slate-600 dark:text-slate-300 font-medium">
+                      <thead className="bg-brand-100/50 dark:bg-brand-700/30 text-brand-600 dark:text-brand-300 font-medium">
                         <tr>
                           <th className="p-3">Email</th>
                           <th className="p-3">Status</th>
@@ -333,21 +333,21 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                           <th className="p-3">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100/50">
+                      <tbody className="divide-y divide-brand-200">
                         {testers.map(t => (
-                          <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                          <tr key={t.id} className="hover:bg-brand-50/50 dark:hover:bg-brand-700/30">
                             <td className="p-3 font-medium">{t.email}</td>
                             <td className="p-3">
                               <Badge variant={t.status === 'active' ? 'success' : 'danger'} size="md">
                                 {t.status}
                               </Badge>
                             </td>
-                            <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(t.addedAt).toLocaleDateString()}</td>
+                            <td className="p-3 text-brand-500 dark:text-brand-400">{new Date(t.addedAt).toLocaleDateString()}</td>
                             <td className="p-3 flex gap-2">
-                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-blue-600 dark:text-blue-300 hover:underline text-xs font-bold">
+                              <button onClick={() => toggleTesterStatus(t.id, t.status)} className="text-habit-blue hover:underline text-xs font-bold">
                                 {t.status === 'active' ? 'REVOKE' : 'ACTIVATE'}
                               </button>
-                              <button onClick={() => deleteTester(t.id)} className="text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/20 p-1 rounded-sm ml-2" aria-label={`Delete tester ${t.email}`}>
+                              <button onClick={() => deleteTester(t.id)} className="text-money-neg hover:bg-money-neg/10 p-1 rounded-sm ml-2" aria-label={`Delete tester ${t.email}`}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -362,35 +362,35 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
               {activeTab === 'ai_meter' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-blue-50 dark:bg-blue-500/15 p-4 rounded-xl border border-blue-100 dark:border-blue-500/30">
-                      <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">Total Active Households</h3>
-                      <p className="text-3xl font-bold text-blue-900 dark:text-blue-200">{households.length}</p>
+                    <div className="bg-habit-blue/10 dark:bg-habit-blue/15 p-4 rounded-xl border border-habit-blue/30">
+                      <h3 className="text-sm font-medium text-habit-blue">Total Active Households</h3>
+                      <p className="text-3xl font-bold text-habit-blue">{households.length}</p>
                     </div>
                   </div>
 
                   <div className="border rounded-xl overflow-hidden">
-                    <div className="bg-slate-50/50 dark:bg-slate-700/30 px-4 py-3 border-b font-medium text-slate-700 dark:text-slate-200">Household Usage (Daily)</div>
+                    <div className="bg-brand-50/50 dark:bg-brand-700/30 px-4 py-3 border-b font-medium text-brand-700 dark:text-brand-200">Household Usage (Daily)</div>
                     <div className="divide-y">
                         {households.map(h => {
                             const usage = h.aiUsage?.dailyCount || 0;
                             const percentage = Math.min((usage / 20) * 100, 100);
                             return (
-                                <div key={h.id} className="p-4 hover:bg-slate-50/50 dark:hover:bg-slate-700/30">
+                                <div key={h.id} className="p-4 hover:bg-brand-50/50 dark:hover:bg-brand-700/30">
                                     {/* Stack name + a full-width bar on mobile; side-by-side at sm+. */}
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                                         <div className="min-w-0 sm:flex-1">
-                                            <p className="font-bold text-slate-800 dark:text-slate-100 truncate">{h.name}</p>
-                                            <p className="text-xs text-slate-400 dark:text-slate-500 font-mono truncate">{h.id}</p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
+                                            <p className="font-bold text-brand-800 dark:text-brand-100 truncate">{h.name}</p>
+                                            <p className="text-xs text-brand-400 dark:text-brand-500 font-mono truncate">{h.id}</p>
+                                            <p className="text-xs text-brand-500 dark:text-brand-400">Last Reset: {h.aiUsage?.lastResetDate || 'Never'}</p>
                                         </div>
                                         <div className="flex items-center gap-3 w-full sm:w-1/2 shrink-0">
-                                            <div className="flex-1 h-3 bg-slate-200/50 dark:bg-slate-700 rounded-full overflow-hidden">
+                                            <div className="flex-1 h-3 bg-brand-200/50 dark:bg-brand-700 rounded-full overflow-hidden">
                                                 <div
-                                                    className={`h-full transition-all ${percentage > 90 ? 'bg-red-500' : 'bg-brand-500'}`}
+                                                    className={`h-full transition-all ${percentage > 90 ? 'bg-money-neg' : 'bg-brand-500'}`}
                                                     style={{ width: `${percentage}%` }}
                                                 />
                                             </div>
-                                            <span className={`text-sm font-mono font-bold w-12 text-right shrink-0 ${percentage > 90 ? 'text-red-600 dark:text-red-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                                            <span className={`text-sm font-mono font-bold w-12 text-right shrink-0 ${percentage > 90 ? 'text-money-neg' : 'text-brand-600 dark:text-brand-300'}`}>
                                                 {usage}/20
                                             </span>
                                         </div>
@@ -399,7 +399,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                             );
                         })}
                         {households.length === 0 && (
-                            <div className="text-center py-12 text-slate-400 dark:text-slate-500">No households found.</div>
+                            <div className="text-center py-12 text-brand-400 dark:text-brand-500">No households found.</div>
                         )}
                     </div>
                   </div>
@@ -409,37 +409,37 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
               {activeTab === 'reports' && (
                 <div className="space-y-4">
                     {reports.map(report => (
-                        <div key={report.id} className="p-4 rounded-xl border border-slate-200/60 dark:border-slate-700/60 hover:shadow-md transition-shadow">
+                        <div key={report.id} className="p-4 rounded-xl border border-brand-200 dark:border-brand-700/60 hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard)">
                             <div className="flex justify-between items-start gap-2 mb-2">
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
-                                    <span className="text-xs font-mono bg-slate-100/50 dark:bg-slate-700/30 px-2 py-1 rounded-sm text-slate-600 dark:text-slate-300 font-bold">{report.version}</span>
-                                    <span className="text-xs text-slate-400 dark:text-slate-500">{new Date(report.timestamp).toLocaleString()}</span>
+                                    <span className="text-xs font-mono bg-brand-100/50 dark:bg-brand-700/30 px-2 py-1 rounded-sm text-brand-600 dark:text-brand-300 font-bold">{report.version}</span>
+                                    <span className="text-xs text-brand-400 dark:text-brand-500">{new Date(report.timestamp).toLocaleString()}</span>
                                 </div>
-                                <button onClick={() => copyReport(report)} className="flex h-11 w-11 items-center justify-center shrink-0 -mr-1 -mt-1 text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg active:scale-[0.98] transition" title="Copy JSON" aria-label="Copy report as JSON">
+                                <button onClick={() => copyReport(report)} className="flex h-11 w-11 items-center justify-center shrink-0 -mr-1 -mt-1 text-brand-600 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg active:scale-[0.98] transition" title="Copy JSON" aria-label="Copy report as JSON">
                                     <Copy size={18} />
                                 </button>
                             </div>
-                            <p className="text-slate-800 dark:text-slate-100 whitespace-pre-wrap break-words mb-3">{report.message}</p>
-                            <div className="pt-3 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
+                            <p className="text-brand-800 dark:text-brand-100 whitespace-pre-wrap break-words mb-3">{report.message}</p>
+                            <div className="pt-3 border-t border-brand-200 dark:border-brand-700/60 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-brand-500 dark:text-brand-400 font-mono">
                                 <span className="break-all">Route: {report.route}</span>
                                 <span className="break-all">UID: {report.userId}</span>
                                 <span className="break-all">HID: {report.householdId}</span>
                             </div>
                             {report.errorContext && (
-                                <div className="mt-2 bg-red-50 dark:bg-red-500/15 p-2 rounded-sm text-xs text-red-700 dark:text-red-300 font-mono overflow-x-auto border border-red-100 dark:border-red-500/30">
+                                <div className="mt-2 bg-money-bgNeg dark:bg-money-neg/15 p-2 rounded-sm text-xs text-money-neg font-mono overflow-x-auto border border-money-neg/30">
                                     <strong>Error Context:</strong><br/>
                                     {report.errorContext}
                                 </div>
                             )}
                         </div>
                     ))}
-                    {reports.length === 0 && <div className="text-center py-12 text-slate-400 dark:text-slate-500">No feedback reports found.</div>}
+                    {reports.length === 0 && <div className="text-center py-12 text-brand-400 dark:text-brand-500">No feedback reports found.</div>}
                 </div>
               )}
 
               {activeTab === 'flags' && (
                 <div className="space-y-3 sm:space-y-4">
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                  <p className="text-sm text-brand-500 dark:text-brand-400">
                     Global switches on <span className="font-mono">app_config/global</span>, effective for ALL users within ~60 s. Changes are confirmed before they apply.
                   </p>
                   {FEATURE_FLAGS.map(flag => {
@@ -449,13 +449,13 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                         key={flag.key}
                         className={`flex items-start justify-between gap-3 sm:gap-4 p-4 rounded-xl border ${
                           flag.danger
-                            ? 'border-amber-300/70 bg-amber-50/60 dark:border-amber-500/40 dark:bg-amber-500/10'
-                            : 'border-slate-200/60 bg-slate-50/50 dark:border-slate-700/60 dark:bg-slate-700/30'
+                            ? 'border-warm-300/70 bg-warm-50/60 dark:border-warm-800/60 dark:bg-warm-900/20'
+                            : 'border-brand-200 bg-brand-50/50 dark:border-brand-700/60 dark:bg-brand-700/30'
                         }`}
                       >
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                            <h3 className="font-bold text-slate-800 dark:text-slate-100">{flag.label}</h3>
+                            <h3 className="font-bold text-brand-800 dark:text-brand-100">{flag.label}</h3>
                             <Badge variant={isOn ? 'success' : 'neutral'} size="sm">
                               {isOn ? 'ON' : 'OFF'}
                             </Badge>
@@ -465,7 +465,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                               </Badge>
                             )}
                           </div>
-                          <p className="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{flag.description}</p>
+                          <p className="mt-1.5 text-xs leading-relaxed text-brand-500 dark:text-brand-400">{flag.description}</p>
                         </div>
                         {/* Reuse the shared Switch primitive (44px touch row, accessible
                             checkbox). Confirm-gated: onCheckedChange opens the dialog. */}

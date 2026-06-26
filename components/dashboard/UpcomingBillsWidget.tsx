@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
-import { CalendarClock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 const UPCOMING_DAYS_WINDOW = 14;
 const MAX_BILLS_TO_SHOW = 3;
@@ -21,7 +22,6 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
   const fmt = useFormatCurrency();
 
   const upcomingBills = useMemo(() => {
-    // Filter, sort, and transform
     return expanded
       .filter(item => item.type === 'expense' && !item.isPaid)
       .sort((a, b) => a.date.localeCompare(b.date))
@@ -29,14 +29,14 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
       .map(bill => {
         const date = parseISO(bill.date);
         let dateLabel = format(date, 'MMM d');
-        let urgencyClass = 'text-slate-500 dark:text-slate-400';
+        let urgencyClass = 'text-brand-500 dark:text-brand-400';
 
         if (isSameDay(date, today)) {
           dateLabel = 'Today';
-          urgencyClass = 'text-rose-600 font-bold';
+          urgencyClass = 'text-money-neg font-bold';
         } else if (isTomorrow(date)) {
           dateLabel = 'Tomorrow';
-          urgencyClass = 'text-amber-600 font-bold';
+          urgencyClass = 'text-warm-600 dark:text-warm-400 font-bold';
         }
 
         return {
@@ -51,50 +51,45 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
   if (upcomingBills.length === 0) return null;
 
   return (
-    <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-glass ring-1 ring-black/5 rounded-3xl p-6 animate-in fade-in slide-in-from-top-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <div className="p-1.5 bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300 rounded-lg">
-             <CalendarClock size={14} />
-          </div>
-          Upcoming Bills
-        </h2>
+    <Section
+      title="Upcoming bills"
+      action={
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
         >
           Calendar <ArrowRight size={12} />
         </Link>
-      </div>
-
-      <div className="space-y-3">
+      }
+    >
+      <SurfaceList>
         {upcomingBills.map(bill => (
-            <div key={bill.id} className="flex items-center justify-between group">
-              <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs shrink-0 group-hover:bg-white group-hover:shadow-xs transition-all dark:bg-slate-700/50 dark:border-slate-700 dark:text-slate-500 dark:group-hover:bg-slate-700">
-                    {bill.displayDate}
-                 </div>
-                 <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[120px]">{bill.title}</p>
-                    <p className={`text-xs ${bill.urgencyClass}`}>{bill.dateLabel}</p>
-                 </div>
+          <Row key={bill.id} className="justify-between group">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-card bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-500 font-mono font-bold tabular-nums text-xs shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-300">
+                {bill.displayDate}
               </div>
-              <div className="flex items-center gap-3">
-                 <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                    {fmt(bill.amount, { decimals: 0 })}
-                 </span>
-                 <button
-                   onClick={() => onPay(bill.id)}
-                   className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 rounded-xl transition-colors"
-                   title="Pay Bill"
-                   aria-label={`Pay ${bill.title}`}
-                 >
-                   <CheckCircle2 size={18} />
-                 </button>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[120px]">{bill.title}</p>
+                <p className={`text-xs ${bill.urgencyClass}`}>{bill.dateLabel}</p>
               </div>
             </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm">
+                {fmt(bill.amount, { decimals: 0 })}
+              </span>
+              <button
+                onClick={() => onPay(bill.id)}
+                className="p-2 text-money-pos bg-money-bgPos hover:brightness-95 dark:bg-money-pos/15 dark:hover:bg-money-pos/25 rounded-btn transition-[filter,colors] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+                title="Pay Bill"
+                aria-label={`Pay ${bill.title}`}
+              >
+                <CheckCircle2 size={18} />
+              </button>
+            </div>
+          </Row>
         ))}
-      </div>
-    </div>
+      </SurfaceList>
+    </Section>
   );
 };

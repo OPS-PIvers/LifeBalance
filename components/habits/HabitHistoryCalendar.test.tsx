@@ -113,8 +113,8 @@ describe('HabitHistoryCalendar', () => {
     render(<HabitHistoryCalendar />);
 
     // Initial state should be selected date (today = Jan 15)
-    expect(screen.getByText('January 15 Summary')).toBeInTheDocument();
-    expect(screen.getByText('2 Completed')).toBeInTheDocument();
+    expect(screen.getByText('January 15 summary')).toBeInTheDocument();
+    expect(screen.getByText('2 completed')).toBeInTheDocument();
     expect(screen.getByText('Workout')).toBeInTheDocument();
     expect(screen.getByText('Read')).toBeInTheDocument();
   });
@@ -129,8 +129,8 @@ describe('HabitHistoryCalendar', () => {
     const dayButton = screen.getByRole('button', { name: /Jan 16/i });
     await user.click(dayButton);
 
-    expect(screen.getByText('January 16 Summary')).toBeInTheDocument();
-    expect(screen.getByText('1 Completed')).toBeInTheDocument();
+    expect(screen.getByText('January 16 summary')).toBeInTheDocument();
+    expect(screen.getByText('1 completed')).toBeInTheDocument();
     expect(screen.getByText('Workout')).toBeInTheDocument();
     expect(screen.queryByText('Read')).not.toBeInTheDocument();
   });
@@ -143,8 +143,8 @@ describe('HabitHistoryCalendar', () => {
     const dayButton = screen.getByRole('button', { name: /Jan 10/i });
     await user.click(dayButton);
 
-    expect(screen.getByText('January 10 Summary')).toBeInTheDocument();
-    expect(screen.getByText('0 Completed')).toBeInTheDocument();
+    expect(screen.getByText('January 10 summary')).toBeInTheDocument();
+    expect(screen.getByText('0 completed')).toBeInTheDocument();
     expect(screen.getByText('No habits completed on this day.')).toBeInTheDocument();
   });
 
@@ -158,7 +158,7 @@ describe('HabitHistoryCalendar', () => {
     const dayButtons = screen.getAllByRole('button', { name: /Jan \d+/ });
     // Sample a few buttons
     dayButtons.slice(0, 5).forEach(btn => {
-       expect(btn).not.toHaveClass('bg-emerald-500');
+       expect(btn).not.toHaveClass('bg-accent-600');
     });
   });
 
@@ -167,25 +167,25 @@ describe('HabitHistoryCalendar', () => {
     render(<HabitHistoryCalendar />);
 
     // Select today (Jan 15)
-    expect(screen.getByText('January 15 Summary')).toBeInTheDocument();
-    expect(screen.getByText('0 Completed')).toBeInTheDocument();
+    expect(screen.getByText('January 15 summary')).toBeInTheDocument();
+    expect(screen.getByText('0 completed')).toBeInTheDocument();
   });
 
   it('applies intensity classes based on completion count', () => {
     // Setup: Max completions = 2 (Workout + Read on Jan 15)
-    // Jan 15: 2 completions (100% of max) -> should be darkest (emerald-500 or similar)
-    // Jan 16: 1 completion (50% of max) -> should be lighter
+    // Jan 15: 2 completions (100% of max) -> should be darkest (accent-600)
+    // Jan 16: 1 completion (50% of max) -> should be lighter (accent-500)
 
     render(<HabitHistoryCalendar />);
 
     const day15 = screen.getByRole('button', { name: /Jan 15/i });
     const day16 = screen.getByRole('button', { name: /Jan 16/i });
 
-    // Based on getIntensityClass logic in component:
-    // ratio 1.0 >= 0.75 -> bg-emerald-500
-    // ratio 0.5 >= 0.5 -> bg-emerald-400
+    // Based on getIntensityClass logic in component (evergreen accent ramp):
+    // ratio 1.0 >= 0.75 -> bg-accent-600
+    // ratio 0.5 >= 0.5 -> bg-accent-500
 
-    expect(day15).toHaveClass('bg-emerald-500');
-    expect(day16).toHaveClass('bg-emerald-400');
+    expect(day15).toHaveClass('bg-accent-600');
+    expect(day16).toHaveClass('bg-accent-500');
   });
 });

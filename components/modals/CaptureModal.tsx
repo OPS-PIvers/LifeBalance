@@ -486,9 +486,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   ];
 
   const headerContent = (
-    <div className="flex flex-col border-b border-brand-100 dark:border-slate-700 bg-white dark:bg-slate-800">
+    <div className="flex flex-col border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
       <div className="flex items-center justify-between px-6 py-4">
-        <h2 id="capture-drawer-title" className="text-xl font-bold text-brand-800 dark:text-slate-100">
+        <h2 id="capture-drawer-title" className="font-display text-xl font-semibold text-brand-800 dark:text-brand-100">
           {activeTab === 'transaction' && (
             view === 'menu' ? 'Add Transaction' :
             view === 'camera' ? 'Scan Receipt' :
@@ -543,8 +543,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
               {/* Processing View */}
               {view === 'processing' && (
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                  <Loader2 className="w-12 h-12 text-brand-600 dark:text-slate-300 animate-spin" />
-                  <p className="text-brand-500 dark:text-slate-400 font-medium">{processingMessage}</p>
+                  <Loader2 className="w-12 h-12 text-accent-600 dark:text-accent-300 animate-spin" />
+                  <p className="text-brand-500 dark:text-brand-400 font-medium">{processingMessage}</p>
                 </div>
               )}
 
@@ -574,9 +574,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
                     <button
                       onClick={capturePhoto}
                       aria-label="Capture photo"
-                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 backdrop-blur-xs flex items-center justify-center active:scale-90 transition-transform focus:outline-hidden focus:ring-2 focus:ring-brand-500"
+                      className="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center active:scale-90 transition-transform focus:outline-hidden focus:ring-2 focus:ring-white"
                     >
-                      <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full" />
+                      <div className="w-12 h-12 bg-white rounded-full" />
                     </button>
                   </div>
                 </div>

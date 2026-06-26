@@ -34,14 +34,14 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? 'px-3 py-2 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-lg text-sm text-brand-700 dark:text-slate-200 outline-hidden focus:border-brand-400 min-w-[120px]'
-    : 'w-full px-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl text-base text-brand-700 dark:text-slate-200 outline-hidden focus:border-brand-400';
+    ? 'px-3 py-2 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-sm text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20 min-w-[120px]'
+    : 'w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-card text-base text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20';
 
   return (
     <>
       {/* Category Filter */}
       <div className={isRow ? '' : 'space-y-1'}>
-        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Category</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-brand-300">Category</label>}
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
@@ -56,7 +56,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Source Filter */}
       <div className={isRow ? '' : 'space-y-1'}>
-        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Source</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-brand-300">Source</label>}
         <select
           value={sourceFilter}
           onChange={(e) => setSourceFilter(e.target.value)}
@@ -72,7 +72,7 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 
       {/* Store Filter */}
       <div className={isRow ? '' : 'space-y-1'}>
-        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-slate-300">Store</label>}
+        {!isRow && <label className="text-sm font-medium text-brand-600 dark:text-brand-300">Store</label>}
         <select
           value={storeFilter}
           onChange={(e) => setStoreFilter(e.target.value)}

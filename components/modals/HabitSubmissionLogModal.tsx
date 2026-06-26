@@ -228,11 +228,11 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       noPadding={true}
     >
       {/* Tab Navigation */}
-      <div className="px-4 pt-3 pb-0 border-b border-brand-100 dark:border-slate-700">
+      <div className="px-4 pt-3 pb-0 border-b border-brand-200 dark:border-brand-700">
         <div
           role="tablist"
           aria-label="Habit analytics tabs"
-          className="flex gap-1 bg-brand-50 dark:bg-slate-700/50 p-1 rounded-xl"
+          className="flex gap-1 bg-brand-50 dark:bg-brand-700/50 p-1 rounded-xl"
         >
           <button
             role="tab"
@@ -247,8 +247,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             }}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'log'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
-                : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
+                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
             }`}
           >
             <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
@@ -267,8 +267,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             }}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'stats'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
-                : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
+                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
             }`}
           >
             <BarChart3 className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
@@ -287,8 +287,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             }}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
               activeTab === 'calendar'
-                ? 'bg-white dark:bg-slate-800 text-brand-800 dark:text-slate-100 shadow-xs'
-                : 'text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300'
+                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
+                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
             }`}
           >
             <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
@@ -300,8 +300,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       {/* Content */}
       <div className="scroll-contain-y">
         {isLoading ? (
-          <div className="text-center py-12 text-brand-400 dark:text-slate-400">
-            <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-slate-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
+          <div className="text-center py-12 text-brand-400 dark:text-brand-400">
+            <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
             Loading...
           </div>
         ) : activeTab === 'calendar' ? (
@@ -312,20 +312,20 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             className="p-4 space-y-4"
           >
             {/* Calendar Controls */}
-            <div className="flex items-center justify-between bg-white dark:bg-slate-800 p-2 rounded-xl border border-brand-100 dark:border-slate-700 shadow-xs">
+            <div className="flex items-center justify-between bg-white dark:bg-brand-800 p-2 rounded-xl border border-brand-200 dark:border-brand-700 shadow-xs">
               <button
                 onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 transition-colors"
+                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Previous month"
               >
                 <ChevronLeft size={20} />
               </button>
-              <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">
+              <h3 className="text-lg font-bold text-brand-800 dark:text-brand-100">
                 {format(calendarDate, 'MMMM yyyy')}
               </h3>
               <button
                 onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 transition-colors"
+                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Next month"
               >
                 <ChevronRight size={20} />
@@ -334,13 +334,13 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Calendar Grid */}
             <div
-              className="bg-white dark:bg-slate-800 rounded-xl border border-brand-100 dark:border-slate-700 p-4 shadow-xs"
+              className="bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 p-4 shadow-xs"
               role="grid"
               aria-label={`Habit calendar for ${format(calendarDate, 'MMMM yyyy')}`}
             >
               <div className="grid grid-cols-7 mb-2" role="row">
                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                  <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-slate-500 py-2" role="columnheader">
+                  <div key={i} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2" role="columnheader">
                     {day}
                   </div>
                 ))}
@@ -365,8 +365,8 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                         aspect-square rounded-lg flex items-center justify-center text-sm font-medium relative
                         ${!isCurrentMonth ? 'opacity-30' : ''}
                         ${isCompleted
-                          ? (habit.type === 'positive' ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold' : 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold')
-                          : 'bg-brand-50 dark:bg-slate-700/50 text-brand-400 dark:text-slate-400 hover:bg-brand-100 dark:hover:bg-slate-700/50'
+                          ? (habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos font-bold' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg font-bold')
+                          : 'bg-brand-50 dark:bg-brand-700/50 text-brand-400 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-700/50'
                         }
                         ${isTodayDate && !isCompleted ? 'ring-2 ring-brand-400' : ''}
                       `}
@@ -374,7 +374,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     >
                       {format(day, 'd')}
                       {isCompleted && (
-                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${habit.type === 'positive' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <div className={`absolute bottom-1 w-1 h-1 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
                       )}
                     </div>
                   );
@@ -383,15 +383,15 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             </div>
 
             {/* Summary */}
-            <div className="bg-brand-50 dark:bg-slate-700/50 rounded-xl p-4 flex items-center gap-4">
-              <div className={`p-3 rounded-full ${habit.type === 'positive' ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300'}`}>
+            <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl p-4 flex items-center gap-4">
+              <div className={`p-3 rounded-full ${habit.type === 'positive' ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'}`}>
                 <CheckCircle2 size={24} />
               </div>
               <div>
-                <p className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase tracking-wide">
+                <p className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase tracking-wide">
                   {format(calendarDate, 'MMMM')} Performance
                 </p>
-                <p className="text-xl font-bold text-brand-800 dark:text-slate-100">
+                <p className="text-xl font-bold text-brand-800 dark:text-brand-100">
                   {calendarData.completionsInMonth} day{calendarData.completionsInMonth !== 1 ? 's' : ''} completed
                 </p>
               </div>
@@ -406,48 +406,48 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           >
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-linear-to-br from-emerald-50 to-emerald-100 dark:from-emerald-500/10 dark:to-emerald-500/10 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/30">
+              <div className="bg-money-bgPos dark:bg-money-pos/10 p-4 rounded-xl border border-money-pos/30">
                 <div className="flex items-center gap-2 mb-1">
-                  <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-300" />
-                  <span className="text-xs font-bold text-emerald-600 dark:text-emerald-300 uppercase tracking-wide">Total Points</span>
+                  <Award className="w-4 h-4 text-money-pos" />
+                  <span className="text-xs font-bold text-money-pos uppercase tracking-wide">Total Points</span>
                 </div>
-                <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-200">{analytics.totalPoints.toLocaleString()}</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-300 mt-1">
+                <p className="font-mono text-2xl font-bold tabular-nums text-money-pos">{analytics.totalPoints.toLocaleString()}</p>
+                <p className="text-xs text-money-pos mt-1">
                   {analytics.averagePointsPerSubmission.toFixed(1)} avg/submission
                 </p>
               </div>
 
-              <div className="bg-linear-to-br from-purple-50 to-purple-100 dark:from-purple-500/10 dark:to-purple-500/10 p-4 rounded-xl border border-purple-200 dark:border-purple-500/30">
+              <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
                 <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-purple-600 dark:text-purple-300" />
-                  <span className="text-xs font-bold text-purple-600 dark:text-purple-300 uppercase tracking-wide">Submissions</span>
+                  <TrendingUp className="w-4 h-4 text-warm-600 dark:text-warm-300" />
+                  <span className="text-xs font-bold text-warm-700 dark:text-warm-300 uppercase tracking-wide">Submissions</span>
                 </div>
-                <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">{analytics.totalSubmissions}</p>
-                <p className="text-xs text-purple-600 dark:text-purple-300 mt-1">
+                <p className="font-mono text-2xl font-bold tabular-nums text-warm-700 dark:text-warm-200">{analytics.totalSubmissions}</p>
+                <p className="text-xs text-warm-600 dark:text-warm-300 mt-1">
                   {analytics.totalCount} total actions
                 </p>
               </div>
 
-              <div className="bg-linear-to-br from-orange-50 to-orange-100 dark:from-orange-500/10 dark:to-orange-500/10 p-4 rounded-xl border border-orange-200 dark:border-orange-500/30">
+              <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
                 <div className="flex items-center gap-2 mb-1">
-                  <Flame className="w-4 h-4 text-orange-600 dark:text-orange-300" />
-                  <span className="text-xs font-bold text-orange-600 dark:text-orange-300 uppercase tracking-wide">Current Streak</span>
+                  <Flame className="w-4 h-4 text-habit-streak" />
+                  <span className="text-xs font-bold text-habit-streak uppercase tracking-wide">Current Streak</span>
                 </div>
-                <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{analytics.currentStreak}</p>
-                <p className="text-xs text-orange-600 dark:text-orange-300 mt-1">
+                <p className="font-mono text-2xl font-bold tabular-nums text-habit-streak">{analytics.currentStreak}</p>
+                <p className="text-xs text-warm-600 dark:text-warm-300 mt-1">
                   {analytics.maxStreak} day max
                 </p>
               </div>
 
-              <div className="bg-linear-to-br from-blue-50 to-blue-100 dark:from-blue-500/10 dark:to-blue-500/10 p-4 rounded-xl border border-blue-200 dark:border-blue-500/30">
+              <div className="bg-habit-blue/10 dark:bg-habit-blue/15 p-4 rounded-xl border border-habit-blue/30">
                 <div className="flex items-center gap-2 mb-1">
-                  <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-300" />
-                  <span className="text-xs font-bold text-blue-600 dark:text-blue-300 uppercase tracking-wide">Multiplier</span>
+                  <BarChart3 className="w-4 h-4 text-habit-blue" />
+                  <span className="text-xs font-bold text-habit-blue uppercase tracking-wide">Multiplier</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+                <p className="font-mono text-2xl font-bold tabular-nums text-habit-blue">
                   {analytics.currentStreak >= 7 ? '2.0x' : analytics.currentStreak >= 3 ? '1.5x' : '1.0x'}
                 </p>
-                <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                <p className="text-xs text-habit-blue mt-1">
                   Current bonus
                 </p>
               </div>
@@ -455,10 +455,10 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Weekly Breakdown */}
             {analytics.weeklyData.length > 0 && (
-              <div className="bg-brand-50 dark:bg-slate-700/50 rounded-xl border border-brand-100 dark:border-slate-700 overflow-hidden">
-                <div className="p-3 border-b border-brand-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                  <h3 className="text-sm font-bold text-brand-800 dark:text-slate-100">Weekly Breakdown</h3>
-                  <p className="text-xs text-brand-400 dark:text-slate-400 mt-0.5">Points earned per week</p>
+              <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700 overflow-hidden">
+                <div className="p-3 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+                  <h3 className="text-sm font-bold text-brand-800 dark:text-brand-100">Weekly Breakdown</h3>
+                  <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">Points earned per week</p>
                 </div>
                 <div className="p-3 space-y-2">
                   {analytics.weeklyData.map((week, idx) => {
@@ -468,14 +468,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                     return (
                       <div key={idx}>
                         <div className="flex justify-between items-baseline mb-1">
-                          <span className="text-xs font-bold text-brand-600 dark:text-slate-300">{week.label}</span>
-                          <span className="text-xs text-brand-400 dark:text-slate-400">
+                          <span className="text-xs font-bold text-brand-600 dark:text-brand-300">{week.label}</span>
+                          <span className="text-xs text-brand-400 dark:text-brand-400">
                             {week.points} pts • {week.count} actions
                           </span>
                         </div>
-                        <div className="h-2 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
+                        <div className="h-2 bg-brand-100 dark:bg-brand-700/50 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-linear-to-r from-emerald-400 to-emerald-600 rounded-full transition-all duration-500"
+                            className="h-full bg-linear-to-r from-money-pos to-accent-600 rounded-full transition-all duration-500"
                             style={{ width: `${barWidth}%` }}
                           />
                         </div>
@@ -488,10 +488,10 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Time of Day Distribution */}
             {Object.keys(analytics.dailyDistribution).length > 0 && (
-              <div className="bg-brand-50 dark:bg-slate-700/50 rounded-xl border border-brand-100 dark:border-slate-700 overflow-hidden">
-                <div className="p-3 border-b border-brand-200 dark:border-slate-700 bg-white dark:bg-slate-800">
-                  <h3 className="text-sm font-bold text-brand-800 dark:text-slate-100">Time Patterns</h3>
-                  <p className="text-xs text-brand-400 dark:text-slate-400 mt-0.5">When you complete this habit</p>
+              <div className="bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700 overflow-hidden">
+                <div className="p-3 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
+                  <h3 className="text-sm font-bold text-brand-800 dark:text-brand-100">Time Patterns</h3>
+                  <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">When you complete this habit</p>
                 </div>
                 <div className="p-3 space-y-2">
                   {Object.entries(analytics.dailyDistribution)
@@ -503,14 +503,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                       return (
                         <div key={period}>
                           <div className="flex justify-between items-baseline mb-1">
-                            <span className="text-xs font-bold text-brand-600 dark:text-slate-300">{period}</span>
-                            <span className="text-xs text-brand-400 dark:text-slate-400">
+                            <span className="text-xs font-bold text-brand-600 dark:text-brand-300">{period}</span>
+                            <span className="text-xs text-brand-400 dark:text-brand-400">
                               {count} time{count !== 1 ? 's' : ''}
                             </span>
                           </div>
-                          <div className="h-2 bg-brand-100 dark:bg-slate-700/50 rounded-full overflow-hidden">
+                          <div className="h-2 bg-brand-100 dark:bg-brand-700/50 rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-linear-to-r from-purple-400 to-purple-600 rounded-full transition-all duration-500"
+                              className="h-full bg-linear-to-r from-habit-blue to-accent-500 rounded-full transition-all duration-500"
                               style={{ width: `${barWidth}%` }}
                             />
                           </div>
@@ -523,7 +523,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Empty State */}
             {analytics.totalSubmissions === 0 && (
-              <div className="text-center py-12 text-brand-400 dark:text-slate-400">
+              <div className="text-center py-12 text-brand-400 dark:text-brand-400">
                 <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
                 <p className="font-bold">No data yet</p>
                 <p className="text-xs mt-1">Start logging submissions to see analytics</p>
@@ -541,7 +541,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             {!isAddMode && (
               <button
                 onClick={() => setIsAddMode(true)}
-                className="w-full mb-4 py-3 bg-brand-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
+                className="w-full mb-4 py-3 bg-warm-500 text-white font-semibold rounded-btn flex items-center justify-center gap-2 hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
               >
                 <Plus size={16} /> Add Submission
               </button>
@@ -549,52 +549,52 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Add Form */}
             {isAddMode && (
-              <div className="mb-4 p-4 bg-brand-50 dark:bg-slate-700/50 rounded-xl border border-brand-200 dark:border-slate-700">
-                <h3 className="font-bold text-sm text-brand-700 dark:text-slate-200 mb-3">New Submission</h3>
+              <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700">
+                <h3 className="font-bold text-sm text-brand-700 dark:text-brand-200 mb-3">New Submission</h3>
                 <div className="grid grid-cols-3 gap-2 mb-3">
                   <div>
-                    <label htmlFor={dateInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Date</label>
+                    <label htmlFor={dateInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Date</label>
                     <input
                       id={dateInputId}
                       type="date"
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
                       max={getLocalDateString()}
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
                     />
                   </div>
                   <div>
-                    <label htmlFor={timeInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Time</label>
+                    <label htmlFor={timeInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Time</label>
                     <input
                       id={timeInputId}
                       type="time"
                       value={formTime}
                       onChange={(e) => setFormTime(e.target.value)}
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
                     />
                   </div>
                   <div>
-                    <label htmlFor={countInputId} className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Count</label>
+                    <label htmlFor={countInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
                     <input
                       id={countInputId}
                       type="number"
                       value={formCount}
                       onChange={(e) => setFormCount(e.target.value)}
                       min="1"
-                      className="w-full p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-400"
+                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
                     />
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setIsAddMode(false)}
-                    className="flex-1 py-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 text-brand-600 dark:text-slate-300 font-bold rounded-lg hover:bg-brand-50 dark:hover:bg-slate-700/50 active:scale-98 transition-all"
+                    className="flex-1 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-lg hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleAdd}
-                    className="flex-1 py-2 bg-brand-800 text-white font-bold rounded-lg hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
+                    className="flex-1 py-2 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
                   >
                     Add
                   </button>
@@ -605,7 +605,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             {/* Submissions List */}
             <div className="space-y-3">
               {Object.keys(groupedSubmissions).length === 0 ? (
-                <div className="text-center py-12 text-brand-400 dark:text-slate-400 border-2 border-dashed border-brand-200 dark:border-slate-700 rounded-xl">
+                <div className="text-center py-12 text-brand-400 dark:text-brand-400 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-xl">
                   <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p className="font-bold">No submissions yet</p>
                   <p className="text-xs mt-1">Click &quot;Add Submission&quot; to get started</p>
@@ -616,45 +616,45 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   const dayCount = subs.reduce((sum, s) => sum + s.count, 0);
 
                   return (
-                    <div key={date} className="border border-brand-100 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
-                      <div className="bg-linear-to-r from-brand-50 to-brand-100 dark:from-slate-700/50 dark:to-slate-700/50 px-3 py-2.5 flex items-center justify-between">
+                    <div key={date} className="border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden shadow-xs">
+                      <div className="bg-brand-50 dark:bg-brand-700/50 px-3 py-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <Calendar size={14} className="text-brand-600 dark:text-slate-300 shrink-0" />
-                          <span className="text-xs font-bold text-brand-800 dark:text-slate-100 truncate">
+                          <Calendar size={14} className="text-brand-600 dark:text-brand-300 shrink-0" />
+                          <span className="text-xs font-bold text-brand-800 dark:text-brand-100 truncate">
                             {format(parseISO(date), 'MMMM d, yyyy')}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className="text-xs bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                          <span className="text-xs bg-money-bgPos dark:bg-money-pos/15 text-money-pos px-2 py-0.5 rounded-full font-bold">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
                           </span>
-                          <span className="text-xxs text-brand-400 dark:text-slate-400 font-bold">
+                          <span className="text-xxs text-brand-400 dark:text-brand-400 font-bold">
                             {dayCount} log{dayCount !== 1 ? 's' : ''}
                           </span>
                         </div>
                       </div>
-                      <div className="divide-y divide-brand-100">
+                      <div className="divide-y divide-brand-200">
                         {subs.map((sub) => (
-                          <div key={sub.id} className="p-3 flex items-center justify-between hover:bg-brand-50/50 dark:hover:bg-slate-700/50 transition-colors">
+                          <div key={sub.id} className="p-3 flex items-center justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-mono font-bold text-brand-800 dark:text-slate-100">
+                                <span className="text-sm font-mono font-bold text-brand-800 dark:text-brand-100">
                                   {format(parseISO(sub.timestamp), 'h:mm a')}
                                 </span>
-                                <span className="text-xs bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                                <span className="text-xs bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full font-bold">
                                   ×{sub.count}
                                 </span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                                  sub.pointsEarned >= 0 ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                  sub.pointsEarned >= 0 ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
                                 }`}>
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
                                 </span>
                               </div>
-                              <div className="text-xxs text-brand-400 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                              <div className="text-xxs text-brand-400 dark:text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
                                 <span>{sub.multiplierApplied}x multiplier</span>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">
-                                  <Flame size={10} className={sub.streakDaysAtTime >= 3 ? 'text-orange-500 dark:text-orange-300' : 'text-brand-400 dark:text-slate-400'} />
+                                  <Flame size={10} className={sub.streakDaysAtTime >= 3 ? 'text-habit-streak' : 'text-brand-400 dark:text-brand-400'} />
                                   {sub.streakDaysAtTime} day{sub.streakDaysAtTime !== 1 ? 's' : ''}
                                 </span>
                               </div>
@@ -665,14 +665,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                   setEditingSubmission(sub);
                                   setFormCount(sub.count.toString());
                                 }}
-                                className="p-2 text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 hover:bg-brand-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+                                className="p-2 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
                                 aria-label="Edit submission"
                               >
                                 <Edit2 size={14} />
                               </button>
                               <button
                                 onClick={() => handleDelete(sub.id)}
-                                className="p-2 text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-500/20 rounded-lg transition-colors"
+                                className="p-2 text-brand-400 hover:text-money-neg hover:bg-money-neg/10 rounded-lg transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                                 aria-label="Delete submission"
                               >
                                 <Trash2 size={14} />
@@ -692,12 +692,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
       {/* Edit Modal (nested) */}
       {editingSubmission && (
-        <div className="absolute inset-0 bg-white dark:bg-slate-800 z-10 p-4 flex flex-col">
+        <div className="absolute inset-0 bg-white dark:bg-brand-800 z-10 p-4 flex flex-col">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-brand-800 dark:text-slate-100">Edit Submission</h3>
+            <h3 className="font-bold text-brand-800 dark:text-brand-100">Edit Submission</h3>
             <button
               onClick={() => setEditingSubmission(null)}
-              className="text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-300 p-1 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+              className="text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 p-1 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
               aria-label="Close edit"
             >
               <X size={20} />
@@ -705,18 +705,18 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="text-xs text-brand-400 dark:text-slate-400 block mb-1 font-bold">Count</label>
+            <label className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
             <input
               type="number"
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
               min="1"
-              className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-brand-400"
+              className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
             />
           </div>
 
-          <div className="bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3 mb-4">
-            <p className="text-xs text-amber-700 dark:text-amber-300">
+          <div className="bg-warm-50 dark:bg-warm-900/20 border border-warm-200 dark:border-warm-800/60 rounded-xl p-3 mb-4">
+            <p className="text-xs text-warm-700 dark:text-warm-300">
               <strong>Note:</strong> Editing count will recalculate points for this submission.
               Date and time cannot be changed - delete and re-add instead.
             </p>
@@ -725,13 +725,13 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           <div className="mt-auto flex gap-2">
             <button
               onClick={() => setEditingSubmission(null)}
-              className="flex-1 py-3 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 text-brand-600 dark:text-slate-300 font-bold rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700/50 active:scale-98 transition-all"
+              className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-xl hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
             >
               Cancel
             </button>
             <button
               onClick={handleUpdate}
-              className="flex-1 py-3 bg-brand-800 text-white font-bold rounded-xl hover:bg-brand-900 active:scale-98 transition-all shadow-xs"
+              className="flex-1 py-3 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
             >
               Save Changes
             </button>

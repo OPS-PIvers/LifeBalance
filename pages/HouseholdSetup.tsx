@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Home, Users, Plus, LogIn, Loader2, ArrowLeft } from 'lucide-react';
+import { Home, Users, Plus, LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { createHousehold, joinHousehold } from '@/services/householdService';
 import { parseInviteCode } from '@/utils/inviteLink';
+import { Button } from '@/components/ui/Button';
 import toast from 'react-hot-toast';
 
 type ViewMode = 'choice' | 'create' | 'join';
@@ -28,15 +29,15 @@ const ConsentCheckbox: React.FC<ConsentCheckboxProps> = ({ id, checked, onChange
       checked={checked}
       onChange={(e) => onChange(e.target.checked)}
       disabled={disabled}
-      className="mt-0.5 h-4 w-4 shrink-0 rounded border-brand-300 dark:border-slate-600 text-brand-600 focus:ring-2 focus:ring-brand-500 disabled:opacity-50"
+      className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-2 focus:ring-accent-500/40 disabled:opacity-50"
     />
-    <label htmlFor={id} className="text-xs text-brand-600 dark:text-slate-300 leading-relaxed">
+    <label htmlFor={id} className="text-xs text-brand-600 dark:text-brand-300 leading-relaxed">
       I agree to the{' '}
       <a
         href="#/terms"
         target="_blank"
         rel="noopener noreferrer"
-        className="font-medium text-brand-700 dark:text-brand-300 underline hover:text-brand-800 dark:hover:text-brand-200"
+        className="font-medium text-accent-700 dark:text-accent-300 underline hover:text-accent-800 dark:hover:text-accent-200"
       >
         Terms of Service
       </a>{' '}
@@ -45,7 +46,7 @@ const ConsentCheckbox: React.FC<ConsentCheckboxProps> = ({ id, checked, onChange
         href="#/privacy"
         target="_blank"
         rel="noopener noreferrer"
-        className="font-medium text-brand-700 dark:text-brand-300 underline hover:text-brand-800 dark:hover:text-brand-200"
+        className="font-medium text-accent-700 dark:text-accent-300 underline hover:text-accent-800 dark:hover:text-accent-200"
       >
         Privacy Policy
       </a>
@@ -136,18 +137,18 @@ const HouseholdSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white dark:bg-brand-800 rounded-lg border border-brand-200 dark:border-brand-700 shadow-raised p-8 space-y-6">
           {/* Header */}
           <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-accent-600 dark:bg-accent-500 rounded-2xl mb-4">
               <Home className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 dark:text-slate-100 mb-2">
-              Set Up Your Household
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-800 dark:text-brand-100 mb-2">
+              Set up your household
             </h1>
-            <p className="text-brand-500 dark:text-slate-400 text-sm">
+            <p className="text-brand-500 dark:text-brand-400 text-sm">
               Create a new household or join an existing one
             </p>
           </div>
@@ -155,21 +156,24 @@ const HouseholdSetup: React.FC = () => {
           {/* Choice View */}
           {mode === 'choice' && (
             <div className="space-y-3">
-              <button
+              <Button
+                size="lg"
+                className="w-full"
+                leftIcon={<Plus size={20} />}
                 onClick={() => setMode('create')}
-                className="w-full bg-brand-600 text-white font-semibold py-4 px-6 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
               >
-                <Plus size={20} />
-                <span>Create New Household</span>
-              </button>
+                Create new household
+              </Button>
 
-              <button
+              <Button
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                leftIcon={<LogIn size={20} />}
                 onClick={() => setMode('join')}
-                className="w-full bg-white dark:bg-slate-800 border-2 border-brand-200 dark:border-slate-700 text-brand-800 dark:text-slate-100 font-semibold py-4 px-6 rounded-xl hover:bg-brand-50 dark:hover:bg-slate-700/50 hover:border-brand-300 dark:hover:border-slate-600 active:scale-95 transition-all duration-200 flex items-center justify-center gap-3"
               >
-                <LogIn size={20} />
-                <span>Join Existing Household</span>
-              </button>
+                Join existing household
+              </Button>
             </div>
           )}
 
@@ -179,22 +183,22 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+                className="flex items-center gap-2 text-brand-500 dark:text-brand-400 hover:text-accent-600 dark:hover:text-accent-300 font-medium text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard)"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 dark:text-slate-200 mb-2">
-                  Household Name
+                <label className="block text-sm font-semibold text-brand-700 dark:text-brand-200 mb-2">
+                  Household name
                 </label>
                 <input
                   type="text"
                   value={householdName}
                   onChange={(e) => setHouseholdName(e.target.value)}
                   placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 border-2 border-brand-200 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                  className="w-full px-4 py-3 bg-white border border-brand-200 dark:border-brand-700 dark:bg-brand-900/40 text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-card focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400"
                   required
                   disabled={loading}
                 />
@@ -207,23 +211,16 @@ const HouseholdSetup: React.FC = () => {
                 disabled={loading}
               />
 
-              <button
+              <Button
                 type="submit"
+                size="lg"
+                className="w-full"
                 disabled={loading || !householdName.trim() || !consentChecked}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                isLoading={loading}
+                leftIcon={<Users size={20} />}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Creating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Users size={20} />
-                    <span>Create Household</span>
-                  </>
-                )}
-              </button>
+                {loading ? 'Creating…' : 'Create household'}
+              </Button>
             </form>
           )}
 
@@ -233,27 +230,27 @@ const HouseholdSetup: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setMode('choice')}
-                className="flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+                className="flex items-center gap-2 text-brand-500 dark:text-brand-400 hover:text-accent-600 dark:hover:text-accent-300 font-medium text-sm transition-colors duration-(--duration-fast) ease-(--ease-standard)"
               >
                 <ArrowLeft size={16} />
                 <span>Back</span>
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 dark:text-slate-200 mb-2">
-                  Invite Code
+                <label className="block text-sm font-semibold text-brand-700 dark:text-brand-200 mb-2">
+                  Invite code
                 </label>
                 <input
                   type="text"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 border-2 border-brand-200 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-brand-500 focus:border-transparent font-mono text-lg tracking-wider text-center uppercase"
+                  className="w-full px-4 py-3 bg-white border border-brand-200 dark:border-brand-700 dark:bg-brand-900/40 text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-card focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400 font-mono text-lg tracking-wider text-center uppercase"
                   maxLength={6}
                   required
                   disabled={loading}
                 />
-                <p className="text-xs text-brand-500 dark:text-slate-400 mt-2">
+                <p className="text-xs text-brand-500 dark:text-brand-400 mt-2">
                   Enter the 6-character code shared by your household admin
                 </p>
               </div>
@@ -265,23 +262,16 @@ const HouseholdSetup: React.FC = () => {
                 disabled={loading}
               />
 
-              <button
+              <Button
                 type="submit"
+                size="lg"
+                className="w-full"
                 disabled={loading || inviteCode.length !== 6 || !consentChecked}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                isLoading={loading}
+                leftIcon={<LogIn size={20} />}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Joining...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={20} />
-                    <span>Join Household</span>
-                  </>
-                )}
-              </button>
+                {loading ? 'Joining…' : 'Join household'}
+              </Button>
             </form>
           )}
         </div>
