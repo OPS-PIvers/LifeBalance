@@ -58,6 +58,19 @@ Bakery:
     expect(result.indexOf('APPLE STORE')).toBeLessThan(result.indexOf('ZEBRA MART'));
   });
 
+  it('merges store and category case variants into one section', () => {
+    const items: ShoppingItem[] = [
+      { id: '1', name: 'Apples', category: 'Produce', store: 'Safeway', isPurchased: false },
+      { id: '2', name: 'Bananas', category: 'produce', store: 'safeway', isPurchased: false }
+    ];
+    const result = formatShoppingListForShare(items);
+    // Only one SAFEWAY header and one Produce category despite mixed casing.
+    expect(result.match(/SAFEWAY/g)?.length).toBe(1);
+    expect(result.match(/Produce:/gi)?.length).toBe(1);
+    expect(result).toContain('☐ Apples');
+    expect(result).toContain('☐ Bananas');
+  });
+
   it('sorts categories alphabetically within a store', () => {
     const items: ShoppingItem[] = [
       { id: '1', name: 'B', category: 'Zebra', store: 'Target', isPurchased: false },
