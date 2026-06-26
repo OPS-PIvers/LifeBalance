@@ -1,10 +1,13 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import DeveloperConsole from './DeveloperConsole';
+import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY } from '@/services/appConfig';
+import { resetAiEnabledCache } from '@/services/geminiService';
 
-// Mock Modal component
+// Mock Modal component — render children when open so nested dialogs (ConfirmDialog,
+// which is built on Modal) also render their controls during the test.
 vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean; onClose: () => void }) => {
     if (!isOpen) return null;
@@ -30,8 +33,26 @@ vi.mock('firebase/firestore', () => ({
   updateDoc: vi.fn(),
   doc: vi.fn(),
   deleteDoc: vi.fn(),
+  setDoc: vi.fn(),
+  getDoc: vi.fn(),
   orderBy: vi.fn(),
   limit: vi.fn(),
+}));
+
+// Mock the app-config service so the Feature Flags tab reads/writes through a
+// controllable seam (no real Firestore). setAppFlag is asserted directly.
+vi.mock('@/services/appConfig', async () => {
+  const actual = await vi.importActual<typeof import('@/services/appConfig')>('@/services/appConfig');
+  return {
+    ...actual,
+    readAppConfigFlags: vi.fn(),
+    setAppFlag: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+// Mock geminiService so flipping the AI flag can be asserted without pulling the SDK.
+vi.mock('@/services/geminiService', () => ({
+  resetAiEnabledCache: vi.fn(),
 }));
 
 // Mock toast
@@ -49,13 +70,27 @@ vi.mock('lucide-react', () => ({
   Trash2: () => <div data-testid="icon-trash" />,
   Copy: () => <div data-testid="icon-copy" />,
   X: () => <div data-testid="icon-x" />,
+  AlertTriangle: () => <div data-testid="icon-alert" />,
 }));
+
+const mockedReadFlags = vi.mocked(readAppConfigFlags);
+const mockedSetFlag = vi.mocked(setAppFlag);
+const mockedResetAiCache = vi.mocked(resetAiEnabledCache);
+
+/** Default effective-flag state: the three gates off, AI fail-open ON. */
+const DEFAULT_FLAGS: Record<string, boolean> = {
+  openSignup: false,
+  billingEnabled: false,
+  kidModeEnabled: false,
+  [AI_ENABLED_FLAG_KEY]: true,
+};
 
 describe('DeveloperConsole', () => {
   const mockOnClose = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedReadFlags.mockResolvedValue({ ...DEFAULT_FLAGS });
   });
 
   it('renders correctly when open', async () => {
@@ -93,5 +128,104 @@ describe('DeveloperConsole', () => {
     await user.click(closeButton);
 
     expect(mockOnClose).toHaveBeenCalled();
+  });
+
+  describe('Feature Flags tab', () => {
+    /** Render, switch to the Feature Flags tab, and wait for the flags to load. */
+    const openFlagsTab = async (user: ReturnType<typeof userEvent.setup>) => {
+      render(<DeveloperConsole isOpen={true} onClose={mockOnClose} />);
+      await user.click(screen.getByRole('tab', { name: 'Feature Flags' }));
+      await waitFor(() => {
+        expect(mockedReadFlags).toHaveBeenCalled();
+        expect(screen.queryByTestId('icon-loader')).not.toBeInTheDocument();
+      });
+    };
+
+    it('renders all four flags with their effective ON/OFF state', async () => {
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      // All four flag labels render.
+      const kidRow = screen.getByText('Kid Mode').closest('div')!;
+      const billingRow = screen.getByText('Billing / Freemium').closest('div')!;
+      const signupRow = screen.getByText('Open Signup').closest('div')!;
+      const aiRow = screen.getByText('AI Enabled').closest('div')!;
+
+      // Three gates default OFF...
+      expect(within(kidRow).getByText('OFF')).toBeInTheDocument();
+      expect(within(billingRow).getByText('OFF')).toBeInTheDocument();
+      expect(within(signupRow).getByText('OFF')).toBeInTheDocument();
+      // ...and the AI master switch is fail-open ON by default.
+      expect(within(aiRow).getByText('ON')).toBeInTheDocument();
+    });
+
+    it('shows aiEnabled as ON when the field is absent (fail-open default)', async () => {
+      // readAppConfigFlags is responsible for the fail-open default; assert the UI
+      // surfaces ON when it returns aiEnabled: true for an absent field.
+      mockedReadFlags.mockResolvedValue({
+        openSignup: false,
+        billingEnabled: false,
+        kidModeEnabled: false,
+        [AI_ENABLED_FLAG_KEY]: true,
+      });
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      const aiToggle = screen.getByRole('checkbox', { name: /Turn AI Enabled OFF/i });
+      expect(aiToggle).toBeChecked();
+    });
+
+    it('confirm-gates a flip and calls setAppFlag with the right key/value on confirm', async () => {
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      // Kid Mode is OFF → its switch prompts to turn ON.
+      const kidToggle = screen.getByRole('checkbox', { name: /Turn Kid Mode ON/i });
+      await user.click(kidToggle);
+
+      // A confirm dialog appears; nothing is written yet.
+      expect(mockedSetFlag).not.toHaveBeenCalled();
+      const confirmBtn = await screen.findByRole('button', { name: /Turn ON/i });
+
+      await user.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(mockedSetFlag).toHaveBeenCalledWith('kidModeEnabled', true);
+      });
+      // Non-AI flag: the gemini cache reset is NOT called.
+      expect(mockedResetAiCache).not.toHaveBeenCalled();
+      // Flags are re-read from source of truth after the write.
+      expect(mockedReadFlags).toHaveBeenCalledTimes(2);
+    });
+
+    it('flipping the AI master switch OFF also resets the gemini cache', async () => {
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      // AI is ON → its switch prompts to turn OFF.
+      const aiToggle = screen.getByRole('checkbox', { name: /Turn AI Enabled OFF/i });
+      await user.click(aiToggle);
+
+      const confirmBtn = await screen.findByRole('button', { name: /Turn OFF/i });
+      await user.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(mockedSetFlag).toHaveBeenCalledWith(AI_ENABLED_FLAG_KEY, false);
+      });
+      expect(mockedResetAiCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not write when the confirm dialog is cancelled', async () => {
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      const billingToggle = screen.getByRole('checkbox', { name: /Turn Billing \/ Freemium ON/i });
+      await user.click(billingToggle);
+
+      const cancelBtn = await screen.findByRole('button', { name: /Cancel/i });
+      await user.click(cancelBtn);
+
+      expect(mockedSetFlag).not.toHaveBeenCalled();
+    });
   });
 });

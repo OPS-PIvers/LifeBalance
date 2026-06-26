@@ -1,5 +1,5 @@
 import { db } from '@/firebase.config';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 /**
  * Reader for the shared `app_config/global` Firestore doc — the same operator
@@ -13,9 +13,10 @@ import { doc, getDoc } from 'firebase/firestore';
  *     (Private Alpha — current behavior).
  *
  * A human flips it WITHOUT a deploy by setting
- * `app_config/global.openSignup = true` in the Firestore console. When opening
- * signup, also add the production origin to Firebase Auth → Settings →
- * Authorized domains so Google Sign-In is permitted from it.
+ * `app_config/global.openSignup = true` in the Firestore console, or live via
+ * Settings → Developer Console → Feature Flags. When opening signup, also add the
+ * production origin to Firebase Auth → Settings → Authorized domains so Google
+ * Sign-In is permitted from it.
  *
  * Fail-safe direction is the OPPOSITE of the AI kill-switch: this guards
  * *access*, so it fails CLOSED — a missing doc, absent field, or read error
@@ -78,7 +79,8 @@ let billingEnabledFetchedAt = 0;
  * operator has explicitly set the boolean `billingEnabled: true`. While off, no
  * upgrade UI shows and the AI quota keeps its legacy cap for everyone — so flipping
  * this is what actually launches the tiered limits. A human flips it WITHOUT a
- * deploy in the Firestore console (effective within ~60 s).
+ * deploy in the Firestore console, or live via Settings → Developer Console →
+ * Feature Flags (effective within ~60 s).
  */
 export const getBillingEnabled = (): Promise<boolean> => {
   const now = Date.now();
@@ -117,7 +119,8 @@ let kidModeEnabledFetchedAt = 0;
  * the read throws, so Kid Mode stays **dormant** unless an operator has explicitly
  * set the boolean `kidModeEnabled: true`. While off, no switcher or kid view shows
  * and households behave exactly as before. A human flips it WITHOUT a deploy in the
- * Firestore console (effective within ~60 s).
+ * Firestore console, or live via Settings → Developer Console → Feature Flags
+ * (effective within ~60 s).
  */
 export const getKidModeEnabled = (): Promise<boolean> => {
   // DEV + TEST-MODE ONLY short-circuit. In Test Mode the mock backend can't reach
@@ -157,4 +160,82 @@ export const getKidModeEnabled = (): Promise<boolean> => {
   })();
 
   return kidModeEnabledPromise;
+};
+
+/**
+ * The exact field name of the AI master kill-switch on `app_config/global`, owned
+ * by `geminiService.getAiEnabled()`. Unlike the other three flags it is **fail-OPEN**:
+ * AI is ON unless this field is explicitly the boolean `false`.
+ */
+export const AI_ENABLED_FLAG_KEY = 'aiEnabled' as const;
+
+/**
+ * Reads `app_config/global` ONCE (not through the cached single-flag getters) and
+ * returns all four operator flags as their **effective** booleans — i.e. what the
+ * running app actually does right now:
+ *
+ *   - `openSignup`, `billingEnabled`, `kidModeEnabled` — fail-CLOSED: `true` only
+ *     when the field is the boolean `true`; absent / non-boolean / missing-doc → `false`.
+ *   - `aiEnabled` — fail-OPEN to match `geminiService.getAiEnabled()`: `true` unless
+ *     the field is explicitly the boolean `false`. So an absent field or missing doc
+ *     reads back as `true`, truthfully reflecting that AI is live by default.
+ *
+ * Used by the admin Feature Flags panel so the toggles show the real effective state.
+ * On read error every flag falls back to its fail-safe default (the three access/
+ * billing gates → `false`, the AI switch → `true`).
+ */
+export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => {
+  try {
+    const globalConfigRef = doc(db, 'app_config', 'global');
+    const snap = await getDoc(globalConfigRef);
+    const data = snap.exists() ? snap.data() : {};
+    return {
+      openSignup: data.openSignup === true,
+      billingEnabled: data.billingEnabled === true,
+      kidModeEnabled: data.kidModeEnabled === true,
+      // Fail-open: only an explicit boolean false disables AI.
+      [AI_ENABLED_FLAG_KEY]: data[AI_ENABLED_FLAG_KEY] !== false,
+    };
+  } catch {
+    // Each flag falls back to its fail-safe default if the doc is unreachable.
+    return {
+      openSignup: false,
+      billingEnabled: false,
+      kidModeEnabled: false,
+      [AI_ENABLED_FLAG_KEY]: true,
+    };
+  }
+};
+
+/**
+ * Writes a single operator flag to `app_config/global` with **merge** so the other
+ * flags on the doc are never clobbered, then invalidates this module's caches so the
+ * operator's own session re-reads the new value immediately (rather than waiting out
+ * the 60 s TTL).
+ *
+ * Note: this does NOT reset `geminiService`'s separate kill-switch cache — callers
+ * flipping the AI flag should also invoke `geminiService.resetAiEnabledCache()` so the
+ * AI SDK module stays out of this SDK-free config module.
+ */
+export const setAppFlag = async (key: string, value: boolean): Promise<void> => {
+  await setDoc(doc(db, 'app_config', 'global'), { [key]: value }, { merge: true });
+  invalidateAppConfigCaches();
+};
+
+/**
+ * Resets the three module-level flag caches (promise → `null`, fetchedAt → `0`) so the
+ * next `getOpenSignup` / `getBillingEnabled` / `getKidModeEnabled` performs a fresh
+ * Firestore read instead of returning a stale cached promise. Called by `setAppFlag`
+ * after a write so an operator sees their change take effect at once.
+ *
+ * Does not touch `geminiService`'s kill-switch cache (that module owns the `aiEnabled`
+ * read); reset it there via `resetAiEnabledCache()` to keep this module SDK-free.
+ */
+export const invalidateAppConfigCaches = (): void => {
+  openSignupPromise = null;
+  openSignupFetchedAt = 0;
+  billingEnabledPromise = null;
+  billingEnabledFetchedAt = 0;
+  kidModeEnabledPromise = null;
+  kidModeEnabledFetchedAt = 0;
 };
