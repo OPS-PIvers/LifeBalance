@@ -129,7 +129,18 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             <div
                 role="button"
                 tabIndex={0}
-                onPointerDown={(e) => dragControls.start(e)}
+                onPointerDownCapture={(e) => {
+                    // Start ONLY the vertical reorder gesture from the handle, and
+                    // stop the pointer event in the capture phase before it reaches
+                    // the parent swipe layer's `drag="x"` listener. Otherwise both
+                    // framer-motion drag gestures start on the same pointer and
+                    // contend for the single global drag lock: the losing gesture's
+                    // onMove silently no-ops and the conflicted pointer-up can skip
+                    // the Reorder.Item's onDragEnd, which leaves the item visually
+                    // "stuck" (dark) and un-draggable until a full page reload.
+                    e.stopPropagation();
+                    dragControls.start(e);
+                }}
                 onKeyDown={(e) => {
                     // Space/Enter don't initiate drag but ensure the element is reachable
                     // by keyboard; actual reorder via keyboard is handled by edit flow.
