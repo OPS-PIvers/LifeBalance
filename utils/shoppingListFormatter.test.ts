@@ -49,6 +49,18 @@ Bakery:
     expect(result.indexOf('COSTCO')).toBeLessThan(result.indexOf('OTHER'));
   });
 
+  it('does not merge a real store named "Other" with the no-store section', () => {
+    const items: ShoppingItem[] = [
+      { id: '1', name: 'Snacks', category: 'Misc', store: 'Other', isPurchased: false },
+      { id: '2', name: 'Batteries', category: 'Misc', isPurchased: false }
+    ];
+    const result = formatShoppingListForShare(items);
+    // Two distinct sections, both rendered "OTHER", kept separate.
+    expect(result.match(/^OTHER$/gm)?.length).toBe(2);
+    // The real "Other" store sorts before the no-store catch-all section.
+    expect(result.indexOf('Snacks')).toBeLessThan(result.indexOf('Batteries'));
+  });
+
   it('sorts stores alphabetically', () => {
     const items: ShoppingItem[] = [
       { id: '1', name: 'B', category: 'Misc', store: 'Zebra Mart', isPurchased: false },

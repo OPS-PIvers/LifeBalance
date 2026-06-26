@@ -1,8 +1,10 @@
 import { ShoppingItem } from '@/types/schema';
 
-// Items without a store are collected under this section, shown last.
-// Store headers are uppercased, so this key is uppercase too.
-const NO_STORE_LABEL = 'OTHER';
+// Internal sentinel key for items without a store. Real store keys are
+// uppercased (see below), so this lowercase value can never collide with one.
+const NO_STORE_KEY = '__no_store__';
+// Display label for the no-store section (headers are uppercased on output).
+const NO_STORE_LABEL = 'Other';
 // Unicode empty checkbox (U+2610) reads as a tappable bullet when pasted into messages.
 const BULLET = '☐';
 
@@ -13,22 +15,22 @@ export const formatShoppingListForShare = (items: ShoppingItem[]): string => {
   // Store headers are uppercased, so key by the uppercase name to merge
   // case variants (e.g. "Safeway" and "safeway") into one section.
   const byStore = items.reduce((acc, item) => {
-    const store = item.store?.trim().toUpperCase() || NO_STORE_LABEL;
+    const store = item.store?.trim().toUpperCase() || NO_STORE_KEY;
     (acc[store] ??= []).push(item);
     return acc;
   }, {} as Record<string, ShoppingItem[]>);
 
   // Stores alphabetical, but the catch-all "Other" group always comes last.
   const sortedStores = Object.keys(byStore).sort((a, b) => {
-    if (a === NO_STORE_LABEL) return 1;
-    if (b === NO_STORE_LABEL) return -1;
+    if (a === NO_STORE_KEY) return 1;
+    if (b === NO_STORE_KEY) return -1;
     return a.localeCompare(b);
   });
 
   const lines: string[] = ['🛒 Shopping List', ''];
 
   sortedStores.forEach(store => {
-    lines.push(store);
+    lines.push(store === NO_STORE_KEY ? NO_STORE_LABEL.toUpperCase() : store);
     lines.push('');
 
     // store comes from Object.keys(byStore), so byStore[store] is always defined.
