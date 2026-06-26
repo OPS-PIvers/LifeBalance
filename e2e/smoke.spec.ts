@@ -58,19 +58,21 @@ test.describe('LifeBalance smoke (Test Mode)', () => {
     ).toBeVisible();
   });
 
-  test('navigates to Budget and Habits via the bottom nav', async ({ page }) => {
+  test('navigates to Money and Habits via the bottom nav', async ({ page }) => {
     await enterTestMode(page);
 
     // Scope nav clicks to the bottom-nav landmark: the dashboard also renders
-    // "View Budget" / "Details" links to the same routes, so a page-wide
-    // `getByRole('link', { name: 'Budget' })` is ambiguous. The nav links have
-    // the exact accessible names "Budget" and "Habits".
+    // links to the same routes, so a page-wide `getByRole('link')` is ambiguous.
+    // The nav links have the exact accessible names "Money" and "Habits".
     const nav = page.getByRole('navigation', { name: /main navigation/i });
 
-    // --- Budget ---
-    await nav.getByRole('link', { name: 'Budget', exact: true }).click();
+    // --- Money (label renamed from "Budget"; the route is still /#/budget) ---
+    await nav.getByRole('link', { name: 'Money', exact: true }).click();
     await expect(page).toHaveURL(/#\/budget$/);
-    // "Groceries" is a seeded budget bucket (SEED_BUCKETS in MockHouseholdContext).
+    // Money opens on the Overview tab; "Groceries" is a seeded bucket
+    // (SEED_BUCKETS in MockHouseholdContext) shown on the Buckets tab, so switch
+    // to it first.
+    await page.getByRole('tab', { name: 'Buckets' }).click();
     await expect(page.getByText('Groceries').first()).toBeVisible();
 
     // --- Habits ---
