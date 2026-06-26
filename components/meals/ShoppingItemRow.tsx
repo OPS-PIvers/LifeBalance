@@ -130,6 +130,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                 role="button"
                 tabIndex={0}
                 onPointerDownCapture={(e) => {
+                    // Only react to the primary button / touch contact. Without this,
+                    // a right-click on the handle would be swallowed (blocking the
+                    // context menu) and would needlessly start a drag.
+                    if (e.button !== 0) return;
                     // Start ONLY the vertical reorder gesture from the handle, and
                     // stop the pointer event in the capture phase before it reaches
                     // the parent swipe layer's `drag="x"` listener. Otherwise both
