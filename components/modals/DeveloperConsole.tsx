@@ -239,7 +239,7 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex min-h-[40px] items-center whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors [scroll-snap-align:start] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
+                className={`flex min-h-[44px] items-center whitespace-nowrap rounded-full px-4 text-sm font-semibold transition-colors [scroll-snap-align:start] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
                   isActive
                     ? 'bg-brand-600 text-white shadow-sm dark:bg-brand-500'
                     : 'bg-white text-slate-600 border border-slate-200/60 hover:bg-slate-100/70 hover:text-slate-800 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 dark:hover:bg-slate-700/50 dark:hover:text-slate-200'
