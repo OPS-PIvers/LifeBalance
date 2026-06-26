@@ -126,10 +126,11 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   }, [isOpen, activeTab, loadData]);
 
   const handleAddTester = async () => {
-    if (!newTesterEmail) return;
+    const email = newTesterEmail.trim();
+    if (!email) return;
     try {
       const newTester: Omit<BetaTester, 'id'> = {
-        email: newTesterEmail,
+        email,
         addedAt: new Date().toISOString(),
         status: 'active',
         usageLimit: 20
@@ -198,8 +199,16 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   };
 
   const copyReport = (report: FeedbackReport) => {
-    navigator.clipboard.writeText(JSON.stringify(report, null, 2));
-    toast.success("Report JSON copied");
+    if (!navigator.clipboard) {
+      toast.error('Clipboard not available in this browser');
+      return;
+    }
+    navigator.clipboard.writeText(JSON.stringify(report, null, 2))
+      .then(() => toast.success('Report JSON copied'))
+      .catch(err => {
+        console.error('Failed to copy report:', err);
+        toast.error('Failed to copy to clipboard');
+      });
   };
 
   return (
@@ -262,19 +271,22 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
               {activeTab === 'testers' && (
                 <div className="space-y-6">
                   {/* Add form stacks on mobile so neither the input nor the button overflows. */}
-                  <div className="flex flex-col sm:flex-row gap-2 p-4 bg-slate-50/50 dark:bg-slate-700/30 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                  <form
+                    onSubmit={e => { e.preventDefault(); handleAddTester(); }}
+                    className="flex flex-col sm:flex-row gap-2 p-4 bg-slate-50/50 dark:bg-slate-700/30 rounded-xl border border-slate-200/60 dark:border-slate-700/60"
+                  >
                     <input
                       type="email"
+                      required
                       placeholder="new@tester.com"
                       className="flex-1 min-w-0 h-11 px-3 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500/40"
                       value={newTesterEmail}
                       onChange={e => setNewTesterEmail(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleAddTester(); }}
                     />
-                    <button onClick={handleAddTester} className="h-11 bg-brand-600 text-white px-4 rounded-lg flex items-center justify-center gap-2 font-semibold hover:bg-brand-700 active:scale-[0.98] transition shrink-0">
+                    <button type="submit" className="h-11 bg-brand-600 text-white px-4 rounded-lg flex items-center justify-center gap-2 font-semibold hover:bg-brand-700 active:scale-[0.98] transition shrink-0">
                       <Plus size={16} /> Add Tester
                     </button>
-                  </div>
+                  </form>
 
                   {testers.length === 0 && (
                     <div className="text-center py-12 text-slate-400 dark:text-slate-500">No beta testers yet.</div>
