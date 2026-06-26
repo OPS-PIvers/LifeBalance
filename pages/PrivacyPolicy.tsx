@@ -11,13 +11,13 @@ import { CONSENT_VERSION } from '@/utils/legal';
  */
 const PrivacyPolicy: React.FC = () => {
   return (
-    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-slate-900 py-10 px-4">
+    <div className="min-h-screen bg-linear-to-br from-brand-100 via-brand-50 to-money-50 dark:from-brand-900 dark:via-brand-900 dark:to-brand-900 py-10 px-4">
       <div className="w-full max-w-2xl mx-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl p-8 space-y-6">
+        <div className="bg-white dark:bg-brand-800 rounded-2xl shadow-2xl p-8 space-y-6">
           {/* Back link */}
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+            className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200 font-medium text-sm"
           >
             <ArrowLeft size={16} />
             <span>Back</span>
@@ -28,10 +28,10 @@ const PrivacyPolicy: React.FC = () => {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-4">
               <ShieldCheck className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-brand-800 dark:text-slate-100 mb-1">
+            <h1 className="text-2xl font-bold text-brand-800 dark:text-brand-100 mb-1">
               Privacy Policy
             </h1>
-            <p className="text-brand-500 dark:text-slate-400 text-sm">
+            <p className="text-brand-500 dark:text-brand-400 text-sm">
               How LifeBalance handles your information
             </p>
           </div>
@@ -47,9 +47,9 @@ const PrivacyPolicy: React.FC = () => {
           </div>
 
           {/* Body */}
-          <div className="space-y-6 text-sm leading-relaxed text-brand-700 dark:text-slate-300">
+          <div className="space-y-6 text-sm leading-relaxed text-brand-700 dark:text-brand-300">
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 1. Who we are
               </h2>
               <p>
@@ -62,7 +62,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 2. Information we collect
               </h2>
               <ul className="list-disc pl-5 space-y-1">
@@ -103,7 +103,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 3. How we use your information
               </h2>
               <ul className="list-disc pl-5 space-y-1">
@@ -121,7 +121,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 4. AI features &amp; your data
               </h2>
               <p>
@@ -168,7 +168,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 5. How your data is stored &amp; processed
               </h2>
               <p>
@@ -181,7 +181,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 6. Data retention &amp; deletion
               </h2>
               <p>
@@ -195,7 +195,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 7. Children&apos;s use
               </h2>
               <p>
@@ -208,7 +208,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 8. Changes to this policy
               </h2>
               <p>
@@ -220,7 +220,7 @@ const PrivacyPolicy: React.FC = () => {
             </section>
 
             <section className="space-y-2">
-              <h2 className="text-lg font-semibold text-brand-800 dark:text-slate-100">
+              <h2 className="text-lg font-semibold text-brand-800 dark:text-brand-100">
                 9. Contact &amp; governing law
               </h2>
               <p>
@@ -235,7 +235,7 @@ const PrivacyPolicy: React.FC = () => {
           <div className="pt-2 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center gap-2 text-brand-600 dark:text-slate-300 hover:text-brand-700 dark:hover:text-slate-200 font-medium text-sm"
+              className="inline-flex items-center gap-2 text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:hover:text-brand-200 font-medium text-sm"
             >
               <ArrowLeft size={16} />
               <span>Back to sign in</span>
