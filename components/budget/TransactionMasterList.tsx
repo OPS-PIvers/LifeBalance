@@ -368,26 +368,26 @@ const TransactionMasterList: React.FC = () => {
   });
 
   return (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-4 animate-in fade-in duration-(--duration-base)">
       {/* Filters Card */}
-      <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass space-y-3">
+      <div className="surface-section p-5 space-y-3">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500" size={18} />
           <input
             type="text"
             aria-label="Search transactions"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl outline-hidden focus:border-brand-400 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500"
+            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-card outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20 transition-colors dark:text-brand-100 dark:placeholder:text-brand-500"
           />
           {searchTerm && (
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-slate-500 hover:text-brand-600 dark:hover:text-slate-300 h-auto p-0 hover:bg-transparent shadow-none"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 h-auto p-0 hover:bg-transparent shadow-none"
             >
               <X size={16} />
             </Button>
@@ -402,7 +402,7 @@ const TransactionMasterList: React.FC = () => {
              onClick={() => setIsFilterDrawerOpen(true)}
            >
              <Filter size={16} className="mr-2" />
-             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 dark:bg-slate-700 text-brand-700 dark:text-slate-200 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
+             Filters {activeFilterCount > 0 && <span className="ml-1 bg-brand-100 dark:bg-brand-700 text-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-full text-xs">{activeFilterCount}</span>}
            </Button>
 
            <Button
@@ -475,29 +475,29 @@ const TransactionMasterList: React.FC = () => {
       </div>
 
       {/* Summary Widget */}
-      <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-6 rounded-2xl ring-1 ring-black/5 shadow-glass">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Income</p>
-            <p className="text-lg font-bold text-money-pos font-mono">
+      <div className="surface-section p-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
+            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Income</p>
+            <p className="text-lg font-bold text-money-pos font-mono tabular-nums">
               +{fmt(summary.income)}
             </p>
           </div>
-          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Expense</p>
-            <p className="text-lg font-bold text-money-neg font-mono">
+          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
+            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Expense</p>
+            <p className="text-lg font-bold text-money-neg font-mono tabular-nums">
               -{fmt(summary.expense)}
             </p>
           </div>
-          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Net</p>
-            <p className={`text-lg font-bold font-mono ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
+          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
+            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Net</p>
+            <p className={`text-lg font-bold font-mono tabular-nums ${net >= 0 ? 'text-money-pos' : 'text-money-neg'}`}>
               {net >= 0 ? '+' : ''}{fmt(net)}
             </p>
           </div>
-          <div className="bg-slate-50/50 dark:bg-slate-700/50 p-4 rounded-xl ring-1 ring-black/5">
-            <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Count</p>
-            <p className="text-lg font-bold text-slate-700 dark:text-slate-200 font-mono">
+          <div className="bg-brand-50 dark:bg-brand-700/40 p-4 rounded-card border border-brand-200 dark:border-brand-700">
+            <p className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">Count</p>
+            <p className="text-lg font-bold text-brand-700 dark:text-brand-200 font-mono tabular-nums">
               {summary.count}
             </p>
           </div>
@@ -506,13 +506,13 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Select All Bar */}
       {isSelectionMode && (
-        <div className="flex items-center justify-between px-2 text-sm text-brand-600 dark:text-slate-300">
+        <div className="flex items-center justify-between px-2 text-sm text-brand-600 dark:text-brand-300">
           <Button
             variant="link"
             onClick={handleSelectAll}
             className="flex items-center gap-2 font-bold hover:no-underline"
           >
-            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600 dark:text-slate-300' : 'text-brand-300 dark:text-slate-600'} />
+            <CheckSquare size={16} className={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'text-brand-600 dark:text-brand-300' : 'text-brand-300 dark:text-brand-600'} />
             Select All ({filteredTransactions.length})
           </Button>
           <span className="text-xs">{selectedIds.size} selected</span>
@@ -521,7 +521,7 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Windowing notice: filters/search only apply to the loaded window */}
       {transactionWindowStart && hasMoreTransactions && (searchTerm.trim() !== '' || activeFilterCount > 0) && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200/60 dark:ring-amber-500/20 text-sm text-amber-800 dark:text-amber-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 rounded-card bg-warm-50 dark:bg-warm-500/10 border border-warm-200 dark:border-warm-500/20 text-sm text-warm-800 dark:text-warm-200">
           <span>Showing recent transactions only — older ones aren’t searched yet.</span>
           <Button
             variant="secondary"
@@ -540,12 +540,12 @@ const TransactionMasterList: React.FC = () => {
       {filteredTransactions.length === 0 ? (
         transactions.length === 0 && searchTerm.trim() === '' && activeFilterCount === 0 ? (
           /* Zero-data empty state: no transactions at all and no active filters */
-          <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-800/40">
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4 text-slate-400 dark:text-slate-500">
+          <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-300 dark:border-brand-700 rounded-card bg-white dark:bg-brand-800">
+            <div className="w-16 h-16 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
               <Receipt size={28} />
             </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No transactions yet</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+            <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">No transactions yet</h3>
+            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
               Start tracking your spending by adding your first transaction.
             </p>
             <Button
@@ -561,11 +561,11 @@ const TransactionMasterList: React.FC = () => {
         ) : (
           /* Filter-empty state: transactions exist but none match the current search/filters */
           <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center mb-4">
-              <Filter className="w-7 h-7 text-slate-400 dark:text-slate-500" />
+            <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
+              <Filter className="w-7 h-7 text-brand-400 dark:text-brand-500" />
             </div>
-            <h3 className="text-base font-bold text-brand-800 dark:text-slate-100">No transactions found</h3>
-            <p className="text-sm text-brand-500 dark:text-slate-400 mt-1 max-w-xs">
+            <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-100">No transactions found</h3>
+            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
               Nothing matches your current search and filters.
             </p>
             <Button
@@ -646,7 +646,7 @@ const TransactionMasterList: React.FC = () => {
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
         <div className="fixed bottom-20 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
-          <div className="bg-brand-900 text-white p-2 rounded-2xl shadow-xl flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+          <div className="bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4 duration-(--duration-base)">
             <div className="px-3 font-bold text-sm border-r border-brand-700">
               {selectedIds.size} selected
             </div>
@@ -675,7 +675,7 @@ const TransactionMasterList: React.FC = () => {
               variant="ghost-inverted"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5 text-red-300 hover:text-red-200 hover:bg-white/10"
+              className="flex-col h-auto gap-0.5 text-red-300 hover:text-red-200 hover:bg-white/10 rounded-btn"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
@@ -702,8 +702,8 @@ const TransactionMasterList: React.FC = () => {
           ariaLabelledBy="batch-delete-title"
         >
           <div className="p-4 space-y-4">
-            <h3 id="batch-delete-title" className="text-lg font-bold text-brand-800 dark:text-slate-100">Batch Delete</h3>
-            <p className="text-brand-600 dark:text-slate-300">
+            <h3 id="batch-delete-title" className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Batch Delete</h3>
+            <p className="text-brand-600 dark:text-brand-300">
               Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
             </p>
             <p className="text-sm text-money-neg font-bold">
@@ -777,8 +777,8 @@ const TransactionMasterList: React.FC = () => {
           disableBackdropClose={isDeleting}
         >
           <div className="p-4 space-y-4">
-            <h3 className="text-lg font-bold text-brand-800 dark:text-slate-100">Confirm Delete</h3>
-            <p className="text-brand-600 dark:text-slate-300">
+            <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Confirm Delete</h3>
+            <p className="text-brand-600 dark:text-brand-300">
               Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>?
             </p>
             <p className="text-sm text-money-neg font-bold">
@@ -852,7 +852,7 @@ const TransactionMasterList: React.FC = () => {
               >
                 Split Transaction
               </Button>
-              <div className="h-px bg-gray-100 my-2" />
+              <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
               <Button
                 variant="ghost-destructive"
                 className="w-full justify-start text-lg py-4"
@@ -878,7 +878,7 @@ const TransactionMasterList: React.FC = () => {
         <div className="space-y-4 pt-2">
           <FilterControls {...filterProps} layout="stack" />
 
-          <div className="pt-4 space-y-3 border-t border-gray-100 dark:border-slate-700">
+          <div className="pt-4 space-y-3 border-t border-brand-200 dark:border-brand-700">
             {/* Export Button */}
             <Button
                variant="primary"

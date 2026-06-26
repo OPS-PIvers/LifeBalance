@@ -19,16 +19,16 @@ export interface CustomTooltipProps {
 export const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, formatter, suffix = '' }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-2xl z-dropdown">
-        <p className="text-slate-400 text-xs font-bold mb-1">{label}</p>
+      <div className="bg-brand-900 border border-brand-700 p-3 rounded-card shadow-raised z-dropdown">
+        <p className="text-brand-300 text-xs font-bold mb-1">{label}</p>
         {payload.map((entry, index) => (
           <div key={`${entry.name ?? 'entry'}-${index}`} className="flex items-center gap-2 text-sm">
             <div
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: entry.color || entry.fill }}
             />
-            <span className="text-slate-300 font-medium">{entry.name}:</span>
-            <span className="text-white font-bold font-mono">
+            <span className="text-brand-200 font-medium">{entry.name}:</span>
+            <span className="text-white font-bold font-mono tabular-nums">
               {formatter && typeof entry.value === 'number' ? formatter(entry.value) : entry.value}{suffix}
             </span>
           </div>

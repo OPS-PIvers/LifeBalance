@@ -126,8 +126,8 @@ describe('ToDosPage Reschedule Features', () => {
     // Enter selection mode
     fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-    // Select All
-    fireEvent.click(screen.getByText('Select All'));
+    // Select all
+    fireEvent.click(screen.getByText('Select all'));
 
     // Click Reschedule in FAB
     const rescheduleBtn = screen.getByLabelText('Reschedule selected items');

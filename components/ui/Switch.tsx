@@ -41,13 +41,13 @@ export const Switch: React.FC<SwitchProps> = ({
         className="sr-only peer"
       />
       <div className={cn(
-        "w-11 h-6 rounded-full peer transition-colors duration-200 ease-in-out",
-        "bg-brand-200 dark:bg-slate-700 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-500/30",
-        "peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500",
+        "w-11 h-6 rounded-full peer transition-colors duration-(--duration-base) ease-(--ease-standard)",
+        "bg-brand-300 dark:bg-brand-700 peer-focus-visible:outline-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500/40",
+        "peer-checked:bg-accent-600 dark:peer-checked:bg-accent-500",
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
-        "after:bg-white after:border-gray-300 after:border after:rounded-full",
-        "after:h-5 after:w-5 after:transition-all after:duration-200",
+        "after:bg-white after:border-brand-300 after:border after:rounded-full",
+        "after:h-5 after:w-5 after:transition-all after:duration-(--duration-base)",
         // Knob checked state
         "peer-checked:after:translate-x-full peer-checked:after:border-white"
       )}></div>

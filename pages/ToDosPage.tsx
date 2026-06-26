@@ -14,7 +14,9 @@ import { generateCsvExport } from '@/utils/exportUtils';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
+import { SurfaceList, Row } from '@/components/ui/Section';
+import { cn } from '@/utils/cn';
 import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -197,20 +199,14 @@ const ToDosPage: React.FC = () => {
   // Derive completed count from already-computed buckets to avoid a fourth pass over todos.
   const completedCount = completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length;
 
-  const viewModeOptions = useMemo(() => [
-    { value: 'active', label: 'Active' },
-    {
-        value: 'completed',
-        label: (
-            <span className="flex items-center gap-1.5">
-                Completed
-                <span className="bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded-sm text-xs font-normal">
-                    {completedCount}
-                </span>
-            </span>
-        )
-    }
-  ], [completedCount]);
+  const completedBadge = (
+    <span className="flex items-center gap-1.5">
+        Completed
+        <span className="bg-brand-200 text-brand-700 dark:bg-brand-700 dark:text-brand-200 px-1.5 py-0.5 rounded-sm text-xs font-normal tabular-nums">
+            {completedCount}
+        </span>
+    </span>
+  );
 
   // Open modal for adding
   const openAddModal = useCallback(() => {
@@ -289,8 +285,8 @@ const ToDosPage: React.FC = () => {
   if (!currentUser) {
     return (
       <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
-        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl p-6 shadow-xs ring-1 ring-black/5 dark:ring-white/5 text-rose-700 dark:text-rose-300">
-          <p className="font-semibold tracking-tight text-lg">Authentication Required</p>
+        <div className="surface-section p-6 text-money-neg">
+          <p className="font-display font-semibold tracking-tight text-lg">Authentication required</p>
           <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
         </div>
       </div>
@@ -499,19 +495,19 @@ const ToDosPage: React.FC = () => {
           <div>
             {isSelectionMode ? (
               <div className="flex flex-col">
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Select Tasks</h1>
+                <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Select tasks</h1>
                 <button
                     onClick={handleSelectAll}
-                    className="text-sm text-brand-600 dark:text-brand-400 font-medium flex items-center gap-1 mt-1 hover:text-brand-800 dark:hover:text-brand-200"
+                    className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 mt-1 hover:text-accent-700 dark:hover:text-accent-200"
                 >
-                  <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-brand-600' : 'text-brand-300'} />
-                  {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect All' : 'Select All'}
+                  <CheckSquare size={14} aria-hidden="true" className={selectedIds.size === allActiveCount && allActiveCount > 0 ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-500'} />
+                  {selectedIds.size === allActiveCount && allActiveCount > 0 ? 'Deselect all' : 'Select all'}
                 </button>
               </div>
             ) : (
               <>
-                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">To-Do List</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Stay on top of your tasks</p>
+                <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
+                <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed">Stay on top of your tasks</p>
               </>
             )}
           </div>
@@ -545,7 +541,7 @@ const ToDosPage: React.FC = () => {
                 size="icon"
                 onClick={() => setIsSelectionMode(!isSelectionMode)}
                 disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`${isSelectionMode ? 'bg-slate-100 border-slate-200 dark:bg-slate-700 dark:border-slate-600' : ''}`}
+                className={`${isSelectionMode ? 'bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600' : ''}`}
                 title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
                 aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
               >
@@ -555,14 +551,12 @@ const ToDosPage: React.FC = () => {
         </div>
 
         {/* View Toggle */}
-        <div className="self-start">
-             <SegmentedControl
-                value={viewMode}
-                onChange={(val) => setViewMode(val as 'active' | 'completed')}
-                options={viewModeOptions}
-                name="View mode"
-             />
-        </div>
+        <Tabs value={viewMode} onValueChange={(val) => setViewMode(val as 'active' | 'completed')}>
+          <TabsList className="self-start w-auto inline-flex">
+            <TabsTrigger value="active">Active</TabsTrigger>
+            <TabsTrigger value="completed">{completedBadge}</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {viewMode === 'active' ? (
@@ -622,12 +616,12 @@ const ToDosPage: React.FC = () => {
             />
 
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
-                 <div className="text-center py-20 px-6 bg-white/50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
+                 <div className="text-center py-20 px-6 surface-section">
+                     <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-accent-600 dark:text-accent-300">
                          <ClipboardList size={28} />
                      </div>
-                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">All caught up!</h3>
-                     <p className="text-slate-500 dark:text-slate-400 mt-1 mb-6">No active tasks. Add one to get started.</p>
+                     <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">All caught up</h3>
+                     <p className="text-brand-500 dark:text-brand-400 mt-1 mb-6">No active tasks. Add one to get started.</p>
                      <Button variant="primary" onClick={openAddModal} leftIcon={<Plus size={16} />}>
                          New Task
                      </Button>
@@ -689,12 +683,12 @@ const ToDosPage: React.FC = () => {
             )}
 
             {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && !hasMoreCompletedTodos && (
-                 <div className="text-center py-20 px-6 bg-white/50 dark:bg-slate-800/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
-                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-500">
+                 <div className="text-center py-20 px-6 surface-section">
+                     <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
                          <History size={28} />
                      </div>
-                     <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">No history yet</h3>
-                     <p className="text-slate-500 dark:text-slate-400 mt-1">Completed tasks will appear here.</p>
+                     <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No history yet</h3>
+                     <p className="text-brand-500 dark:text-brand-400 mt-1">Completed tasks will appear here.</p>
                  </div>
             )}
           </>
@@ -703,7 +697,7 @@ const ToDosPage: React.FC = () => {
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
         <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
-          <div className="bg-slate-900/90 backdrop-blur-xl text-white p-2 rounded-2xl shadow-glass ring-1 ring-white/10 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+          <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-2xl shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
             <div className="px-3 font-bold text-sm border-r border-white/10">
               {selectedIds.size} selected
             </div>
@@ -763,17 +757,17 @@ const ToDosPage: React.FC = () => {
         ariaLabelledBy="todo-modal-title"
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 id="todo-modal-title" className="text-xl font-bold text-brand-800 dark:text-slate-100">
-            {editingId ? 'Edit Task' : 'New Task'}
+          <h2 id="todo-modal-title" className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50">
+            {editingId ? 'Edit task' : 'New task'}
           </h2>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsAddModalOpen(false)}
-            className="rounded-full hover:bg-brand-50 dark:hover:bg-slate-700/50"
+            className="rounded-full hover:bg-brand-50 dark:hover:bg-brand-700/50"
             aria-label="Close dialog"
           >
-            <X size={20} className="text-brand-400 dark:text-slate-500" />
+            <X size={20} className="text-brand-400 dark:text-brand-500" />
           </Button>
         </div>
 
@@ -799,11 +793,11 @@ const ToDosPage: React.FC = () => {
           />
 
           <fieldset>
-            <legend className="block text-xs font-bold text-brand-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-              Assign To
+            <legend className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-1">
+              Assign to
             </legend>
             {members.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-500 py-2">
+              <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-500 py-2">
                 <AlertCircle size={16} className="shrink-0" />
                 <span>No household members available to assign this task.</span>
               </div>
@@ -816,16 +810,16 @@ const ToDosPage: React.FC = () => {
                     onClick={() => setAssignedTo(member.uid)}
                     aria-label={`Assign to ${member.displayName || 'User'}`}
                     aria-pressed={assignedTo === member.uid}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap ${
                       assignedTo === member.uid
-                        ? 'bg-brand-800 text-white border-brand-800 shadow-md dark:bg-brand-600 dark:border-brand-600'
-                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-slate-700/50 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700'
+                        ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-600 dark:border-accent-600'
+                        : 'bg-white text-brand-600 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-200 dark:border-brand-600 dark:hover:bg-brand-700'
                     }`}
                   >
                     {member.photoURL ? (
                       <img src={member.photoURL} alt={member.displayName ?? 'User'} className="w-5 h-5 rounded-full" />
                     ) : (
-                      <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-200">
+                      <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-600 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-200">
                         {member.displayName?.charAt(0) ?? 'U'}
                       </div>
                     )}
@@ -840,9 +834,9 @@ const ToDosPage: React.FC = () => {
             type="submit"
             variant="primary"
             disabled={members.length === 0}
-            className="w-full mt-4 py-3.5 shadow-lg"
+            className="w-full mt-4 py-3.5"
           >
-            {editingId ? 'Save Changes' : 'Create Task'}
+            {editingId ? 'Save changes' : 'Create task'}
           </Button>
         </form>
       </Modal>
@@ -898,7 +892,7 @@ const ToDosPage: React.FC = () => {
                 Duplicate
               </Button>
 
-              <div className="h-px bg-gray-100 dark:bg-slate-700 my-2" />
+              <div className="h-px bg-brand-200 dark:bg-brand-700 my-2" />
 
               <Button
                 variant="ghost-destructive"
@@ -942,9 +936,9 @@ interface TodoRowProps {
 }
 
 const badgeStyleMap = {
-  rose: 'bg-rose-50/50 text-rose-600 border border-rose-100/50 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/20',
-  amber: 'bg-amber-50/50 text-amber-600 border border-amber-100/50 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
-  blue: 'bg-blue-50/50 text-blue-600 border border-blue-100/50 dark:bg-blue-500/15 dark:text-blue-300 dark:border-blue-500/20',
+  rose: 'bg-money-bgNeg text-money-neg border border-money-neg/20 dark:bg-money-neg/15 dark:text-money-neg dark:border-money-neg/25',
+  amber: 'bg-warm-50 text-warm-700 border border-warm-200 dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/25',
+  blue: 'bg-habit-blue/10 text-habit-blue border border-habit-blue/20 dark:bg-habit-blue/15 dark:text-habit-blue dark:border-habit-blue/25',
 } as const;
 
 // Memoized row for a single active to-do.
@@ -983,16 +977,19 @@ const TodoRow = React.memo(function TodoRow({
           }
         }
       } : {})}
-      className={`rounded-2xl p-4 shadow-glass ring-1 ring-black/5 dark:ring-white/5 transition-all active:scale-[0.99] ${
+      className={cn(
+        'hairline-divider p-4 transition-colors duration-(--duration-fast) ease-(--ease-standard)',
         isSelectionMode
-          ? `cursor-pointer ${isSelected ? 'bg-brand-50/50 ring-brand-200 dark:bg-brand-700/30 dark:ring-brand-500/40' : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'}`
-          : 'bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl'
-      }`}
+          ? isSelected
+            ? 'cursor-pointer bg-accent-50 dark:bg-accent-900/30'
+            : 'cursor-pointer bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40'
+          : 'bg-white dark:bg-brand-800'
+      )}
     >
       <div className="flex items-start gap-3">
         {/* Complete Checkbox or Selection Box */}
         {isSelectionMode ? (
-          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-brand-600 dark:text-brand-400' : 'text-brand-200 dark:text-slate-600'}`}>
+          <div className={`mt-0.5 w-6 h-6 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'text-accent-600 dark:text-accent-300' : 'text-brand-300 dark:text-brand-600'}`}>
             {isSelected ? <CheckSquare aria-hidden="true" size={24} /> : <div className="w-5 h-5 border-2 border-current rounded-sm" />}
           </div>
         ) : (
@@ -1008,11 +1005,7 @@ const TodoRow = React.memo(function TodoRow({
                 toast.error('Failed to complete to-do');
               }
             }}
-            className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 ${
-              color === 'rose' ? 'border-rose-200 hover:bg-rose-50 active:bg-rose-100 dark:border-rose-500/40 dark:hover:bg-rose-500/15' :
-              color === 'amber' ? 'border-amber-200 hover:bg-amber-50 active:bg-amber-100 dark:border-amber-500/40 dark:hover:bg-amber-500/15' :
-              'border-blue-200 hover:bg-blue-50 active:bg-blue-100 dark:border-blue-500/40 dark:hover:bg-blue-500/15'
-            }`}
+            className="mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 border-brand-300 hover:border-accent-500 hover:bg-accent-50 active:bg-accent-100 dark:border-brand-600 dark:hover:border-accent-400 dark:hover:bg-accent-900/30"
             aria-label={`Complete task: ${item.text}`}
           >
             <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
@@ -1020,16 +1013,16 @@ const TodoRow = React.memo(function TodoRow({
         )}
 
         <div className="flex-1 min-w-0">
-          <p className={`font-medium leading-snug ${isSelected ? 'text-brand-800 dark:text-brand-200' : 'text-slate-900 dark:text-slate-100'}`}>{item.text}</p>
+          <p className={`font-medium leading-snug ${isSelected ? 'text-accent-800 dark:text-accent-200' : 'text-brand-900 dark:text-brand-50'}`}>{item.text}</p>
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {isOverdue ? (
-              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-md font-bold bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300">
+              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-bold bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-neg">
                 <AlertCircle size={10} />
                 Overdue ({format(dueDate, 'MMM d')})
               </div>
             ) : (
-              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-md font-medium ${badgeStyleMap[color]}`}>
+              <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-medium ${badgeStyleMap[color]}`}>
                 <Clock size={10} />
                 {isToday(dueDate) ? 'Today' :
                  isTomorrow(dueDate) ? 'Tomorrow' :
@@ -1038,7 +1031,7 @@ const TodoRow = React.memo(function TodoRow({
             )}
 
             {assignee && (
-              <div className="flex items-center gap-1 text-xs text-brand-400 bg-brand-50 px-2 py-1 rounded-md dark:text-slate-400 dark:bg-slate-700/50">
+              <div className="flex items-center gap-1 text-xs text-brand-500 bg-brand-100 px-2 py-1 rounded-sm dark:text-brand-300 dark:bg-brand-700/60">
                 {assignee.photoURL ? (
                   <img
                     src={assignee.photoURL}
@@ -1055,7 +1048,7 @@ const TodoRow = React.memo(function TodoRow({
             {/* Plan 080c-5: points-on-completion badge — kid chores only. Dormant for
                 normal households: only shown when the assignee is a managed kid. */}
             {assignee?.isManaged === true && (
-              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-md bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300">
+              <span className="flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-sm bg-warm-100 text-warm-700 dark:bg-warm-500/15 dark:text-warm-300">
                 +{item.points ?? DEFAULT_TODO_POINTS} pts
               </span>
             )}
@@ -1104,7 +1097,7 @@ const TodoRow = React.memo(function TodoRow({
                     toast.success('Task deleted');
                   });
                 }}
-                className="hover:text-rose-600 active:text-rose-700 active:bg-rose-50 dark:hover:text-rose-300 dark:active:bg-rose-500/15"
+                className="hover:text-money-neg active:text-money-neg active:bg-money-bgNeg dark:hover:text-money-neg dark:active:bg-money-neg/15"
                 aria-label="Delete task"
               >
                 <Trash2 size={16} />
@@ -1175,22 +1168,22 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
   if (items.length === 0) return null;
 
   const sectionDotColors = {
-    rose: 'bg-rose-500',
-    amber: 'bg-amber-500',
-    blue: 'bg-blue-500',
+    rose: 'bg-money-neg',
+    amber: 'bg-warm-500',
+    blue: 'bg-habit-blue',
   };
 
   return (
-    <div className="animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-baseline justify-between mb-4 px-1">
+    <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
+      <div className="flex items-baseline justify-between mb-2 px-1">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]} shadow-xs`}></div>
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">{title}</h2>
+          <div className={`w-2 h-2 rounded-full ${sectionDotColors[color]}`}></div>
+          <h2 className="font-display text-base font-semibold text-brand-900 dark:text-brand-50 tracking-tight">{title}</h2>
         </div>
-        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{subtitle}</span>
+        <span className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{subtitle}</span>
       </div>
 
-      <div className="space-y-3">
+      <SurfaceList className="[&>*:first-child_.hairline-divider]:border-t-0">
         {items.map(item => (
           <TodoRow
             key={item.id}
@@ -1208,7 +1201,7 @@ const Section = React.memo(function Section({ title, subtitle, items, color, onC
             onToggleSelection={onToggleSelection}
           />
         ))}
-      </div>
+      </SurfaceList>
     </div>
   );
 }, (prev: SectionProps, next: SectionProps) => {
@@ -1258,9 +1251,9 @@ const SwipeableTodoRow: React.FC<{ onDelete: () => void; children: React.ReactNo
   };
 
   return (
-    <div className="relative overflow-hidden rounded-2xl">
+    <div className="relative overflow-hidden">
       <motion.div
-        className="absolute inset-0 flex items-center justify-end pr-6 rounded-2xl bg-rose-500 text-white z-0"
+        className="absolute inset-0 flex items-center justify-end pr-6 bg-money-neg text-white z-0"
         style={{ opacity: deleteOpacity }}
         aria-hidden="true"
       >
@@ -1297,25 +1290,25 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
     if (items.length === 0) return null;
 
     return (
-        <div className="animate-in slide-in-from-bottom-4 duration-500 opacity-80">
-            <div className="flex items-center gap-2 mb-3 px-1">
-                <h2 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{title}</h2>
-                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+        <div className="animate-in slide-in-from-bottom-4 duration-(--duration-slow)">
+            <div className="flex items-center gap-2 mb-2 px-1">
+                <h2 className="text-xs font-semibold text-brand-400 dark:text-brand-500 uppercase tracking-wider">{title}</h2>
+                <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
             </div>
 
-            <div className="space-y-2">
+            <SurfaceList>
                 {items.map(item => {
                     const assignee = memberMap.get(item.assignedTo);
                     const completedDate = item.completedAt ? parseISO(item.completedAt) : null;
 
                     return (
-                        <div
+                        <Row
                             key={item.id}
-                            className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start gap-3 hover:bg-white hover:shadow-xs transition-all group dark:bg-slate-800/50 dark:border-slate-700 dark:hover:bg-slate-800"
+                            className="group items-start"
                         >
                             <button
                                 onClick={() => { haptic('light'); onUncomplete(item.id); }}
-                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-200 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-brand-600 transition-colors shrink-0 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                                className="mt-0.5 w-6 h-6 rounded-full border-2 border-brand-300 bg-brand-50 text-brand-400 flex items-center justify-center hover:bg-brand-100 hover:text-accent-600 transition-colors shrink-0 dark:border-brand-600 dark:bg-brand-700/50 dark:text-brand-400 dark:hover:bg-brand-700 dark:hover:text-accent-300"
                                 title="Mark as incomplete"
                                 aria-label={`Mark as incomplete: ${item.text}`}
                             >
@@ -1323,8 +1316,8 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                             </button>
 
                             <div className="flex-1 min-w-0">
-                                <p className="text-slate-500 dark:text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{item.text}</p>
-                                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 dark:text-slate-500">
+                                <p className="text-brand-500 dark:text-brand-400 line-through decoration-brand-300 dark:decoration-brand-600">{item.text}</p>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-brand-400 dark:text-brand-500">
                                     {completedDate && (
                                         <span className="flex items-center gap-1">
                                             <Check size={10} />
@@ -1346,7 +1339,7 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                                     variant="ghost"
                                     size="icon-sm"
                                     onClick={() => onDuplicate(item)}
-                                    className="text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:text-slate-500 dark:hover:text-brand-300 dark:hover:bg-slate-700/50"
+                                    className="text-brand-400 hover:text-accent-600 hover:bg-accent-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                                     title="Duplicate task"
                                     aria-label={`Duplicate task: ${item.text}`}
                                 >
@@ -1372,16 +1365,16 @@ const CompletedSection = React.memo(function CompletedSection({ title, items, on
                                  variant="ghost"
                                  size="icon"
                                  onClick={(e) => { e.stopPropagation(); onMore(item); }}
-                                 className="text-brand-300 hover:text-brand-600 active:text-brand-800 active:bg-brand-50 dark:text-slate-500 dark:hover:text-slate-300 dark:active:bg-slate-700/50"
+                                 className="text-brand-300 hover:text-accent-600 active:text-accent-800 active:bg-accent-50 dark:text-brand-500 dark:hover:text-brand-300 dark:active:bg-brand-700/50"
                                  aria-label={`More options for: ${item.text}`}
                                >
                                  <MoreVertical size={20} />
                                </Button>
                             </div>
-                        </div>
+                        </Row>
                     );
                 })}
-            </div>
+            </SurfaceList>
         </div>
     );
 });

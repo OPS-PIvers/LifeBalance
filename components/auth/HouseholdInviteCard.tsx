@@ -57,17 +57,17 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
   };
 
   return (
-    <div className="bg-brand-50 dark:bg-slate-700/50 border-2 border-brand-200 dark:border-slate-700 rounded-xl p-4">
-      <p className="text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-        Household Invite Code
+    <div className="bg-warm-50 dark:bg-warm-500/10 border border-warm-200 dark:border-warm-500/30 rounded-card p-4">
+      <p className="font-display text-xs font-semibold text-warm-700 dark:text-warm-200 uppercase tracking-wider mb-2">
+        Household invite code
       </p>
       <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-2xl font-bold text-brand-800 dark:text-slate-100 tracking-wider">
+        <span className="font-mono text-2xl font-bold tabular-nums text-brand-800 dark:text-brand-100 tracking-wider">
           {inviteCode}
         </span>
         <button
           onClick={handleCopy}
-          className="shrink-0 p-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 active:scale-95 transition-all duration-200"
+          className="shrink-0 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:bg-accent-500 dark:hover:bg-accent-400"
           aria-label="Copy invite code"
         >
           {copied ? <Check size={20} /> : <Copy size={20} />}
@@ -76,13 +76,13 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
 
       <button
         onClick={handleShareLink}
-        className="mt-4 w-full flex items-center justify-center gap-2 bg-brand-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-brand-700 active:scale-95 transition-all duration-200"
+        className="mt-4 w-full flex items-center justify-center gap-2 bg-accent-600 text-white font-semibold py-3 px-4 rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:bg-accent-500 dark:hover:bg-accent-400"
       >
         <Share2 size={18} />
         <span>Share invite link</span>
       </button>
 
-      <p className="text-xs text-brand-500 dark:text-slate-400 mt-3">
+      <p className="text-xs text-brand-500 dark:text-brand-400 mt-3">
         Share the link for one-tap joining, or give family members the code to enter manually
       </p>
     </div>

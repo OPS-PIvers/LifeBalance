@@ -19,8 +19,8 @@ const CustomHabitList: React.FC<CustomHabitListProps> = ({
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <Settings size={14} className="text-brand-400 dark:text-slate-500" />
-        <h3 className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase tracking-wider">
+        <Settings size={14} className="text-brand-400 dark:text-brand-500" />
+        <h3 className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase tracking-wider">
           Your Custom Habits
         </h3>
       </div>
@@ -28,14 +28,14 @@ const CustomHabitList: React.FC<CustomHabitListProps> = ({
         {habits.map(habit => (
           <div
             key={habit.id}
-            className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-brand-100 dark:border-slate-700 rounded-xl"
+            className="flex items-center justify-between p-3 bg-white dark:bg-brand-800 border border-brand-100 dark:border-brand-700 rounded-xl"
           >
             <div className="flex items-center gap-3">
               <div className={`w-2 h-8 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
               <div>
-                <p className="font-semibold text-brand-800 dark:text-slate-100 text-sm">{habit.title}</p>
+                <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">{habit.title}</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xxs text-brand-400 dark:text-slate-400">{habit.category}</span>
+                  <span className="text-xxs text-brand-400 dark:text-brand-400">{habit.category}</span>
                   {habit.effortLevel && (
                     <span className={`text-xxs px-1.5 py-0.5 rounded-full font-medium ${EFFORT_COLORS[habit.effortLevel].bg} ${EFFORT_COLORS[habit.effortLevel].text}`}>
                       {EFFORT_LABELS[habit.effortLevel]}
@@ -47,14 +47,14 @@ const CustomHabitList: React.FC<CustomHabitListProps> = ({
             <div className="flex items-center gap-1">
               <button
                 onClick={() => onEdit(habit)}
-                className="p-2 text-brand-400 dark:text-slate-400 hover:text-brand-600 dark:hover:text-slate-200 hover:bg-brand-50 dark:hover:bg-slate-700/50 rounded-lg"
+                className="p-2 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg"
                 aria-label={`Edit habit: ${habit.title}`}
               >
                 <Edit2 size={16} />
               </button>
               <button
                 onClick={() => onDelete(habit)}
-                className="p-2 text-brand-400 dark:text-slate-400 hover:text-money-neg hover:bg-rose-50 dark:hover:bg-rose-500/15 rounded-lg"
+                className="p-2 text-brand-400 dark:text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-lg"
                 aria-label={`Delete habit: ${habit.title}`}
               >
                 <Trash2 size={16} />

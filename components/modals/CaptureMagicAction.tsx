@@ -47,32 +47,30 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
   };
 
   return (
-    <div className="bg-linear-to-r from-violet-600 to-indigo-600 p-1 rounded-2xl shadow-lg mb-6">
-      <div className="bg-white dark:bg-slate-800 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles size={16} className="text-violet-600 dark:text-violet-300 animate-pulse" />
-          <span className="text-xs font-bold text-violet-600 dark:text-violet-300 uppercase tracking-wider">Magic Action</span>
-        </div>
-        <form onSubmit={handleMagicSubmit} className="flex gap-2">
-          <input
-            type="text"
-            aria-label="Magic action input"
-            value={magicInput}
-            onChange={(e) => setMagicInput(e.target.value)}
-            placeholder="Spent $20 on Pizza..."
-            className="flex-1 bg-violet-50 dark:bg-violet-500/15 border-none outline-hidden text-brand-800 dark:text-slate-100 placeholder:text-violet-300 font-medium rounded-lg px-2 py-1"
-            disabled={magicLoading}
-          />
-          <button
-            type="submit"
-            aria-label="Submit magic action"
-            disabled={!magicInput.trim() || magicLoading}
-            className="p-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
-          >
-            {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-          </button>
-        </form>
+    <div className="surface-section bg-warm-50 dark:bg-warm-900/20 border-warm-200 dark:border-warm-800/60 p-4 mb-6">
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles size={16} className="text-warm-600 dark:text-warm-300" />
+        <span className="text-xs font-bold text-warm-700 dark:text-warm-300 uppercase tracking-wider">Magic Action</span>
       </div>
+      <form onSubmit={handleMagicSubmit} className="flex gap-2">
+        <input
+          type="text"
+          aria-label="Magic action input"
+          value={magicInput}
+          onChange={(e) => setMagicInput(e.target.value)}
+          placeholder="Spent $20 on Pizza..."
+          className="flex-1 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-800/60 outline-hidden text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 font-medium rounded-btn px-3 py-2 focus:border-warm-500 focus:ring-2 focus:ring-warm-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
+          disabled={magicLoading}
+        />
+        <button
+          type="submit"
+          aria-label="Submit magic action"
+          disabled={!magicInput.trim() || magicLoading}
+          className="p-2 bg-warm-500 text-white rounded-btn hover:bg-warm-600 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+        >
+          {magicLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowRight size={16} />}
+        </button>
+      </form>
     </div>
   );
 };

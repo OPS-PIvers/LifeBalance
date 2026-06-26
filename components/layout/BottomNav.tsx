@@ -13,8 +13,8 @@ const CaptureModal = React.lazy(loadCaptureModal);
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Pending-items nudge (Plan 063): count transactions awaiting review so the Budget
-  // tab can show a red badge. Subscribes to the narrow finance slice only.
+  // Pending-items nudge (Plan 063): count transactions awaiting review so the Money
+  // tab can show a badge. Subscribes to the narrow finance slice only.
   const { transactions } = useFinance();
   const pendingReviewCount = useMemo(
     () => transactions.filter((t) => t.status === 'pending_review').length,
@@ -23,28 +23,33 @@ const BottomNav: React.FC = () => {
 
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
+  // Active tab reads in the evergreen accent (the app's primary), inactive in the
+  // calm paper neutrals. No glass — a solid surface with a hairline top edge.
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center justify-center w-full min-h-[44px] space-y-1 transition-colors ${
+    `flex flex-col items-center justify-center w-full min-h-[44px] gap-1 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
       isActive
-        ? 'text-brand-800 dark:text-brand-100'
+        ? 'text-accent-600 dark:text-accent-300'
         : 'text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300'
     }`;
 
-  const iconClass = (isActive: boolean) => 
+  const iconClass = (isActive: boolean) =>
     `w-6 h-6 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`;
 
   return (
     <>
-      <nav aria-label="Main navigation" className="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-t border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 shadow-nav pb-safe">
+      <nav
+        aria-label="Main navigation"
+        className="w-full bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 shadow-nav pb-safe"
+      >
         <div className="flex items-center justify-between h-16 px-2 relative">
-          
+
           {/* Left Group */}
           <div className="flex items-center flex-1 justify-around">
             <NavLink to="/" end className={navLinkClass}>
               {({ isActive }) => (
                 <>
                   <LayoutDashboard className={iconClass(isActive)} />
-                  <span className="text-xs font-medium">Home</span>
+                  <span className="text-xs font-semibold">Home</span>
                 </>
               )}
             </NavLink>
@@ -52,7 +57,7 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <Activity className={iconClass(isActive)} />
-                  <span className="text-xs font-medium">Habits</span>
+                  <span className="text-xs font-semibold">Habits</span>
                 </>
               )}
             </NavLink>
@@ -70,15 +75,15 @@ const BottomNav: React.FC = () => {
                     <Wallet className={iconClass(isActive)} />
                     {pendingReviewCount > 0 && (
                       <span
-                        className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-rose-500 text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-slate-800"
+                        className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-brand-800"
                         aria-hidden="true"
                       >
                         {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
                       </span>
                     )}
                   </div>
-                  <span className="text-xs font-medium">
-                    Budget
+                  <span className="text-xs font-semibold">
+                    Money
                     {pendingReviewCount > 0 && (
                       <span className="sr-only">, {pendingReviewCount} pending review</span>
                     )}
@@ -90,20 +95,21 @@ const BottomNav: React.FC = () => {
               {({ isActive }) => (
                 <>
                   <List className={iconClass(isActive)} />
-                  <span className="text-xs font-medium">Lists</span>
+                  <span className="text-xs font-semibold">Plan</span>
                 </>
               )}
             </NavLink>
           </div>
 
-          {/* Actual FAB positioned absolutely */}
+          {/* Actual FAB positioned absolutely — evergreen accent, the app's
+              primary action color. */}
           <div className="absolute left-1/2 -translate-x-1/2 -top-6">
             <button
               onClick={() => setIsModalOpen(true)}
-              className="group flex items-center justify-center w-16 h-16 bg-brand-800 dark:bg-brand-700 text-white rounded-full shadow-xl shadow-brand-900/20 border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-transform"
+              className="group flex items-center justify-center w-16 h-16 bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400 text-white rounded-full shadow-raised border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
               aria-label="Capture transaction, task, or item"
             >
-              <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-300" />
+              <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-(--duration-slow) ease-(--ease-standard)" />
             </button>
           </div>
         </div>

@@ -23,9 +23,9 @@ export interface ModalProps {
    */
   centerContent?: boolean;
   /**
-   * Background color of the backdrop. Defaults to 'bg-slate-900/60'.
+   * Background color of the backdrop. Defaults to 'bg-brand-900/60'.
    * Note: Older usages sometimes used 'bg-slate-900/50' or 'bg-slate-900/90'; these have been
-   * standardized to 'bg-slate-900/60' for better contrast.
+   * standardized to 'bg-brand-900/60' for better contrast on the warm-paper palette.
    */
   backdropColor?: string;
   /**
@@ -70,10 +70,10 @@ export interface ModalProps {
  * Standardized Modal Component.
  * Unified Pattern:
  * - Fixed z-index (z-modal)
- * - Backdrop blur
+ * - Solid, dimmed backdrop (no blur)
  * - Animation (zoom-in-95)
- * - Rounded corners (rounded-2xl)
- * - Shadow (shadow-xl)
+ * - Deliberate radius (rounded-card) + hairline border
+ * - Restrained elevation (shadow-raised — modals are a hero surface)
  * - Mobile safe area handling
  */
 export const Modal: React.FC<ModalProps> = ({
@@ -83,7 +83,7 @@ export const Modal: React.FC<ModalProps> = ({
   maxWidth = 'max-w-md',
   className,
   centerContent = true,
-  backdropColor = 'bg-slate-900/60',
+  backdropColor = 'bg-brand-900/60',
   mobileSafePadding = true,
   disableBackdropClose = false,
   fullScreenOnMobile = false,
@@ -153,7 +153,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <div
         className={clsx(
-          "absolute inset-0 backdrop-blur-xs transition-opacity",
+          "absolute inset-0 transition-opacity",
           backdropColor
         )}
         aria-hidden="true"
@@ -169,7 +169,7 @@ export const Modal: React.FC<ModalProps> = ({
         aria-describedby={ariaDescribedBy}
         tabIndex={-1}
         className={twMerge(
-          "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 outline-hidden",
+          "relative w-full bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card shadow-raised overflow-hidden flex flex-col animate-in zoom-in-95 duration-(--duration-base) outline-hidden",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
           // Mobile full-screen sheet: edge-to-edge, square corners, and fill the

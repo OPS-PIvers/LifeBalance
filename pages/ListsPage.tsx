@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import ToDosPage from './ToDosPage';
 import MealPlanTab from '@/components/meals/MealPlanTab';
 import ShoppingListTab from '@/components/meals/ShoppingListTab';
@@ -34,21 +34,16 @@ const ListsPage: React.FC = () => {
     }
   }, [activeTab]);
 
-  const tabs = [
-    { value: 'todos', label: 'To-Dos' },
-    { value: 'meals', label: 'Meals' },
-    { value: 'shopping', label: 'Shopping' },
-  ];
-
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur-xs">
-        <SegmentedControl
-          options={tabs}
-          value={activeTab}
-          onChange={setActiveTab}
-          name="Lists Navigation"
-        />
+      <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="todos">To-Dos</TabsTrigger>
+            <TabsTrigger value="meals">Meals</TabsTrigger>
+            <TabsTrigger value="shopping">Shopping</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <div className="flex-1">

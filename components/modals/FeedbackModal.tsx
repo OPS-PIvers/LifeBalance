@@ -55,14 +55,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
     <Drawer isOpen={isOpen} onClose={onClose} title="Send Feedback">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="feedback-message" className="block text-sm font-medium text-gray-700 dark:text-slate-200">
+          <label htmlFor="feedback-message" className="block text-sm font-medium text-brand-700 dark:text-brand-200">
             Describe the issue or suggestion
           </label>
           <textarea
             id="feedback-message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full h-32 p-3 border border-gray-300 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-100 dark:placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 resize-none"
+            className="w-full h-32 p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-900 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-btn focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 outline-hidden transition-all duration-(--duration-fast) ease-(--ease-standard) resize-none"
             placeholder="I found a bug when..."
             required
           />
@@ -71,14 +71,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+            className="px-4 py-2 text-brand-600 dark:text-brand-300 font-medium hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard)"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !message.trim()}
-            className="flex items-center gap-2 bg-brand-600 text-white px-4 py-2 rounded-xl hover:bg-brand-700 disabled:opacity-50 transition-colors font-bold"
+            className="flex items-center gap-2 bg-accent-600 dark:bg-accent-500 text-white px-4 py-2 rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) font-semibold focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             Send Report

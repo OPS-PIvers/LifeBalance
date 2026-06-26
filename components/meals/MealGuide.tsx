@@ -119,28 +119,28 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
           {plan.weekLabel && (
             <div className="text-xxs font-bold uppercase tracking-widest text-brand-600">{plan.weekLabel}</div>
           )}
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight mt-1">This Week</h2>
-          {plan.subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">{plan.subtitle}</p>}
+          <h2 className="text-2xl font-bold text-brand-900 dark:text-brand-100 tracking-tight mt-1">This Week</h2>
+          {plan.subtitle && <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 leading-relaxed">{plan.subtitle}</p>}
         </header>
       )}
 
       {view === 'week' ? (
         <div className="space-y-3">
-          <div className="text-xxs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1">Cook in order</div>
+          <div className="text-xxs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 px-1">Cook in order</div>
           {meals.map((meal, i) => {
             const sched = buildSchedule(meal, serveOverrides[mealKey(meal, i)]);
             return (
               <button
                 key={mealKey(meal, i)}
                 onClick={() => openRecipe(i)}
-                className="w-full text-left flex items-start gap-3 p-4 rounded-2xl bg-white border border-slate-200/70 shadow-xs hover:shadow-md hover:border-slate-300 transition-all dark:bg-slate-800 dark:border-slate-700 dark:hover:border-slate-600"
+                className="w-full text-left flex items-start gap-3 p-4 rounded-2xl bg-white border border-brand-200 hover:border-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-600"
               >
                 <span className="font-serif text-2xl font-bold text-brand-600 dark:text-brand-300 leading-none w-7 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{meal.cuisine}</div>}
-                  <div className="font-bold text-slate-900 dark:text-slate-100 tracking-tight leading-snug text-balance">{meal.name}</div>
-                  {meal.blurb && <div className="text-xs text-slate-500 dark:text-slate-400 italic mt-0.5 leading-relaxed">{meal.blurb}</div>}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xxs font-semibold text-slate-500 dark:text-slate-400">
+                  {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
+                  <div className="font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug text-balance">{meal.name}</div>
+                  {meal.blurb && <div className="text-xs text-brand-500 dark:text-brand-400 italic mt-0.5 leading-relaxed">{meal.blurb}</div>}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xxs font-semibold text-brand-500 dark:text-brand-400">
                     {meal.effort && <span className="text-brand-700 dark:text-brand-300">{effortLabel(meal.effort)}</span>}
                     {typeof meal.activeMin === 'number' && <span>{meal.activeMin}m active</span>}
                     <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" /> {fmtDur(sched.total)}</span>
@@ -156,12 +156,12 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
                     </div>
                   ) : null}
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-300 dark:text-slate-600 shrink-0 mt-1" />
+                <ChevronRight className="w-5 h-5 text-brand-300 dark:text-brand-600 shrink-0 mt-1" />
               </button>
             );
           })}
           {meals.length === 0 && (
-            <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">No meals in this plan.</p>
+            <p className="text-center text-sm text-brand-400 dark:text-brand-500 py-10">No meals in this plan.</p>
           )}
         </div>
       ) : (
@@ -173,7 +173,7 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
       )}
 
       {/* Bottom tab bar */}
-      <div className="sticky bottom-0 mt-5 flex gap-1 p-1 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md rounded-2xl ring-1 ring-black/5 dark:ring-white/5 shadow-glass">
+      <div className="sticky bottom-0 mt-5 flex gap-1 p-1 bg-white dark:bg-brand-800 rounded-2xl border border-brand-200 dark:border-brand-700">
         <TabButton active={view === 'week'} onClick={() => setView('week')} icon={<CalendarDays className="w-4 h-4" />}>Week</TabButton>
         <TabButton active={view === 'shopping'} onClick={() => setView('shopping')} icon={<ShoppingCart className="w-4 h-4" />}>
           Shopping
@@ -189,8 +189,8 @@ const TabButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
   <button
     onClick={onClick}
     className={clsx(
-      'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all',
-      active ? 'bg-brand-600 text-white shadow-xs' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700/50'
+      'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard)',
+      active ? 'bg-accent-600 text-white' : 'text-brand-500 hover:bg-brand-100 dark:text-brand-400 dark:hover:bg-brand-700/50'
     )}
   >
     {icon} {children}
@@ -202,7 +202,7 @@ const Tag: React.FC<{ children: React.ReactNode; icon?: React.ReactNode; tone?: 
     'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold border',
     tone === 'save' && 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-700/40 dark:text-brand-200 dark:border-brand-500/40',
     tone === 'warn' && 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
-    tone === 'default' && 'bg-white text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+    tone === 'default' && 'bg-white text-brand-600 border-brand-200 dark:bg-brand-800 dark:text-brand-300 dark:border-brand-700'
   )}>
     {icon}{children}
   </span>
@@ -210,8 +210,8 @@ const Tag: React.FC<{ children: React.ReactNode; icon?: React.ReactNode; tone?: 
 
 const StatCell: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="flex-1 px-3 py-2 text-center">
-    <div className="font-bold text-slate-900 dark:text-slate-100 tabular-nums">{value}</div>
-    <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mt-0.5">{label}</div>
+    <div className="font-bold text-brand-900 dark:text-brand-100 tabular-nums">{value}</div>
+    <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mt-0.5">{label}</div>
   </div>
 );
 
@@ -226,35 +226,35 @@ interface RecipeViewProps {
 
 const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onServeChange, onBack, onStartCook }) => (
   <div>
-    <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-slate-500 hover:text-slate-800 mb-3 dark:text-slate-400 dark:hover:text-slate-200">
+    <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-brand-500 hover:text-brand-800 mb-3 dark:text-brand-400 dark:hover:text-brand-200">
       <ChevronLeft className="w-4 h-4" /> Week
     </button>
 
-    {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">{meal.cuisine}</div>}
-    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight text-balance">{meal.name}</h2>
-    {meal.blurb && <p className="text-sm text-slate-500 dark:text-slate-400 italic mt-1 leading-relaxed">{meal.blurb}</p>}
+    {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
+    <h2 className="text-2xl font-bold text-brand-900 dark:text-brand-100 tracking-tight text-balance">{meal.name}</h2>
+    {meal.blurb && <p className="text-sm text-brand-500 dark:text-brand-400 italic mt-1 leading-relaxed">{meal.blurb}</p>}
 
     {/* Stats strip */}
-    <div className="flex items-stretch divide-x divide-slate-200 dark:divide-slate-700 border-y border-slate-200 dark:border-slate-700 my-4">
+    <div className="flex items-stretch divide-x divide-brand-200 dark:divide-brand-700 border-y border-brand-200 dark:border-brand-700 my-4">
       <StatCell label="Active" value={typeof meal.activeMin === 'number' ? `${meal.activeMin}m` : '—'} />
       <StatCell label="Total" value={fmtDur(schedule.total)} />
       <StatCell label="Serves" value={meal.servesNote || '—'} />
     </div>
 
     {/* Scheduler */}
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 flex items-center justify-between gap-3 dark:bg-slate-700/40 dark:border-slate-700">
+    <div className="rounded-2xl bg-brand-50 border border-brand-200 p-4 flex items-center justify-between gap-3 dark:bg-brand-700/40 dark:border-brand-700">
       <div>
-        <label htmlFor="serve-time" className="block text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Serve at</label>
+        <label htmlFor="serve-time" className="block text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mb-1">Serve at</label>
         <input
           id="serve-time"
           type="time"
           value={serveValue}
           onChange={(e) => onServeChange(e.target.value)}
-          className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100"
+          className="bg-white border border-brand-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-brand-900 focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-100"
         />
       </div>
       <div className="text-right">
-        <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Start cooking</div>
+        <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">Start cooking</div>
         <div className="text-lg font-bold text-brand-700 dark:text-brand-300 tabular-nums">{fmtClock(schedule.start)}</div>
       </div>
     </div>
@@ -263,9 +263,9 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     {(meal.uses?.length || meal.saves?.length) ? (
       <div className="flex flex-col gap-2 mt-4">
         {meal.uses?.map((u, k) => (
-          <div key={`u${k}`} className="flex items-center gap-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-xl px-3 py-2 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-700">
-            <ArrowLeft className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-            <span><span className="font-semibold">{u.item}</span>{u.from ? <span className="text-slate-400 dark:text-slate-500"> from {u.from}</span> : null}</span>
+          <div key={`u${k}`} className="flex items-center gap-2 text-sm text-brand-600 bg-white border border-brand-200 rounded-xl px-3 py-2 dark:text-brand-300 dark:bg-brand-800 dark:border-brand-700">
+            <ArrowLeft className="w-4 h-4 text-brand-400 dark:text-brand-500 shrink-0" />
+            <span><span className="font-semibold">{u.item}</span>{u.from ? <span className="text-brand-400 dark:text-brand-500"> from {u.from}</span> : null}</span>
           </div>
         ))}
         {meal.saves?.map((s, k) => (
@@ -280,11 +280,11 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     {/* Ingredients */}
     {meal.ingredients?.length > 0 && (
       <section className="mt-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Mise en place</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 mb-3">Mise en place</h3>
         <ul className="space-y-1.5">
           {meal.ingredients.map((ing, i) => (
-            <li key={i} className="text-sm text-slate-700 dark:text-slate-300 flex items-baseline gap-2">
-              <span className="w-1 h-1 rounded-full bg-brand-400 shrink-0 translate-y-1.5" />
+            <li key={i} className="text-sm text-brand-700 dark:text-brand-300 flex items-baseline gap-2">
+              <span className="w-1 h-1 rounded-full bg-brand-400 shrink-0 tranbrand-y-1.5" />
               {ing}
             </li>
           ))}
@@ -294,7 +294,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
 
     {/* Steps */}
     <section className="mt-6">
-      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Cook in order</h3>
+      <h3 className="text-xs font-bold uppercase tracking-widest text-brand-400 dark:text-brand-500 mb-3">Cook in order</h3>
       <div className="space-y-3">
         {schedule.steps.map((s, i) => (
           <StepRow key={i} step={s} />
@@ -317,7 +317,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     {schedule.steps.length > 0 && (
       <button
         onClick={onStartCook}
-        className="mt-6 w-full flex items-center justify-center gap-2 py-3.5 bg-brand-800 text-white font-bold rounded-2xl shadow-lg hover:bg-brand-900 transition-all active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-500"
+        className="mt-6 w-full flex items-center justify-center gap-2 py-3.5 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-500 dark:hover:bg-accent-400"
       >
         <ChefHat className="w-5 h-5" /> Start Cook Mode
       </button>
@@ -339,13 +339,13 @@ const StepRow: React.FC<{ step: ScheduledStep }> = ({ step }) => (
   <div className="flex gap-3">
     <div className="w-14 shrink-0 text-right">
       <div className="text-sm font-bold text-brand-700 dark:text-brand-300 tabular-nums leading-tight">{fmtClock(step.when)}</div>
-      <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500 mt-0.5">{step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`}</div>
+      <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500 mt-0.5">{step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`}</div>
     </div>
-    <div className="flex-1 min-w-0 pb-3 border-b border-slate-100 dark:border-slate-700">
-      <h4 className="font-bold text-slate-900 dark:text-slate-100 leading-snug">{step.t}</h4>
+    <div className="flex-1 min-w-0 pb-3 border-b border-brand-100 dark:border-brand-700">
+      <h4 className="font-bold text-brand-900 dark:text-brand-100 leading-snug">{step.t}</h4>
       {step.det?.length ? (
         <ul className="mt-1 space-y-0.5">
-          {step.det.map((d, i) => <li key={i} className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{d}</li>)}
+          {step.det.map((d, i) => <li key={i} className="text-sm text-brand-600 dark:text-brand-300 leading-relaxed">{d}</li>)}
         </ul>
       ) : null}
       <StepFlags step={step} />
@@ -383,14 +383,14 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
   return (
     <div>
       {/* Summary */}
-      <div className="rounded-2xl bg-white border border-slate-200 p-4 mb-4 flex items-end justify-between dark:bg-slate-800 dark:border-slate-700">
+      <div className="rounded-2xl bg-white border border-brand-200 p-4 mb-4 flex items-end justify-between dark:bg-brand-800 dark:border-brand-700">
         <div>
-          <div className="text-xxs font-bold uppercase tracking-wide text-slate-400 dark:text-slate-500">Estimated total</div>
-          <div className="text-3xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">{fmt(total)}</div>
+          <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">Estimated total</div>
+          <div className="text-3xl font-bold text-brand-900 dark:text-brand-100 tabular-nums">{fmt(total)}</div>
         </div>
         <div className="text-right">
-          <div className="text-sm font-bold text-slate-700 dark:text-slate-200 tabular-nums">{itemsLeft} left</div>
-          <div className="text-xxs text-slate-400 dark:text-slate-500 tabular-nums">{fmt(remaining)} to buy</div>
+          <div className="text-sm font-bold text-brand-700 dark:text-brand-200 tabular-nums">{itemsLeft} left</div>
+          <div className="text-xxs text-brand-400 dark:text-brand-500 tabular-nums">{fmt(remaining)} to buy</div>
         </div>
       </div>
 
@@ -407,15 +407,15 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
             <div key={group.key}>
               <div className="flex items-baseline justify-between px-1 mb-2">
                 <div>
-                  <div className="font-bold text-slate-900 dark:text-slate-100">{group.name}</div>
-                  {group.why && <div className="text-xxs text-slate-400 dark:text-slate-500">{group.why}</div>}
+                  <div className="font-bold text-brand-900 dark:text-brand-100">{group.name}</div>
+                  {group.why && <div className="text-xxs text-brand-400 dark:text-brand-500">{group.why}</div>}
                 </div>
-                <div className="text-sm font-bold text-slate-500 dark:text-slate-400 tabular-nums">{fmt(groupSubtotal)}</div>
+                <div className="text-sm font-bold text-brand-500 dark:text-brand-400 tabular-nums">{fmt(groupSubtotal)}</div>
               </div>
               {sections.map(sec => (
                 <div key={sec} className="mb-2">
-                  <div className="text-xxs font-bold uppercase tracking-widest text-slate-300 dark:text-slate-500 px-1 mb-1">{sec}</div>
-                  <div className="rounded-2xl bg-white border border-slate-200 divide-y divide-slate-100 overflow-hidden dark:bg-slate-800 dark:border-slate-700 dark:divide-slate-700">
+                  <div className="text-xxs font-bold uppercase tracking-widest text-brand-300 dark:text-brand-500 px-1 mb-1">{sec}</div>
+                  <div className="rounded-2xl bg-white border border-brand-200 divide-y divide-brand-100 overflow-hidden dark:bg-brand-800 dark:border-brand-700 dark:divide-brand-700">
                     {group.items.filter(it => (it.sec || 'other').toLowerCase() === sec).map(it => {
                       const i = indexOf.get(it) ?? 0;
                       const id = itemId(it, i);
@@ -424,22 +424,22 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
                         <button
                           key={id}
                           onClick={() => onToggle(id)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition-colors dark:hover:bg-slate-700/50"
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-brand-50 transition-colors dark:hover:bg-brand-700/50"
                         >
                           <span className={clsx(
                             'w-6 h-6 rounded-full border flex items-center justify-center shrink-0 transition-colors',
-                            checked ? 'bg-brand-600 border-brand-600 text-white' : 'border-slate-300 dark:border-slate-600'
+                            checked ? 'bg-accent-600 border-accent-600 text-white' : 'border-brand-300 dark:border-brand-600'
                           )}>
                             {checked && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
                           </span>
-                          <span className={clsx('flex-1 min-w-0', checked && 'line-through text-slate-400 dark:text-slate-500')}>
-                            <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{it.n}</span>
-                            {it.q && <span className="text-xs text-slate-400 dark:text-slate-500 ml-1.5">{it.q}</span>}
-                            {it.staple && <span className="ml-1.5 text-xxs font-bold text-slate-400 dark:text-slate-500">staple</span>}
-                            {it.note && <span className="block text-xxs text-slate-400 dark:text-slate-500">{it.note}</span>}
+                          <span className={clsx('flex-1 min-w-0', checked && 'line-through text-brand-400 dark:text-brand-500')}>
+                            <span className="text-sm font-semibold text-brand-800 dark:text-brand-200">{it.n}</span>
+                            {it.q && <span className="text-xs text-brand-400 dark:text-brand-500 ml-1.5">{it.q}</span>}
+                            {it.staple && <span className="ml-1.5 text-xxs font-bold text-brand-400 dark:text-brand-500">staple</span>}
+                            {it.note && <span className="block text-xxs text-brand-400 dark:text-brand-500">{it.note}</span>}
                           </span>
                           {typeof it.p === 'number' && (
-                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-slate-300 dark:text-slate-600' : 'text-slate-600 dark:text-slate-300')}>{fmt(it.p)}</span>
+                            <span className={clsx('text-sm font-bold tabular-nums shrink-0', checked ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300')}>{fmt(it.p)}</span>
                           )}
                         </button>
                       );
@@ -451,7 +451,7 @@ const ShoppingView: React.FC<ShoppingViewProps> = ({ plan, checkedItems, onToggl
           );
         })}
         {allItems.length === 0 && (
-          <p className="text-center text-sm text-slate-400 dark:text-slate-500 py-10">No shopping items in this plan.</p>
+          <p className="text-center text-sm text-brand-400 dark:text-brand-500 py-10">No shopping items in this plan.</p>
         )}
       </div>
     </div>
@@ -468,26 +468,26 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
   if (!step) return null;
 
   return (
-    <div className="fixed inset-0 z-modal bg-white dark:bg-slate-900 flex flex-col p-6 pt-safe pb-safe">
+    <div className="fixed inset-0 z-modal bg-white dark:bg-brand-900 flex flex-col p-6 pt-safe pb-safe">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-bold text-slate-500 dark:text-slate-400">
+        <div className="text-sm font-bold text-brand-500 dark:text-brand-400">
           {step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`} · {i + 1}/{steps.length}
         </div>
-        <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-800" aria-label="Exit cook mode">
+        <button onClick={onClose} className="p-2 -mr-2 text-brand-400 hover:text-brand-700 rounded-full hover:bg-brand-100 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-800" aria-label="Exit cook mode">
           <X className="w-6 h-6" />
         </button>
       </div>
 
-      <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-3 overflow-hidden">
-        <div className="h-full bg-brand-600 transition-all" style={{ width: `${progress}%` }} />
+      <div className="h-1.5 bg-brand-100 dark:bg-brand-800 rounded-full mt-3 overflow-hidden">
+        <div className="h-full bg-accent-600 transition-[width] duration-(--duration-base) ease-(--ease-standard)" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="flex-1 flex flex-col justify-center min-h-0">
         <div className="text-sm font-bold text-brand-600 dark:text-brand-300 tabular-nums">{fmtClock(step.when)} · {meal.name}</div>
-        <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 tracking-tight mt-2 leading-tight text-balance">{step.t}</h2>
+        <h2 className="text-3xl font-bold text-brand-900 dark:text-brand-100 tracking-tight mt-2 leading-tight text-balance">{step.t}</h2>
         {step.det?.length ? (
           <ul className="mt-4 space-y-2">
-            {step.det.map((d, k) => <li key={k} className="text-lg text-slate-600 dark:text-slate-300 leading-relaxed">• {d}</li>)}
+            {step.det.map((d, k) => <li key={k} className="text-lg text-brand-600 dark:text-brand-300 leading-relaxed">• {d}</li>)}
           </ul>
         ) : null}
         <StepFlags step={step} />
@@ -497,21 +497,21 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
         <button
           onClick={() => setI(v => Math.max(0, v - 1))}
           disabled={i === 0}
-          className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-slate-100 text-slate-700 font-bold rounded-2xl disabled:opacity-40 active:scale-95 transition-all dark:bg-slate-800 dark:text-slate-200"
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-brand-100 text-brand-700 font-bold rounded-btn disabled:opacity-40 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-brand-800 dark:text-brand-200"
         >
           <ChevronLeft className="w-5 h-5" /> Back
         </button>
         {i < steps.length - 1 ? (
           <button
             onClick={() => setI(v => Math.min(steps.length - 1, v + 1))}
-            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-brand-800 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all dark:bg-brand-600 dark:hover:bg-brand-500"
+            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-accent-600 text-white font-bold rounded-btn active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-accent-500 dark:hover:bg-accent-400"
           >
             Next <ChevronRight className="w-5 h-5" />
           </button>
         ) : (
           <button
             onClick={onClose}
-            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-green-600 text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-all"
+            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-money-pos text-white font-bold rounded-btn active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
           >
             <Check className="w-5 h-5" /> Done
           </button>

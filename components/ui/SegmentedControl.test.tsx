@@ -71,12 +71,12 @@ describe('SegmentedControl', () => {
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={true} name="Border Group" />
     );
     let group = screen.getByRole('radiogroup', { name: /border group/i });
-    expect(group).toHaveClass('ring-1');
+    expect(group).toHaveClass('border');
 
     rerender(
       <SegmentedControl options={options} value="opt1" onChange={() => {}} showBorder={false} name="Border Group" />
     );
     group = screen.getByRole('radiogroup', { name: /border group/i });
-    expect(group).not.toHaveClass('ring-1');
+    expect(group).not.toHaveClass('border');
   });
 });

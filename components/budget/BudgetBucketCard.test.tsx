@@ -55,9 +55,9 @@ describe('BudgetBucketCard', () => {
 
   it('renders progress bar correctly', () => {
     const { container } = render(<BudgetBucketCard {...defaultProps} />);
-    // Target the progress bar specifically (it's inside the bg-slate-100/80 wrapper)
-    // We use a partial class match or the escaped selector
-    const progressBarWrapper = container.querySelector('[class*="bg-slate-100/80"]');
+    // Target the progress bar specifically (the track is the role=progressbar
+    // wrapper; the fill is its first child).
+    const progressBarWrapper = container.querySelector('[role="progressbar"]');
     const progressBar = progressBarWrapper?.firstElementChild;
 
     expect(progressBar).toHaveStyle('width: 50%'); // (250/500)*100

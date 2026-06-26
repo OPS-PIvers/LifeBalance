@@ -5,6 +5,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
 import Card from '@/components/ui/Card';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
 
 interface NotificationSettingsProps {
@@ -38,6 +39,12 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
   },
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
 };
+
+// Shared input styling for the inline time/number controls inside each
+// preference row. Solid surface + hairline border + evergreen focus ring, no
+// glass/gradient — matches the redesigned Select/input language.
+const inlineControlClass =
+  'text-sm px-3 py-1.5 border border-brand-200 dark:border-brand-700 rounded-btn bg-white dark:bg-brand-900 text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)';
 
 const getHourOptions = () => {
   return Array.from({ length: 24 }, (_, i) => {
@@ -165,21 +172,21 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   };
 
   return (
-    <Card className="p-6 space-y-4">
+    <Card className="p-5 space-y-4">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-brand-100 rounded-xl flex items-center justify-center">
-            <Bell className="w-6 h-6 text-brand-600" />
+          <div className="w-12 h-12 bg-warm-50 dark:bg-warm-500/15 rounded-card flex items-center justify-center">
+            <Bell className="w-6 h-6 text-warm-600 dark:text-warm-300" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-brand-800">Notification Preferences</h3>
-            <p className="text-sm text-brand-500">Customize your alerts</p>
+            <h3 className="font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-100">Notification Preferences</h3>
+            <p className="text-sm text-brand-500 dark:text-brand-400">Customize your alerts</p>
           </div>
         </div>
 
         <button
           onClick={handleSendTest}
-          className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 text-sm font-medium rounded-lg transition-colors border border-brand-200"
+          className="flex items-center gap-2 px-3 py-1.5 bg-accent-50 hover:bg-accent-100 text-accent-700 text-sm font-medium rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30 dark:hover:bg-accent-500/25"
           title="Send a test notification to your device"
         >
           <Send className="w-4 h-4" />
@@ -197,21 +204,23 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         const isReady = isPwa && hasPushSupport;
 
         return (
-          <div className={`p-4 rounded-xl border mb-4 ${
-            isReady ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'
+          <div className={`p-4 rounded-card border mb-4 ${
+            isReady
+              ? 'bg-money-bgPos border-accent-200 dark:bg-accent-500/10 dark:border-accent-500/30'
+              : 'bg-warm-50 border-warm-200 dark:bg-warm-500/10 dark:border-warm-500/30'
           }`}>
             <div className="flex items-start gap-3">
               <Info className={`w-5 h-5 shrink-0 mt-0.5 ${
-                isReady ? 'text-green-600' : 'text-amber-600'
+                isReady ? 'text-money-pos dark:text-accent-300' : 'text-warm-600 dark:text-warm-300'
               }`} />
               <div>
                 <h4 className={`font-semibold text-sm ${
-                  isReady ? 'text-green-800' : 'text-amber-800'
+                  isReady ? 'text-accent-800 dark:text-accent-200' : 'text-warm-800 dark:text-warm-200'
                 }`}>
                   {isReady ? 'Push Notifications Ready' : 'iOS Notification Setup'}
                 </h4>
                 <p className={`text-sm mt-1 ${
-                  isReady ? 'text-green-700' : 'text-amber-700'
+                  isReady ? 'text-accent-700 dark:text-accent-300' : 'text-warm-700 dark:text-warm-300'
                 }`}>
                   {isReady ? (
                     <>
@@ -236,17 +245,17 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         );
       })()}
 
-      <div className="space-y-4">
+      <SurfaceList>
         {/* Habit Reminders */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <div className="flex items-start justify-between mb-3">
+        <Row className="flex-col items-stretch gap-0">
+          <div className="flex items-start justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-habit-green-100 rounded-lg flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5 text-habit-green-600" />
+              <div className="w-10 h-10 bg-warm-50 dark:bg-warm-500/15 rounded-btn flex items-center justify-center shrink-0">
+                <Flame className="w-5 h-5 text-warm-600 dark:text-warm-300" />
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-800">Daily Habit Check-In</h4>
-                <p className="text-sm text-brand-500 mt-1">Remind me to complete my habits</p>
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Daily Habit Check-In</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me to complete my habits</p>
               </div>
             </div>
             <Switch
@@ -257,12 +266,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             />
           </div>
           {preferences.habitReminders.enabled && (
-            <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
-              <Clock className="w-4 h-4 text-brand-500" />
+            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
+              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
               <select
                 value={preferences.habitReminders.time}
                 onChange={(e) => handleTimeChange('habitReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                className={inlineControlClass}
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -272,18 +281,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </select>
             </div>
           )}
-        </div>
+        </Row>
 
         {/* Action Queue Reminders */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <div className="flex items-start justify-between mb-3">
+        <Row className="flex-col items-stretch gap-0">
+          <div className="flex items-start justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
-                <ListTodo className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 bg-habit-blue/15 rounded-btn flex items-center justify-center shrink-0">
+                <ListTodo className="w-5 h-5 text-habit-blue" />
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-800">Morning To-Do List</h4>
-                <p className="text-sm text-brand-500 mt-1">Get a summary of today&apos;s tasks</p>
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Morning To-Do List</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Get a summary of today&apos;s tasks</p>
               </div>
             </div>
             <Switch
@@ -294,12 +303,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             />
           </div>
           {preferences.actionQueueReminders.enabled && (
-            <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
-              <Clock className="w-4 h-4 text-brand-500" />
+            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
+              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
               <select
                 value={preferences.actionQueueReminders.time}
                 onChange={(e) => handleTimeChange('actionQueueReminders', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                className={inlineControlClass}
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -309,18 +318,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </select>
             </div>
           )}
-        </div>
+        </Row>
 
         {/* Budget Alerts */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <div className="flex items-start justify-between mb-3">
+        <Row className="flex-col items-stretch gap-0">
+          <div className="flex items-start justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-money-red-100 rounded-lg flex items-center justify-center shrink-0">
-                <DollarSign className="w-5 h-5 text-money-red-600" />
+              <div className="w-10 h-10 bg-money-bgNeg dark:bg-money-neg/15 rounded-btn flex items-center justify-center shrink-0">
+                <DollarSign className="w-5 h-5 text-money-neg" />
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-800">Low Balance Alert</h4>
-                <p className="text-sm text-brand-500 mt-1">Alert when safe-to-spend is low</p>
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Low Balance Alert</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Alert when safe-to-spend is low</p>
               </div>
             </div>
             <Switch
@@ -331,33 +340,33 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             />
           </div>
           {preferences.budgetAlerts.enabled && (
-            <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
-              <span className="text-sm text-brand-600">Threshold:</span>
+            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
+              <span className="text-sm text-brand-600 dark:text-brand-300">Threshold:</span>
               <div className="flex items-center gap-1">
-                <span className="text-sm text-brand-500">$</span>
+                <span className="text-sm text-brand-500 dark:text-brand-400">$</span>
                 <input
                   type="number"
                   min="0"
                   step="10"
                   value={preferences.budgetAlerts.threshold || 100}
                   onChange={(e) => handleThresholdChange(Number(e.target.value))}
-                  className="w-20 text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className={`w-20 ${inlineControlClass}`}
                 />
               </div>
             </div>
           )}
-        </div>
+        </Row>
 
         {/* Streak Warnings */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <div className="flex items-start justify-between mb-3">
+        <Row className="flex-col items-stretch gap-0">
+          <div className="flex items-start justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5 text-orange-600" />
+              <div className="w-10 h-10 bg-habit-streak/15 rounded-btn flex items-center justify-center shrink-0">
+                <Flame className="w-5 h-5 text-habit-streak" />
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-800">Streak Protection</h4>
-                <p className="text-sm text-brand-500 mt-1">Remind me before my streak breaks</p>
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Streak Protection</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me before my streak breaks</p>
               </div>
             </div>
             <Switch
@@ -368,12 +377,12 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             />
           </div>
           {preferences.streakWarnings.enabled && (
-            <div className="flex items-center gap-2 ml-13 pl-3 border-l-2 border-brand-200">
-              <Clock className="w-4 h-4 text-brand-500" />
+            <div className="flex items-center gap-2 mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700">
+              <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
               <select
                 value={preferences.streakWarnings.time}
                 onChange={(e) => handleTimeChange('streakWarnings', e.target.value)}
-                className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                className={inlineControlClass}
               >
                 {hourOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -383,18 +392,18 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </select>
             </div>
           )}
-        </div>
+        </Row>
 
         {/* Bill Reminders */}
-        <div className="p-4 bg-brand-50 rounded-xl border border-brand-100">
-          <div className="flex items-start justify-between mb-3">
+        <Row className="flex-col items-stretch gap-0">
+          <div className="flex items-start justify-between">
             <div className="flex items-start gap-3 flex-1">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center shrink-0">
-                <Calendar className="w-5 h-5 text-purple-600" />
+              <div className="w-10 h-10 bg-accent-50 dark:bg-accent-500/15 rounded-btn flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5 text-accent-600 dark:text-accent-300" />
               </div>
               <div className="flex-1">
-                <h4 className="font-semibold text-brand-800">Bill Payment Reminders</h4>
-                <p className="text-sm text-brand-500 mt-1">Remind me about upcoming bills</p>
+                <h4 className="font-semibold text-brand-900 dark:text-brand-100">Bill Payment Reminders</h4>
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">Remind me about upcoming bills</p>
               </div>
             </div>
             <Switch
@@ -405,25 +414,25 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
             />
           </div>
           {preferences.billReminders.enabled && (
-            <div className="ml-13 pl-3 border-l-2 border-brand-200 space-y-2">
+            <div className="mt-3 ml-13 pl-3 border-l-2 border-brand-200 dark:border-brand-700 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm text-brand-600">Remind:</span>
+                <span className="text-sm text-brand-600 dark:text-brand-300">Remind:</span>
                 <input
                   type="number"
                   min="1"
                   max="7"
                   value={preferences.billReminders.daysBeforeDue}
                   onChange={(e) => handleDaysBeforeChange(Number(e.target.value))}
-                  className="w-16 text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                  className={`w-16 ${inlineControlClass}`}
                 />
-                <span className="text-sm text-brand-500">day(s) before due</span>
+                <span className="text-sm text-brand-500 dark:text-brand-400">day(s) before due</span>
               </div>
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-brand-500" />
+                <Clock className="w-4 h-4 text-brand-500 dark:text-brand-400" />
                 <select
                   value={preferences.billReminders.time}
                   onChange={(e) => handleTimeChange('billReminders', e.target.value)}
-                  className="text-sm px-3 py-1.5 border border-brand-200 rounded-lg focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white"
+                  className={inlineControlClass}
                 >
                   {hourOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -434,14 +443,14 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </Row>
+      </SurfaceList>
 
       {/* Save Button */}
       <button
         onClick={handleSave}
         disabled={isSaving}
-        className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full bg-accent-600 text-white font-semibold py-3 px-4 rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 dark:bg-accent-500 dark:hover:bg-accent-600"
       >
         {isSaving ? 'Saving...' : 'Save Preferences'}
       </button>

@@ -1,26 +1,26 @@
 import React, { useState, useCallback, Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
-const AnalyticsModal = React.lazy(() => import('@/components/modals/AnalyticsModal'));
+// The Analytics modal is retired: its Wallet charts now live in Money → Trends
+// and its Behavior charts in Habits → Insights, so the Home chart button
+// deep-links into Money → Trends instead of opening a modal (redesign IA).
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
 const InsightsArchiveModal = React.lazy(() => import('@/components/modals/InsightsArchiveModal'));
 import { useActionQueue } from '@/hooks/useActionQueue';
 import { ActionQueueItemCard } from '@/components/dashboard/ActionQueueItem';
-import { ChallengeWidget } from '@/components/dashboard/ChallengeWidget';
-import { EmptyChallengeWidget } from '@/components/dashboard/EmptyChallengeWidget';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
-import { MoneyPulseWidget } from '@/components/dashboard/MoneyPulseWidget';
 import { DailyHabitsWidget } from '@/components/dashboard/DailyHabitsWidget';
 import { KidsChoresWidget } from '@/components/dashboard/KidsChoresWidget';
-import { UpcomingBillsWidget } from '@/components/dashboard/UpcomingBillsWidget';
-import { CategorySpendWidget } from '@/components/dashboard/CategorySpendWidget';
 import { ActivityFeedWidget } from '@/components/dashboard/ActivityFeedWidget';
+import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { CreateChallengePayload } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { SafeToSpendHero } from '@/components/dashboard/SafeToSpendHero';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 const Dashboard: React.FC = () => {
   // Consume the narrowest context slices so a change in one domain (e.g. a
@@ -37,11 +37,11 @@ const Dashboard: React.FC = () => {
     updateTransaction,
     deleteTransaction,
   } = useFinance();
-  const { activeChallenge, habits } = useGamification();
+  const { habits } = useGamification();
   const { updateToDo, deleteToDo, completeToDo } = useTodos();
   const fmt = useFormatCurrency();
-  
-  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
+  const navigate = useNavigate();
+
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [proposedChallenge, setProposedChallenge] = useState<CreateChallengePayload | null>(null);
@@ -64,59 +64,65 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32">
-      
-      {/* Dashboard Header */}
-      <div className="px-6 py-8 flex items-center justify-between">
+
+      {/* Editorial greeting header */}
+      <div className="px-5 pt-8 pb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Hi, {currentUser?.displayName || 'there'}</h1>
-          <p className="text-base text-slate-500 dark:text-slate-400 font-medium mt-1">Let&apos;s make today count.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+            Hi, {currentUser?.displayName || 'there'}
+          </h1>
+          <p className="mt-1 text-sm text-brand-500 dark:text-brand-400 font-medium">
+            Let&apos;s make today count.
+          </p>
         </div>
         <button
-          onClick={() => setIsAnalyticsOpen(true)}
-          className="p-3 bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 ring-1 ring-black/5 dark:ring-white/5 rounded-2xl shadow-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800 active:scale-95 transition-all"
-          aria-label="Open Analytics"
+          onClick={() => navigate('/budget', { state: { tab: 'trends' } })}
+          className="shrink-0 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 hover:border-brand-300 dark:hover:border-brand-600 active:scale-95 transition-[transform,color,border-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+          aria-label="View money trends"
         >
-          <BarChart2 size={24} />
+          <BarChart2 size={22} />
         </button>
       </div>
 
-      <div className="px-4 space-y-8">
+      <div className="px-4 space-y-6">
 
-        {/* Hero: Safe to Spend */}
+        {/* Hero: Safe to Spend — the single elevated surface on Home */}
         <SafeToSpendHero />
+
+        {/* The Pulse strip — money + habits balance, the app's thesis metric */}
+        <PulseStripWidget />
 
         {/* Pending Voice Commands Banner */}
         {pendingItemsCount > 0 && (
-          <div className="bg-white/90 dark:bg-slate-800/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xs ring-1 ring-black/5 dark:ring-white/5 rounded-2xl p-4 animate-in fade-in slide-in-from-top-4">
+          <div className="surface-section p-4 animate-in fade-in slide-in-from-top-2 duration-(--duration-base)">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)] animate-pulse"></div>
+              <div className="w-2 h-2 rounded-full bg-accent-500 motion-safe:animate-pulse"></div>
               <div className="flex-1">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-sm font-semibold text-brand-900 dark:text-brand-100">
                   Processing voice command{pendingItemsCount !== 1 ? 's' : ''}
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts...
+                <p className="text-xs text-brand-500 dark:text-brand-400 mt-0.5">
+                  Adding {pendingItemsCount} item{pendingItemsCount !== 1 ? 's' : ''} from your Siri shortcuts…
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Widget A: Action Queue */}
-        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-premium ring-1 ring-black/5 dark:ring-white/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              {actionQueue.length > 0 ? (
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse shadow-xs"></span>
-              ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs"></span>
-              )}
+        {/* Action Queue — triage of what needs attention */}
+        <Section
+          title={
+            <span className="flex items-center gap-2">
+              <span
+                className={`w-2 h-2 rounded-full ${actionQueue.length > 0 ? 'bg-habit-streak motion-safe:animate-pulse' : 'bg-money-pos'}`}
+                aria-hidden="true"
+              />
               Action Queue {actionQueue.length > 0 && `(${actionQueue.length})`}
-            </h2>
-          </div>
-
+            </span>
+          }
+        >
           {actionQueue.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {actionQueue.map(item => (
                 <ActionQueueItemCard
                   key={item.id}
@@ -140,49 +146,36 @@ const Dashboard: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <p className="text-sm font-medium text-slate-400 dark:text-slate-500">✨ All caught up!</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Nothing needs your attention right now.</p>
-            </div>
+            <SurfaceList>
+              <Row className="flex-col items-center py-8 text-center">
+                <p className="text-sm font-semibold text-brand-600 dark:text-brand-300">All caught up</p>
+                <p className="text-xs text-brand-400 dark:text-brand-500 mt-1">
+                  Nothing needs your attention right now.
+                </p>
+              </Row>
+            </SurfaceList>
           )}
-        </div>
+        </Section>
 
-        {/* Widget: Daily Habits */}
+        {/* Today's Habits — compact tracker */}
         <DailyHabitsWidget />
 
-        {/* Widget: Kids' Chores (parent overview) — self-nulls unless Kid Mode is
-            on and a managed kid has a chore, so this is dormant by default. */}
+        {/* Kids' Chores (parent overview) — self-nulls unless Kid Mode is on and a
+            managed kid has a chore, so this is dormant by default. */}
         <KidsChoresWidget />
 
-        {/* Widget: Money Pulse */}
-        <MoneyPulseWidget />
-
-        {/* Widget: Upcoming Bills */}
-        <UpcomingBillsWidget onPay={setPayModalItemId} />
-
-        {/* Widget: Recent Activity */}
-        <ActivityFeedWidget />
-
-        {/* Widget: Category Spend */}
-        <CategorySpendWidget />
-
-        {/* Widget B: Monthly Challenge (Enhanced) */}
-        {activeChallenge ? (
-          <ChallengeWidget onOpenModal={() => setIsChallengeModalOpen(true)} />
-        ) : (
-          <EmptyChallengeWidget onOpenModal={() => setIsChallengeModalOpen(true)} />
-        )}
-
-        {/* Widget C: Gemini Insight */}
+        {/* One AI Insight */}
         <InsightWidget
           onOpenArchive={() => setIsArchiveOpen(true)}
           onCreateChallenge={handleCreateChallenge}
         />
 
+        {/* Compact Recent Activity */}
+        <ActivityFeedWidget />
+
       </div>
 
-      <Suspense fallback={<div className="fixed inset-0 z-modal bg-slate-900/40 backdrop-blur-xs" />}>
-        {isAnalyticsOpen && <AnalyticsModal isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />}
+      <Suspense fallback={<div className="fixed inset-0 z-modal bg-brand-900/50" />}>
         {isChallengeModalOpen && (
           <ChallengeHubModal
             isOpen={isChallengeModalOpen}
@@ -195,18 +188,18 @@ const Dashboard: React.FC = () => {
         )}
         {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
       </Suspense>
-      
+
       {/* Pay Modal for Calendar Items */}
       {payModalItemId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-900/60">
            <div
              role="dialog"
              aria-modal="true"
              aria-labelledby="pay-bill-title"
-             className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-white/20 dark:border-white/5 animate-in zoom-in-95"
+             className="bg-white dark:bg-brand-800 w-full max-w-sm rounded-card p-6 shadow-raised border border-brand-200 dark:border-brand-700 animate-in zoom-in-95 duration-(--duration-base)"
            >
-             <h3 id="pay-bill-title" className="font-bold text-lg text-slate-900 dark:text-slate-100 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+             <h3 id="pay-bill-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100 mb-2">Confirm Payment</h3>
+             <p className="text-sm text-brand-500 dark:text-brand-400 mb-6 leading-relaxed">
                Select which account to deduct this payment from.
              </p>
 
@@ -218,17 +211,17 @@ const Dashboard: React.FC = () => {
                      payCalendarItem(payModalItemId, acc.id);
                      setPayModalItemId(null);
                    }}
-                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600 shadow-xs hover:shadow-md transition-all group"
+                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-brand-700/40 hover:bg-brand-50 dark:hover:bg-brand-700 rounded-card border border-brand-200 dark:border-brand-700 hover:border-brand-300 dark:hover:border-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) group"
                  >
-                   <span className="font-bold text-slate-700 dark:text-slate-200 text-sm group-hover:text-slate-900 dark:group-hover:text-slate-100">{acc.name}</span>
-                   <span className="font-mono text-xs text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300">{fmt(acc.balance)}</span>
+                   <span className="font-semibold text-brand-700 dark:text-brand-200 text-sm group-hover:text-brand-900 dark:group-hover:text-brand-100">{acc.name}</span>
+                   <span className="font-mono text-xs tabular-nums text-brand-400 dark:text-brand-500 group-hover:text-brand-600 dark:group-hover:text-brand-300">{fmt(acc.balance)}</span>
                  </button>
                ))}
              </div>
 
              <button
                onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 font-semibold transition-colors text-sm"
+               className="w-full py-3 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 font-semibold transition-colors text-sm"
              >
                Cancel
              </button>

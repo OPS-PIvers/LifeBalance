@@ -20,7 +20,9 @@ import type { Habit, RewardItem } from '@/types/schema';
  * AND a parent has switched into a kid. Writes execute in the parent's
  * authenticated session (Principle 2), so no kid credential is ever required.
  *
- * Theme: purple, matching the kid avatars in ProfileMenu. Scope notes:
+ * Theme: warm-amber (the redesign's secondary accent for household/gamification
+ * warmth), matching the kid avatars in ProfileMenu. Surfaces are grouped-flat
+ * (solid + hairline), no glass/gradient. Scope notes:
  *  - Chores are habits with `assignedTo === kidUid`; the assignment UI + per-kid
  *    point crediting land in 080c (so this list is empty until then).
  *  - The reward "Request" button is a friendly stub here; the real
@@ -154,29 +156,29 @@ const KidDashboard: React.FC = () => {
   });
 
   return (
-    <div className="min-h-dvh bg-linear-to-b from-purple-50 to-brand-50 dark:from-brand-900 dark:to-slate-900 overflow-y-auto">
+    <div className="min-h-dvh bg-brand-50 dark:bg-brand-900 overflow-y-auto">
       <div className="max-w-md mx-auto px-4 pt-6 pb-12 space-y-6">
         {/* Header: who you are + exit */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-extrabold text-white shrink-0 shadow-md"
-              style={{ backgroundColor: activeKid.avatarColor ?? '#7c3aed' }}
+              className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-extrabold text-white shrink-0"
+              style={{ backgroundColor: activeKid.avatarColor ?? '#b87a29' }}
             >
               {activeKid.avatarEmoji ?? activeKid.displayName.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-purple-500 dark:text-purple-300">
+              <p className="text-xs font-semibold uppercase tracking-wide text-warm-600 dark:text-warm-300">
                 Hi there
               </p>
-              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white truncate">
+              <h1 className="font-display text-xl font-semibold text-brand-900 dark:text-white truncate">
                 {activeKid.displayName}
               </h1>
             </div>
           </div>
           <button
             onClick={handleExitClick}
-            className="flex items-center gap-1.5 rounded-full bg-white/80 dark:bg-slate-800/80 px-3.5 py-2 text-sm font-bold text-slate-600 dark:text-slate-200 shadow-sm ring-1 ring-black/5 active:scale-95 transition-transform"
+            className="flex items-center gap-1.5 rounded-btn bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 px-4 min-h-11 text-sm font-bold text-brand-600 dark:text-brand-200 active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard)"
             aria-label="Done — back to parent"
           >
             {hasPin ? <Lock className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
@@ -186,35 +188,39 @@ const KidDashboard: React.FC = () => {
 
         {/* Points + allowance */}
         <section className="grid grid-cols-2 gap-3">
-          <div className="rounded-3xl bg-linear-to-br from-amber-400 to-orange-500 p-4 text-white shadow-lg">
-            <div className="flex items-center gap-1.5 text-amber-50">
+          <div className="rounded-lg bg-warm-600 p-4 text-white shadow-raised">
+            <div className="flex items-center gap-1.5 text-warm-50">
               <Star className="w-4 h-4 fill-current" />
               <span className="text-xs font-bold uppercase tracking-wide">Points</span>
             </div>
-            <p className="mt-1 text-4xl font-black tabular-nums">{points.total.toLocaleString()}</p>
-            <p className="text-xs font-semibold text-amber-50/90">{points.weekly} this week</p>
+            <p className="mt-1 font-mono text-4xl font-black tabular-nums">
+              {points.total.toLocaleString()}
+            </p>
+            <p className="text-xs font-semibold text-warm-50">{points.weekly} this week</p>
           </div>
-          <div className="rounded-3xl bg-linear-to-br from-emerald-400 to-green-600 p-4 text-white shadow-lg">
-            <div className="flex items-center gap-1.5 text-emerald-50">
+          <div className="rounded-lg bg-accent-600 p-4 text-white shadow-raised">
+            <div className="flex items-center gap-1.5 text-accent-50">
               <PiggyBank className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wide">Saved up</span>
             </div>
-            <p className="mt-1 text-3xl font-black tabular-nums">{allowance}</p>
-            <p className="text-xs font-semibold text-emerald-50/90">your allowance</p>
+            <p className="mt-1 font-mono text-3xl font-black tabular-nums">{allowance}</p>
+            <p className="text-xs font-semibold text-accent-50/90">your allowance</p>
           </div>
         </section>
 
         {/* Family Challenge (Plan 080e) — only when one is active */}
         {activeChallenge && challengeProgress && (
           <section>
-            <div className="rounded-3xl bg-linear-to-br from-purple-500 to-indigo-600 p-5 text-white shadow-lg">
-              <div className="flex items-center gap-2 text-purple-100">
+            <div className="rounded-lg bg-warm-600 p-5 text-white shadow-raised">
+              <div className="flex items-center gap-2 text-warm-100">
                 <Trophy className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase tracking-wide">Family challenge</span>
               </div>
-              <h2 className="mt-1 text-lg font-extrabold leading-tight">{activeChallenge.title}</h2>
+              <h2 className="font-display mt-1 text-lg font-semibold leading-tight">
+                {activeChallenge.title}
+              </h2>
               {activeChallenge.description && (
-                <p className="mt-0.5 text-sm text-purple-100/90">{activeChallenge.description}</p>
+                <p className="mt-0.5 text-sm text-warm-100/90">{activeChallenge.description}</p>
               )}
 
               {/* Overall progress bar */}
@@ -227,11 +233,11 @@ const KidDashboard: React.FC = () => {
                 aria-label={`Family challenge progress: ${Math.round(challengeProgress.progress)}% complete`}
               >
                 <div
-                  className="h-full rounded-full bg-linear-to-r from-amber-300 to-orange-400 transition-all duration-700"
+                  className="h-full rounded-full bg-warm-200 transition-all duration-700"
                   style={{ width: `${challengeProgress.progress}%` }}
                 />
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs font-semibold text-purple-100">
+              <div className="mt-2 flex items-center justify-between text-xs font-semibold text-warm-100">
                 <span>{Math.round(challengeProgress.progress)}% as a family</span>
                 {familyCompletions > 0 && (
                   <span className="inline-flex items-center gap-1">
@@ -246,15 +252,17 @@ const KidDashboard: React.FC = () => {
 
         {/* Chores */}
         <section>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-slate-900 dark:text-white">
-            <Check className="w-5 h-5 text-purple-500" />
+          <h2 className="font-display mb-3 flex items-center gap-2 text-lg font-semibold text-brand-900 dark:text-white">
+            <Check className="w-5 h-5 text-warm-500" />
             My chores
           </h2>
           {myChores.length === 0 ? (
-            <div className="rounded-3xl bg-white/70 dark:bg-slate-800/60 p-8 text-center ring-1 ring-black/5">
-              <Sparkles className="w-8 h-8 mx-auto text-purple-400" />
-              <p className="mt-2 font-bold text-slate-700 dark:text-slate-200">No chores yet!</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+            <div className="surface-section p-8 text-center">
+              <Sparkles className="w-8 h-8 mx-auto text-warm-400" />
+              <p className="font-display mt-2 font-semibold text-brand-700 dark:text-brand-200">
+                No chores yet!
+              </p>
+              <p className="text-sm text-brand-500 dark:text-brand-400">
                 A grown-up will add some for you soon.
               </p>
             </div>
@@ -266,20 +274,20 @@ const KidDashboard: React.FC = () => {
                   <li key={h.id}>
                     <button
                       onClick={() => handleToggleChore(h)}
-                      className={`w-full flex items-center gap-4 rounded-3xl p-4 text-left shadow-sm ring-1 transition-all active:scale-[0.98] ${
+                      className={`w-full flex items-center gap-4 rounded-2xl border p-4 text-left transition-all active:scale-[0.98] ${
                         done
-                          ? 'bg-purple-500 text-white ring-purple-600'
-                          : 'bg-white/90 dark:bg-slate-800/80 text-slate-900 dark:text-white ring-black/5'
+                          ? 'bg-warm-500 text-white border-warm-600'
+                          : 'bg-white dark:bg-brand-800 text-brand-900 dark:text-white border-brand-200 dark:border-brand-700'
                       }`}
                       aria-pressed={done}
                     >
                       <span
-                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
-                          done ? 'bg-white/25' : 'bg-purple-100 dark:bg-purple-500/20'
+                        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                          done ? 'bg-white/25' : 'bg-warm-100 dark:bg-warm-500/20'
                         }`}
                       >
                         <Check
-                          className={`h-6 w-6 ${done ? 'text-white' : 'text-purple-500'}`}
+                          className={`h-6 w-6 ${done ? 'text-white' : 'text-warm-600 dark:text-warm-300'}`}
                           strokeWidth={3}
                         />
                       </span>
@@ -287,7 +295,7 @@ const KidDashboard: React.FC = () => {
                         <span className="block truncate text-base font-bold">{h.title}</span>
                         <span
                           className={`flex items-center gap-2 text-sm font-semibold ${
-                            done ? 'text-white/80' : 'text-slate-500 dark:text-slate-400'
+                            done ? 'text-white/80' : 'text-brand-500 dark:text-brand-400'
                           }`}
                         >
                           <span className="inline-flex items-center gap-1">
@@ -313,15 +321,17 @@ const KidDashboard: React.FC = () => {
 
         {/* Reward store */}
         <section>
-          <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-slate-900 dark:text-white">
-            <Gift className="w-5 h-5 text-purple-500" />
+          <h2 className="font-display mb-3 flex items-center gap-2 text-lg font-semibold text-brand-900 dark:text-white">
+            <Gift className="w-5 h-5 text-warm-500" />
             Reward store
           </h2>
           {rewardsInventory.length === 0 ? (
-            <div className="rounded-3xl bg-white/70 dark:bg-slate-800/60 p-8 text-center ring-1 ring-black/5">
-              <Gift className="w-8 h-8 mx-auto text-purple-400" />
-              <p className="mt-2 font-bold text-slate-700 dark:text-slate-200">No rewards yet!</p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+            <div className="surface-section p-8 text-center">
+              <Gift className="w-8 h-8 mx-auto text-warm-400" />
+              <p className="font-display mt-2 font-semibold text-brand-700 dark:text-brand-200">
+                No rewards yet!
+              </p>
+              <p className="text-sm text-brand-500 dark:text-brand-400">
                 Earn points while a grown-up sets up the store.
               </p>
             </div>
@@ -333,33 +343,33 @@ const KidDashboard: React.FC = () => {
                 return (
                   <li
                     key={r.id}
-                    className="flex items-center gap-3 rounded-3xl bg-white/90 dark:bg-slate-800/80 p-4 shadow-sm ring-1 ring-black/5"
+                    className="flex items-center gap-3 rounded-2xl bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 p-4"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-500/20 text-xl">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-warm-100 dark:bg-warm-500/20 text-xl">
                       {r.icon || '🎁'}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-bold text-slate-900 dark:text-white">
+                      <p className="truncate text-base font-bold text-brand-900 dark:text-white">
                         {r.title}
                       </p>
-                      <p className="flex items-center gap-1 text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      <p className="flex items-center gap-1 text-sm font-semibold text-warm-600 dark:text-warm-300">
                         <Star className="h-3.5 w-3.5 fill-current" />
                         {r.cost} pts
                       </p>
                     </div>
                     {alreadyRequested ? (
-                      <span className="rounded-full bg-purple-100 dark:bg-purple-500/20 px-3 py-2 text-center text-xs font-bold text-purple-600 dark:text-purple-300">
+                      <span className="flex items-center rounded-full bg-warm-100 dark:bg-warm-500/20 px-3 min-h-11 text-center text-xs font-bold text-warm-700 dark:text-warm-300">
                         Requested
                       </span>
                     ) : canAfford ? (
                       <button
                         onClick={() => handleRequestReward(r)}
-                        className="rounded-full bg-purple-500 px-4 py-2 text-sm font-bold text-white shadow-sm active:scale-95 transition-transform"
+                        className="rounded-full bg-warm-600 px-5 min-h-11 text-sm font-bold text-white active:scale-95 transition-transform duration-(--duration-fast) ease-(--ease-standard) hover:bg-warm-700"
                       >
                         Request
                       </button>
                     ) : (
-                      <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-3 py-2 text-center text-xs font-bold text-slate-500 dark:text-slate-300">
+                      <span className="flex items-center rounded-full bg-brand-100 dark:bg-brand-700 px-3 min-h-11 text-center text-xs font-bold text-brand-500 dark:text-brand-300">
                         {r.cost - points.total} more
                       </span>
                     )}
@@ -381,16 +391,16 @@ const KidDashboard: React.FC = () => {
         >
           <div
             ref={pinModalRef}
-            className="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-800 p-6 shadow-2xl"
+            className="w-full max-w-xs rounded-lg bg-white dark:bg-brand-800 p-6 shadow-raised"
           >
             <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-100 dark:bg-purple-500/20">
-                <Lock className="h-6 w-6 text-purple-500" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warm-100 dark:bg-warm-500/20">
+                <Lock className="h-6 w-6 text-warm-600 dark:text-warm-300" />
               </div>
-              <h3 className="mt-3 text-lg font-extrabold text-slate-900 dark:text-white">
+              <h3 className="font-display mt-3 text-lg font-semibold text-brand-900 dark:text-white">
                 Grown-up check
               </h3>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-sm text-brand-500 dark:text-brand-400">
                 Enter the PIN to leave {activeKid.displayName}&apos;s view.
               </p>
             </div>
@@ -405,16 +415,16 @@ const KidDashboard: React.FC = () => {
                   setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6));
                   setPinError(false);
                 }}
-                className={`w-full rounded-xl border-2 bg-white dark:bg-slate-900 px-4 py-3 text-center text-2xl font-black tracking-[0.4em] text-slate-900 dark:text-white outline-none ${
+                className={`w-full rounded-btn border-2 bg-white dark:bg-brand-900 px-4 py-3 text-center text-2xl font-black tracking-[0.4em] text-brand-900 dark:text-white outline-none ${
                   pinError
-                    ? 'border-rose-400 focus:border-rose-500'
-                    : 'border-slate-200 dark:border-slate-700 focus:border-purple-500'
+                    ? 'border-money-neg focus:border-money-neg'
+                    : 'border-brand-200 dark:border-brand-700 focus:border-warm-500'
                 }`}
                 aria-label="Parent PIN"
                 aria-invalid={pinError}
               />
               {pinError && (
-                <p className="text-center text-sm font-semibold text-rose-500">
+                <p className="text-center text-sm font-semibold text-money-neg">
                   That PIN isn&apos;t right — try again.
                 </p>
               )}
@@ -422,14 +432,14 @@ const KidDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPinModal(false)}
-                  className="flex-1 rounded-xl bg-slate-100 dark:bg-slate-700 px-4 py-3 text-sm font-bold text-slate-600 dark:text-slate-200 active:scale-95 transition-transform"
+                  className="flex-1 rounded-btn bg-brand-100 dark:bg-brand-700 px-4 py-3 text-sm font-bold text-brand-600 dark:text-brand-200 active:scale-95 transition-transform"
                 >
                   Stay
                 </button>
                 <button
                   type="submit"
                   disabled={pinInput.length < 4}
-                  className="flex-1 rounded-xl bg-purple-500 px-4 py-3 text-sm font-bold text-white shadow-sm active:scale-95 transition-transform disabled:opacity-50"
+                  className="flex-1 rounded-btn bg-warm-500 px-4 py-3 text-sm font-bold text-white active:scale-95 transition-transform disabled:opacity-50"
                 >
                   Exit
                 </button>

@@ -13,7 +13,7 @@ describe('Button', () => {
   it('applies primary variant classes by default', () => {
     render(<Button>Primary</Button>);
     const button = screen.getByRole('button', { name: /primary/i });
-    expect(button).toHaveClass('bg-slate-900');
+    expect(button).toHaveClass('bg-accent-600');
     expect(button).toHaveClass('text-white');
   });
 
@@ -21,7 +21,7 @@ describe('Button', () => {
     render(<Button variant="secondary">Secondary</Button>);
     const button = screen.getByRole('button', { name: /secondary/i });
     expect(button).toHaveClass('bg-white');
-    expect(button).toHaveClass('text-slate-700');
+    expect(button).toHaveClass('text-brand-700');
     expect(button).toHaveClass('border');
   });
 
@@ -29,14 +29,14 @@ describe('Button', () => {
     render(<Button variant="ghost">Ghost</Button>);
     const button = screen.getByRole('button', { name: /ghost/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-slate-600');
+    expect(button).toHaveClass('text-brand-600');
   });
 
   it('applies danger variant classes', () => {
     render(<Button variant="danger">Danger</Button>);
     const button = screen.getByRole('button', { name: /danger/i });
-    expect(button).toHaveClass('bg-red-50');
-    expect(button).toHaveClass('text-red-700');
+    expect(button).toHaveClass('bg-money-bgNeg');
+    expect(button).toHaveClass('text-money-neg');
   });
 
   it('applies outline variant classes', () => {
@@ -44,48 +44,48 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /outline/i });
     expect(button).toHaveClass('bg-transparent');
     expect(button).toHaveClass('border');
-    expect(button).toHaveClass('text-slate-600');
+    expect(button).toHaveClass('text-brand-600');
   });
 
   it('applies subtle variant classes', () => {
     render(<Button variant="subtle">Subtle</Button>);
     const button = screen.getByRole('button', { name: /subtle/i });
-    expect(button).toHaveClass('bg-brand-50');
-    expect(button).toHaveClass('text-brand-700');
+    expect(button).toHaveClass('bg-accent-50');
+    expect(button).toHaveClass('text-accent-700');
   });
 
   it('applies ghost-danger variant classes', () => {
     render(<Button variant="ghost-danger">Ghost Danger</Button>);
     const button = screen.getByRole('button', { name: /ghost danger/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-rose-500');
+    expect(button).toHaveClass('text-money-neg');
   });
 
   it('applies ghost-destructive variant classes', () => {
     render(<Button variant="ghost-destructive">Ghost Destructive</Button>);
     const button = screen.getByRole('button', { name: /ghost destructive/i });
     expect(button).toHaveClass('bg-transparent');
-    expect(button).toHaveClass('text-slate-400');
+    expect(button).toHaveClass('text-brand-400');
   });
 
   it('applies success variant classes', () => {
     render(<Button variant="success">Success</Button>);
     const button = screen.getByRole('button', { name: /success/i });
-    expect(button).toHaveClass('bg-emerald-500');
+    expect(button).toHaveClass('bg-money-pos');
     expect(button).toHaveClass('text-white');
   });
 
   it('applies warning variant classes', () => {
     render(<Button variant="warning">Warning</Button>);
     const button = screen.getByRole('button', { name: /warning/i });
-    expect(button).toHaveClass('bg-amber-500');
+    expect(button).toHaveClass('bg-warm-500');
     expect(button).toHaveClass('text-white');
   });
 
   it('applies destructive variant classes', () => {
     render(<Button variant="destructive">Destructive</Button>);
     const button = screen.getByRole('button', { name: /destructive/i });
-    expect(button).toHaveClass('bg-rose-500');
+    expect(button).toHaveClass('bg-money-neg');
     expect(button).toHaveClass('text-white');
   });
 
@@ -157,7 +157,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: /focus me/i });
     expect(button).toHaveClass('focus:outline-hidden');
     expect(button).toHaveClass('focus-visible:ring-2');
-    expect(button).toHaveClass('focus-visible:ring-brand-500/20');
+    expect(button).toHaveClass('focus-visible:ring-accent-500/40');
     expect(button).toHaveClass('focus-visible:ring-offset-2');
   });
 });

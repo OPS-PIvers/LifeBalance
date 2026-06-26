@@ -82,7 +82,7 @@ const MemberModal: React.FC<MemberModalProps> = ({
         />
 
         <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase block mb-1">
+          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-1">
             Role
           </label>
           <div className="flex gap-4">
@@ -93,9 +93,9 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 value="member"
                 checked={role === 'member'}
                 onChange={() => setRole('member')}
-                className="text-brand-600 dark:text-slate-300 focus:ring-brand-500"
+                className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
               />
-              <span className="text-gray-700 dark:text-slate-200">Member</span>
+              <span className="text-brand-700 dark:text-brand-200">Member</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -104,9 +104,9 @@ const MemberModal: React.FC<MemberModalProps> = ({
                 value="admin"
                 checked={role === 'admin'}
                 onChange={() => setRole('admin')}
-                className="text-brand-600 dark:text-slate-300 focus:ring-brand-500"
+                className="accent-accent-600 focus:ring-2 focus:ring-accent-500/40"
               />
-              <span className="text-gray-700 dark:text-slate-200">Admin</span>
+              <span className="text-brand-700 dark:text-brand-200">Admin</span>
             </label>
           </div>
         </div>
@@ -115,14 +115,14 @@ const MemberModal: React.FC<MemberModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-gray-600 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition-colors"
+            className="px-4 py-2 text-brand-600 dark:text-brand-300 font-medium hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-xl transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
           >
             {loading ? (
               <span className="animate-spin">⌛</span>

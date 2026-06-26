@@ -230,8 +230,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
   const renderEditControls = (item: typeof contributions[0]) => {
     if (view === 'daily') {
         return (
-            <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg flex items-center justify-between">
-                <span className="text-sm text-gray-600 dark:text-slate-300">Adjust Count:</span>
+            <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg flex items-center justify-between">
+                <span className="text-sm text-brand-600 dark:text-brand-300">Adjust Count:</span>
                 <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
@@ -260,8 +260,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         const days = eachDayOfInterval({ start: weekStart, end: new Date() });
 
         return (
-            <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Toggle days to adjust history:</p>
+            <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg">
+                <p className="text-xs text-brand-500 dark:text-brand-400 mb-2">Toggle days to adjust history:</p>
                 <div className="flex justify-between">
                     {days.map(day => {
                         const dateStr = format(day, 'yyyy-MM-dd');
@@ -272,14 +272,14 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                             <button
                                 key={dateStr}
                                 onClick={() => toggleDate(item, dateStr)}
-                                className={`flex flex-col items-center gap-1 p-2 rounded transition-colors ${
+                                className={`flex flex-col items-center gap-1 p-2 rounded transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                                     isCompleted
-                                        ? 'bg-brand-100 dark:bg-slate-700/50 text-brand-700 dark:text-slate-200'
-                                        : 'bg-gray-100 dark:bg-slate-700/50 text-gray-400 dark:text-slate-500 hover:bg-gray-200 dark:hover:bg-slate-700'
+                                        ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
+                                        : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500 hover:bg-brand-200 dark:hover:bg-brand-700'
                                 }`}
                             >
                                 <span className="text-xs font-bold">{dayLabel}</span>
-                                <div className={`w-3 h-3 rounded-full ${isCompleted ? 'bg-brand-500' : 'bg-gray-300'}`} />
+                                <div className={`w-3 h-3 rounded-full ${isCompleted ? 'bg-money-pos' : 'bg-brand-300 dark:bg-brand-600'}`} />
                             </button>
                         );
                     })}
@@ -290,8 +290,8 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
 
     if (view === 'total') {
         return (
-             <div className="mt-3 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
-                 <p className="text-sm text-gray-600 dark:text-slate-300 mb-2">Total Count Correction:</p>
+             <div className="mt-3 p-3 bg-brand-50 dark:bg-brand-700/50 rounded-lg">
+                 <p className="text-sm text-brand-600 dark:text-brand-300 mb-2">Total Count Correction:</p>
                  <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
@@ -311,15 +311,15 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                         <Plus size={16} />
                     </Button>
                 </div>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">Adjusting this only affects lifetime stats, not points.</p>
+                <p className="text-xs text-brand-400 dark:text-brand-500 mt-2">Adjusting this only affects lifetime stats, not points.</p>
 
-                <p className="text-sm text-gray-600 dark:text-slate-300 mb-2 mt-4">Total Lifetime Completions:</p>
+                <p className="text-sm text-brand-600 dark:text-brand-300 mb-2 mt-4">Total Lifetime Completions:</p>
                 <div className="flex items-center gap-3">
                    <span className="font-bold min-w-12 text-center">
                    {item.totalCount}
                    </span>
                 </div>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">
+                <p className="text-xs text-brand-400 dark:text-brand-500 mt-2">
                    This shows lifetime completion count. Points displayed above are estimates based on base value.
                 </p>
              </div>
@@ -338,9 +338,9 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     >
       <div className="p-4 space-y-3">
           {contributions.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Award className="w-8 h-8 text-gray-300 dark:text-slate-600" />
+            <div className="text-center py-8 text-brand-500 dark:text-brand-400">
+                <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Award className="w-8 h-8 text-brand-300 dark:text-brand-600" />
                 </div>
                 <p>No points recorded for this period.</p>
             </div>
@@ -349,31 +349,31 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
               <div
                 key={item.id}
                 className={`border rounded-xl p-3 transition-all ${
-                    editingHabitId === item.id ? 'ring-2 ring-brand-200 border-brand-300 dark:border-slate-600 bg-brand-50/30 dark:bg-slate-700/30' : 'border-gray-100 dark:border-slate-700 hover:border-brand-200 dark:hover:border-slate-600'
+                    editingHabitId === item.id ? 'ring-2 ring-brand-200 border-brand-300 dark:border-brand-600 bg-brand-50/30 dark:bg-brand-700/30' : 'border-brand-200 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
                 }`}
               >
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-brand-100 dark:bg-slate-700/50 flex items-center justify-center text-xl">
+                        <div className="w-10 h-10 rounded-lg bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center text-xl">
                             {/* Simple emoji placeholder if no icon system */}
                             {item.title.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                            <h3 className="font-semibold text-gray-800 dark:text-slate-100">{item.title}</h3>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">{item.details}</p>
+                            <h3 className="font-semibold text-brand-800 dark:text-brand-100">{item.title}</h3>
+                            <p className="text-xs text-brand-500 dark:text-brand-400">{item.details}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <span className="block font-bold text-brand-700 dark:text-slate-200">+{item.calculatedPoints}</span>
-                            <span className="text-xxs text-gray-400 dark:text-slate-500">points</span>
+                            <span className="block font-mono font-bold tabular-nums text-warm-600 dark:text-warm-300">+{item.calculatedPoints}</span>
+                            <span className="text-xxs text-brand-400 dark:text-brand-500">points</span>
                         </div>
                         <button
                             onClick={() => handleEdit(item.id)}
                             className={`p-2 rounded-full transition-colors ${
                                 editingHabitId === item.id
-                                    ? 'bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300'
-                                    : 'text-gray-400 dark:text-slate-500 hover:bg-gray-100 dark:hover:bg-slate-700/50'
+                                    ? 'bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300'
+                                    : 'text-brand-400 dark:text-brand-500 hover:bg-brand-100 dark:hover:bg-brand-700/50'
                             }`}
                             aria-label={`Edit ${item.title}`}
                         >
@@ -388,7 +388,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
           )}
       </div>
 
-      <div className="sticky bottom-0 p-4 border-t border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/50 text-center text-xs text-gray-400 dark:text-slate-500">
+      <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 text-center text-xs text-brand-400 dark:text-brand-500">
         {view === 'total' && "Total points are estimated from lifetime counts."}
         {view === 'weekly' && "Points are calculated based on completed days this week."}
         {view === 'daily' && "Points earned today."}

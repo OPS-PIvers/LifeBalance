@@ -13,6 +13,11 @@ interface BucketFormModalProps {
   editingBucket?: BudgetBucket;
 }
 
+// User-selectable categorical bucket identity colors. These are persisted DATA
+// (the chosen hue is stored on the bucket and rendered across the app), not
+// surface chrome — so the redesign's "no purple/indigo in chrome" rule does not
+// apply here, the same way the spec exempts data-viz. Kept stable so existing
+// buckets keep their color and the color-selection test stays meaningful.
 const COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500', 'bg-cyan-500'];
 
 const getColorName = (colorClass: string) => {
@@ -135,7 +140,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         />
 
         <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase block mb-2">Color</label>
+          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-2">Color</label>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Bucket color">
             {COLORS.map(c => {
               const colorName = getColorName(c);
@@ -157,14 +162,14 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         </div>
 
         <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase block mb-2">Sub-Categories (Optional)</label>
+          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-2">Sub-Categories (Optional)</label>
           <div className="space-y-2 mb-2">
             {subBuckets.map(sb => (
-              <div key={sb.id} className="flex justify-between items-center bg-brand-50 dark:bg-slate-700/50 p-2 rounded-lg">
-                <span className="text-sm font-medium text-brand-700 dark:text-slate-200">{sb.name}</span>
+              <div key={sb.id} className="flex justify-between items-center bg-brand-50 dark:bg-brand-700/50 p-2 rounded-lg">
+                <span className="text-sm font-medium text-brand-700 dark:text-brand-200">{sb.name}</span>
                 <button
                   onClick={() => handleRemoveSubBucket(sb.id)}
-                  className="text-brand-400 dark:text-slate-400 hover:text-money-neg"
+                  className="text-brand-400 dark:text-brand-400 hover:text-money-neg"
                   aria-label={`Remove ${sb.name} sub-category`}
                 >
                   <X size={16} />
@@ -179,7 +184,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
               onChange={e => setNewSubBucketName(e.target.value)}
               placeholder="New sub-category..."
               aria-label="New sub-category name"
-              className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500"
+              className="flex-1 px-3 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -190,7 +195,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
             <button
               onClick={handleAddSubBucket}
               disabled={!newSubBucketName.trim()}
-              className="px-3 py-2 bg-brand-100 dark:bg-slate-700/50 text-brand-600 dark:text-slate-300 rounded-lg hover:bg-brand-200 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+              className="px-3 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg hover:bg-brand-200 dark:hover:bg-brand-700 disabled:opacity-50 transition-colors"
               aria-label="Add sub-category"
             >
               <Plus size={20} />

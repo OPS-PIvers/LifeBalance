@@ -173,14 +173,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
         {/* Title */}
         <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-title">Title</label>
+          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-title">Title</label>
           <input
             id="habit-title"
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="e.g. Drink Water"
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl"
+            className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl"
             disabled={isSaving}
           />
         </div>
@@ -188,14 +188,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         {/* Type & Category */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-category">Category</label>
+            <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-category">Category</label>
             <input
               id="habit-category"
               type="text"
               value={category}
               onChange={e => setCategory(e.target.value)}
               placeholder="Select or type..."
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl"
+              className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl"
               disabled={isSaving}
             />
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -207,8 +207,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   disabled={isSaving}
                   className={`text-xxs px-2 py-1 rounded-lg border transition-all ${
                     category === c
-                      ? 'bg-brand-200 dark:bg-slate-700 border-brand-300 dark:border-slate-600 text-brand-800 dark:text-slate-100 font-bold'
-                      : 'bg-white dark:bg-slate-800 border-brand-100 dark:border-slate-700 text-brand-400 dark:text-slate-400 hover:bg-brand-50 dark:hover:bg-slate-700/50'
+                      ? 'bg-brand-200 dark:bg-brand-700 border-brand-300 dark:border-brand-600 text-brand-800 dark:text-brand-100 font-bold'
+                      : 'bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 text-brand-400 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-700/50'
                   }`}
                 >
                   {c}
@@ -217,21 +217,21 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             </div>
           </div>
           <div role="group" aria-label="Habit type">
-            <span className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase">Type</span>
-            <div className="flex bg-brand-50 dark:bg-slate-700/50 p-1 rounded-xl mt-1">
+            <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Type</span>
+            <div className="flex bg-brand-50 dark:bg-brand-700/50 p-1 rounded-xl mt-1">
                <button
                  onClick={() => setType('positive')}
                  disabled={isSaving}
                  type="button"
                  aria-pressed={type === 'positive'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white dark:bg-slate-800 shadow-xs text-money-pos' : 'text-brand-400 dark:text-slate-400'}`}
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white dark:bg-brand-800 shadow-xs text-money-pos' : 'text-brand-400 dark:text-brand-400'}`}
                >Good</button>
                <button
                  onClick={() => setType('negative')}
                  disabled={isSaving}
                  type="button"
                  aria-pressed={type === 'negative'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white dark:bg-slate-800 shadow-xs text-money-neg' : 'text-brand-400 dark:text-slate-400'}`}
+                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white dark:bg-brand-800 shadow-xs text-money-neg' : 'text-brand-400 dark:text-brand-400'}`}
                >Bad</button>
              </div>
           </div>
@@ -240,11 +240,11 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         {/* Assign to kid (Plan 080c-3) — dormant unless Kid Mode is on AND there is
             at least one managed kid. CREATE = multi-select; EDIT = single-select. */}
         {showAssignControl && (
-          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-200 dark:border-purple-800/50">
-            <span className="text-xs font-bold text-purple-600 dark:text-purple-300 uppercase" id="assign-kid-label">
+          <div className="bg-warm-50 dark:bg-warm-900/20 p-4 rounded-xl border border-warm-200 dark:border-warm-800/60">
+            <span className="text-xs font-bold text-warm-700 dark:text-warm-300 uppercase" id="assign-kid-label">
               {editingHabit ? 'Assign to kid' : 'Assign to kid(s)'}
             </span>
-            <p className="text-xxs text-purple-500/80 dark:text-purple-300/70 mt-0.5 mb-2">
+            <p className="text-xxs text-warm-600/80 dark:text-warm-300/70 mt-0.5 mb-2">
               {editingHabit
                 ? 'A chore shows on that kid’s dashboard and credits their points.'
                 : 'Creates one chore per selected kid, each crediting that kid’s points.'}
@@ -261,10 +261,10 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                     onClick={() => (editingHabit ? selectEditKid(kid.uid) : toggleKidSelection(kid.uid))}
                     disabled={isSaving}
                     aria-pressed={selected}
-                    className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all disabled:opacity-50 ${
+                    className={`text-xs px-3 py-1.5 rounded-btn border font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 ${
                       selected
-                        ? 'bg-purple-600 border-purple-600 text-white shadow-xs'
-                        : 'bg-white dark:bg-slate-800 border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30'
+                        ? 'bg-warm-500 border-warm-500 text-white'
+                        : 'bg-white dark:bg-brand-800 border-warm-200 dark:border-warm-800/60 text-warm-700 dark:text-warm-300 hover:bg-warm-100 dark:hover:bg-warm-900/30'
                     }`}
                   >
                     {kid.displayName}
@@ -276,8 +276,8 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         )}
 
         {/* Scoring Logic */}
-        <div className="bg-brand-50 dark:bg-slate-700/50 p-4 rounded-xl border border-brand-100 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-brand-700 dark:text-slate-200 mb-3">Scoring Strategy</h3>
+        <div className="bg-brand-50 dark:bg-brand-700/50 p-4 rounded-xl border border-brand-200 dark:border-brand-700">
+          <h3 className="text-sm font-bold text-brand-700 dark:text-brand-200 mb-3">Scoring Strategy</h3>
 
           <div className="grid grid-cols-2 gap-2 mb-4">
             <button
@@ -285,26 +285,26 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               disabled={isSaving}
               type="button"
               aria-pressed={scoringType === 'incremental'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white dark:bg-brand-800 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-brand-50 dark:hover:bg-brand-700/50'}`}
             >
               <span className="block font-bold mb-1">Incremental</span>
-              <span className="text-brand-400 dark:text-slate-400">Points for every tap.</span>
+              <span className="text-brand-400 dark:text-brand-400">Points for every tap.</span>
             </button>
             <button
               onClick={() => setScoringType('threshold')}
               disabled={isSaving}
               type="button"
               aria-pressed={scoringType === 'threshold'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white dark:bg-slate-800 border-brand-300 dark:border-slate-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-white/50 dark:hover:bg-slate-700/50'}`}
+              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white dark:bg-brand-800 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-brand-50 dark:hover:bg-brand-700/50'}`}
             >
               <span className="block font-bold mb-1">Threshold</span>
-              <span className="text-brand-400 dark:text-slate-400">Points only when target met.</span>
+              <span className="text-brand-400 dark:text-brand-400">Points only when target met.</span>
             </button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-points">
+              <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-points">
                 {showAssignControl ? 'Chore Points' : 'Points'}
               </label>
               <input
@@ -312,19 +312,19 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                 type="number"
                 value={basePoints}
                 onChange={e => setBasePoints(e.target.value)}
-                className="w-full mt-1 p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-center font-mono font-bold"
+                className="w-full mt-1 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-center font-mono font-bold"
                 disabled={isSaving}
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-slate-400 uppercase" htmlFor="habit-target">Target ({period})</label>
+              <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-target">Target ({period})</label>
               <div className="flex items-center gap-2 mt-1">
                  <input
                   id="habit-target"
                   type="number"
                   value={targetCount}
                   onChange={e => setTargetCount(e.target.value)}
-                  className="w-20 p-2 bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 rounded-lg text-center font-mono font-bold"
+                  className="w-20 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-center font-mono font-bold"
                   disabled={isSaving}
                 />
                 <button
@@ -332,7 +332,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   disabled={isSaving}
                   type="button"
                   aria-pressed={period === 'weekly'}
-                  className="text-xxs font-bold uppercase bg-white dark:bg-slate-800 border border-brand-200 dark:border-slate-700 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
+                  className="text-xxs font-bold uppercase bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
                 >
                   {period}
                 </button>
@@ -343,12 +343,12 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
 
       </div>
 
-      <div className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-brand-100 dark:border-slate-700 p-4">
+      <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
         <button
           type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className={`w-full py-3 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-95'}`}
+          className={`w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) hover:bg-warm-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-[0.98]'}`}
         >
           {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
         </button>

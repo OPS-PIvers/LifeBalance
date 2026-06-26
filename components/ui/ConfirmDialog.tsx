@@ -51,14 +51,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       maxWidth="max-w-sm"
       ariaLabelledBy={titleId}
       ariaDescribedBy={descId}
-      className="dark:bg-slate-900"
       disableBackdropClose={isConfirming}
     >
       <div className="p-6">
-        <h2 id={titleId} className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+        <h2 id={titleId} className="font-display text-lg font-semibold tracking-tight text-brand-900 dark:text-brand-100">
           {title}
         </h2>
-        <div id={descId} className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <div id={descId} className="mt-2 text-sm text-brand-600 dark:text-brand-400">
           {message}
         </div>
         <div className="mt-6 flex justify-end gap-2">

@@ -210,8 +210,9 @@ export interface SafeToSpendBreakdown {
  * - When `currentPeriodId` is set, only transactions in that pay period count;
  *   otherwise all pending_review spend counts. (Matches bucketSpentCalculator.)
  *
- * Exported so display surfaces (e.g. SafeToSpendModal) can itemize the same
- * value the canonical formula subtracts — one rule, one source of truth.
+ * Exported so display surfaces (e.g. the Money → Overview Safe-to-Spend detail)
+ * can itemize the same value the canonical formula subtracts — one rule, one
+ * source of truth.
  */
 export const sumPendingSpend = (
   transactions: Transaction[],

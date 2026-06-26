@@ -49,16 +49,16 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
         ref={dropdownRef}
         role="menu"
         aria-label="Filter by store"
-        className="absolute top-full right-0 mt-2 w-48 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-xl shadow-glass ring-1 ring-black/5 dark:ring-white/5 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-200"
+        className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-brand-800 rounded-card shadow-raised border border-brand-200 dark:border-brand-700 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-(--duration-base)"
       >
         <div className="max-h-60 scroll-contain-y">
           <button
             role="menuitemradio"
             aria-checked={!filterStore}
             onClick={() => onSelect(null)}
-            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${!filterStore ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
+            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between ${!filterStore ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
           >
-            All Items
+            All items
             {!filterStore && <Filter size={14} />}
           </button>
           {stores.map(store => (
@@ -67,14 +67,14 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
               role="menuitemradio"
               aria-checked={filterStore === store.name}
               onClick={() => onSelect(store.name)}
-              className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-brand-600 font-medium bg-brand-50/50 dark:text-brand-300 dark:bg-brand-700/30' : 'text-slate-700 dark:text-slate-300'}`}
+              className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
             >
               {store.name}
               {filterStore === store.name && <Filter size={14} />}
             </button>
           ))}
           {stores.length === 0 && (
-            <div className="px-4 py-2 text-xs text-slate-400 dark:text-slate-500 italic">No stores configured</div>
+            <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-500 italic">No stores configured</div>
           )}
         </div>
       </div>
@@ -460,21 +460,21 @@ const ShoppingListTab: React.FC = () => {
     <div className="space-y-6 pb-20">
         {/* Header Actions */}
         <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Shopping List</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Shopping list</h1>
             <div className="flex gap-2">
                 <button
                     onClick={handleSaveAsTemplate}
                     disabled={shoppingList.length === 0}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
-                    title="Save as Template"
-                    aria-label="Save as Template"
+                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                    title="Save as template"
+                    aria-label="Save as template"
                 >
                     <Save className="w-5 h-5" />
                 </button>
                 <button
                     onClick={handleShareList}
                     disabled={!hasPendingItems}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
+                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                     title="Copy list to clipboard"
                     aria-label="Copy list to clipboard"
                 >
@@ -483,14 +483,14 @@ const ShoppingListTab: React.FC = () => {
                 <button
                     onClick={handleExport}
                     disabled={shoppingList.length === 0}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors disabled:opacity-50 dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
+                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                     aria-label="Export to CSV"
                 >
                     <Download className="w-5 h-5" />
                 </button>
                 <button
                     onClick={() => setIsSettingsOpen(true)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors dark:text-slate-500 dark:hover:text-slate-300 dark:hover:bg-slate-700/50"
+                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                     aria-label="Settings"
                 >
                     <Settings className="w-5 h-5" />
@@ -499,7 +499,7 @@ const ShoppingListTab: React.FC = () => {
         </div>
 
         {/* Quick Add Input */}
-        <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl p-4 rounded-xl shadow-glass ring-1 ring-black/5 dark:ring-white/5 space-y-3">
+        <div className="surface-section p-4 space-y-3">
              <QuickRestockRow />
              <form onSubmit={handleSmartAdd} className="relative">
                 <input
@@ -508,13 +508,13 @@ const ShoppingListTab: React.FC = () => {
                     value={newItemText}
                     onChange={(e) => setNewItemText(e.target.value)}
                     placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200/60 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all outline-hidden placeholder:text-slate-400 dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    className="w-full pl-4 pr-12 py-3 bg-brand-50 border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
                 />
                 <button
                     type="submit"
                     disabled={!newItemText.trim()}
                     aria-label="Add item to shopping list"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-brand-800 text-white rounded-xl hover:bg-brand-900 disabled:opacity-50 disabled:bg-gray-300 transition-colors dark:bg-brand-600 dark:hover:bg-brand-500 dark:disabled:bg-slate-600"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
                 >
                     <Plus size={20} />
                 </button>
@@ -526,8 +526,8 @@ const ShoppingListTab: React.FC = () => {
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-xs text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-violet-600 hover:bg-violet-50/50 hover:border-violet-200/50 dark:hover:text-violet-300 dark:hover:bg-violet-500/15 dark:hover:border-violet-500/30 active:scale-95 transition-all disabled:opacity-50"
-                title="AI Optimize List"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-warm-600 hover:bg-warm-50 hover:border-warm-200 dark:hover:text-warm-300 dark:hover:bg-warm-500/15 dark:hover:border-warm-500/30 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
+                title="AI optimize list"
              >
                 {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 <span>Optimize</span>
@@ -535,8 +535,8 @@ const ShoppingListTab: React.FC = () => {
 
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border border-slate-200/50 dark:border-slate-700 rounded-xl shadow-xs text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 hover:bg-indigo-50/50 hover:border-indigo-200/50 dark:hover:text-indigo-300 dark:hover:bg-indigo-500/15 dark:hover:border-indigo-500/30 active:scale-95 transition-all"
-                title="View Item History"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-accent-600 hover:bg-accent-50 hover:border-accent-200 dark:hover:text-accent-300 dark:hover:bg-accent-900/30 dark:hover:border-accent-700 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                title="View item history"
              >
                 <Clock className="w-3.5 h-3.5" />
                 <span>History</span>
@@ -548,10 +548,10 @@ const ShoppingListTab: React.FC = () => {
                   aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
                   aria-expanded={isFilterOpen}
                   aria-haspopup="listbox"
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-xl shadow-xs text-xs font-medium transition-all ${
+                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                     filterStore
-                      ? 'bg-brand-50 border-brand-200 text-brand-700 dark:bg-brand-700/30 dark:border-brand-500/40 dark:text-brand-200'
-                      : 'bg-white/60 dark:bg-slate-800/60 backdrop-blur-xs border-slate-200/50 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-50 dark:hover:text-slate-100 dark:hover:bg-slate-700/50'
+                      ? 'bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-900/30 dark:border-accent-700 dark:text-accent-200'
+                      : 'bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 hover:text-brand-900 hover:bg-brand-50 dark:hover:text-brand-50 dark:hover:bg-brand-700/50'
                   }`}
                >
                   <Filter className="w-3.5 h-3.5" />
@@ -574,7 +574,7 @@ const ShoppingListTab: React.FC = () => {
             <div className="flex justify-center -mt-2">
                 <button
                     onClick={() => setFilterStore(null)}
-                    className="flex items-center gap-1 text-xs text-brand-600 hover:underline bg-brand-50 px-2 py-1 rounded-full border border-brand-100 dark:text-brand-300 dark:bg-brand-700/30 dark:border-brand-500/30"
+                    className="flex items-center gap-1 text-xs text-accent-600 hover:underline bg-accent-50 px-2 py-1 rounded-full border border-accent-200 dark:text-accent-300 dark:bg-accent-900/30 dark:border-accent-700"
                 >
                     <X size={10} />
                     Clear filter: {filterStore}
@@ -587,24 +587,24 @@ const ShoppingListTab: React.FC = () => {
             <div className="flex justify-end">
                 <button
                     onClick={() => setIsClearCheckedConfirmOpen(true)}
-                    className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-800 px-3 py-1 bg-brand-50 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-300 dark:hover:text-brand-200 dark:bg-brand-700/30 dark:hover:bg-brand-700/50"
+                    className="flex items-center gap-1 text-sm font-medium text-accent-600 hover:text-accent-700 px-3 py-1 bg-accent-50 hover:bg-accent-100 rounded-full transition-colors dark:text-accent-300 dark:hover:text-accent-200 dark:bg-accent-900/30 dark:hover:bg-accent-900/50"
                 >
                     <RotateCcw className="w-3 h-3" />
-                    Clear Checked
+                    Clear checked
                 </button>
             </div>
         )}
 
         {/* Main List */}
         {items.length === 0 ? (
-             <div className="text-center py-16 px-6 bg-white/50 dark:bg-slate-800/40 rounded-2xl border border-dashed border-slate-200/60 dark:border-slate-700">
-                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400 dark:text-slate-500">
+             <div className="text-center py-16 px-6 surface-section">
+                <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
                     <ShoppingCart className="w-7 h-7" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">
                     {filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">
+                <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 mb-6">
                     {filterStore ? 'No items match this store filter.' : 'Add items above to start your shopping list.'}
                 </p>
                 {filterStore ? (
@@ -692,9 +692,9 @@ const ShoppingListTab: React.FC = () => {
           return (
             <WrapperComponent {...wrapperProps}>
               {isDesktop && (
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 dark:border-slate-700">
-                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">Edit Item</h3>
-                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" /></button>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700">
+                  <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50 tracking-tight">Edit item</h3>
+                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300" /></button>
                 </div>
               )}
               {itemForm}

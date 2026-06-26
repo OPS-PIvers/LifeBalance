@@ -3,8 +3,9 @@ import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfWeek, subWeeks, isSameWeek, parseISO, formatDistanceToNow } from 'date-fns';
 import { roundMoney } from '@/utils/money';
-import { TrendingUp, TrendingDown, Receipt, ArrowRight, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, Receipt, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 export const MoneyPulseWidget: React.FC = () => {
   const { transactions } = useFinance();
@@ -13,7 +14,6 @@ export const MoneyPulseWidget: React.FC = () => {
   // 1. Calculate Spending Pulse
   const spendingStats = useMemo(() => {
     const now = new Date();
-    // Week starts on Monday (1)
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
     const lastWeekStart = subWeeks(currentWeekStart, 1);
 
@@ -21,7 +21,6 @@ export const MoneyPulseWidget: React.FC = () => {
     let lastWeekTotal = 0;
 
     transactions.forEach(t => {
-      // Exclude income
       if (t.category === 'Income') return;
       if (t.status === 'pending_review') return;
 
@@ -33,7 +32,6 @@ export const MoneyPulseWidget: React.FC = () => {
       }
     });
 
-    // Round the accumulated totals to the cent before deriving the comparison.
     thisWeekTotal = roundMoney(thisWeekTotal);
     lastWeekTotal = roundMoney(lastWeekTotal);
     const diff = roundMoney(thisWeekTotal - lastWeekTotal);
@@ -47,8 +45,7 @@ export const MoneyPulseWidget: React.FC = () => {
     };
   }, [transactions]);
 
-  // 2. Get Recent Transactions — also precompute the relative-time strings here
-  // so they are not re-evaluated inside JSX on every parent re-render.
+  // 2. Get Recent Transactions — precompute relative-time strings here.
   const recentTransactions = useMemo(() => {
     return transactions
       .filter(t => t.category !== 'Income' && t.status !== 'pending_review')
@@ -62,75 +59,68 @@ export const MoneyPulseWidget: React.FC = () => {
 
   if (transactions.length === 0) return null;
 
+  const noPrior = spendingStats.percentChange === 0 && spendingStats.isHigher;
+
   return (
-    <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <div className="p-1.5 bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300 rounded-lg">
-             <Wallet size={14} />
-          </div>
-          Money Pulse
-        </h2>
+    <Section
+      title="Money pulse"
+      action={
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
         >
-          View Budget <ArrowRight size={12} />
+          View money <ArrowRight size={12} />
         </Link>
-      </div>
-
-      <div className="mb-6 px-1">
-        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Spent This Week</p>
-        <div className="flex items-baseline gap-3">
-          <p className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            {fmt(spendingStats.thisWeek, { decimals: 0 })}
-          </p>
-          <div
-            className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
-              spendingStats.percentChange === 0 && spendingStats.isHigher
-                ? 'bg-slate-100 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400'
-                : spendingStats.isHigher
-                  ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-300'
-                  : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300'
-            }`}
-          >
-            {spendingStats.percentChange === 0 && spendingStats.isHigher ? (
-              <span className="font-medium">No prior data</span>
-            ) : (
-              <>
-                {spendingStats.isHigher ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                <span>{Math.abs(spendingStats.percentChange).toFixed(0)}%</span>
-                <span className="opacity-60 font-medium">vs last week</span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 px-1">Recent Activity</h3>
-        <div className="space-y-1">
-          {recentTransactions.map(tx => (
-            <div key={tx.id} className="flex items-center justify-between py-3 px-2 hover:bg-slate-50/80 dark:hover:bg-slate-700/50 rounded-xl transition-colors">
-              <div className="flex items-center gap-3">
-                 <div className="w-10 h-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-400 shrink-0 shadow-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-500">
-                    <Receipt size={16} />
-                 </div>
-                 <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{tx.merchant}</p>
-                    <p className="text-xxs text-slate-400 dark:text-slate-500 font-medium">{tx.relativeDate}</p>
-                 </div>
-              </div>
-              <span className="font-mono font-bold text-slate-900 dark:text-slate-100 text-sm">
-                 {fmt(tx.amount, { decimals: 0 })}
-              </span>
+      }
+    >
+      <SurfaceList>
+        {/* This week's spend + delta */}
+        <Row className="flex-col items-start gap-1">
+          <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">Spent this week</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="font-mono text-2xl font-bold tabular-nums tracking-tight text-brand-900 dark:text-brand-50">
+              {fmt(spendingStats.thisWeek, { decimals: 0 })}
+            </p>
+            <div
+              className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                noPrior
+                  ? 'bg-brand-100 text-brand-500 dark:bg-brand-700 dark:text-brand-300'
+                  : spendingStats.isHigher
+                    ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300'
+                    : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos'
+              }`}
+            >
+              {noPrior ? (
+                <span className="font-medium">No prior data</span>
+              ) : (
+                <>
+                  {spendingStats.isHigher ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                  <span>{Math.abs(spendingStats.percentChange).toFixed(0)}%</span>
+                  <span className="opacity-70 font-medium">vs last week</span>
+                </>
+              )}
             </div>
-          ))}
-          {recentTransactions.length === 0 && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 italic text-center py-4">No recent transactions</p>
-          )}
-        </div>
-      </div>
-    </div>
+          </div>
+        </Row>
+
+        {/* Recent transactions */}
+        {recentTransactions.map(tx => (
+          <Row key={tx.id} className="justify-between">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-400 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-500">
+                <Receipt size={16} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-brand-800 dark:text-brand-100 truncate max-w-[150px]">{tx.merchant}</p>
+                <p className="text-xxs text-brand-400 dark:text-brand-500 font-medium">{tx.relativeDate}</p>
+              </div>
+            </div>
+            <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50 text-sm shrink-0">
+              {fmt(tx.amount, { decimals: 0 })}
+            </span>
+          </Row>
+        ))}
+      </SurfaceList>
+    </Section>
   );
 };

@@ -30,7 +30,7 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div>
-        <label htmlFor={taskInputId} className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <label htmlFor={taskInputId} className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
           Task
         </label>
         <input
@@ -40,12 +40,12 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter task description"
-          className="w-full p-3 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
+          className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 focus:outline-hidden"
         />
       </div>
 
       <div>
-        <label htmlFor={dueDateInputId} className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <label htmlFor={dueDateInputId} className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
           Due Date
         </label>
         <div className="relative w-full">
@@ -54,19 +54,19 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-slate-700/50 border border-brand-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-hidden appearance-none"
+            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 focus:outline-hidden appearance-none"
             style={{ WebkitAppearance: 'none' }}
           />
-          <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 dark:text-slate-400 pointer-events-none" />
+          <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 dark:text-brand-400 pointer-events-none" />
         </div>
       </div>
 
       <fieldset>
-        <legend className="block text-xs font-bold text-brand-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+        <legend className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
           Assign To
         </legend>
         {members.length === 0 ? (
-          <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-slate-400 py-2">
+          <div className="flex items-center gap-2 text-sm text-brand-400 dark:text-brand-400 py-2">
             <AlertCircle size={16} className="shrink-0" />
             <span>No household members available.</span>
           </div>
@@ -78,16 +78,16 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
                 type="button"
                 onClick={() => setAssignee(member.uid)}
                 aria-pressed={assignee === member.uid}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-btn border transition-colors duration-(--duration-fast) ease-(--ease-standard) whitespace-nowrap ${
                   assignee === member.uid
-                    ? 'bg-brand-800 text-white border-brand-800 shadow-md'
-                    : 'bg-white dark:bg-slate-800 text-brand-600 dark:text-slate-300 border-brand-200 dark:border-slate-700 hover:bg-brand-50 dark:hover:bg-slate-700/50'
+                    ? 'bg-accent-600 text-white border-accent-600 dark:bg-accent-500 dark:border-accent-500'
+                    : 'bg-white dark:bg-brand-800 text-brand-600 dark:text-brand-300 border-brand-200 dark:border-brand-700 hover:bg-brand-50 dark:hover:bg-brand-700/50'
                 }`}
               >
                 {member.photoURL ? (
                   <img src={member.photoURL} alt={member.displayName ?? 'Member'} className="w-5 h-5 rounded-full" />
                 ) : (
-                  <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-slate-700 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-slate-300">
+                  <div className="w-5 h-5 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-xxs font-bold text-brand-600 dark:text-brand-300">
                     {member.displayName?.charAt(0) ?? 'U'}
                   </div>
                 )}
@@ -101,8 +101,8 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
       <button
         onClick={onSubmit}
         disabled={members.length === 0 || !text.trim()}
-        className={`w-full py-3.5 bg-brand-800 text-white font-bold rounded-xl shadow-lg transition-all mt-4 ${
-          members.length === 0 || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-brand-900 active:scale-[0.98]'
+        className={`w-full py-3.5 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) mt-4 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 ${
+          members.length === 0 || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98]'
         }`}
       >
         Create Task

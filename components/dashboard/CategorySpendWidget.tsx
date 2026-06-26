@@ -3,8 +3,10 @@ import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { roundMoney, sumMoney } from '@/utils/money';
-import { PieChart, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { cn } from '@/utils/cn';
 
 export const CategorySpendWidget: React.FC = () => {
   const { transactions } = useFinance();
@@ -19,10 +21,7 @@ export const CategorySpendWidget: React.FC = () => {
     let totalSpent = 0;
 
     transactions.forEach(tx => {
-      // Exclude income and pending
       if (tx.category === 'Income' || tx.status === 'pending_review') return;
-
-      // Filter for current month
       const date = parseISO(tx.date);
       if (!isWithinInterval(date, { start: monthStart, end: monthEnd })) return;
 
@@ -31,11 +30,8 @@ export const CategorySpendWidget: React.FC = () => {
       totalSpent += tx.amount;
     });
 
-    // Round the accumulated totals to the cent before deriving percentages.
     totalSpent = roundMoney(totalSpent);
 
-    // Convert to array and sort. Derive the percentage from the *rounded*
-    // amount so the bar width matches the displayed dollar figure.
     const sorted = Object.entries(breakdown)
       .map(([name, amount]) => {
         const rounded = roundMoney(amount);
@@ -43,7 +39,6 @@ export const CategorySpendWidget: React.FC = () => {
       })
       .sort((a, b) => b.amount - a.amount);
 
-    // Top 3 + Others
     const top3 = sorted.slice(0, 3);
     const rest = sorted.slice(3);
     const othersAmount = sumMoney(rest.map(item => item.amount));
@@ -59,48 +54,45 @@ export const CategorySpendWidget: React.FC = () => {
 
   if (categoryStats.totalSpent === 0) return null;
 
+  // Ranked evergreen ramp — the money domain color, deepest for the top spend.
+  const barColor = (idx: number) =>
+    idx === 0 ? 'bg-accent-600' :
+    idx === 1 ? 'bg-accent-500' :
+    idx === 2 ? 'bg-accent-400' : 'bg-brand-300 dark:bg-brand-600';
+
   return (
-    <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-premium ring-1 ring-black/5 rounded-3xl p-8 animate-in fade-in slide-in-from-top-4">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-          <div className="p-1.5 bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-300 rounded-lg">
-             <PieChart size={14} />
-          </div>
-          Top Spending (Month)
-        </h2>
+    <Section
+      title="Top spending this month"
+      action={
         <Link
           to="/budget"
-          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 transition-colors"
+          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
         >
           Details <ArrowRight size={12} />
         </Link>
-      </div>
-
-      <div className="space-y-4">
+      }
+    >
+      <SurfaceList>
         {categoryStats.displayItems.map((item, idx) => (
-          <div key={item.name} className="space-y-2">
-            <div className="flex justify-between text-xs font-bold text-slate-700 dark:text-slate-200">
+          <Row key={item.name} className="flex-col items-stretch gap-2">
+            <div className="flex justify-between text-xs font-semibold text-brand-700 dark:text-brand-200">
               <span>{item.name}</span>
-              <span className="font-mono text-slate-900 dark:text-slate-100">{fmt(item.amount, { decimals: 0 })}</span>
+              <span className="font-mono tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount, { decimals: 0 })}</span>
             </div>
-            <div className="h-1.5 bg-slate-100/50 dark:bg-slate-700/50 rounded-full overflow-hidden">
-               <div
-                 role="progressbar"
-                 aria-valuemin={0}
-                 aria-valuemax={100}
-                 aria-valuenow={Math.round(item.percentage)}
-                 aria-label={`${item.name}: ${Math.round(item.percentage)}% of spending`}
-                 className={`h-full rounded-full transition-all duration-500 ${
-                    idx === 0 ? 'bg-purple-500' :
-                    idx === 1 ? 'bg-purple-400' :
-                    idx === 2 ? 'bg-purple-300' : 'bg-slate-300'
-                 }`}
-                 style={{ width: `${item.percentage}%` }}
-               />
+            <div className="h-1.5 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(item.percentage)}
+                aria-label={`${item.name}: ${Math.round(item.percentage)}% of spending`}
+                className={cn('h-full rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)', barColor(idx))}
+                style={{ width: `${item.percentage}%` }}
+              />
             </div>
-          </div>
+          </Row>
         ))}
-      </div>
-    </div>
+      </SurfaceList>
+    </Section>
   );
 };

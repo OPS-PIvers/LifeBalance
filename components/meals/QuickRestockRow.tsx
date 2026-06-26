@@ -57,10 +57,10 @@ export const QuickRestockRow: React.FC = () => {
   };
 
   return (
-    <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-500">
+    <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-(--duration-slow)">
       <div className="flex items-center gap-2 px-1">
-        <span className="text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Restock</span>
-        <div className="h-px bg-slate-100 dark:bg-slate-700 flex-1"></div>
+        <span className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick restock</span>
+        <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
       </div>
 
       <div
@@ -78,9 +78,9 @@ export const QuickRestockRow: React.FC = () => {
               key={list.id}
               onClick={() => handleRestock(list)}
               className={clsx(
-                "shrink-0 flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-all active:scale-95 shadow-xs",
-                // Use a subtle glass effect with the store color as tint
-                `${color.bg} ${color.text} ${color.border} hover:shadow-md hover:brightness-95 backdrop-blur-xs bg-opacity-60`
+                "shrink-0 flex items-center gap-2 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
+                // Solid store-color tint chip (glass removed).
+                `${color.bg} ${color.text} ${color.border} hover:brightness-95`
               )}
               aria-label={`Quick add items from ${list.name}`}
             >

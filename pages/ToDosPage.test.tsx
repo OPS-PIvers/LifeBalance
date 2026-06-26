@@ -166,8 +166,8 @@ describe('ToDosPage', () => {
       const toggleBtn = screen.getByLabelText('Select Multiple');
       fireEvent.click(toggleBtn);
 
-      // Should show "Select All" button
-      expect(screen.getByText('Select All')).toBeInTheDocument();
+      // Should show "Select all" button
+      expect(screen.getByText('Select all')).toBeInTheDocument();
       // Should show checkboxes (or placeholders)
       expect(screen.getByLabelText('Cancel Selection')).toBeInTheDocument();
     });
@@ -177,12 +177,12 @@ describe('ToDosPage', () => {
       // Enter selection mode
       fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-      // Click Select All
-      fireEvent.click(screen.getByText('Select All'));
+      // Click Select all
+      fireEvent.click(screen.getByText('Select all'));
 
       // Should show 2 selected (only active tasks)
       expect(screen.getByText('2 selected')).toBeInTheDocument();
-      expect(screen.getByText('Deselect All')).toBeInTheDocument();
+      expect(screen.getByText('Deselect all')).toBeInTheDocument();
     });
 
     it('batch completes selected items', async () => {
@@ -190,8 +190,8 @@ describe('ToDosPage', () => {
       // Enter selection mode
       fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-      // Select All
-      fireEvent.click(screen.getByText('Select All'));
+      // Select all
+      fireEvent.click(screen.getByText('Select all'));
 
       // Click Complete in FAB
       const completeBtn = screen.getByLabelText('Mark selected as completed');
@@ -209,8 +209,8 @@ describe('ToDosPage', () => {
       // Enter selection mode
       fireEvent.click(screen.getByLabelText('Select Multiple'));
 
-      // Select All
-      fireEvent.click(screen.getByText('Select All'));
+      // Select all
+      fireEvent.click(screen.getByText('Select all'));
 
       // Click Delete in FAB
       const deleteBtn = screen.getByLabelText('Delete selected items');
@@ -252,7 +252,7 @@ describe('ToDosPage', () => {
       // Select assignee (user1)
       fireEvent.click(screen.getByLabelText('Assign to Alice Smith'));
 
-      fireEvent.click(screen.getByText('Create Task'));
+      fireEvent.click(screen.getByText('Create task'));
 
       await waitFor(() => {
         expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
@@ -336,7 +336,7 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByLabelText('Add new task'));
 
       // Try submitting empty form
-      fireEvent.click(screen.getByText('Create Task'));
+      fireEvent.click(screen.getByText('Create task'));
       expect(toast.error).toHaveBeenCalledWith('Please fill in all required fields');
     });
 
@@ -364,7 +364,7 @@ describe('ToDosPage', () => {
       fireEvent.click(screen.getByLabelText('Add new task'));
 
       // Button should be disabled or show error on click if not disabled
-      const createBtn = screen.getByText('Create Task');
+      const createBtn = screen.getByText('Create task');
       expect(createBtn).toBeDisabled();
 
       expect(screen.getByText('No household members available to assign this task.')).toBeInTheDocument();

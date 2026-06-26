@@ -8,13 +8,15 @@ describe('Card', () => {
     expect(screen.getByText('Test Content')).toBeInTheDocument();
   });
 
-  it('applies base glassmorphism classes', () => {
+  it('applies base grounded-surface classes', () => {
     const { container } = render(<Card>Content</Card>);
     const card = container.firstChild;
-    expect(card).toHaveClass('backdrop-blur-xl');
+    // Grouped-flat language: solid surface + hairline border + deliberate radius,
+    // no glass blur / floating shadow.
+    expect(card).toHaveClass('bg-white');
     expect(card).toHaveClass('rounded-card');
-    expect(card).toHaveClass('shadow-glass');
-    expect(card).toHaveClass('ring-1');
+    expect(card).toHaveClass('border');
+    expect(card).not.toHaveClass('backdrop-blur-xl');
   });
 
   it('merges custom className correctly', () => {

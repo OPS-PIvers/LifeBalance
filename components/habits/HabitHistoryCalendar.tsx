@@ -16,10 +16,10 @@ function cn(...inputs: (string | undefined | null | false)[]) {
 function getIntensityClass(count: number, maxDailyCompletions: number): string {
   if (count === 0) return '';
   const ratio = count / maxDailyCompletions;
-  if (ratio >= 0.75) return 'bg-emerald-500 text-white';
-  if (ratio >= 0.5) return 'bg-emerald-400 text-white';
-  if (ratio >= 0.25) return 'bg-emerald-300 text-white';
-  return 'bg-emerald-200 text-emerald-800';
+  if (ratio >= 0.75) return 'bg-accent-600 text-white';
+  if (ratio >= 0.5) return 'bg-accent-500 text-white';
+  if (ratio >= 0.25) return 'bg-accent-300 text-accent-900';
+  return 'bg-accent-200 text-accent-900';
 }
 
 // Optimization: Memoized calendar day to prevent re-rendering the entire grid on selection change
@@ -38,14 +38,14 @@ const CalendarDay = React.memo(({ day, count, isSelected, isCurrentMonth, intens
     <button
       onClick={() => onSelect(day)}
       className={cn(
-        "relative flex flex-col items-center justify-center h-10 w-full rounded-xl text-sm font-medium transition-all duration-200",
+        "relative flex flex-col items-center justify-center h-10 w-full rounded-card text-sm font-medium transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard)",
         !isCurrentMonth && "opacity-30",
         isSelected
-          ? "ring-2 ring-brand-800 dark:ring-brand-300 scale-105 z-10"
-          : "hover:scale-105 hover:bg-brand-50 dark:hover:bg-slate-700/50",
-        !intensityClass && !isSelected && "text-brand-400 dark:text-slate-400 bg-brand-50/50 dark:bg-slate-700/30",
+          ? "ring-2 ring-warm-500 dark:ring-warm-400 scale-105 z-10"
+          : "hover:scale-105 hover:bg-brand-100 dark:hover:bg-brand-700/50",
+        !intensityClass && !isSelected && "text-brand-400 dark:text-brand-400 bg-brand-50 dark:bg-brand-700/30",
         intensityClass,
-        isToday && !isSelected && !intensityClass && "text-brand-800 dark:text-slate-100 font-bold bg-brand-100 dark:bg-slate-700"
+        isToday && !isSelected && !intensityClass && "text-brand-900 dark:text-brand-50 font-bold bg-brand-200 dark:bg-brand-700"
       )}
       aria-label={`${format(day, 'MMM d')}: ${count} habits completed`}
     >
@@ -94,12 +94,12 @@ const HabitHistoryCalendar: React.FC = () => {
   const selectedDateHabits = dailyCompletions.get(selectedDateStr) || [];
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-(--duration-base)">
       {/* Calendar Card */}
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xs border border-brand-100 dark:border-slate-700 p-4">
+      <div className="surface-section p-4">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-lg text-brand-800 dark:text-slate-100">
+          <h2 className="font-display font-semibold text-lg text-brand-900 dark:text-brand-50">
             {format(currentDate, 'MMMM yyyy')}
           </h2>
           <div className="flex gap-2">
@@ -107,7 +107,7 @@ const HabitHistoryCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="text-brand-400 dark:text-slate-400 rounded-lg"
+              className="text-brand-400 dark:text-brand-400 rounded-btn"
               aria-label="Previous month"
             >
               <ChevronLeft size={20} />
@@ -116,7 +116,7 @@ const HabitHistoryCalendar: React.FC = () => {
               variant="ghost"
               size="icon-sm"
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="text-brand-400 dark:text-slate-400 rounded-lg"
+              className="text-brand-400 dark:text-brand-400 rounded-btn"
               aria-label="Next month"
             >
               <ChevronRight size={20} />
@@ -127,7 +127,7 @@ const HabitHistoryCalendar: React.FC = () => {
         {/* Grid */}
         <div className="grid grid-cols-7 mb-2">
           {weekDays.map((day, i) => (
-            <div key={`${day.full}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-slate-500 py-2">
+            <div key={`${day.full}-${i}`} className="text-center text-xs font-bold text-brand-300 dark:text-brand-500 py-2">
               <abbr title={day.full} className="no-underline">{day.abbr}</abbr>
             </div>
           ))}
@@ -158,13 +158,13 @@ const HabitHistoryCalendar: React.FC = () => {
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-slate-500 uppercase tracking-wide">
+        <div className="mt-4 flex items-center justify-end gap-2 text-xxs font-bold text-brand-300 dark:text-brand-500 uppercase tracking-wide">
           <span>Less</span>
           <div className="flex gap-1">
-             <div className="w-3 h-3 rounded-sm bg-emerald-200"></div>
-             <div className="w-3 h-3 rounded-sm bg-emerald-300"></div>
-             <div className="w-3 h-3 rounded-sm bg-emerald-400"></div>
-             <div className="w-3 h-3 rounded-sm bg-emerald-500"></div>
+             <div className="w-3 h-3 rounded-sm bg-accent-200"></div>
+             <div className="w-3 h-3 rounded-sm bg-accent-300"></div>
+             <div className="w-3 h-3 rounded-sm bg-accent-500"></div>
+             <div className="w-3 h-3 rounded-sm bg-accent-600"></div>
           </div>
           <span>More</span>
         </div>
@@ -173,47 +173,47 @@ const HabitHistoryCalendar: React.FC = () => {
       {/* Detail List */}
       <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <h3 className="font-bold text-brand-800 dark:text-slate-100 text-sm uppercase tracking-wide">
-            {format(selectedDate, 'MMMM d')} Summary
+          <h3 className="font-display font-semibold text-brand-700 dark:text-brand-200 text-sm">
+            {format(selectedDate, 'MMMM d')} summary
           </h3>
-          <span className="text-xs font-medium text-brand-500 dark:text-slate-300 bg-brand-100 dark:bg-slate-700/50 px-2 py-1 rounded-full">
-            {selectedDateHabits.length} Completed
+          <span className="text-xs font-medium text-brand-600 dark:text-brand-300 bg-brand-100 dark:bg-brand-700/50 px-2 py-1 rounded-full">
+            {selectedDateHabits.length} completed
           </span>
         </div>
 
         {selectedDateHabits.length === 0 ? (
-          <div className="text-center py-10 bg-white dark:bg-slate-800/40 border border-dashed border-brand-200 dark:border-slate-700 rounded-2xl text-brand-400 dark:text-slate-400">
+          <div className="text-center py-10 bg-white dark:bg-brand-800 border border-dashed border-brand-200 dark:border-brand-700 rounded-2xl text-brand-400 dark:text-brand-500">
             <Calendar className="w-10 h-10 mx-auto mb-3 opacity-20" />
             <p className="font-medium text-sm">No habits completed on this day.</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
             {selectedDateHabits.map(habit => {
               const isPositive = habit.type === 'positive';
               return (
-                <div key={habit.id} className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-brand-100 dark:border-slate-700 shadow-xs flex items-center justify-between group animate-in slide-in-from-bottom-2">
-                  <div className="flex items-center gap-3">
+                <div key={habit.id} className="px-4 py-3.5 hairline-divider flex items-center justify-between group animate-in fade-in duration-(--duration-base)">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className={cn(
-                      "w-10 h-10 rounded-lg flex items-center justify-center font-bold transition-colors",
-                      isPositive ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                      "w-10 h-10 rounded-card flex items-center justify-center font-bold shrink-0",
+                      isPositive ? "bg-money-bgPos dark:bg-money-pos/15 text-money-pos" : "bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-red-300"
                     )}>
                       {isPositive ? <CheckCircle2 size={20} /> : <Flame size={20} />}
                     </div>
-                    <div>
-                      <p className="font-bold text-brand-800 dark:text-slate-100 text-sm">{habit.title}</p>
-                      <p className="text-xs text-brand-400 dark:text-slate-400">{habit.category}</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm truncate">{habit.title}</p>
+                      <p className="text-xs text-brand-400 dark:text-brand-500">{habit.category}</p>
                     </div>
                   </div>
 
-                  <div className="flex flex-col items-end">
+                  <div className="flex flex-col items-end shrink-0">
                     <span className={cn(
                       "text-xs font-bold px-2 py-0.5 rounded-full",
-                      isPositive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                      isPositive ? "bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos" : "bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300"
                     )}>
                       {habit.basePoints} pts
                     </span>
                     {habit.streakDays > 0 && (
-                      <span className="text-xxs text-orange-500 font-bold flex items-center gap-0.5 mt-0.5">
+                      <span className="text-xxs text-habit-streak font-bold flex items-center gap-0.5 mt-0.5">
                         <Flame size={8} fill="currentColor" /> {habit.streakDays} day streak
                       </span>
                     )}

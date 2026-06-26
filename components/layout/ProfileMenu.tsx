@@ -134,13 +134,13 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
   return (
     <div
       ref={menuRef}
-      className="absolute top-14 right-4 z-dropdown w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-100 dark:border-slate-700 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right"
+      className="absolute top-14 right-4 z-dropdown w-64 bg-white dark:bg-brand-800 rounded-card shadow-raised border border-brand-200 dark:border-brand-700 overflow-hidden animate-in fade-in zoom-in-95 duration-(--duration-base) origin-top-right"
       role="menu"
       aria-label="Profile Menu"
       onKeyDown={handleMenuKeyDown}
     >
       {/* User Info Header */}
-      <div className="bg-brand-50 dark:bg-slate-700/50 p-4 border-b border-brand-100 dark:border-slate-700">
+      <div className="bg-brand-50 dark:bg-brand-700/50 p-4 border-b border-brand-200 dark:border-brand-700">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 font-bold text-lg">
             {currentUser?.displayName ? (
@@ -150,14 +150,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-brand-900 dark:text-slate-100 truncate">
+            <p className="font-display font-semibold text-brand-900 dark:text-brand-100 truncate">
               {currentUser?.displayName || 'User'}
             </p>
-            <p className="text-xs text-brand-600 dark:text-slate-400 truncate">{currentUser?.email}</p>
+            <p className="text-xs text-brand-600 dark:text-brand-400 truncate">{currentUser?.email}</p>
           </div>
         </div>
         {household && (
-          <div className="mt-3 text-xs font-medium text-brand-500 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-600/50 py-1 px-2 rounded-md truncate">
+          <div className="mt-3 text-xs font-medium text-brand-600 dark:text-brand-300 bg-brand-100 dark:bg-brand-700/60 py-1 px-2 rounded-sm truncate">
             Household: {household.name}
           </div>
         )}
@@ -165,15 +165,15 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
 
       {/* Profiles section — only visible when Kid Mode is enabled (Plan 080, dormant by default) */}
       {kidModeEnabled && (
-        <div className="p-2 border-b border-gray-100 dark:border-slate-700">
-          <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">
+        <div className="p-2 border-b border-brand-200 dark:border-brand-700">
+          <div className="px-3 py-1.5 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-brand-400 dark:text-brand-500">
             <Users className="w-3.5 h-3.5" />
             Profiles
           </div>
 
           {/* Active-kid banner */}
           {activeKid && (
-            <div className="mx-3 mb-1.5 flex items-center justify-between rounded-lg bg-brand-50 dark:bg-brand-900/30 px-3 py-1.5 text-xs text-brand-700 dark:text-brand-300">
+            <div className="mx-3 mb-1.5 flex items-center justify-between rounded-btn bg-warm-50 dark:bg-warm-900/30 px-3 py-1.5 text-xs text-warm-700 dark:text-warm-200">
               <span>
                 Viewing as{' '}
                 <span className="font-semibold">
@@ -185,7 +185,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
                   exitToParent();
                   onClose();
                 }}
-                className="ml-2 flex items-center gap-1 font-medium hover:text-brand-900 dark:hover:text-brand-100 transition-colors"
+                className="ml-2 flex items-center gap-1 font-medium hover:text-warm-900 dark:hover:text-warm-100 transition-colors"
                 role="menuitem"
                 tabIndex={-1}
                 aria-label="Back to parent view"
@@ -198,7 +198,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
 
           {/* Parent row (active when no kid is selected) */}
           <div
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 ${activeMemberId === null ? 'bg-brand-50 dark:bg-brand-900/20' : ''}`}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-sm font-medium text-brand-700 dark:text-brand-300 ${activeMemberId === null ? 'bg-brand-50 dark:bg-brand-700/40' : ''}`}
           >
             <div className="w-6 h-6 rounded-full bg-brand-200 dark:bg-brand-700 flex items-center justify-center text-brand-700 dark:text-brand-200 text-xs font-bold shrink-0">
               {currentUser?.displayName ? currentUser.displayName.charAt(0) : <User className="w-3.5 h-3.5" />}
@@ -216,7 +216,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
                 actAs(kid.uid);
                 onClose();
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
               role="menuitem"
               tabIndex={-1}
             >
@@ -228,8 +228,8 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
                   {kid.avatarEmoji ?? kid.displayName.charAt(0)}
                 </div>
               ) : (
-                <div className="w-6 h-6 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
-                  <User className="w-3.5 h-3.5 text-purple-500 dark:text-purple-300" />
+                <div className="w-6 h-6 rounded-full bg-warm-100 dark:bg-warm-900/30 flex items-center justify-center shrink-0">
+                  <User className="w-3.5 h-3.5 text-warm-500 dark:text-warm-300" />
                 </div>
               )}
               <span className="truncate">{kid.displayName}</span>
@@ -239,7 +239,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           {/* Add kid profile */}
           <button
             onClick={handleAddKidProfile}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
+            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-500 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-warm-700 dark:hover:text-warm-300 rounded-btn transition-colors text-left"
             role="menuitem"
             tabIndex={-1}
           >
@@ -256,7 +256,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
             navigate('/settings');
             onClose();
           }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-brand-700 dark:hover:text-brand-300 rounded-lg transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700 hover:text-accent-700 dark:hover:text-accent-300 rounded-btn transition-colors text-left"
           role="menuitem"
           tabIndex={-1}
         >
@@ -264,11 +264,11 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           Settings
         </button>
 
-        <hr className="my-1 border-gray-100 dark:border-slate-700" />
+        <hr className="my-1 border-brand-200 dark:border-brand-700" />
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-money-neg dark:text-red-400 hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-btn transition-colors text-left"
           role="menuitem"
           tabIndex={-1}
         >

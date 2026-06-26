@@ -11,18 +11,18 @@ describe('Badge', () => {
   it('applies default styles', () => {
     render(<Badge>Default</Badge>);
     const badge = screen.getByText('Default');
-    expect(badge).toHaveClass('bg-brand-50', 'text-brand-700', 'text-xs');
+    expect(badge).toHaveClass('bg-accent-50', 'text-accent-700', 'text-xs');
   });
 
   it('applies variant styles correctly', () => {
     const { rerender } = render(<Badge variant="success">Success</Badge>);
-    expect(screen.getByText('Success')).toHaveClass('bg-emerald-50', 'text-emerald-700');
+    expect(screen.getByText('Success')).toHaveClass('bg-money-bgPos', 'text-money-pos');
 
     rerender(<Badge variant="danger">Danger</Badge>);
-    expect(screen.getByText('Danger')).toHaveClass('bg-rose-50', 'text-rose-700');
+    expect(screen.getByText('Danger')).toHaveClass('bg-money-bgNeg', 'text-money-neg');
 
     rerender(<Badge variant="warning">Warning</Badge>);
-    expect(screen.getByText('Warning')).toHaveClass('bg-amber-50', 'text-amber-700');
+    expect(screen.getByText('Warning')).toHaveClass('bg-warm-50', 'text-warm-700');
   });
 
   it('applies size styles correctly', () => {

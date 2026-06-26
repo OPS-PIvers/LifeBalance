@@ -5,51 +5,74 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: Inter, sans-serif;
-  --font-mono: JetBrains Mono, monospace;
+  /* Editorial type identity — newspaper-finance, definitively not-Inter. */
+  --font-display: 'Fraunces', 'Times New Roman', serif;
+  --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
 
-  --color-brand-50: #f8fafc;
-  --color-brand-100: #f1f5f9;
-  --color-brand-200: #e2e8f0;
-  --color-brand-300: #cbd5e1;
-  --color-brand-400: #94a3b8;
-  --color-brand-500: #64748b;
-  --color-brand-600: #475569;
-  --color-brand-700: #334155;
-  --color-brand-800: #1e293b;
-  --color-brand-900: #0f172a;
+  /* Neutrals — refined, faintly-warm "paper" ramp (replaces the raw slate). */
+  --color-brand-50: #f8f7f4;
+  --color-brand-100: #f0eee9;
+  --color-brand-200: #e3e0d8;
+  --color-brand-300: #cbc7bb;
+  --color-brand-400: #a8a399;
+  --color-brand-500: #7c776c;
+  --color-brand-600: #565249;
+  --color-brand-700: #3a3731;
+  --color-brand-800: #242220;
+  --color-brand-900: #161512;
 
-  --color-money-pos: #10b981;
-  --color-money-neg: #f43f5e;
-  --color-money-bgPos: #ecfdf5;
-  --color-money-bgNeg: #fff1f2;
+  /* Primary accent — EVERGREEN (finance / primary actions / active nav / FAB). */
+  --color-accent-50: #eef3ef;
+  --color-accent-100: #d8e6dd;
+  --color-accent-200: #b3cdbd;
+  --color-accent-300: #84ad97;
+  --color-accent-400: #538a70;
+  --color-accent-500: #356f54;
+  --color-accent-600: #285742; /* PRIMARY */
+  --color-accent-700: #214636;
+  --color-accent-800: #1a382b;
+  --color-accent-900: #122618;
 
-  --color-habit-streak: #f97316;
-  --color-habit-gold: #fbbf24;
-  --color-habit-blue: #60a5fa;
+  /* Secondary accent — WARM AMBER (habits / household / gamification / streaks). */
+  --color-warm-50: #faf4ea;
+  --color-warm-100: #f4e6cf;
+  --color-warm-200: #e9cb9f;
+  --color-warm-300: #ddac6a;
+  --color-warm-400: #d09140;
+  --color-warm-500: #b87a29; /* PRIMARY */
+  --color-warm-600: #97611f;
+  --color-warm-700: #744a1b;
+  --color-warm-800: #533619;
+  --color-warm-900: #382512;
 
-  --radius-card: 1rem;
-  --radius-btn: 0.75rem;
+  /* Semantic money — retuned for harmony with the new accents. */
+  --color-money-pos: #1f8f63;
+  --color-money-neg: #d4483f;
+  --color-money-bgPos: #eef6f1;
+  --color-money-bgNeg: #fbeeec;
 
-  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-  --shadow-glass: 0 8px 30px rgba(0, 0, 0, 0.04);
-  --shadow-glass-card: 0 8px 30px rgba(0, 0, 0, 0.04);
-  --shadow-glass-sm: 0 2px 10px rgba(0, 0, 0, 0.02);
-  --shadow-glass-deep: 0 8px 30px rgba(0, 0, 0, 0.12);
-  --shadow-nav: 0 -10px 40px -15px rgba(0, 0, 0, 0.05);
-  --shadow-premium:
-    0 20px 40px -4px rgba(0, 0, 0, 0.08), 0 8px 16px -4px rgba(0, 0, 0, 0.04);
-  --shadow-btn-primary:
-    0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --shadow-btn-primary-hover:
-    0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --shadow-btn-secondary: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-btn-success:
-    0 1px 2px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --shadow-btn-warning:
-    0 1px 2px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --shadow-btn-destructive:
-    0 1px 2px rgba(244, 63, 94, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  /* Habit tokens — retuned off the generic palette. habit-blue keeps its
+     token name for compatibility but is now a slate-teal so it stops reading
+     as generic sky-blue. */
+  --color-habit-streak: #ea6a26;
+  --color-habit-gold: #e0a32a;
+  --color-habit-blue: #5a8a86;
+
+  /* Radii — deliberate, smaller. */
+  --radius-sm: 0.375rem;
+  --radius-btn: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-lg: 1rem; /* hero surfaces only */
+
+  /* Elevation — rare + restrained. Default surfaces use a hairline border and
+     NO shadow; only hero surfaces opt into --shadow-raised. */
+  --shadow-raised:
+    0 1px 2px rgba(0, 0, 0, 0.06), 0 10px 24px -14px rgba(0, 0, 0, 0.14);
+  --shadow-nav: 0 -1px 0 rgba(0, 0, 0, 0.04);
+  --shadow-btn-primary: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-btn-primary-hover: 0 2px 6px -1px rgba(0, 0, 0, 0.12);
+  --shadow-btn-secondary: 0 1px 2px rgba(0, 0, 0, 0.04);
 
   --spacing-safe: env(safe-area-inset-bottom);
 
@@ -62,6 +85,11 @@
   --z-index-banner: 55;
   --z-index-toast: 110;
 
+  /* Motion — consistent durations/easing for tabs, routes, lists, press. */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -79,7 +107,7 @@
   ::before,
   ::backdrop,
   ::file-selector-button {
-    border-color: var(--color-gray-200, currentcolor);
+    border-color: var(--color-brand-200, currentcolor);
   }
 }
 
@@ -97,6 +125,18 @@
   @apply overflow-y-auto overscroll-contain;
 }
 
+@utility surface-section {
+  /* Grouped-flat surface (iOS Settings / Things / Copilot Money): a solid
+     calm panel with a hairline border, deliberate radius, and NO shadow by
+     default. Hierarchy comes from type + spacing, not blur/shadow. */
+  @apply bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl;
+}
+
+@utility hairline-divider {
+  /* The 1px separator between rows inside a section. */
+  @apply border-t border-brand-200 dark:border-brand-700;
+}
+
 @utility skeleton {
   /* Shimmer placeholder used by the Skeleton primitive */
   position: relative;
@@ -109,7 +149,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0.45) 50%,
       transparent 100%
     );
     animation: skeleton-shimmer 1.6s ease-in-out infinite;

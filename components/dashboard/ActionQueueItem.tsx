@@ -159,7 +159,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         className="w-4 h-4 rounded-full border border-white object-cover shrink-0"
       />
     ) : (
-      <div className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 border border-white dark:border-slate-700 shrink-0">
+      <div className="w-4 h-4 rounded-full bg-brand-200 dark:bg-brand-500/30 flex items-center justify-center text-[8px] font-bold text-brand-600 dark:text-brand-200 border border-white dark:border-brand-700 shrink-0">
         {assignee.displayName?.charAt(0) || '?'}
       </div>
     );
@@ -253,36 +253,36 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     if (isCalendarQueueItem(item)) {
       return {
         iconComponent: <CalendarClock size={18} />,
-        iconClasses: 'bg-orange-50 border-orange-100/50 text-orange-600 dark:bg-orange-500/10 dark:border-orange-500/20 dark:text-orange-300',
+        iconClasses: 'bg-warm-100 border-warm-200 text-warm-600 dark:bg-warm-900/30 dark:border-warm-800 dark:text-warm-300',
       };
     }
     if (isTodoQueueItem(item)) {
       return {
         iconComponent: <ListTodo size={18} />,
-        iconClasses: 'bg-rose-50 border-rose-100/50 text-rose-600 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-300',
+        iconClasses: 'bg-money-bgNeg border-money-neg/20 text-money-neg dark:bg-money-neg/15 dark:border-money-neg/30 dark:text-red-300',
       };
     }
     return {
       iconComponent: <Receipt size={18} />,
-      iconClasses: 'bg-blue-50 border-blue-100/50 text-blue-600 dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-300',
+      iconClasses: 'bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-800/40 dark:border-accent-700 dark:text-accent-200',
     };
   }, [item]);
 
   return (
-    <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl ring-1 ring-black/5 overflow-hidden transition-all hover:bg-white/90 dark:hover:bg-slate-800/70 shadow-soft group">
+    <div className="surface-section overflow-hidden transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/30 group">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-3 rounded-2xl border shadow-xs ${iconClasses}`}>
+          <div className={`p-3 rounded-card border ${iconClasses}`}>
              {iconComponent}
           </div>
           <div>
-            <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">
+            <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">
               {isCalendarQueueItem(item) ? item.title :
                isTodoQueueItem(item) ? item.text :
                isTransactionQueueItem(item) ? item.merchant : ''}
             </p>
-            <div className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+            <div className="text-xs text-brand-400 dark:text-brand-500 flex items-center gap-1">
                {isCalendarQueueItem(item) ? 'Due: ' : isTodoQueueItem(item) ? 'Due: ' : 'Tx: '}
                {format(parseISO(item.date), 'MMM d, yyyy')}
                {isTodoQueueItem(item) && item.assignedTo && (
@@ -291,7 +291,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                  </div>
                )}
                {isTodoQueueItem(item) && isBefore(parseISO(item.date), startOfToday()) && (
-                 <span className="flex items-center gap-0.5 text-red-500 font-bold ml-1">
+                 <span className="flex items-center gap-0.5 text-money-neg font-bold ml-1">
                    <AlertCircle size={10} />
                    Overdue
                  </span>
@@ -302,12 +302,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
         <div className="flex items-center gap-3">
           {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
-            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">{fmt(item.amount)}</span>
+            <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount)}</span>
           )}
           {!isExpanded && (
             <button
               onClick={handleExpand}
-              className="text-xs font-bold text-white px-3 py-1.5 rounded-lg shadow-xs active:scale-95 bg-slate-900"
+              className="text-xs font-semibold text-white px-4 min-h-11 rounded-btn active:scale-95 transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400"
               aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
             >
               Review
@@ -318,18 +318,18 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
       {/* Expanded Actions */}
       {isExpanded && (
-        <div className="px-4 pb-3 sm:pb-4 pt-3 border-t border-black/5 dark:border-white/5 bg-white/40 dark:bg-slate-900/30">
+        <div className="px-4 pb-3 sm:pb-4 pt-3 border-t border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-900/30">
           <div className="flex justify-between items-center mb-2 sm:mb-3">
-             <p className="text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+             <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
              </p>
-             <button onClick={() => setExpandedId(null)} aria-label="Collapse item"><X size={14} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"/></button>
+             <button onClick={() => setExpandedId(null)} aria-label="Collapse item"><X size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"/></button>
           </div>
 
           {isCalendarQueueItem(item) ? (
             /* Calendar Item Actions */
             <div className="space-y-2">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
                 {item.type === 'expense' ? 'Confirm this expense' : 'Confirm this income'} has hit your account:
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -373,7 +373,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           ) : isTodoQueueItem(item) ? (
             /* To-Do Item Actions */
             <div className="space-y-2">
-               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+               <p className="text-xs text-brand-500 dark:text-brand-400 mb-3">
                  Mark this task as complete or delay it:
                </p>
                <div className="flex flex-col sm:flex-row gap-2">
@@ -469,7 +469,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                         step="0.01"
                         value={editForm.amount}
                         onChange={e => setEditForm({...editForm, amount: e.target.value})}
-                        icon={<span className="text-slate-400 dark:text-slate-500 font-bold">$</span>}
+                        icon={<span className="text-brand-400 dark:text-brand-500 font-bold">$</span>}
                         error={editErrors.amount}
                     />
                     <Input
@@ -494,12 +494,12 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 {/* Habits Section - Smart Suggestions */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Connect Habits</p>
+                    <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Connect Habits</p>
                     {suggestedHabits.some(s => s.confidence !== 'low') && (
-                      <Sparkles size={10} className="text-violet-500" />
+                      <Sparkles size={10} className="text-warm-500" />
                     )}
                   </div>
-                  {habits.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500 italic">No habits found. Create some in Habits tab.</p>}
+                  {habits.length === 0 && <p className="text-xs text-brand-400 dark:text-brand-500 italic">No habits found. Create some in Habits tab.</p>}
 
                   {habits.length > 0 && (
                     <div className="flex flex-wrap gap-2">
@@ -518,18 +518,18 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                                     : [...prev, habit.id]
                                 );
                               }}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 relative ${
+                              className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 relative ${
                                 isSelected
-                                  ? 'bg-habit-green text-white shadow-xs'
+                                  ? 'bg-accent-600 text-white'
                                   : confidence === 'high'
-                                  ? 'bg-violet-50 border-2 border-violet-300 text-violet-700 hover:bg-violet-100 dark:bg-violet-500/10 dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/20'
-                                  : 'bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 dark:bg-blue-500/10 dark:border-blue-500/30 dark:text-blue-300 dark:hover:bg-blue-500/20'
+                                  ? 'bg-warm-50 border-2 border-warm-300 text-warm-700 hover:bg-warm-100 dark:bg-warm-900/20 dark:border-warm-700 dark:text-warm-300 dark:hover:bg-warm-900/40'
+                                  : 'bg-warm-50 border border-warm-200 text-warm-600 hover:bg-warm-100 dark:bg-warm-900/15 dark:border-warm-800 dark:text-warm-300 dark:hover:bg-warm-900/30'
                               }`}
                             >
                               {isSelected && <Check size={12} strokeWidth={3} />}
                               {habit.title}
                               {!isSelected && confidence === 'high' && (
-                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-violet-500 rounded-full motion-safe:animate-pulse" />
+                                <span className="absolute -top-1 -right-1 w-2 h-2 bg-warm-500 rounded-full motion-safe:animate-pulse" />
                               )}
                             </button>
                           );
@@ -547,7 +547,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                               onClick={() => {
                                 setSelectedHabitIds(prev => prev.filter(id => id !== habit.id));
                               }}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 bg-habit-green text-white shadow-xs"
+                              className="px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 bg-accent-600 text-white"
                             >
                               <Check size={12} strokeWidth={3} />
                               {habit.title}
@@ -558,7 +558,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                       {/* "More" button to show all habits */}
                       {suggestedHabits.filter(s => s.confidence === 'low' && !selectedHabitIds.includes(s.habit.id)).length > 0 && (
                         <details className="inline">
-                          <summary className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/50 border border-slate-200 text-slate-500 hover:bg-white dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700 cursor-pointer inline-flex items-center gap-1">
+                          <summary className="px-3 py-1.5 rounded-btn text-xs font-semibold bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700 cursor-pointer inline-flex items-center gap-1">
                             + More ({suggestedHabits.filter(s => s.confidence === 'low').length})
                           </summary>
                           <div className="flex flex-wrap gap-2 mt-2">
@@ -570,7 +570,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                                   onClick={() => {
                                     setSelectedHabitIds(prev => [...prev, habit.id]);
                                   }}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors bg-white/50 border border-slate-200 text-slate-500 hover:bg-white dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-400 dark:hover:bg-slate-700"
+                                  className="px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) bg-white border border-brand-200 text-brand-500 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-400 dark:hover:bg-brand-700"
                                 >
                                   {habit.title}
                                 </button>
@@ -584,16 +584,16 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
                 {/* Categories Section */}
                 <div className="space-y-2">
-                  <p className="text-xxs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Budget Category</p>
+                  <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Budget Category</p>
                   <div className="flex flex-wrap gap-2">
                     {buckets.map(bucket => (
                       <button
                         key={bucket.id}
                         onClick={() => setSelectedCategory(bucket.name)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                           selectedCategory === bucket.name
-                            ? 'bg-slate-900 text-white shadow-xs'
-                            : 'bg-white/50 border border-slate-200 text-slate-600 hover:bg-white dark:bg-slate-700/50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700'
+                            ? 'bg-brand-800 text-white dark:bg-brand-100 dark:text-brand-900'
+                            : 'bg-white border border-brand-200 text-brand-600 hover:bg-brand-50 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700'
                         }`}
                       >
                         {selectedCategory === bucket.name && <Check size={12} strokeWidth={3} className="inline mr-1" />}
@@ -602,10 +602,10 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                     ))}
                     <button
                       onClick={() => setSelectedCategory('Budgeted in Calendar')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      className={`px-3 py-1.5 rounded-btn text-xs font-semibold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                         selectedCategory === 'Budgeted in Calendar'
-                          ? 'bg-indigo-700 text-white shadow-xs'
-                          : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-300 dark:border-indigo-500/30 dark:hover:bg-indigo-500/20'
+                          ? 'bg-accent-700 text-white'
+                          : 'bg-accent-50 text-accent-700 border border-accent-200 hover:bg-accent-100 dark:bg-accent-800/40 dark:text-accent-200 dark:border-accent-700 dark:hover:bg-accent-800/60'
                       }`}
                     >
                       {selectedCategory === 'Budgeted in Calendar' && <Check size={12} strokeWidth={3} className="inline mr-1" />}
@@ -642,7 +642,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 </Button>
 
                 {/* Edit/Delete Actions */}
-                <div className="flex gap-2 pt-1 border-t border-black/5 dark:border-white/5 mt-2">
+                <div className="flex gap-2 pt-1 border-t border-brand-200 dark:border-brand-700 mt-2">
                     <Button
                       variant="ghost"
                       size="sm"
