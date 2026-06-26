@@ -170,6 +170,19 @@ const getAiEnabled = (): Promise<boolean> => {
 };
 
 /**
+ * Clears the cached `aiEnabled` kill-switch promise so the next AI call re-reads
+ * `app_config/global` immediately instead of waiting out the 60 s TTL. Exported for
+ * the admin Feature Flags panel to call right after it flips the AI flag, so the
+ * operator's own session reflects the change at once. Kept here (rather than in the
+ * SDK-free `appConfig` module) so toggling the other flags never pulls the Gemini
+ * SDK into their bundle.
+ */
+export const resetAiEnabledCache = (): void => {
+  killSwitchPromise = null;
+  killSwitchFetchedAt = 0;
+};
+
+/**
  * Atomically checks the household's daily AI quota and, if under the limit,
  * increments the counter — all inside a single Firestore transaction so
  * concurrent callers cannot all pass the check before any increment lands.

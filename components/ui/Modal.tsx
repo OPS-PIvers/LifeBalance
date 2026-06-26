@@ -34,6 +34,16 @@ export interface ModalProps {
    */
   mobileSafePadding?: boolean;
   /**
+   * If true, the dialog fills the screen as an edge-to-edge sheet on small
+   * viewports (full width, near-full height via dvh + safe-area insets, square
+   * corners) and reverts to the centered, rounded, `maxWidth`-capped card at the
+   * `sm` breakpoint and up. Opt-in (defaults to false) so existing modals are
+   * unaffected. Designed for content-dense panels (e.g. the Developer Console)
+   * that need real estate on a phone. When enabled the outer gutter is removed on
+   * mobile so the sheet is truly full-bleed.
+   */
+  fullScreenOnMobile?: boolean;
+  /**
    * If true, clicking the backdrop or pressing Escape will not close the modal.
    * Useful for processing states or critical confirmations.
    */
@@ -76,6 +86,7 @@ export const Modal: React.FC<ModalProps> = ({
   backdropColor = 'bg-slate-900/60',
   mobileSafePadding = true,
   disableBackdropClose = false,
+  fullScreenOnMobile = false,
   ariaLabelledBy,
   ariaLabel,
   ariaDescribedBy,
@@ -119,16 +130,23 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
+  // When full-screen-on-mobile, drop the outer gutter on phones (the sheet itself
+  // owns the safe-area inset) and restore the standard p-4 gutter at sm+. The
+  // inline safe-area padding is only meaningful for the centered desktop card, so
+  // it is moved onto the sm+ media query via Tailwind below in that mode.
+  const outerSafeStyle = mobileSafePadding && !fullScreenOnMobile ? {
+    paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
+    paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))',
+  } : undefined;
+
   return createPortal(
     <div
       className={clsx(
-        "fixed inset-0 z-modal flex p-4",
+        "fixed inset-0 z-modal flex",
+        fullScreenOnMobile ? "p-0 sm:p-4" : "p-4",
         centerContent && "items-center justify-center"
       )}
-      style={mobileSafePadding ? {
-        paddingBottom: 'calc(2rem + env(safe-area-inset-bottom, 0px))',
-        paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))'
-      } : undefined}
+      style={outerSafeStyle}
       data-testid="modal-backdrop-wrapper"
       onClick={handleBackdropClick}
     >
@@ -154,6 +172,12 @@ export const Modal: React.FC<ModalProps> = ({
           "relative w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200 outline-hidden",
           // Standardized max-height with dvh + vh fallback using supports modifier
           "max-h-[calc(100vh-10rem)] supports-[height:100dvh]:max-h-[calc(100dvh-10rem)] sm:max-h-[80vh]",
+          // Mobile full-screen sheet: edge-to-edge, square corners, and fill the
+          // viewport height (minus safe-area insets) on phones; everything reverts
+          // at sm+ so the desktop centered card is untouched. Placed AFTER the
+          // standardized rules so twMerge lets the responsive variants win on mobile.
+          fullScreenOnMobile &&
+            "h-[100dvh] max-h-[100dvh] supports-[height:100dvh]:max-h-[100dvh] rounded-none pt-[env(safe-area-inset-top)] pb-safe sm:h-auto sm:max-h-[80vh] sm:rounded-2xl sm:pt-0 sm:pb-0",
           maxWidth,
           className
         )}
