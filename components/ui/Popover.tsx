@@ -82,6 +82,9 @@ export const Popover: React.FC<PopoverProps> = ({
     );
     if (items.length === 0) return;
     e.preventDefault();
+    // Keep arrow-key roving self-contained so a scrollable/list ancestor doesn't
+    // also react to it.
+    e.stopPropagation();
     const current = items.indexOf(document.activeElement as HTMLElement);
     let next: number;
     switch (e.key) {
@@ -103,8 +106,16 @@ export const Popover: React.FC<PopoverProps> = ({
 
   return (
     <>
-      {/* Transparent click-away backdrop */}
-      <div className="fixed inset-0 z-dropdown" onClick={onClose} aria-hidden="true" />
+      {/* Transparent click-away backdrop. Stop propagation so a dismiss-click
+          doesn't also reach a clickable ancestor (the panel isn't portalled). */}
+      <div
+        className="fixed inset-0 z-dropdown"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        aria-hidden="true"
+      />
       <div
         ref={panelRef}
         tabIndex={-1}
