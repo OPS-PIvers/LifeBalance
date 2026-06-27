@@ -521,14 +521,20 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                         ? <Loader2 className="w-5 h-5 animate-spin" />
                         : <MoreHorizontal className="w-5 h-5" />}
                 </button>
-                <Menu
-                    isOpen={menuOpen}
-                    onClose={() => setMenuOpen(false)}
-                    ariaLabel="Shopping list actions"
-                    position="top-full right-0 mt-2"
-                    className="min-w-[208px]"
-                    items={menuItems}
-                />
+                {/* Mounted only while open: Menu builds its button elements
+                    eagerly (JSX children evaluate before Popover discards them
+                    when closed), so gating here keeps add-input keystrokes from
+                    re-walking the menu tree. */}
+                {menuOpen && (
+                    <Menu
+                        isOpen={menuOpen}
+                        onClose={() => setMenuOpen(false)}
+                        ariaLabel="Shopping list actions"
+                        position="top-full right-0 mt-2"
+                        className="min-w-[208px]"
+                        items={menuItems}
+                    />
+                )}
             </div>
         </div>
 
@@ -541,7 +547,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             shares this pinned stacking context. */}
         <div
             className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur border-b border-brand-200 dark:border-brand-800"
-            style={{ top: stickyTopOffset }}
+            style={{ top: `${stickyTopOffset}px` }}
         >
             <div className="flex items-center gap-2">
                 <form onSubmit={handleSmartAdd} className="relative flex-1">
