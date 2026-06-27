@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { Meal } from '@/types/schema';
-import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import toast from 'react-hot-toast';
 
 const COMMON_TAGS = ['Quick', 'Healthy', 'Vegetarian', 'Gluten-Free', 'High Protein', 'Family Favorite'];
@@ -40,7 +38,6 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   onOpenImport,
   onSave
 }) => {
-  const isMobile = useMediaQuery('(max-width: 639px)');
 
   // Tag management
   const [tagInput, setTagInput] = useState('');
@@ -104,21 +101,6 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
   const content = (
     <div className="flex flex-col h-full max-h-[80vh] sm:max-h-[calc(100dvh-10rem)]">
-        {!isMobile && (
-            <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex justify-between items-center shrink-0">
-                <h3 id="modal-title" className="text-lg font-bold text-brand-900 dark:text-brand-100 tracking-tight">
-                    {title}
-                </h3>
-                <button
-                    onClick={onClose}
-                    className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-                    aria-label="Close modal"
-                >
-                    <X className="w-5 h-5" />
-                </button>
-            </div>
-        )}
-
         <div className="flex-1 scroll-contain-y p-6 space-y-6 overflow-y-auto overscroll-contain">
             {/* Top Actions */}
             <div className={`grid gap-2 ${onOpenImport ? 'grid-cols-3' : 'grid-cols-2'}`}>
@@ -385,28 +367,14 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
     </div>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer
-        isOpen={isOpen}
-        onClose={onClose}
-        title={title}
-        noPadding
-      >
-        {content}
-      </Drawer>
-    );
-  }
-
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-lg"
-      className="p-0" // The content provides its own padding
-      ariaLabelledBy="modal-title"
+      title={title}
+      noPadding
     >
       {content}
-    </Modal>
+    </Drawer>
   );
 };

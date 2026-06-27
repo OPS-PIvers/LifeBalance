@@ -12,10 +12,8 @@ import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
-import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -99,8 +97,6 @@ const ShoppingListTab: React.FC = () => {
     updateQuickStockList,
   } = useShopping();
   const { householdId } = useHouseholdCore();
-
-  const isDesktop = useMediaQuery('(min-width: 640px)');
 
   // Combine default and custom categories
   const categories = useMemo(() => {
@@ -660,9 +656,13 @@ const ShoppingListTab: React.FC = () => {
             initialTemplateData={settingsInitialTemplate}
         />
 
-        {/* Edit Modal / Drawer */}
-        {editingItem && (() => {
-          const itemForm = (
+        {/* Edit Item Drawer */}
+        {editingItem && (
+          <Drawer
+            isOpen={!!editingItem}
+            onClose={() => setEditingItem(null)}
+            title="Edit item"
+          >
             <ShoppingItemForm
               item={editingItem}
               onChange={setEditingItem}
@@ -677,27 +677,8 @@ const ShoppingListTab: React.FC = () => {
               activeQuickList={itemQuickListMap.get(editingItem.name.toLowerCase())}
               onQuickListChange={handleQuickListChange}
             />
-          );
-
-          const WrapperComponent = isDesktop ? Modal : Drawer;
-          const wrapperProps = {
-            isOpen: !!editingItem,
-            onClose: () => setEditingItem(null),
-            ...(isDesktop ? { className: "overflow-visible" } : { title: "Edit Item" })
-          };
-
-          return (
-            <WrapperComponent {...wrapperProps}>
-              {isDesktop && (
-                <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700">
-                  <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50 tracking-tight">Edit item</h3>
-                  <button onClick={() => setEditingItem(null)}><X className="w-5 h-5 text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300" /></button>
-                </div>
-              )}
-              {itemForm}
-            </WrapperComponent>
-          );
-        })()}
+          </Drawer>
+        )}
 
         {/* Clear Checked Confirmation Dialog */}
         <ConfirmDialog

@@ -1,8 +1,6 @@
 import React from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export type AIOptions = {
   cheap: boolean;
@@ -27,8 +25,6 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
   isGeneratingAI,
   onSuggest
 }) => {
-  const isMobile = useMediaQuery('(max-width: 639px)');
-
   const content = (
     <div className="p-6">
         <h3 id="ai-modal-title" className="text-xl font-bold mb-6 flex items-center gap-2 text-brand-900 dark:text-brand-100 tracking-tight">
@@ -95,28 +91,14 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
     </div>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer
-        isOpen={isOpen}
-        onClose={onClose}
-        noPadding
-        title="Chef AI"
-      >
-        {content}
-      </Drawer>
-    );
-  }
-
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-sm"
-      className="p-0"
-      ariaLabelledBy="ai-modal-title"
+      noPadding
+      title="Chef AI"
     >
       {content}
-    </Modal>
+    </Drawer>
   );
 };
