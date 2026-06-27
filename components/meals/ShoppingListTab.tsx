@@ -530,7 +530,7 @@ const ShoppingListTab: React.FC = () => {
                   aria-haspopup="menu"
                   className={`w-full flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                     filterStore
-                      ? 'bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200'
+                      ? 'bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-900/30 dark:text-accent-200 dark:hover:bg-accent-900/50'
                       : 'text-brand-600 dark:text-brand-300 hover:text-brand-900 hover:bg-brand-50 dark:hover:text-brand-50 dark:hover:bg-brand-700/50'
                   }`}
                >
