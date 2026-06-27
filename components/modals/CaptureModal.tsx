@@ -11,6 +11,8 @@ import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
 import { normalizeStoreName } from '@/utils/storeMatch';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { findMatchingPendingTransaction, buildReceiptMergeUpdates } from '@/utils/transactionMatch';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl, SegmentedControlOption } from '@/components/ui/SegmentedControl';
 import { CaptureShoppingTab } from './CaptureShoppingTab';
@@ -49,7 +51,7 @@ const getLocalDateString = (): string => {
 };
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
-  const { addTransaction, buckets, transactions, accounts } = useFinance();
+  const { addTransaction, updateTransaction, buckets, transactions, accounts } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
   const { addToDo } = useTodos();
@@ -68,6 +70,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const [manualInitialData, setManualInitialData] = useState<ManualInitialData | undefined>(undefined);
 
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+
+  // Receipt → pending-tx link prompt. When a camera scan looks like a duplicate
+  // of an existing pending_review transaction (e.g. an Apple Pay $0 stub already
+  // in the Action Queue), we HOLD the built receipt transaction here instead of
+  // writing it, until the user chooses Link vs Keep separate.
+  const [pendingMatch, setPendingMatch] = useState<{
+    receiptTx: Transaction;   // the transaction we WOULD have added
+    candidate: Transaction;   // the existing pending tx to merge into (best match)
+  } | null>(null);
+  const [isResolvingMatch, setIsResolvingMatch] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -149,6 +161,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     // Reset Transaction State
     setManualInitialData(undefined);
     setParsedTransactions([]);
+    setPendingMatch(null);
+    setIsResolvingMatch(false);
 
     // Reset To-Do State
     setTodoText('');
@@ -270,6 +284,19 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           subBucketId: matchSubBucket(category, data.subBucket),
           store: data.store
         };
+        // Before writing, see if this receipt likely duplicates an existing
+        // pending transaction (e.g. an Apple Pay $0 stub or another pending row
+        // for the same store within ~3 days). If so, hold it and ask whether to
+        // link/merge instead of creating a duplicate.
+        const candidate = findMatchingPendingTransaction(data, transactions);
+        if (candidate) {
+          setPendingMatch({ receiptTx: newTransaction, candidate });
+          // Park the body on the menu view (re-enables normal Drawer close) and
+          // let the ConfirmDialog overlay it — do NOT handleClose() here.
+          setView('menu');
+          return;
+        }
+
         await addTransaction(newTransaction);
         toast.success("Receipt scanned! Check your Action Queue.");
         handleClose();
@@ -401,6 +428,47 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     if (succeeded > 0) toast.success(`${succeeded} transaction(s) added to Action Queue!`);
     else toast.error('Failed to add transactions');
     handleClose();
+  };
+
+  // Link the scanned receipt INTO the matched pending transaction (merge) rather
+  // than creating a duplicate. We go through updateTransaction so only the
+  // (newAmount - oldAmount) delta hits the checking balance — for an Apple Pay
+  // $0 stub that's the full receipt amount (its first debit); for an
+  // already-amounted pending row it's just the correction. (Mirrors
+  // AwaitingAmountDrawer's promote-the-existing-stub pattern.)
+  const handleConfirmLink = async () => {
+    if (!pendingMatch) return;
+    setIsResolvingMatch(true);
+    try {
+      const { receiptTx, candidate } = pendingMatch;
+      // buildReceiptMergeUpdates only sends `amount` when it changes (delta-safe)
+      // and clears needsAmount for a stub; status stays pending_review.
+      await updateTransaction(candidate.id, buildReceiptMergeUpdates(receiptTx, candidate));
+      setPendingMatch(null);
+      handleClose();
+    } catch {
+      // updateTransaction already toasts on failure; keep the prompt open to retry.
+    } finally {
+      setIsResolvingMatch(false);
+    }
+  };
+
+  // Keep the scanned receipt as its own new transaction (no merge). Also the
+  // dismiss path for the prompt (Escape/backdrop): a scan you took should still
+  // be recorded rather than silently discarded.
+  const handleKeepSeparate = async () => {
+    if (!pendingMatch) return;
+    setIsResolvingMatch(true);
+    try {
+      await addTransaction(pendingMatch.receiptTx);
+      toast.success('Receipt scanned! Check your Action Queue.');
+      setPendingMatch(null);
+      handleClose();
+    } catch {
+      toast.error('Failed to add transaction');
+    } finally {
+      setIsResolvingMatch(false);
+    }
   };
 
   // --- To-Do Logic ---
@@ -539,6 +607,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   );
 
   return (
+    <>
     <Drawer
       isOpen={isOpen}
       onClose={handleClose}
@@ -659,6 +728,25 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
 
       </div>
     </Drawer>
+
+    {/* Receipt → pending-transaction link prompt. ConfirmDialog is Modal-based
+        (its own portal at z-modal), so it overlays the Capture Drawer cleanly.
+        Cancel ("Keep separate") and Escape/backdrop both add the receipt as a
+        new transaction so a scan is never silently discarded. */}
+    {pendingMatch && (
+      <ConfirmDialog
+        isOpen={!!pendingMatch}
+        onClose={handleKeepSeparate}
+        onConfirm={handleConfirmLink}
+        title="Link this receipt?"
+        message={`Link this receipt to the ${pendingMatch.candidate.merchant} transaction from ${pendingMatch.candidate.date}? We'll update that pending transaction instead of adding a duplicate.`}
+        confirmLabel="Link"
+        cancelLabel="Keep separate"
+        confirmVariant="primary"
+        isConfirming={isResolvingMatch}
+      />
+    )}
+    </>
   );
 };
 
