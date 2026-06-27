@@ -39,9 +39,9 @@ const ListsPage: React.FC = () => {
       <div className="flex-none px-4 pt-4 pb-2 sticky top-0 z-30 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
-            <TabsTrigger value="todos">To-Dos</TabsTrigger>
-            <TabsTrigger value="meals">Meals</TabsTrigger>
-            <TabsTrigger value="shopping">Shopping</TabsTrigger>
+            <TabsTrigger value="todos" className="flex-1">To-Dos</TabsTrigger>
+            <TabsTrigger value="meals" className="flex-1">Meals</TabsTrigger>
+            <TabsTrigger value="shopping" className="flex-1">Shopping</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
