@@ -127,8 +127,7 @@ const ShortcutSetupGuide: React.FC = () => {
         'Tap + in the top right corner',
         'Scroll down and tap Transaction',
         'Choose your Apple Pay card(s), then tap Next',
-        'Add an "If" action → set it to: Amount → is greater than → 0 (this skips Apple Pay\'s $0 holding charges)',
-        'You\'ll add the "Get Contents of URL" action (next step) INSIDE the If block, above "Otherwise"',
+        'Already set this up before? DELETE any "If Amount > 0" filter you added — $0 pre-auths now become an "awaiting amount" item you complete in the app, so every transaction should be sent through',
       ],
       postActions: [
         'Tap Done in the top right',
@@ -136,7 +135,7 @@ const ShortcutSetupGuide: React.FC = () => {
         'Expenses auto-log as pending - review them in the Budget tab',
       ],
       isAutomation: true,
-      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. IMPORTANT: Apple Pay fires this trigger on the authorization event, which often arrives as a $0 pre-authorization hold (the real amount settles later on the bank side and does not re-fire the trigger). The "If Amount > 0" step above filters those out so they don\'t clutter your review queue. As a safety net, the server also automatically skips any $0 that slips through. The API accepts positive or negative amounts and handles common formats automatically: 50, -50, "$50.00", "-$50.00", "50,00", "1.234,56", and accounting notation "(50.00)". Both signs work correctly regardless of your iOS version or locale. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
+      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. Apple Pay fires this trigger on the authorization event, which often arrives as a $0 pre-authorization hold (the real amount settles later on the bank side and does not re-fire the trigger). LifeBalance now captures those: a $0 charge with a merchant becomes an "awaiting amount" item — next time you open the app you\'ll be prompted to enter the real total (or fill it in later from the Action Queue). So do NOT add an "If Amount > 0" filter; let every transaction through. The API accepts positive or negative amounts and handles common formats automatically: 50, -50, "$50.00", "-$50.00", "50,00", "1.234,56", and accounting notation "(50.00)". Both signs work correctly regardless of your iOS version or locale. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
     },
   ];
 

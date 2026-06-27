@@ -718,6 +718,25 @@ describe('transactionConverter', () => {
     expect(result.id).toBe('tx-3');
     expect(result.createdAt).toBeUndefined();
   });
+
+  it('Apple Pay $0 stub fields (needsAmount / needsAmountPromptedAt) round-trip', () => {
+    const stub = {
+      ...wellFormed,
+      amount: 0,
+      status: 'pending_review',
+      needsAmount: true,
+      needsAmountPromptedAt: '2024-01-15T11:00:00.000Z',
+    };
+    // fromFirestore preserves both via the spread
+    const read = transactionConverter.fromFirestore(fakeSnap('tx-4', stub));
+    expect(read.needsAmount).toBe(true);
+    expect(read.needsAmountPromptedAt).toBe('2024-01-15T11:00:00.000Z');
+    // toFirestore preserves both while stripping the synthetic id
+    const out = callToFirestore(transactionConverter, { ...stub, id: 'tx-4' });
+    expect(out['needsAmount']).toBe(true);
+    expect(out['needsAmountPromptedAt']).toBe('2024-01-15T11:00:00.000Z');
+    expect('id' in out).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

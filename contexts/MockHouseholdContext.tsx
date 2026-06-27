@@ -61,6 +61,11 @@ const SEED_TRANSACTIONS: Transaction[] = [
     status: 'verified', isRecurring: true, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
+  // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub. A
+  // pending_review transaction adds a "pending review" badge to the Money nav
+  // link (changing its accessible name) and the e2e smoke test matches the nav
+  // link by exact name "Money"; a stub here breaks that. The stub flow is
+  // covered by AwaitingAmountDrawer.test.tsx + the quickAdd function tests.
 ];
 
 const SEED_HABITS: Habit[] = [
@@ -805,6 +810,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransactionCategory: noOp,
     deleteTransaction,
     splitTransaction,
+    markNeedsAmountPrompted: async (ids: string[]) => {
+      const now = new Date().toISOString();
+      setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, needsAmountPromptedAt: now } : t));
+    },
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,

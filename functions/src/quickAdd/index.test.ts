@@ -525,7 +525,7 @@ describe("quickAddExpense", () => {
     expect(res.body).toMatchObject({ data: { amount: 50 } });
   });
 
-  it("zero-dollar hold returns 200 skipped:true and does NOT add a transaction", async () => {
+  it("zero-dollar hold WITH a merchant creates an awaiting-amount stub (needsAmount:true, amount 0, pending_review)", async () => {
     const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
     collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
     configureCollections();
@@ -535,10 +535,45 @@ describe("quickAddExpense", () => {
       res
     );
     expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      data: { amount: 0, status: "pending_review" },
+    });
+    expect(add).toHaveBeenCalledTimes(1);
+    const txData = add.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(txData.amount).toBe(0);
+    expect(txData.needsAmount).toBe(true);
+    expect(txData.status).toBe("pending_review");
+    expect(txData.source).toBe("shortcut");
+    expect(txData.merchant).toBe("Gas");
+    expect(logAddMock).toHaveBeenCalled();
+  });
+
+  it("zero-dollar hold with NO merchant still skips (no transaction, skipped:true)", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(makeReq({ body: { amount: 0 } }), res);
+    expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ success: true, skipped: true });
     expect(add).not.toHaveBeenCalled();
     // logApiCall still fires for the skipped event.
     expect(logAddMock).toHaveBeenCalled();
+  });
+
+  it("zero-dollar hold with a blank/whitespace merchant still skips", async () => {
+    const add = vi.fn(() => Promise.resolve({ id: "tx1" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = { add };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 0, merchant: "   " } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ success: true, skipped: true });
+    expect(add).not.toHaveBeenCalled();
   });
 
   it("missing merchant returns 400", async () => {

@@ -128,6 +128,16 @@ export interface Transaction {
   accountId?: string;
   notes?: string;
   createdAt?: string; // ISO timestamp
+  /** Apple Pay $0 pre-authorization stub (created by the quickAddExpense Cloud
+   *  Function): the merchant + date are known but the real charge amount is not
+   *  yet entered, so `amount` is a placeholder 0. Cleared (set false) once the
+   *  user supplies the amount during review. Absent on normal transactions. */
+  needsAmount?: boolean;
+  /** ISO timestamp set the first time the on-open "awaiting amount" drawer
+   *  surfaces this stub. Its presence suppresses future auto-pop (so a dismissed
+   *  stub lives only in the Action Queue). Stored on the shared transaction doc
+   *  so the suppression is cross-device. */
+  needsAmountPromptedAt?: string;
 }
 
 export interface CalendarItem {

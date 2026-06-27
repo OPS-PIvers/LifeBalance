@@ -361,31 +361,31 @@ export const quickAddExpense = onRequest(
     // Expenses are always stored as positive numbers; the sign carries no meaning here.
     amount = Math.abs(amount);
 
-    // Skip zero-dollar holds. Apple Pay's "Transaction" automation trigger fires on the
-    // authorization event, which for many cards/merchants (gas, hotels, tipped purchases)
-    // comes through as a $0 pre-authorization hold. The real amount settles later on the
-    // bank side and does NOT re-fire the on-device trigger, so a $0 here is never the final
-    // amount — it would just clutter the review queue. We drop it without creating a
-    // transaction, but still log the event (Cloud Logging + api_calls) so it's possible to
-    // see how often these holds occur. Returns 200 so the iOS shortcut doesn't show an error.
-    if (amount === 0) {
-      // Truncate before logging: merchant length validation runs later in this
-      // function, so guard against an oversized string bloating the log here.
-      const merchantLabel =
-        typeof merchant === "string" && merchant.trim()
-          ? merchant.trim().substring(0, 100)
-          : "unknown merchant";
+    // Apple Pay's "Transaction" automation trigger fires on the authorization event,
+    // which for many cards/merchants (gas, hotels, tipped purchases) comes through as a
+    // $0 pre-authorization hold. The real amount settles later on the bank side and does
+    // NOT re-fire the on-device trigger. Rather than dropping the event, we create an
+    // "awaiting amount" stub transaction (amount 0, needsAmount:true) so the user can fill
+    // in the real amount during review — provided we have a merchant to identify it by.
+    // If there is no usable merchant a blank stub is useless, so we still skip it (but log
+    // the event so it's possible to see how often these holds occur). Returns 200 either
+    // way so the iOS shortcut doesn't show an error.
+    const hasMerchant =
+      typeof merchant === "string" && merchant.trim().length > 0;
+    if (amount === 0 && !hasMerchant) {
       logger.info(
-        `Skipped zero-dollar Apple Pay hold for household ${householdId} at ${merchantLabel}`
+        `Skipped merchant-less zero-dollar Apple Pay hold for household ${householdId}`
       );
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
       jsonResponse(res, 200, {
         success: true,
         skipped: true,
-        message: "Skipped zero-dollar hold (Apple Pay pre-authorization, not a real charge)",
+        message: "Skipped zero-dollar hold with no merchant (Apple Pay pre-authorization)",
       });
       return;
     }
+    // A $0 WITH a merchant falls through to the normal validation + write path
+    // below and is persisted as a needsAmount stub (see transactionData).
 
     // Security: Input validation & sanitization
     if (!merchant || typeof merchant !== "string") {
@@ -446,6 +446,9 @@ export const quickAddExpense = onRequest(
         payPeriodId,
         notes: notes || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Apple Pay $0 pre-auth stub: flags the review UI that the real amount
+        // still needs to be entered. Omitted for normal (amount > 0) expenses.
+        ...(amount === 0 ? { needsAmount: true } : {}),
       };
 
       const transactionRef = await db
@@ -457,10 +460,14 @@ export const quickAddExpense = onRequest(
       // 7. Log API call
       await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
 
-      // 8. Return success
+      // 8. Return success. A $0 stub reads as "awaiting amount" rather than
+      //    "$0.00" so the iOS notification isn't misleading.
       jsonResponse(res, 200, {
         success: true,
-        message: `Expense added: ${formatCurrency(amount, { currency })} at ${merchant} (pending review)`,
+        message:
+          amount === 0
+            ? `Awaiting amount: ${merchant} (added for review)`
+            : `Expense added: ${formatCurrency(amount, { currency })} at ${merchant} (pending review)`,
         data: {
           transactionId: transactionRef.id,
           amount,

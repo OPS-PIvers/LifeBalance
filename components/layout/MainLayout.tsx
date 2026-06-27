@@ -1,14 +1,21 @@
-import React, { Suspense, lazy, useMemo } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import TopToolbar from './TopToolbar';
 import BottomNav from './BottomNav';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { LazyMount } from '@/components/ui/LazyMount';
+import { preloadOnIdle } from '@/utils/preloadOnIdle';
+import { useHouseholdCore, useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
 // Lazy so the kid view (Plan 080b) stays out of the always-mounted boot bundle —
 // it only loads when a parent actually switches into a kid.
 const KidDashboard = lazy(() => import('@/components/kid/KidDashboard'));
+
+// Lazy (+ idle preload) so the Drawer/framer-motion stay out of the boot bundle.
+// Surfaced on app-open when there are Apple Pay $0 "awaiting amount" stubs.
+const loadAwaitingAmountDrawer = () => import('@/components/modals/AwaitingAmountDrawer');
+const AwaitingAmountDrawer = lazy(loadAwaitingAmountDrawer);
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -17,7 +24,35 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
   const { pathname } = useLocation();
   const { members, activeMemberId, isLoading } = useHouseholdCore();
+  const { transactions } = useFinance();
   const kidModeEnabled = useKidModeEnabled();
+
+  // Apple Pay $0 "awaiting amount" stubs that haven't been surfaced yet.
+  // Hooks are declared unconditionally (above the Kid-Mode early returns) to
+  // satisfy rules-of-hooks; the drawer itself only renders in the normal shell.
+  const awaitingAmountStubs = useMemo(
+    () =>
+      transactions.filter(
+        (t) => t.status === 'pending_review' && t.needsAmount === true && !t.needsAmountPromptedAt,
+      ),
+    [transactions],
+  );
+  // Once-per-app-open: snapshot the stubs and auto-open the cycling drawer.
+  const [hasAutoOpenedAwaiting, setHasAutoOpenedAwaiting] = useState(false);
+  const [awaitingDrawerOpen, setAwaitingDrawerOpen] = useState(false);
+  const [awaitingOpenStubs, setAwaitingOpenStubs] = useState<typeof transactions>([]);
+
+  useEffect(() => preloadOnIdle(loadAwaitingAmountDrawer), []);
+
+  // Decide the once-per-app-open trigger during render (guarded
+  // set-state-during-render — the documented React pattern, same as LazyMount —
+  // to avoid a setState-in-effect cascade). The drawer stamps
+  // `needsAmountPromptedAt` on these stubs so they never auto-pop again.
+  if (!isLoading && !hasAutoOpenedAwaiting && awaitingAmountStubs.length > 0) {
+    setHasAutoOpenedAwaiting(true);
+    setAwaitingOpenStubs(awaitingAmountStubs); // snapshot so the cycle is stable
+    setAwaitingDrawerOpen(true);
+  }
 
   // Active managed kid → Kid Mode. Validated against the live members list so a
   // stale sessionStorage value (e.g. a removed kid, or the flag turned off) falls
@@ -72,6 +107,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       <div className="flex-none z-20">
         <BottomNav />
       </div>
+
+      {/* Apple Pay $0 "awaiting amount" cycler — lazy so Drawer/framer-motion
+          stay out of the boot bundle. Opens once per app-open when stubs exist. */}
+      <LazyMount when={awaitingDrawerOpen}>
+        <AwaitingAmountDrawer
+          stubs={awaitingOpenStubs}
+          isOpen={awaitingDrawerOpen}
+          onClose={() => setAwaitingDrawerOpen(false)}
+        />
+      </LazyMount>
     </div>
   );
 };

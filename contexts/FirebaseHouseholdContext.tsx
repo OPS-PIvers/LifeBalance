@@ -263,6 +263,10 @@ export interface HouseholdContextType {
   updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
+  /** Stamp `needsAmountPromptedAt` on Apple Pay $0 stubs so the on-open
+   *  "awaiting amount" drawer won't auto-surface them again (they remain in the
+   *  Action Queue until resolved). Batched single write per id. */
+  markNeedsAmountPrompted: (ids: string[]) => Promise<void>;
 
   // Habit Actions
   addHabit: (habit: Habit) => Promise<string>;
@@ -400,6 +404,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
   | 'addTransaction' | 'updateTransactionCategory' | 'updateTransaction' | 'deleteTransaction' | 'splitTransaction'
+  | 'markNeedsAmountPrompted'
 >;
 
 export type GamificationContextValue = Pick<HouseholdContextType,
@@ -2693,6 +2698,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, transactions, householdSettings, accounts]);
 
+  // Mark Apple Pay $0 stubs as already prompted (so the on-open awaiting-amount
+  // drawer won't re-surface them). Fire-and-forget per id via a single batch;
+  // failures are non-fatal (worst case the drawer re-pops once next open).
+  const markNeedsAmountPrompted = useCallback(async (ids: string[]) => {
+    if (!householdId || ids.length === 0) return;
+    try {
+      const batch = writeBatch(db);
+      const now = new Date().toISOString();
+      for (const id of ids) {
+        batch.update(doc(db, `households/${householdId}/transactions`, id), {
+          needsAmountPromptedAt: now,
+        });
+      }
+      await batch.commit();
+    } catch (error) {
+      console.error('[markNeedsAmountPrompted] Failed:', error);
+    }
+  }, [householdId]);
+
   const deleteTransaction = useCallback(async (id: string) => {
     if (!householdId) return;
 
@@ -4236,6 +4260,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateTransaction,
     deleteTransaction,
     splitTransaction,
+    markNeedsAmountPrompted,
   }), [
     safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
@@ -4244,6 +4269,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
+    markNeedsAmountPrompted,
   ]);
 
   const gamificationValue = useMemo<GamificationContextValue>(() => ({
