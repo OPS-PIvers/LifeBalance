@@ -18,19 +18,16 @@ const SWIPE_COLORS = {
 interface ShoppingItemRowProps {
   item: ShoppingItem;
   stores?: StoreType[];
-  quickStockLists?: QuickStockList[];
   activeQuickList?: QuickStockList;
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onEdit: (item: ShoppingItem) => void;
-  onUpdate?: (item: ShoppingItem) => void;
-  onQuickListChange?: (item: ShoppingItem, newListId: string) => void;
   isReorderable?: boolean;
   onReorderDragStart?: () => void;
   onReorderDragEnd?: () => void;
 }
 
-const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, quickStockLists, activeQuickList, onCheck, onDelete, onEdit, onUpdate, onQuickListChange, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
+const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores, activeQuickList, onCheck, onDelete, onEdit, isReorderable = true, onReorderDragStart, onReorderDragEnd }) => {
   const dragControls = useDragControls();
   const x = useMotionValue(0);
   const reduceMotion = useReducedMotion();
@@ -87,6 +84,17 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
     ? (TEMPLATE_ICONS.find(i => i.id === activeQuickList.icon)?.icon || ShoppingBag)
     : ShoppingBag;
 
+  // Resolve store/quick-list tint once (read-only display; editing lives in the drawer).
+  // Match case-insensitively so the tint resolves even with casing drift (e.g. "Costco" vs "costco").
+  const storeName = item.store?.toLowerCase();
+  const storeObj = storeName && stores ? stores.find(s => s.name.toLowerCase() === storeName) : undefined;
+  const storeColor = STORE_COLORS[storeObj?.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!;
+  const listColor = activeQuickList
+    ? (STORE_COLORS[activeQuickList.color || DEFAULT_STORE_COLOR] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!)
+    : null;
+
+  const hasMeta = Boolean(item.quantity || item.store || activeQuickList);
+
   const Content = (
     <>
       {/* Background Layer for Swipe Actions */}
@@ -120,7 +128,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onDragEnd={reduceMotion ? undefined : handleDragEnd}
         style={{ x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-4 p-4 bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+          "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
         )}
       >
@@ -152,10 +160,10 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
                         e.preventDefault();
                     }
                 }}
-                className="touch-none cursor-grab active:cursor-grabbing p-1 text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+                className="touch-none cursor-grab active:cursor-grabbing -ml-1 p-1 text-brand-300 hover:text-brand-600 dark:text-brand-600 dark:hover:text-brand-300 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm shrink-0"
                 aria-label={`Drag to reorder ${item.name}`}
             >
-                <GripVertical size={20} />
+                <GripVertical size={16} />
             </div>
         )}
 
@@ -164,119 +172,66 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             onClick={handleCheck}
             aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
             className={clsx(
-                "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
                 item.isPurchased
                     ? "bg-money-pos border-money-pos text-white"
                     : "border-brand-300 hover:border-accent-500 text-transparent dark:border-brand-600 dark:hover:border-accent-400"
             )}
         >
-            <Check size={14} strokeWidth={3} />
+            <Check size={12} strokeWidth={3} />
         </button>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
+        {/* Content — tap opens the edit drawer where store / quick-list / delete live. */}
+        <button
+            type="button"
+            onClick={() => onEdit(item)}
+            className="flex-1 min-w-0 text-left focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 rounded-sm"
+            aria-label={`Edit ${item.name}`}
+        >
             <div className={clsx(
-                "font-medium break-words transition-colors",
+                "text-sm font-medium truncate transition-colors",
                 item.isPurchased ? "text-brand-500 dark:text-brand-400 line-through decoration-brand-400 dark:decoration-brand-600" : "text-brand-900 dark:text-brand-50"
             )}>
                 {item.name}
             </div>
 
-            {/* Metadata Chips */}
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-                 {item.quantity && (
-                    <span className="text-xs text-brand-500 bg-brand-100 dark:bg-brand-700/50 dark:text-brand-300 px-2 py-1.5 rounded-full font-medium">
-                        {item.quantity}
-                    </span>
-                 )}
-                 <div className="relative group">
-                    <span className={clsx(
-                        "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
-                        // Focus ring logic for accessibility (when hidden select is focused)
-                        "group-focus-within:ring-2 group-focus-within:ring-accent-500/40 group-focus-within:ring-offset-1",
-                        item.store && stores
-                            ? (() => {
-                                const storeObj = stores.find(s => s.name === item.store);
-                                const colorKey = storeObj?.color || DEFAULT_STORE_COLOR;
-                                const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
-                                return `${color.bg} ${color.text} ${color.border}`;
-                            })()
-                            : "bg-brand-100 text-brand-500 border-brand-200 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600"
-                    )}>
-                        <Store size={10} />
-                        {item.store || "No store selected"}
-                    </span>
-                    {stores && onUpdate && (
-                        <select
-                            value={item.store || ""}
-                            onChange={(e) => {
-                                const newStore = e.target.value;
-                                onUpdate({ ...item, store: newStore || undefined });
-                            }}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                            aria-label="Select store"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <option value="">No store selected</option>
-                            {stores.map(s => (
-                                <option key={s.id} value={s.name}>{s.name}</option>
-                            ))}
-                        </select>
+            {/* Compact read-only metadata — only rendered when present */}
+            {hasMeta && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    {item.quantity && (
+                        <span className="text-xxs font-medium text-brand-500 dark:text-brand-400">
+                            {item.quantity}
+                        </span>
                     )}
-                 </div>
-
-                 {/* Quick List Chip */}
-                 {quickStockLists && onQuickListChange && (
-                   <div className="relative group">
-                      <span className={clsx(
-                          "flex items-center gap-1 text-xs px-2 py-1.5 rounded-full border whitespace-nowrap transition-colors relative z-0",
-                          "group-focus-within:ring-2 group-focus-within:ring-accent-500/40 group-focus-within:ring-offset-1",
-                          activeQuickList
-                              ? (() => {
-                                  const colorKey = activeQuickList.color || DEFAULT_STORE_COLOR;
-                                  const color = STORE_COLORS[colorKey] ?? STORE_COLORS[DEFAULT_STORE_COLOR]!; // DEFAULT_STORE_COLOR is always present
-                                  return `${color.bg} ${color.text} ${color.border}`;
-                              })()
-                              : "bg-brand-50 text-brand-400 border-brand-200 border-dashed hover:bg-brand-100 hover:border-brand-300 dark:bg-brand-700/40 dark:text-brand-500 dark:border-brand-600 dark:hover:bg-brand-700/60"
-                      )}>
-                          <ActiveIcon size={10} />
-                          {activeQuickList ? activeQuickList.name : "Add to Quick List"}
-                      </span>
-                      <select
-                          value={activeQuickList ? activeQuickList.id : ""}
-                          onChange={(e) => {
-                              onQuickListChange(item, e.target.value);
-                          }}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          aria-label="Select Quick List"
-                          onClick={(e) => e.stopPropagation()}
-                      >
-                          <option value="">{activeQuickList ? "Remove from List" : "Add to Quick List"}</option>
-                          {quickStockLists.map(list => (
-                              <option key={list.id} value={list.id}>{list.name}</option>
-                          ))}
-                      </select>
-                   </div>
-                 )}
-            </div>
-        </div>
+                    {item.store && (
+                        <span className={clsx(
+                            "flex items-center gap-1 text-xxs px-1.5 py-0.5 rounded-full border whitespace-nowrap",
+                            storeColor.bg, storeColor.text, storeColor.border
+                        )}>
+                            <Store size={9} />
+                            {item.store}
+                        </span>
+                    )}
+                    {activeQuickList && listColor && (
+                        <span className={clsx(
+                            "flex items-center gap-1 text-xxs px-1.5 py-0.5 rounded-full border whitespace-nowrap",
+                            listColor.bg, listColor.text, listColor.border
+                        )}>
+                            <ActiveIcon size={9} />
+                            {activeQuickList.name}
+                        </span>
+                    )}
+                </div>
+            )}
+        </button>
 
         {/* Edit Action */}
         <button
             onClick={() => onEdit(item)}
-            className="p-3.5 text-brand-300 hover:text-brand-600 rounded-full hover:bg-brand-100 transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+            className="shrink-0 p-2 text-brand-300 hover:text-brand-600 rounded-full hover:bg-brand-100 transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
             aria-label={`Edit ${item.name}`}
         >
-            <Edit2 size={18} />
-        </button>
-
-        {/* Delete Action — keyboard/non-touch alternative to swipe-left */}
-        <button
-            onClick={() => { haptic('medium'); onDelete(item); }}
-            className="p-3.5 text-brand-300 hover:text-money-neg rounded-full hover:bg-money-bgNeg transition-colors dark:text-brand-600 dark:hover:text-money-neg dark:hover:bg-money-neg/10"
-            aria-label={`Delete ${item.name}`}
-        >
-            <Trash2 size={18} />
+            <Edit2 size={16} />
         </button>
 
       </motion.div>
@@ -328,10 +283,7 @@ const arePropsEqual = (prev: ShoppingItemRowProps, next: ShoppingItemRowProps) =
          prev.onDelete === next.onDelete &&
          prev.onEdit === next.onEdit &&
          prev.stores === next.stores &&
-         prev.quickStockLists === next.quickStockLists &&
          prev.activeQuickList === next.activeQuickList &&
-         prev.onUpdate === next.onUpdate &&
-         prev.onQuickListChange === next.onQuickListChange &&
          prev.isReorderable === next.isReorderable &&
          prev.onReorderDragStart === next.onReorderDragStart &&
          prev.onReorderDragEnd === next.onReorderDragEnd;

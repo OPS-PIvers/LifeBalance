@@ -396,10 +396,6 @@ const ShoppingListTab: React.FC = () => {
         deleteShoppingItem(item.id);
     }, [deleteShoppingItem]);
 
-    const handleUpdateItem = useCallback((item: ShoppingItem) => {
-        updateShoppingItem(item);
-    }, [updateShoppingItem]);
-
     const handleQuickListChange = useCallback(async (item: ShoppingItem, newListId: string) => {
         if (!householdId) return;
 
@@ -624,13 +620,10 @@ const ShoppingListTab: React.FC = () => {
                         key={item.id}
                         item={item}
                         stores={stores}
-                        quickStockLists={quickStockLists}
                         activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
-                        onUpdate={handleUpdateItem}
-                        onQuickListChange={handleQuickListChange}
                         isReorderable={false}
                     />
                 ))}
@@ -642,13 +635,10 @@ const ShoppingListTab: React.FC = () => {
                         key={item.id}
                         item={item}
                         stores={stores}
-                        quickStockLists={quickStockLists}
                         activeQuickList={itemQuickListMap.get(item.name.toLowerCase())}
                         onCheck={handleCheck}
                         onDelete={handleDelete}
                         onEdit={setEditingItem}
-                        onUpdate={handleUpdateItem}
-                        onQuickListChange={handleQuickListChange}
                         onReorderDragStart={handleReorderDragStart}
                         onReorderDragEnd={handleReorderDragEnd}
                     />
@@ -677,8 +667,15 @@ const ShoppingListTab: React.FC = () => {
               item={editingItem}
               onChange={setEditingItem}
               onSave={handleSaveEdit}
+              onDelete={() => {
+                deleteShoppingItem(editingItem.id);
+                setEditingItem(null);
+              }}
               stores={stores}
               categories={categories}
+              quickStockLists={quickStockLists}
+              activeQuickList={itemQuickListMap.get(editingItem.name.toLowerCase())}
+              onQuickListChange={handleQuickListChange}
             />
           );
 
