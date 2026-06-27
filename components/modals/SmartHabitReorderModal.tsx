@@ -1,8 +1,7 @@
-import React, { useEffect, useId, useRef, useState, useMemo } from 'react';
-import { Sparkles, X, Check, Loader, AlertTriangle, ListOrdered, ArrowRight } from 'lucide-react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
+import { Sparkles, Check, Loader, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Modal } from '@/components/ui/Modal';
-import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
 import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';
 
@@ -14,7 +13,6 @@ interface SmartHabitReorderModalProps {
 const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen, onClose }) => {
   const { habits, reorderHabits } = useGamification();
   const { householdId } = useHouseholdCore();
-  const titleId = useId();
   const [plan, setPlan] = useState<HabitReorganizationPlan | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,36 +106,14 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
   }, [habits, plan]);
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-2xl"
-      ariaLabelledBy={titleId}
+      noPadding
+      title="Smart Reorder"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-warm-200 dark:border-warm-800/60 bg-warm-50 dark:bg-warm-900/20 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-brand-800 rounded-xl text-warm-700 dark:text-warm-300 border border-warm-200 dark:border-warm-800/60">
-            <ListOrdered size={20} />
-          </div>
-          <div>
-            <h2 id={titleId} className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">Smart Reorder</h2>
-            <p className="text-xs text-warm-700 dark:text-warm-300 font-medium">AI-powered organization</p>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-warm-500 dark:text-warm-300 hover:bg-white/60 dark:hover:bg-brand-700/50 hover:text-warm-700 dark:hover:text-warm-300"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={20} />
-        </Button>
-      </div>
-
       {/* Content */}
-      <div className="p-6 scroll-contain-y max-h-[70vh]">
+      <div className="p-6">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Loader size={32} className="text-warm-700 dark:text-warm-300 animate-spin mb-4" />
@@ -206,7 +182,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
 
       {/* Footer */}
       {plan && !isLoading && (
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 rounded-b-card flex gap-3">
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 flex gap-3">
           <button
             onClick={onClose}
             className="flex-1 py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-xl transition-colors"
@@ -222,7 +198,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
           </button>
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 };
 

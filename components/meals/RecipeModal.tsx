@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Meal, MealPlanItem } from '@/types/schema';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2 } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
@@ -49,34 +49,36 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   const isCooked = planItem?.isCooked;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl" ariaLabelledBy="recipe-modal-title">
-      <div className="flex flex-col h-full max-h-[85vh]">
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 z-10 flex justify-between items-start shrink-0">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              {isCooked && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-money-bgPos text-money-pos text-xs font-bold border border-money-pos/20 dark:bg-money-pos/15 dark:text-money-pos dark:border-money-pos/25">
-                  <CheckCircle2 size={12} /> Cooked
-                </span>
-              )}
-              {meal.tags?.map(tag => (
-                <span key={tag} className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-500 text-xs font-medium border border-brand-200 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600">
-                  {tag}
-                </span>
-              ))}
-            </div>
-            <h3 id="recipe-modal-title" className="text-xl font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug">
-              {meal.name}
-            </h3>
-            {meal.description && (
-              <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 leading-relaxed">{meal.description}</p>
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      noPadding
+      ariaLabel={meal.name}
+      header={
+        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {isCooked && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-money-bgPos text-money-pos text-xs font-bold border border-money-pos/20 dark:bg-money-pos/15 dark:text-money-pos dark:border-money-pos/25">
+                <CheckCircle2 size={12} /> Cooked
+              </span>
             )}
+            {meal.tags?.map(tag => (
+              <span key={tag} className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-500 text-xs font-medium border border-brand-200 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600">
+                {tag}
+              </span>
+            ))}
           </div>
+          <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-100 tracking-tight leading-snug">
+            {meal.name}
+          </h3>
+          {meal.description && (
+            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 leading-relaxed">{meal.description}</p>
+          )}
         </div>
-
-        {/* Content */}
-        <div className="flex-1 scroll-contain-y p-6 space-y-8 bg-brand-50 dark:bg-brand-900/30">
+      }
+    >
+        {/* Content (single Drawer scroll container) */}
+        <div className="p-6 space-y-8 bg-brand-50 dark:bg-brand-900/30">
 
           {/* Ingredients */}
           {meal.ingredients && meal.ingredients.length > 0 && (
@@ -168,8 +170,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 shrink-0 flex gap-3">
+        {/* Footer (flows after content) */}
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">
           <Button variant="ghost" onClick={onClose} className="flex-1">
             Close
           </Button>
@@ -189,7 +191,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
              </div>
           )}
         </div>
-      </div>
-    </Modal>
+    </Drawer>
   );
 };

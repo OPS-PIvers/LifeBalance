@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { X, Plus, Pencil, Trash2, Check, Inbox } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { RewardItem, HouseholdMember, RewardRedemption } from '@/types/schema';
@@ -388,36 +388,35 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, totalPoints, redeemReward } = useGamification();
   const { members, household } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
-  const titleId = useId();
 
   const kids = members.filter((m) => m.role === 'kid');
   const pendingRedemptions = household?.pendingRedemptions ?? [];
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-lg"
+      noPadding
       className="bg-brand-50 dark:bg-brand-900"
-      ariaLabelledBy={titleId}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 bg-brand-800 dark:bg-brand-900 border-b border-brand-700 text-white shrink-0">
-        <div>
-          <h2 id={titleId} className="font-display text-xl font-semibold">Rewards Store</h2>
-          <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
+      ariaLabel="Rewards Store"
+      header={
+        <div className="flex items-center justify-between px-6 py-4 bg-brand-800 dark:bg-brand-900 border-b border-brand-700 text-white">
+          <div>
+            <h2 className="font-display text-xl font-semibold">Rewards Store</h2>
+            <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
+            aria-label="Close modal"
+          >
+            <X size={20} />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
-          aria-label="Close modal"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
+      }
+    >
       {/* Grid */}
-      <div className="p-6 scroll-contain-y grid grid-cols-2 gap-4">
+      <div className="p-6 grid grid-cols-2 gap-4">
           {rewardsInventory.map(reward => {
             const canAfford = totalPoints >= reward.cost;
 
@@ -463,7 +462,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       {/* Plan 080d — parent-facing reward management. Dormant: only shown when
           Kid Mode is enabled; otherwise the modal is the read-only store above. */}
       {kidModeEnabled && <RewardManagementPanel kids={kids} />}
-    </Modal>
+    </Drawer>
   );
 };
 
