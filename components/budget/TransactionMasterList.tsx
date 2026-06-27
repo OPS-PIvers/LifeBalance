@@ -8,7 +8,6 @@ import EditTransactionModal from '@/components/modals/EditTransactionModal';
 import SplitTransactionModal from '@/components/modals/SplitTransactionModal';
 import BatchCategorizeModal from '@/components/modals/BatchCategorizeModal';
 import { CaptureTransactionManual } from '@/components/modals/CaptureTransactionManual';
-import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
@@ -694,46 +693,20 @@ const TransactionMasterList: React.FC = () => {
       />
 
       {/* Batch Delete Confirmation */}
-      {showBatchDeleteConfirm && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isBatchProcessing && setShowBatchDeleteConfirm(false)}
-          disableBackdropClose={isBatchProcessing}
-          ariaLabelledBy="batch-delete-title"
-        >
-          <div className="p-4 space-y-4">
-            <h3 id="batch-delete-title" className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Batch Delete</h3>
-            <p className="text-brand-600 dark:text-brand-300">
-              Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions?
-            </p>
-            <p className="text-sm text-money-neg font-bold">
-              This action cannot be undone.
-            </p>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="subtle"
-                size="lg"
-                onClick={() => setShowBatchDeleteConfirm(false)}
-                disabled={isBatchProcessing}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="lg"
-                onClick={handleBatchDelete}
-                disabled={isBatchProcessing}
-                className="flex-1"
-                leftIcon={isBatchProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-              >
-                <span>Delete All</span>
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        onClose={() => { if (!isBatchProcessing) setShowBatchDeleteConfirm(false); }}
+        onConfirm={handleBatchDelete}
+        title="Batch Delete"
+        message={
+          <>
+            Are you sure you want to delete <strong>{selectedIds.size}</strong> transactions? This action cannot be undone.
+          </>
+        }
+        confirmLabel="Delete All"
+        confirmVariant="destructive"
+        isConfirming={isBatchProcessing}
+      />
 
       {/* Batch Verify Confirmation */}
       <ConfirmDialog
@@ -769,46 +742,23 @@ const TransactionMasterList: React.FC = () => {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {transactionToDelete && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isDeleting && setTransactionToDelete(null)}
-          disableBackdropClose={isDeleting}
-        >
-          <div className="p-4 space-y-4">
-            <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Confirm Delete</h3>
-            <p className="text-brand-600 dark:text-brand-300">
-              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>?
-            </p>
-            <p className="text-sm text-money-neg font-bold">
-              This action cannot be undone.
-            </p>
-
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="subtle"
-                size="lg"
-                onClick={() => setTransactionToDelete(null)}
-                disabled={isDeleting}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                size="lg"
-                onClick={confirmDelete}
-                disabled={isDeleting}
-                className="flex-1"
-                leftIcon={isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 size={18} />}
-              >
-                <span>Delete</span>
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={!!transactionToDelete}
+        onClose={() => { if (!isDeleting) setTransactionToDelete(null); }}
+        onConfirm={confirmDelete}
+        title="Confirm Delete"
+        message={
+          transactionToDelete ? (
+            <>
+              Are you sure you want to delete the transaction from <strong>{transactionToDelete.merchant}</strong> for <strong>{fmt(transactionToDelete.amount)}</strong>? This action cannot be undone.
+            </>
+          ) : null
+        }
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        isConfirming={isDeleting}
+      />
 
       {/* Mobile Actions Drawer */}
       <Drawer

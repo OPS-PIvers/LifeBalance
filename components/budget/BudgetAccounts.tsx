@@ -2,10 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, X, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
+import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
 import { Account } from '@/types/schema';
 import { sumMoney, subtractMoney } from '@/utils/money';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
@@ -499,55 +499,17 @@ const BudgetAccounts: React.FC = () => {
         </div>
       </Drawer>
 
-      {/* Delete Confirmation Modal */}
-      {deletingId && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isDeleting && setDeletingId(null)}
-          disableBackdropClose={isDeleting}
-          ariaLabelledBy="delete-account-title"
-          ariaDescribedBy="delete-account-desc"
-        >
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 id="delete-account-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100">Delete Account?</h3>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => !isDeleting && setDeletingId(null)}
-                className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
-                aria-label="Close"
-                disabled={isDeleting}
-              >
-                <X size={20} />
-              </Button>
-            </div>
-            <p id="delete-account-desc" className="text-sm text-brand-500 dark:text-brand-400 mb-6">
-              Are you sure you want to delete this account? This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingId(null)}
-                className="flex-1 py-3"
-                disabled={isDeleting}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleDeleteAccount}
-                className="flex-1 py-3"
-                disabled={isDeleting}
-                isLoading={isDeleting}
-                leftIcon={!isDeleting ? <Trash2 size={18} /> : undefined}
-              >
-                Delete
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        isOpen={!!deletingId}
+        onClose={() => { if (!isDeleting) setDeletingId(null); }}
+        onConfirm={handleDeleteAccount}
+        title="Delete Account?"
+        message="Are you sure you want to delete this account? This action cannot be undone."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        isConfirming={isDeleting}
+      />
     </div>
   );
 };
