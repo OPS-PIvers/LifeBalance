@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
@@ -9,6 +9,7 @@ import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays, format } from 'date-fns';
 import { haptic } from '@/utils/haptics';
@@ -29,18 +30,8 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [focusedMenuIndex, setFocusedMenuIndex] = useState(0);
   const isDesktop = useMediaQuery('(min-width: 640px)');
-  const firstMenuItemRef = useRef<HTMLButtonElement>(null);
-  const menuTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Move focus to the first menu item when the desktop menu opens
-  useEffect(() => {
-    if (isMenuOpen && isDesktop && firstMenuItemRef.current) {
-      firstMenuItemRef.current.focus();
-    }
-  }, [isMenuOpen, isDesktop]);
-  
   // Logic helpers
   const isPositive = habit.type === 'positive';
   const isActive = habit.count > 0;
@@ -113,40 +104,26 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
     setIsMenuOpen(false);
   };
 
-  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
-    const menuItems = isEligibleForRepair ? 4 : 3; // Edit, View Log, (Repair), Delete
-    
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setFocusedMenuIndex((prev) => (prev + 1) % menuItems);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setFocusedMenuIndex((prev) => (prev - 1 + menuItems) % menuItems);
-        break;
-      case 'Escape':
-        e.preventDefault();
-        setIsMenuOpen(false);
-        menuTriggerRef.current?.focus();
-        break;
-      case 'Enter':
-      case ' ':
-        e.preventDefault();
-        // Trigger the focused menu item
-        if (focusedMenuIndex === 0) {
-          handleEdit();
-        } else if (focusedMenuIndex === 1) {
-          handleViewLog();
-        } else if (isEligibleForRepair && focusedMenuIndex === 2) {
-          consumeFreezeBankToken(habit.id, yesterday);
-          setIsMenuOpen(false);
-        } else if ((isEligibleForRepair && focusedMenuIndex === 3) || (!isEligibleForRepair && focusedMenuIndex === 2)) {
-          handleDelete();
-        }
-        break;
-    }
-  };
+  // Shared action set for the desktop dropdown (Menu) and mobile Drawer.
+  const menuItems: MenuItem[] = [
+    { key: 'edit', label: 'Edit', icon: <Edit2 size={14} />, onSelect: handleEdit },
+    { key: 'log', label: 'View Log', icon: <Calendar size={14} />, onSelect: handleViewLog },
+    ...(isEligibleForRepair
+      ? [
+          {
+            key: 'repair',
+            label: `Repair Streak (${freezeBank?.tokens})`,
+            icon: <Wrench size={14} />,
+            tone: 'info' as const,
+            onSelect: () => {
+              consumeFreezeBankToken(habit.id, yesterday);
+              setIsMenuOpen(false);
+            },
+          },
+        ]
+      : []),
+    { key: 'delete', label: 'Delete', icon: <Trash2 size={14} />, tone: 'danger', onSelect: handleDelete },
+  ];
 
   return (
     <>
@@ -230,11 +207,9 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                 </div>
               )}
               <button
-                ref={menuTriggerRef}
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsMenuOpen(!isMenuOpen);
-                  setFocusedMenuIndex(0); // Reset focus to first item
                 }}
                 className="p-1 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
                 aria-label="Habit options menu"
@@ -287,90 +262,16 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
           </div>
         </div>
 
-        {/* Menu Dropdown (Desktop Only) */}
-        {isMenuOpen && isDesktop && (
-          <>
-            <div
-              className="fixed inset-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMenuOpen(false);
-                menuTriggerRef.current?.focus();
-              }}
-              aria-hidden="true"
-              style={{ zIndex: 10 }}
-            />
-            <div
-              className="absolute top-10 right-2 surface-section shadow-raised py-1 min-w-[140px] animate-in fade-in zoom-in-95 duration-(--duration-fast)"
-              role="menu"
-              aria-orientation="vertical"
-              aria-label="Habit actions menu"
-              onKeyDown={handleMenuKeyDown}
-              style={{ zIndex: 20 }}
-            >
-              <button
-                ref={firstMenuItemRef}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEdit();
-                }}
-                className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/40 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-1",
-                  focusedMenuIndex === 0 && "bg-warm-50 dark:bg-warm-900/20"
-                )}
-                role="menuitem"
-                tabIndex={-1}
-              >
-                <Edit2 size={14} /> Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleViewLog();
-                }}
-                className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-brand-700 dark:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/40 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-1",
-                  focusedMenuIndex === 1 && "bg-warm-50 dark:bg-warm-900/20"
-                )}
-                role="menuitem"
-                tabIndex={-1}
-              >
-                <Calendar size={14} /> View Log
-              </button>
-              {isEligibleForRepair && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    consumeFreezeBankToken(habit.id, yesterday);
-                    setIsMenuOpen(false);
-                  }}
-                  className={cn(
-                    "w-full text-left px-4 py-2 text-xs font-bold text-habit-blue dark:text-habit-blue hover:bg-habit-blue/10 dark:hover:bg-habit-blue/15 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-1",
-                    focusedMenuIndex === 2 && "bg-habit-blue/10 dark:bg-habit-blue/15"
-                  )}
-                  role="menuitem"
-                  tabIndex={-1}
-                >
-                  <Wrench size={14} /> Repair Streak ({freezeBank?.tokens})
-                </button>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete();
-                }}
-                className={cn(
-                  "w-full text-left px-4 py-2 text-xs font-bold text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/15 flex items-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-1",
-                  focusedMenuIndex === (isEligibleForRepair ? 3 : 2) && "bg-money-bgNeg dark:bg-money-neg/15"
-                )}
-                role="menuitem"
-                tabIndex={-1}
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </div>
-          </>
-        )}
+        {/* Action menu (desktop dropdown; mobile uses the Drawer below) */}
+        <Menu
+          isOpen={isMenuOpen && isDesktop}
+          onClose={() => setIsMenuOpen(false)}
+          items={menuItems}
+          ariaLabel="Habit actions menu"
+          position="top-10 right-2"
+          className="min-w-[140px]"
+          stopPropagation
+        />
       </div>
 
       {/* Mobile Drawer Actions */}

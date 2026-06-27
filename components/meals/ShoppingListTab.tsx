@@ -12,6 +12,7 @@ import { ShoppingItemRow } from '@/components/meals/ShoppingItemRow';
 import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
+import { Popover } from '@/components/ui/Popover';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -28,55 +29,42 @@ interface FilterDropdownProps {
 }
 
 const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, onSelect, onClose }) => {
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
   return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onClose} aria-hidden="true" />
-      <div
-        ref={dropdownRef}
-        role="menu"
-        aria-label="Filter by store"
-        className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-brand-800 rounded-card shadow-raised border border-brand-200 dark:border-brand-700 z-20 py-1 overflow-hidden animate-in zoom-in-95 duration-(--duration-base)"
-      >
-        <div className="max-h-60 scroll-contain-y">
+    <Popover
+      isOpen
+      onClose={onClose}
+      role="menu"
+      ariaLabel="Filter by store"
+      position="top-full right-0 mt-2"
+      className="w-48 overflow-hidden py-1"
+    >
+      <div className="max-h-60 scroll-contain-y">
+        <button
+          role="menuitemradio"
+          aria-checked={!filterStore}
+          onClick={() => onSelect(null)}
+          className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${!filterStore ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+        >
+          All items
+          {!filterStore && <Filter size={14} />}
+        </button>
+        {stores.map(store => (
           <button
+            key={store.id}
             role="menuitemradio"
-            aria-checked={!filterStore}
-            onClick={() => onSelect(null)}
-            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between ${!filterStore ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
+            aria-checked={filterStore === store.name}
+            onClick={() => onSelect(store.name)}
+            className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between focus:outline-hidden focus:bg-brand-50 dark:focus:bg-brand-700/50 ${filterStore === store.name ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
           >
-            All items
-            {!filterStore && <Filter size={14} />}
+            {store.name}
+            {filterStore === store.name && <Filter size={14} />}
           </button>
-          {stores.map(store => (
-            <button
-              key={store.id}
-              role="menuitemradio"
-              aria-checked={filterStore === store.name}
-              onClick={() => onSelect(store.name)}
-              className={`w-full text-left px-4 py-2 min-h-[44px] text-sm hover:bg-brand-50 dark:hover:bg-brand-700/50 flex items-center justify-between ${filterStore === store.name ? 'text-accent-600 font-medium bg-accent-50 dark:text-accent-300 dark:bg-accent-900/30' : 'text-brand-700 dark:text-brand-300'}`}
-            >
-              {store.name}
-              {filterStore === store.name && <Filter size={14} />}
-            </button>
-          ))}
-          {stores.length === 0 && (
-            <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-500 italic">No stores configured</div>
-          )}
-        </div>
+        ))}
+        {stores.length === 0 && (
+          <div className="px-4 py-2 text-xs text-brand-400 dark:text-brand-500 italic">No stores configured</div>
+        )}
       </div>
-    </>
+    </Popover>
   );
 };
 
@@ -539,7 +527,7 @@ const ShoppingListTab: React.FC = () => {
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
                   aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
                   aria-expanded={isFilterOpen}
-                  aria-haspopup="listbox"
+                  aria-haspopup="menu"
                   className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                     filterStore
                       ? 'bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-900/30 dark:border-accent-700 dark:text-accent-200'

@@ -1,19 +1,18 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, LogOut, Plus, Settings, User, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { Popover } from '@/components/ui/Popover';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 
 interface ProfileMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  anchorRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef }) => {
+const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => {
   const { currentUser, logout } = useAuth();
   // Active-member (acting-as) state lives in the household context so the switch is
   // app-wide (the kid view in a later slice reads it), not local to this menu.
@@ -46,77 +45,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
       // addKidProfile surfaces its own error toast.
     }
   }, [addKidProfile]);
-  // useFocusTrap manages focus-in on open, Tab trapping, and focus restoration on close.
-  const menuRef = useFocusTrap<HTMLDivElement>(isOpen);
   const navigate = useNavigate();
-
-  // We also need a plain ref to the container for the click-outside handler.
-  // Since useFocusTrap returns a RefObject we can use it directly.
-  const containerRef = menuRef as React.RefObject<HTMLDivElement>;
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        isOpen &&
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node) &&
-        anchorRef.current &&
-        !anchorRef.current.contains(event.target as Node)
-      ) {
-        onClose();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onClose, anchorRef, containerRef]);
-
-  // Close menu when pressing Escape and return focus to the anchor button.
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (isOpen && event.key === 'Escape') {
-        onClose();
-        anchorRef.current?.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose, anchorRef]);
-
-  /** Move focus between menuitems with ArrowDown/ArrowUp. */
-  const handleMenuKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-      event.preventDefault();
-
-      const container = containerRef.current;
-      if (!container) return;
-
-      const items = Array.from(
-        container.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
-      );
-      if (items.length === 0) return;
-
-      const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-      let nextIndex: number;
-
-      if (event.key === 'ArrowDown') {
-        nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % items.length;
-      } else {
-        nextIndex =
-          currentIndex === -1 ? items.length - 1 : (currentIndex - 1 + items.length) % items.length;
-      }
-
-      items[nextIndex]?.focus();
-    },
-    [containerRef]
-  );
 
   const handleLogout = async () => {
     try {
@@ -129,15 +58,14 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div
-      ref={menuRef}
-      className="absolute top-14 right-4 z-dropdown w-64 bg-white dark:bg-brand-800 rounded-card shadow-raised border border-brand-200 dark:border-brand-700 overflow-hidden animate-in fade-in zoom-in-95 duration-(--duration-base) origin-top-right"
+    <Popover
+      isOpen={isOpen}
+      onClose={onClose}
       role="menu"
-      aria-label="Profile Menu"
-      onKeyDown={handleMenuKeyDown}
+      ariaLabel="Profile Menu"
+      position="top-14 right-4"
+      className="w-64 overflow-hidden origin-top-right"
     >
       {/* User Info Header */}
       <div className="bg-brand-50 dark:bg-brand-700/50 p-4 border-b border-brand-200 dark:border-brand-700">
@@ -276,7 +204,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose, anchorRef })
           Log Out
         </button>
       </div>
-    </div>
+    </Popover>
   );
 };
 
