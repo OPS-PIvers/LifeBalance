@@ -50,6 +50,7 @@ vi.mock('lucide-react', () => ({
   Copy: () => <div data-testid="copy-icon" />,
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
   SlidersHorizontal: () => <div data-testid="sliders-icon" />,
 }));
@@ -123,21 +124,30 @@ describe('ToDosPage', () => {
     render(<ToDosPage />);
   };
 
+  // Export + Select-multiple now live in the top-right "…" overflow menu.
+  const openOverflowMenu = () =>
+    fireEvent.click(screen.getByRole('button', { name: 'To-do list actions' }));
+  const enterSelectionMode = () => {
+    openOverflowMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Select multiple/i }));
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   describe('Export', () => {
-    it('renders the export button', () => {
+    it('exposes the export action in the overflow menu', () => {
       setup();
-      expect(screen.getByLabelText('Export active tasks to CSV')).toBeInTheDocument();
+      openOverflowMenu();
+      expect(screen.getByRole('menuitem', { name: /Export CSV/i })).toBeInTheDocument();
     });
 
-    it('calls generateCsvExport with correct data and status when export button is clicked', () => {
+    it('calls generateCsvExport with correct data and status when export is clicked', () => {
       setup();
 
-      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-      fireEvent.click(exportBtn);
+      openOverflowMenu();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Export CSV/i }));
 
       expect(generateCsvExport).toHaveBeenCalledTimes(1);
 
@@ -153,8 +163,8 @@ describe('ToDosPage', () => {
 
     it('excludes completed tasks from active export', () => {
       setup();
-      const exportBtn = screen.getByLabelText('Export active tasks to CSV');
-      fireEvent.click(exportBtn);
+      openOverflowMenu();
+      fireEvent.click(screen.getByRole('menuitem', { name: /Export CSV/i }));
       const [exportedData] = vi.mocked(generateCsvExport).mock.calls[0]!;
       const completedTask = exportedData.find((d) => d['Task'] === 'Completed Task');
       expect(completedTask).toBeUndefined();
@@ -164,19 +174,18 @@ describe('ToDosPage', () => {
   describe('Batch Operations', () => {
     it('toggles selection mode', () => {
       setup();
-      const toggleBtn = screen.getByLabelText('Select Multiple');
-      fireEvent.click(toggleBtn);
+      enterSelectionMode();
 
       // Should show "Select all" button
       expect(screen.getByText('Select all')).toBeInTheDocument();
-      // Should show checkboxes (or placeholders)
+      // Should show the visible Cancel control
       expect(screen.getByLabelText('Cancel Selection')).toBeInTheDocument();
     });
 
     it('selects all items', () => {
       setup();
       // Enter selection mode
-      fireEvent.click(screen.getByLabelText('Select Multiple'));
+      enterSelectionMode();
 
       // Click Select all
       fireEvent.click(screen.getByText('Select all'));
@@ -189,7 +198,7 @@ describe('ToDosPage', () => {
     it('batch completes selected items', async () => {
       setup();
       // Enter selection mode
-      fireEvent.click(screen.getByLabelText('Select Multiple'));
+      enterSelectionMode();
 
       // Select all
       fireEvent.click(screen.getByText('Select all'));
@@ -208,7 +217,7 @@ describe('ToDosPage', () => {
     it('batch deletes selected items', async () => {
       setup();
       // Enter selection mode
-      fireEvent.click(screen.getByLabelText('Select Multiple'));
+      enterSelectionMode();
 
       // Select all
       fireEvent.click(screen.getByText('Select all'));

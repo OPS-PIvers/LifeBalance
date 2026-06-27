@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList, SlidersHorizontal } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, MoreHorizontal, ClipboardList, SlidersHorizontal } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
@@ -14,6 +14,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
@@ -63,6 +64,10 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   // Modal and form state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Top-right overflow ("…") menu of secondary actions (Export, Select multiple)
+  // — mirrors the Shopping list header so the two pages share one structure.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Mobile Action Drawer State
   const [actionTodo, setActionTodo] = useState<ToDo | null>(null);
@@ -545,6 +550,27 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
     }
   };
 
+  // Secondary header actions, collapsed into the top-right "…" overflow menu
+  // (same pattern as the Shopping list). Export targets the current view;
+  // Select-multiple (batch mode) is disabled in the Completed view, matching
+  // the previous behaviour.
+  const menuItems: MenuItem[] = [
+    {
+      key: 'export',
+      label: 'Export CSV',
+      icon: <Download size={16} />,
+      onSelect: handleExport,
+      disabled: viewMode === 'active' ? allActiveCount === 0 : completedCount === 0,
+    },
+    {
+      key: 'select',
+      label: 'Select multiple',
+      icon: <Layers size={16} />,
+      onSelect: () => setIsSelectionMode(true),
+      disabled: viewMode === 'completed',
+    },
+  ];
+
   return (
     <div className="pb-32 pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
@@ -563,40 +589,50 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 </button>
               </div>
             ) : (
-              <>
-                <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
-                <p className="text-sm text-brand-500 dark:text-brand-400 leading-relaxed">Stay on top of your tasks</p>
-              </>
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
             )}
           </div>
 
-          <div className="flex gap-2">
-            {!isSelectionMode && (
-                /* The primary "New Task" action now lives in the sticky quick-add
-                   bar below (mirrors the shopping list). Export stays here. */
-                <Button
-                  variant="secondary"
-                  onClick={handleExport}
-                  disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
-                  aria-label={`Export ${viewMode} tasks to CSV`}
-                  title={`Export ${viewMode} tasks to CSV`}
-                  leftIcon={<Download size={16} />}
-                >
-                  <span className="hidden sm:inline">Export</span>
-                </Button>
-              )}
-
+          <div className="flex gap-2 items-center">
+            {isSelectionMode ? (
+              /* While selecting, a visible Cancel (X) stays in the header so the
+                 way out is always one tap away — the overflow menu is hidden. */
               <Button
                 variant="secondary"
                 size="icon"
-                onClick={() => setIsSelectionMode(!isSelectionMode)}
-                disabled={viewMode === 'completed'} // Disable batch mode in completed view for now
-                className={`${isSelectionMode ? 'bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600' : ''}`}
-                title={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
-                aria-label={isSelectionMode ? "Cancel Selection" : "Select Multiple"}
+                onClick={() => setIsSelectionMode(false)}
+                className="bg-brand-100 border-brand-200 dark:bg-brand-700 dark:border-brand-600"
+                title="Cancel Selection"
+                aria-label="Cancel Selection"
               >
-                {isSelectionMode ? <X size={20} /> : <Layers size={20} />}
+                <X size={20} />
               </Button>
+            ) : (
+              /* Secondary actions (Export, Select multiple) collapse into one
+                 top-right "…" overflow menu, matching the Shopping list header.
+                 The primary add now lives in the sticky quick-add bar below. */
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen((o) => !o)}
+                  aria-label="To-do list actions"
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                >
+                  <MoreHorizontal className="w-5 h-5" />
+                </button>
+                {menuOpen && (
+                  <Menu
+                    isOpen={menuOpen}
+                    onClose={() => setMenuOpen(false)}
+                    ariaLabel="To-do list actions"
+                    position="top-full right-0 mt-2"
+                    className="min-w-[208px]"
+                    items={menuItems}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
