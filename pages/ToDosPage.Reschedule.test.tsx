@@ -48,6 +48,7 @@ vi.mock('lucide-react', () => ({
   Copy: () => <div data-testid="copy-icon" />,
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
+  MoreHorizontal: () => <div data-testid="more-horizontal-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
   SlidersHorizontal: () => <div data-testid="sliders-icon" />,
 }));
@@ -125,8 +126,9 @@ describe('ToDosPage Reschedule Features', () => {
 
   it('batch reschedules selected tasks', async () => {
     setup();
-    // Enter selection mode
-    fireEvent.click(screen.getByLabelText('Select Multiple'));
+    // Enter selection mode via the overflow menu
+    fireEvent.click(screen.getByRole('button', { name: 'To-do list actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Select multiple/i }));
 
     // Select all
     fireEvent.click(screen.getByText('Select all'));
