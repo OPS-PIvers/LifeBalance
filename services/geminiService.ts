@@ -60,9 +60,9 @@ export type {
 /**
  * Single source of truth for the Gemini model name.
  * Override at build/runtime via VITE_GEMINI_MODEL env var.
- * This is a preview model — bump the string here when a stable release is available.
+ * Bump the string here when moving to a newer model.
  */
-export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3-flash-preview';
+export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
 // Initialize Gemini Client.
 // Reads the Vite env var for the API key, falling back to process.env for tests.
