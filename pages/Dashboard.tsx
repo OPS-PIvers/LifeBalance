@@ -1,7 +1,7 @@
 import React, { useState, useCallback, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { AccountPicker } from '@/components/budget/AccountPicker';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
 // initial Dashboard bundle and only load when a modal is actually opened.
@@ -27,7 +27,6 @@ const Dashboard: React.FC = () => {
   // shopping toggle) doesn't re-render the whole Dashboard.
   const { isLoading, currentUser, members, pendingItemsCount } = useHouseholdCore();
   const {
-    accounts,
     buckets,
     transactions,
     payCalendarItem,
@@ -39,7 +38,6 @@ const Dashboard: React.FC = () => {
   } = useFinance();
   const { habits } = useGamification();
   const { updateToDo, deleteToDo, completeToDo } = useTodos();
-  const fmt = useFormatCurrency();
   const navigate = useNavigate();
 
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -189,45 +187,15 @@ const Dashboard: React.FC = () => {
         {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
       </Suspense>
 
-      {/* Pay Modal for Calendar Items */}
-      {payModalItemId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-900/60">
-           <div
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="pay-bill-title"
-             className="bg-white dark:bg-brand-800 w-full max-w-sm rounded-card p-6 shadow-raised border border-brand-200 dark:border-brand-700 animate-in zoom-in-95 duration-(--duration-base)"
-           >
-             <h3 id="pay-bill-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100 mb-2">Confirm Payment</h3>
-             <p className="text-sm text-brand-500 dark:text-brand-400 mb-6 leading-relaxed">
-               Select which account to deduct this payment from.
-             </p>
-
-             <div className="space-y-3 mb-6">
-               {accounts.filter(a => a.type !== 'credit').map(acc => (
-                 <button
-                   key={acc.id}
-                   onClick={() => {
-                     payCalendarItem(payModalItemId, acc.id);
-                     setPayModalItemId(null);
-                   }}
-                   className="w-full p-4 flex justify-between items-center bg-white dark:bg-brand-700/40 hover:bg-brand-50 dark:hover:bg-brand-700 rounded-card border border-brand-200 dark:border-brand-700 hover:border-brand-300 dark:hover:border-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) group"
-                 >
-                   <span className="font-semibold text-brand-700 dark:text-brand-200 text-sm group-hover:text-brand-900 dark:group-hover:text-brand-100">{acc.name}</span>
-                   <span className="font-mono text-xs tabular-nums text-brand-400 dark:text-brand-500 group-hover:text-brand-600 dark:group-hover:text-brand-300">{fmt(acc.balance)}</span>
-                 </button>
-               ))}
-             </div>
-
-             <button
-               onClick={() => setPayModalItemId(null)}
-               className="w-full py-3 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 font-semibold transition-colors text-sm"
-             >
-               Cancel
-             </button>
-           </div>
-        </div>
-      )}
+      {/* Pay sheet for calendar items */}
+      <AccountPicker
+        isOpen={!!payModalItemId}
+        onClose={() => setPayModalItemId(null)}
+        onSelect={(accountId) => {
+          if (payModalItemId) payCalendarItem(payModalItemId, accountId);
+          setPayModalItemId(null);
+        }}
+      />
 
     </div>
   );
