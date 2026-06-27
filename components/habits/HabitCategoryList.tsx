@@ -53,7 +53,7 @@ const HabitCategoryList: React.FC<HabitCategoryListProps> = ({ category, habits 
       axis="y"
       values={items}
       onReorder={handleReorder}
-      className="space-y-3"
+      className="surface-section overflow-hidden [&>*:first-child]:border-t-0"
       aria-label={`Habit list for ${category}`}
     >
       {items.map(habit => (
@@ -78,6 +78,9 @@ const ReorderableHabitItem: React.FC<ReorderableItemProps> = ({ habit, onSave })
       dragControls={controls}
       onDragEnd={onSave}
       style={{ position: 'relative' }} // ensure z-index works
+      // hairline-divider draws the 1px separator between rows; the parent
+      // SurfaceList suppresses it on the first row.
+      className="hairline-divider"
       // Removed touch-none to allow vertical scrolling on the card itself.
       // Dragging is handled via the grip handle which has touch-none.
     >

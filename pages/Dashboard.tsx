@@ -120,7 +120,7 @@ const Dashboard: React.FC = () => {
           }
         >
           {actionQueue.length > 0 ? (
-            <div className="space-y-3">
+            <SurfaceList>
               {actionQueue.map(item => (
                 <ActionQueueItemCard
                   key={item.id}
@@ -142,7 +142,7 @@ const Dashboard: React.FC = () => {
                   deleteCalendarItem={deleteCalendarItem}
                 />
               ))}
-            </div>
+            </SurfaceList>
           ) : (
             <SurfaceList>
               <Row className="flex-col items-center py-8 text-center">
