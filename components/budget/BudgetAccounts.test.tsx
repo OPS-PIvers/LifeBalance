@@ -103,13 +103,15 @@ vi.mock('@/components/ui/Drawer', () => {
     children: React.ReactNode;
     isOpen: boolean;
     title?: string;
+    onClose?: () => void;
   }
   return {
-    Drawer: ({ children, isOpen, title }: MockDrawerProps) => {
+    Drawer: ({ children, isOpen, title, onClose }: MockDrawerProps) => {
       if (!isOpen) return null;
       return (
         <div data-testid="drawer">
           <h3>{title}</h3>
+          {onClose && <button aria-label="Close drawer" onClick={onClose}>Close</button>}
           {children}
         </div>
       );
@@ -284,17 +286,14 @@ describe('BudgetAccounts', () => {
     // Use fireEvent to ensure click handler fires immediately
     fireEvent.click(within(drawer2).getByRole('button', { name: /Set Savings Goal/i }));
 
-    // Modal should open
-    // using findByText to wait for state update
+    // Goal sheet (now a Drawer) should open with its content
     expect(await screen.findByText('What is your target balance for this account?')).toBeInTheDocument();
 
-    // Drawer should close (eventually)
+    // Close the goal drawer to reset
+    await user.click(screen.getByLabelText('Close drawer'));
     await waitFor(() => expect(screen.queryByTestId('drawer')).not.toBeInTheDocument());
 
-    // Close goal modal to reset (using X button from mock)
-    await user.click(screen.getByText('X'));
-
-    // Re-open drawer for delete
+    // Re-open actions drawer for delete
     await user.click(moreBtn);
 
     // Get the new drawer instance

@@ -3,12 +3,11 @@ import React, { useState, useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { format, isSameMonth, isSameDay, isToday, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, X, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CheckCircle2, Circle, Trash2, Edit2, Copy, CheckSquare, Download, MoreVertical, Repeat, CalendarPlus } from 'lucide-react';
 import { CalendarItem } from '@/types/schema';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { generateCsvExport } from '@/utils/exportUtils';
-import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -535,28 +534,12 @@ const BudgetCalendar: React.FC = () => {
         </div>
       </Drawer>
 
-      {/* Add/Edit Modal */}
-      <Modal
+      {/* Add/Edit Calendar Item Drawer */}
+      <Drawer
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        maxWidth="max-w-sm"
+        title={editingItem ? 'Edit Event' : 'Add Calendar Item'}
       >
-        <div className="p-6 scroll-contain-y max-h-[calc(100vh-10rem)] sm:max-h-[80vh]">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100">
-              {editingItem ? 'Edit Event' : 'Add Calendar Item'}
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsAddModalOpen(false)}
-              aria-label="Close modal"
-              className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"
-            >
-              <X size={20} />
-            </Button>
-          </div>
-
           <div className="space-y-4">
              {/* Type Toggle */}
              <SegmentedControl
@@ -652,8 +635,7 @@ const BudgetCalendar: React.FC = () => {
                </Button>
              </div>
           </div>
-        </div>
-      </Modal>
+      </Drawer>
 
       <RecurringBillsModal
         isOpen={isRecurringModalOpen}

@@ -373,93 +373,66 @@ const BudgetAccounts: React.FC = () => {
         Add Account
       </Button>
 
-      {/* Add Account Modal */}
-      <Modal
+      {/* Add Account Drawer */}
+      <Drawer
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        ariaLabelledBy="add-account-title"
+        title="Add Account"
       >
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 id="add-account-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100">Add Account</h3>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setIsAddModalOpen(false)}
-              aria-label="Close"
-            >
-              <X size={20} className="text-brand-400 dark:text-brand-500" />
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            <Input
-              placeholder="Account Name"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-            />
-            <Select
-              value={newType}
-              onChange={(e) => setNewType(e.target.value as Account['type'])}
-            >
-              <option value="checking">Checking</option>
-              <option value="savings">Savings</option>
-              <option value="credit">Credit Card</option>
-            </Select>
-            <Input
-              type="number"
-              placeholder="Current Balance"
-              value={newBalance}
-              onChange={e => setNewBalance(e.target.value)}
-              className="font-mono"
-            />
-            <Button
-              onClick={handleAddAccount}
-              className="w-full py-3 mt-2"
-            >
-              Save Account
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Goal Modal */}
-      <Modal
-        isOpen={!!isGoalModalOpen}
-        onClose={() => setIsGoalModalOpen(null)}
-        ariaLabelledBy="set-goal-title"
-      >
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 id="set-goal-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100">Set Savings Goal</h3>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setIsGoalModalOpen(null)}
-              aria-label="Close"
-            >
-              <X size={20} className="text-brand-400 dark:text-brand-500" />
-            </Button>
-          </div>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
-            What is your target balance for this account?
-          </p>
+        <div className="space-y-4">
+          <Input
+            placeholder="Account Name"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+          />
+          <Select
+            value={newType}
+            onChange={(e) => setNewType(e.target.value as Account['type'])}
+          >
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+            <option value="credit">Credit Card</option>
+          </Select>
           <Input
             type="number"
-            placeholder="Goal Amount"
-            value={goalAmount}
-            onChange={e => setGoalAmount(e.target.value)}
-            className="font-mono mb-4"
-            autoFocus
+            placeholder="Current Balance"
+            value={newBalance}
+            onChange={e => setNewBalance(e.target.value)}
+            className="font-mono"
           />
           <Button
-            onClick={handleSetGoal}
-            className="w-full py-3"
+            onClick={handleAddAccount}
+            className="w-full py-3 mt-2"
           >
-            Set Goal
+            Save Account
           </Button>
         </div>
-      </Modal>
+      </Drawer>
+
+      {/* Goal Drawer */}
+      <Drawer
+        isOpen={!!isGoalModalOpen}
+        onClose={() => setIsGoalModalOpen(null)}
+        title="Set Savings Goal"
+      >
+        <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
+          What is your target balance for this account?
+        </p>
+        <Input
+          type="number"
+          placeholder="Goal Amount"
+          value={goalAmount}
+          onChange={e => setGoalAmount(e.target.value)}
+          className="font-mono mb-4"
+          autoFocus
+        />
+        <Button
+          onClick={handleSetGoal}
+          className="w-full py-3"
+        >
+          Set Goal
+        </Button>
+      </Drawer>
 
       {/* Mobile Actions Drawer */}
       <Drawer

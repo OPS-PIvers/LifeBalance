@@ -393,7 +393,7 @@ describe('BudgetCalendar', () => {
     expect(screen.getByText('Edit Event', { selector: 'h3' })).toBeInTheDocument();
 
     // Re-open drawer for Cancel test
-    fireEvent.click(screen.getByLabelText('Close modal')); // Close edit modal first
+    fireEvent.click(screen.getByLabelText('Close drawer')); // Close edit drawer first
     fireEvent.click(moreButton);
 
     // Test Cancel Action

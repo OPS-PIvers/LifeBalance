@@ -2,13 +2,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { ArrowRightLeft, Plus, Edit, Trash2, Wallet } from 'lucide-react';
+import { Plus, Edit, Trash2, Wallet } from 'lucide-react';
 import { sumMoney } from '@/utils/money';
 import { BudgetBucket, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import BucketFormModal from '@/components/modals/BucketFormModal';
 import toast from 'react-hot-toast';
 import EditTransactionModal from '@/components/modals/EditTransactionModal';
-import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -327,18 +326,12 @@ const BudgetBuckets: React.FC = () => {
         confirmVariant="destructive"
       />
 
-      {/* Reallocate Modal */}
-      <Modal
+      {/* Reallocate / Fix Overspending Drawer */}
+      <Drawer
         isOpen={!!reallocateModal}
         onClose={() => setReallocateModal(null)}
-        maxWidth="max-w-sm"
-        ariaLabelledBy="reallocate-title"
-        className="p-6"
+        title="Fix Overspending"
       >
-        <h3 id="reallocate-title" className="font-display font-semibold text-lg text-brand-900 dark:text-brand-100 mb-4 flex items-center gap-2">
-          <ArrowRightLeft size={20} /> Fix Overspending
-        </h3>
-
         <div className="mb-4 text-sm text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-700/40 p-3 rounded-card border border-brand-200 dark:border-brand-700">
           Needs <strong>{fmt(amountToCover)}</strong> to cover <span className="font-bold">{targetForPreview?.name}</span>.
         </div>
@@ -409,7 +402,7 @@ const BudgetBuckets: React.FC = () => {
             </Button>
           </div>
         </div>
-      </Modal>
+      </Drawer>
 
       {/* Mobile Actions Drawer */}
       <Drawer
