@@ -61,18 +61,11 @@ const SEED_TRANSACTIONS: Transaction[] = [
     status: 'verified', isRecurring: true, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
-  {
-    // Apple Pay $0 "awaiting amount" stub — demos the Action Queue "Add amount"
-    // affordance + edit-first flow in Test Mode. `needsAmountPromptedAt` is
-    // pre-set so it does NOT auto-open the AwaitingAmountDrawer on boot (a modal
-    // auto-popping over the dashboard would block the e2e smoke nav). The
-    // auto-open drawer itself is covered by AwaitingAmountDrawer.test.tsx.
-    id: 'tx3', amount: 0, merchant: 'Shell Gas', category: 'Uncategorized',
-    date: getLocalDateString(),
-    status: 'pending_review', isRecurring: false, source: 'manual',
-    autoCategorized: false, payPeriodId: '2024-01-01',
-    needsAmount: true, needsAmountPromptedAt: '2024-01-01T00:00:00.000Z'
-  },
+  // NOTE: intentionally no seeded Apple Pay $0 "awaiting amount" stub. A
+  // pending_review transaction adds a "pending review" badge to the Money nav
+  // link (changing its accessible name) and the e2e smoke test matches the nav
+  // link by exact name "Money"; a stub here breaks that. The stub flow is
+  // covered by AwaitingAmountDrawer.test.tsx + the quickAdd function tests.
 ];
 
 const SEED_HABITS: Habit[] = [
