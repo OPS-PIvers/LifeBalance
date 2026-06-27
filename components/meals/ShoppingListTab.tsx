@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { ShoppingItem, QuickStockList } from '@/types/schema';
-import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart } from 'lucide-react';
+import { Plus, Download, Sparkles, Loader2, Clock, Filter, RotateCcw, X, Settings, Share2, Save, ShoppingCart, MoreHorizontal, ChevronDown } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { useGroceryOptimizer } from '@/hooks/useGroceryOptimizer';
 import type { OptimizableItem } from '@/services/geminiService.types';
@@ -13,6 +13,7 @@ import { QuickRestockRow } from '@/components/meals/QuickRestockRow';
 import { ShoppingItemForm } from '@/components/meals/ShoppingItemForm';
 import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -68,7 +69,18 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ filterStore, stores, on
   );
 };
 
-const ShoppingListTab: React.FC = () => {
+interface ShoppingListTabProps {
+  /**
+   * Pixel offset for the sticky add bar's `top`, to clear any sticky chrome a
+   * host renders above it. Default 0 (e.g. /shopping and /meals, where nothing
+   * is pinned above). /lists passes its sticky tab-strip height so the add bar
+   * pins just below it. Inline `style.top` is used (not a Tailwind `top-[]`
+   * class) because the value is host-driven and dynamic classes won't compile.
+   */
+  stickyTopOffset?: number;
+}
+
+const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }) => {
   const {
     shoppingList,
     addShoppingItem,
@@ -123,6 +135,10 @@ const ShoppingListTab: React.FC = () => {
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [filterStore, setFilterStore] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  // Overflow ("...") menu of secondary/bulk actions, and the collapsed
+  // quick-restock disclosure (closed by default — see the render).
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(false);
 
   // Use a ref for drag state to prevent re-renders and potential race conditions
   // caused by the dependency array in useEffect.
@@ -436,129 +452,191 @@ const ShoppingListTab: React.FC = () => {
         }
     }, [householdId, groceryCatalog, quickStockLists, addGroceryCatalogItem, updateQuickStockList]);
 
+  // Secondary/bulk actions, collapsed into one overflow "..." menu so they stop
+  // eating a full button row + a 4-icon header cluster. Filter and Clear-checked
+  // stay out of here (they need a persistent / contextual visible state). Every
+  // handler + disabled guard is reused verbatim — logic unchanged.
+  const menuItems: MenuItem[] = [
+    {
+      key: 'optimize',
+      label: 'Optimize with AI',
+      icon: <Sparkles size={16} />,
+      tone: 'primary',
+      onSelect: handleOptimize,
+      disabled: isOptimizing || shoppingList.length === 0,
+    },
+    {
+      key: 'history',
+      label: 'History',
+      icon: <Clock size={16} />,
+      onSelect: () => setIsCatalogOpen(true),
+    },
+    {
+      key: 'template',
+      label: 'Save as template',
+      icon: <Save size={16} />,
+      onSelect: handleSaveAsTemplate,
+      disabled: shoppingList.length === 0,
+    },
+    {
+      key: 'share',
+      label: 'Share / copy',
+      icon: <Share2 size={16} />,
+      onSelect: handleShareList,
+      disabled: !hasPendingItems,
+    },
+    {
+      key: 'export',
+      label: 'Export CSV',
+      icon: <Download size={16} />,
+      onSelect: handleExport,
+      disabled: shoppingList.length === 0,
+    },
+    {
+      key: 'settings',
+      label: 'Settings',
+      icon: <Settings size={16} />,
+      onSelect: () => setIsSettingsOpen(true),
+    },
+  ];
+
   return (
-    <div className="space-y-6 pb-20">
-        {/* Header Actions */}
+    <div className="space-y-5 pb-20">
+        {/* Title row — NOT sticky (scrolls away). Every secondary/bulk action
+            collapses into one top-right overflow menu (Reminders/Todoist/To-Do
+            pattern), reclaiming the old 4-icon cluster + the 3-button row. The
+            trigger shows a spinner while AI Optimize runs so feedback survives a
+            closed menu. */}
         <div className="flex justify-between items-center">
             <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Shopping list</h1>
-            <div className="flex gap-2">
+            <div className="relative">
                 <button
-                    onClick={handleSaveAsTemplate}
-                    disabled={shoppingList.length === 0}
-                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                    title="Save as template"
-                    aria-label="Save as template"
+                    onClick={() => setMenuOpen((o) => !o)}
+                    aria-label="Shopping list actions"
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
                 >
-                    <Save className="w-5 h-5" />
+                    {isOptimizing
+                        ? <Loader2 className="w-5 h-5 animate-spin" />
+                        : <MoreHorizontal className="w-5 h-5" />}
                 </button>
-                <button
-                    onClick={handleShareList}
-                    disabled={!hasPendingItems}
-                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                    title="Copy list to clipboard"
-                    aria-label="Copy list to clipboard"
-                >
-                    <Share2 className="w-5 h-5" />
-                </button>
-                <button
-                    onClick={handleExport}
-                    disabled={shoppingList.length === 0}
-                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors disabled:opacity-50 dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                    aria-label="Export to CSV"
-                >
-                    <Download className="w-5 h-5" />
-                </button>
-                <button
-                    onClick={() => setIsSettingsOpen(true)}
-                    className="p-2 text-brand-400 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
-                    aria-label="Settings"
-                >
-                    <Settings className="w-5 h-5" />
-                </button>
+                {/* Mounted only while open: Menu builds its button elements
+                    eagerly (JSX children evaluate before Popover discards them
+                    when closed), so gating here keeps add-input keystrokes from
+                    re-walking the menu tree. */}
+                {menuOpen && (
+                    <Menu
+                        isOpen={menuOpen}
+                        onClose={() => setMenuOpen(false)}
+                        ariaLabel="Shopping list actions"
+                        position="top-full right-0 mt-2"
+                        className="min-w-[208px]"
+                        items={menuItems}
+                    />
+                )}
             </div>
         </div>
 
-        {/* Quick Add Input */}
-        <div className="surface-section p-4 space-y-3">
-             <QuickRestockRow />
-             <form onSubmit={handleSmartAdd} className="relative">
-                <input
-                    ref={addInputRef}
-                    type="text"
-                    value={newItemText}
-                    onChange={(e) => setNewItemText(e.target.value)}
-                    placeholder="Add item (e.g. Milk)..."
-                    className="w-full pl-4 pr-12 py-3 bg-brand-50 border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
-                />
-                <button
-                    type="submit"
-                    disabled={!newItemText.trim()}
-                    aria-label="Add item to shopping list"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
-                >
-                    <Plus size={20} />
-                </button>
-             </form>
+        {/* Anchored add bar — pinned to the top of the single <main> scroller so
+            it stays visible while the list scrolls under it. Top (not bottom)
+            deliberately clears the global Capture FAB at bottom-center. The
+            per-host `stickyTopOffset` clears any sticky chrome above it (the
+            /lists tab strip). `-mx-4 px-4` bleeds the blurred bar to the content
+            edges; Reorder.Group stays a sibling below so its drag layer never
+            shares this pinned stacking context. */}
+        <div
+            className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur border-b border-brand-200 dark:border-brand-800"
+            style={{ top: `${stickyTopOffset}px` }}
+        >
+            <div className="flex items-center gap-2">
+                <form onSubmit={handleSmartAdd} className="relative flex-1">
+                    <input
+                        ref={addInputRef}
+                        type="text"
+                        value={newItemText}
+                        onChange={(e) => setNewItemText(e.target.value)}
+                        placeholder="Add item (e.g. Milk)..."
+                        className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!newItemText.trim()}
+                        aria-label="Add item to shopping list"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
+                    >
+                        <Plus size={20} />
+                    </button>
+                </form>
+
+                {/* Filter — kept first-class & always visible (NOT in the overflow
+                    menu) because its active store scope must stay glanceable. A
+                    quiet icon at rest; an accent pill with the store name + inline
+                    clear when active (replacing the old "Clear filter: X" row). */}
+                <div className="relative flex-none">
+                    {filterStore ? (
+                        <div className="flex items-center bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200 rounded-btn">
+                            <button
+                                onClick={() => setIsFilterOpen(!isFilterOpen)}
+                                aria-label={`Filter by store: ${filterStore}`}
+                                aria-expanded={isFilterOpen}
+                                aria-haspopup="menu"
+                                className="flex items-center gap-1.5 pl-3 pr-1.5 py-3 text-xs font-medium max-w-[38vw]"
+                            >
+                                <Filter className="w-4 h-4 shrink-0" />
+                                <span className="truncate">{filterStore}</span>
+                            </button>
+                            <button
+                                onClick={() => setFilterStore(null)}
+                                aria-label="Clear store filter"
+                                className="pr-2.5 py-3 hover:text-accent-900 dark:hover:text-accent-50 transition-colors"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            aria-label="Filter by store"
+                            aria-expanded={isFilterOpen}
+                            aria-haspopup="menu"
+                            className="flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                        >
+                            <Filter className="w-5 h-5" />
+                        </button>
+                    )}
+
+                    {isFilterOpen && (
+                        <FilterDropdown
+                            filterStore={filterStore}
+                            stores={stores}
+                            onSelect={(name) => { setFilterStore(name); setIsFilterOpen(false); }}
+                            onClose={() => setIsFilterOpen(false)}
+                        />
+                    )}
+                </div>
+            </div>
         </div>
 
-        {/* Helper Actions Row: AI, History, Scan */}
-        <div className="flex items-center gap-2">
-             <button
-                onClick={handleOptimize}
-                disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-warm-600 hover:bg-warm-50 dark:hover:text-warm-300 dark:hover:bg-warm-500/15 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
-                title="AI optimize list"
-             >
-                {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                <span>Optimize</span>
-             </button>
-
-             <button
-                onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-accent-600 hover:bg-accent-50 dark:hover:text-accent-300 dark:hover:bg-accent-900/30 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
-                title="View item history"
-             >
-                <Clock className="w-3.5 h-3.5" />
-                <span>History</span>
-             </button>
-
-             <div className="relative flex-1">
-               <button
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
-                  aria-expanded={isFilterOpen}
-                  aria-haspopup="menu"
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                    filterStore
-                      ? 'bg-accent-50 text-accent-700 hover:bg-accent-100 dark:bg-accent-900/30 dark:text-accent-200 dark:hover:bg-accent-900/50'
-                      : 'text-brand-600 dark:text-brand-300 hover:text-brand-900 hover:bg-brand-50 dark:hover:text-brand-50 dark:hover:bg-brand-700/50'
-                  }`}
-               >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span>{filterStore ? filterStore : 'Filter'}</span>
-               </button>
-
-               {isFilterOpen && (
-                 <FilterDropdown
-                   filterStore={filterStore}
-                   stores={stores}
-                   onSelect={(name) => { setFilterStore(name); setIsFilterOpen(false); }}
-                   onClose={() => setIsFilterOpen(false)}
-                 />
-               )}
-             </div>
-        </div>
-
-        {/* Clear Filter Indicator */}
-        {filterStore && (
-            <div className="flex justify-center -mt-2">
+        {/* Quick restock — demoted from an always-on top strip to a collapsed
+            disclosure (rarely used; must not eat prime real estate). One tap
+            reveals the unchanged horizontally-scrollable chip row. Hidden
+            entirely when no quick-stock lists exist (zero footprint). */}
+        {quickStockLists && quickStockLists.length > 0 && (
+            <div>
                 <button
-                    onClick={() => setFilterStore(null)}
-                    className="flex items-center gap-1 text-xs text-accent-600 hover:underline bg-accent-50 px-2 py-1 rounded-full border border-accent-200 dark:text-accent-300 dark:bg-accent-900/30 dark:border-accent-700"
+                    onClick={() => setRestockOpen((o) => !o)}
+                    aria-expanded={restockOpen}
+                    className="flex items-center gap-1.5 px-1 text-xxs font-bold uppercase tracking-wider text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300 transition-colors"
                 >
-                    <X size={10} />
-                    Clear filter: {filterStore}
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-(--duration-fast) ease-(--ease-standard) ${restockOpen ? '' : '-rotate-90'}`} />
+                    Quick restock
                 </button>
+                {restockOpen && (
+                    <div className="mt-2">
+                        <QuickRestockRow showHeader={false} />
+                    </div>
+                )}
             </div>
         )}
 
