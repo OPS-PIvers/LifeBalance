@@ -73,6 +73,9 @@ export function findMatchingPendingTransaction(
   if (!key) return undefined;
 
   const receiptDay = parseISO(receiptDate);
+  // A malformed receipt date → Invalid Date → NaN distance, which would slip past
+  // the `> windowDays` filter (NaN comparisons are always false). Bail instead.
+  if (Number.isNaN(receiptDay.getTime())) return undefined;
 
   // Annotate qualifying candidates with their absolute day-distance once, so the
   // comparator is cheap and the distance is computed a single time per tx.
@@ -81,7 +84,9 @@ export function findMatchingPendingTransaction(
     if (tx.status !== 'pending_review') continue;
     if (normalizeStoreName(transactionName(tx)) !== key) continue;
     if (!tx.date) continue;
-    const distance = Math.abs(differenceInCalendarDays(parseISO(tx.date), receiptDay));
+    const txDay = parseISO(tx.date);
+    if (Number.isNaN(txDay.getTime())) continue; // skip transactions with a bad date
+    const distance = Math.abs(differenceInCalendarDays(txDay, receiptDay));
     if (distance > windowDays) continue;
     candidates.push({ tx, distance });
   }
@@ -126,14 +131,27 @@ export function buildReceiptMergeUpdates(
   candidate: Transaction,
 ): Partial<Transaction> {
   const updates: Partial<Transaction> = {
-    merchant: receiptTx.merchant,
-    category: receiptTx.category,
-    date: receiptTx.date,
+    // merchant/category/date are always present on a scanned receipt; `|| candidate`
+    // is harmless defense in case a field is ever empty.
+    merchant: receiptTx.merchant || candidate.merchant,
+    category: receiptTx.category || candidate.category,
+    date: receiptTx.date || candidate.date,
     autoCategorized: true,
-    relatedHabitIds: receiptTx.relatedHabitIds,
-    subBucketId: receiptTx.subBucketId,
-    store: receiptTx.store,
   };
+  // Enrich with the receipt's metadata, but NEVER wipe a value the candidate
+  // already had when the receipt doesn't supply one (and never write undefined,
+  // which Firestore rejects) — only set each field when there's a usable value.
+  const habitIds =
+    receiptTx.relatedHabitIds && receiptTx.relatedHabitIds.length > 0
+      ? receiptTx.relatedHabitIds
+      : candidate.relatedHabitIds;
+  if (habitIds && habitIds.length > 0) updates.relatedHabitIds = habitIds;
+  const subBucketId = receiptTx.subBucketId || candidate.subBucketId;
+  if (subBucketId) updates.subBucketId = subBucketId;
+  const store = receiptTx.store || candidate.store;
+  if (store) updates.store = store;
+  // Delta-safe amount: only when it changes (full debit for a $0 stub, the
+  // correction for a differing row, omitted when equal). Clear the stub flag.
   if (candidate.needsAmount || candidate.amount !== receiptTx.amount) {
     updates.amount = receiptTx.amount;
     if (candidate.needsAmount) updates.needsAmount = false;
