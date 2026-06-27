@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import type { MagicActionResponse } from '@/services/geminiService.types';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { useShopping } from '@/contexts/FirebaseHouseholdContext';
 
 interface CaptureMagicActionProps {
   householdId: string;
@@ -18,6 +19,9 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
 }) => {
   const [magicInput, setMagicInput] = useState('');
   const [magicLoading, setMagicLoading] = useState(false);
+  // The user's own grocery categories (custom set) so the AI matches against
+  // them, not just the static seed. Falls back to the seed when none exist.
+  const { groceryCategories } = useShopping();
 
   const handleMagicSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -29,7 +33,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
 
       const context = {
         categories: dynamicCategories,
-        groceryCategories: GROCERY_CATEGORIES,
+        groceryCategories: groceryCategories?.length ? groceryCategories : GROCERY_CATEGORIES,
         todayDate: getLocalDateString()
       };
 

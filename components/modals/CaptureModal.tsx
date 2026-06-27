@@ -305,7 +305,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         }
       });
 
-      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles);
+      const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, subBucketsMap);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');
         const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, subBucketsMap);

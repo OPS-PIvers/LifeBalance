@@ -392,8 +392,8 @@ ${previousInsights}
 
 Also suggest 0-2 actionable 'actions' the user can take to improve their situation.
 - 'update_bucket': If spending consistently exceeds limits. Payload: { "bucketName": "CategoryName", "newLimit": number }
-- 'create_challenge': If a new habit would help, suggest a "Mini Challenge" (weekly goal). Payload: { "title": "Challenge Title", "description": "Why this challenge matters", "targetType": "count", "targetValue": number (e.g. 5), "duration": "7 days", "suggestedHabit": { "title": "Habit Title", "category": "Health, Productivity, Mindfulness, Chores, Finance", "type": "positive", "period": "daily" } }
-- 'create_habit': (Legacy/Secondary) If a simple habit is better than a challenge. Payload: { "title": "Habit Title", "category": "Health, Productivity, Mindfulness, Chores, Finance", "type": "positive", "period": "daily" }
+- 'create_challenge': If a new habit would help, suggest a "Mini Challenge" (weekly goal). Payload: { "title": "Challenge Title", "description": "Why this challenge matters", "targetType": "count", "targetValue": number (e.g. 5), "duration": "7 days", "suggestedHabit": { "title": "Habit Title", "category": "one of: Health | Productivity | Mindfulness | Chores | Finance", "type": "positive", "period": "daily" } }
+- 'create_habit': (Legacy/Secondary) If a simple habit is better than a challenge. Payload: { "title": "Habit Title", "category": "one of: Health | Productivity | Mindfulness | Chores | Finance", "type": "positive", "period": "daily" }
 - 'create_todo': If a specific one-off task is needed. Payload: { "text": "Task description", "completeByDate": "YYYY-MM-DD" }
 
 Transactions (last 50): ${transactions}
@@ -459,6 +459,51 @@ const sanitizeForPrompt = (input: string): string => {
  */
 const sanitizeList = (items: readonly string[] | undefined, separator = ', '): string =>
   (items ?? []).map(sanitizeForPrompt).filter(Boolean).join(separator);
+
+/**
+ * Catch-all category used as the fallback whenever the model returns a value
+ * that isn't in the household's actual category set. Kept as one constant so the
+ * prompt instruction and the post-call clamp can never drift apart.
+ */
+const FALLBACK_CATEGORY = 'Other';
+
+/**
+ * Default finance categories, used ONLY when a caller passes no household
+ * categories (e.g. a brand-new household with no budget buckets yet). Real call
+ * sites pass the user's actual bucket names, so categories are dynamic; this is
+ * the last-resort seed. `FALLBACK_CATEGORY` is included so the clamp's fallback
+ * is always a member of the offered list.
+ */
+const DEFAULT_FINANCE_CATEGORIES = [
+  'Groceries', 'Dining', 'Gas', 'Shopping', 'Utilities', 'Transport', FALLBACK_CATEGORY,
+];
+
+/**
+ * Coerce an AI-returned category to the household's actual allow-list. The
+ * model is asked to pick from the list, but the response schema only constrains
+ * the TYPE (string), not membership — so a hallucinated/off-list category would
+ * otherwise be persisted verbatim and fragment the user's category set. Match is
+ * case-insensitive and trimmed.
+ *
+ * Contract: returns a member of `allowed`, or the `fallback` sentinel when
+ * nothing matches. The sentinel ('Other' / 'Uncategorized') is the designated
+ * catch-all and is intentionally allowed to be a NON-member of `allowed` —
+ * collapsing every unknown to ONE recognizable "uncategorized" marker is the
+ * point of clamping. We deliberately do NOT coerce to `allowed[0]`: mislabeling
+ * an unknown (e.g. a gas receipt) as some arbitrary real category is worse than
+ * a clear, unmatched "Other". When `allowed` is empty there is nothing to clamp
+ * against, so the model's own value is kept.
+ */
+const clampToAllowed = (
+  value: string | undefined | null,
+  allowed: readonly string[],
+  fallback: string = FALLBACK_CATEGORY,
+): string => {
+  if (allowed.length === 0) return value || fallback;
+  if (!value) return fallback;
+  const needle = value.trim().toLowerCase();
+  return allowed.find((a) => a.toLowerCase() === needle) ?? fallback;
+};
 
 /**
  * Shared error-handling wrapper for the public Gemini functions (finding 1.3).
@@ -694,9 +739,8 @@ export const analyzeReceipt = async (
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<ReceiptData> => {
   return withErrorHandling('OCR', 'Failed to analyze receipt. Please try manual entry.', async () => {
-    const categoryList = availableCategories?.length
-      ? sanitizeList(availableCategories)
-      : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
+    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
+    const categoryList = sanitizeList(resolvedCategories);
 
     const habitList = availableHabits?.length
       ? sanitizeList(availableHabits)
@@ -717,14 +761,16 @@ export const analyzeReceipt = async (
     const now = new Date();
     const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
     const prompt = [
-      `Analyze this receipt image. Extract the merchant name, total amount (as a positive number), date (YYYY-MM-DD format), and suggest the most appropriate category from this list: ${categoryList}. ${habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : ''}`,
+      `Analyze this receipt image. Extract the merchant name, total amount, date (YYYY-MM-DD format), and suggest the most appropriate category.`,
+      `The amount is in US dollars — return it as a positive decimal number (e.g. 12.34); ignore currency symbols, treat "." as the decimal separator and "," as a thousands separator.`,
+      `For category, choose exactly one of these strings: ${categoryList}. If none fits, use "${FALLBACK_CATEGORY}". Do not invent a new category.`,
+      habitList ? `Also suggest any relevant habits from this list that might apply to this transaction: ${habitList}.` : '',
       subBucketContext,
       `Extract the store name if visible.`,
       `Today's date is ${today}. If the year is missing, infer it.`,
-      'Return JSON.'
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
-    return await generateJsonContent<ReceiptData>(
+    const data = await generateJsonContent<ReceiptData>(
       householdId,
       prepareImageContent(base64Image, prompt),
       {
@@ -744,6 +790,10 @@ export const analyzeReceipt = async (
       GEMINI_MODEL,
       validateReceiptData
     );
+    // Clamp to the household's real categories — the schema only constrains the
+    // type, so an off-list category would otherwise land on the transaction.
+    data.category = clampToAllowed(data.category, resolvedCategories);
+    return data;
   });
 };
 
@@ -760,27 +810,41 @@ export const parseBankStatement = async (
   base64Image: string,
   availableCategories?: string[],
   availableHabits?: string[],
+  availableSubBuckets?: Record<string, string[]>,
   _aiClient?: Pick<typeof ai, 'models'>
 ): Promise<BankTransactionData[]> => {
   return withErrorHandling('Bank Statement Parse', 'Failed to parse bank statement. Please try again or enter transactions manually.', async () => {
-    const categoryList = availableCategories?.length
-      ? sanitizeList(availableCategories)
-      : 'Groceries, Dining, Gas, Shopping, Utilities, Transport';
+    const resolvedCategories = availableCategories?.length ? availableCategories : DEFAULT_FINANCE_CATEGORIES;
+    const categoryList = sanitizeList(resolvedCategories);
 
     const habitList = availableHabits?.length
       ? sanitizeList(availableHabits)
       : '';
 
+    // Sub-bucket context, mirroring analyzeReceipt so bulk-imported transactions
+    // can also be assigned a sub-bucket when their category has them.
+    let subBucketContext = '';
+    if (availableSubBuckets && Object.keys(availableSubBuckets).length > 0) {
+      subBucketContext = 'Available sub-buckets per category:\n';
+      Object.entries(availableSubBuckets).forEach(([cat, subs]) => {
+        if (subs.length > 0) {
+          subBucketContext += `- ${cat}: [${subs.join(', ')}]\n`;
+        }
+      });
+      subBucketContext += 'If the chosen category has sub-buckets, also return the most appropriate one as "subBucket".';
+    }
+
     const now = new Date();
     const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
     const prompt = [
-      `Analyze this bank statement or transaction list screenshot. Extract ALL visible transactions. For each transaction, provide:`,
+      `Analyze this bank statement or transaction list screenshot. Extract ALL visible expense transactions. For each transaction, provide:`,
       `- merchant: The merchant or payee name`,
-      `- amount: The transaction amount as a POSITIVE number (even if shown as negative/debit)`,
+      `- amount: The transaction amount in US dollars as a POSITIVE decimal number (even if shown as negative/debit). Parse "1,234.56" as 1234.56 ("." = decimal, "," = thousands separator).`,
       `- date: The transaction date in YYYY-MM-DD format. Today's date is ${today}. If the year is missing, infer it.`,
-      `- category: Suggest the most appropriate category from: ${categoryList}`,
+      `- category: choose exactly one of: ${categoryList}. Use these exact strings only; if none fits, use "${FALLBACK_CATEGORY}".`,
+      subBucketContext ? `- subBucket: ${subBucketContext}` : '',
       habitList ? `- suggestedHabits: Suggest any relevant habits from this list: ${habitList}` : '',
-      `Only include expense transactions (debits/withdrawals). Skip any credits, deposits, or payments received.`,
+      `Treat money LEAVING the account (debits/withdrawals/purchases, often shown negative or in red) as expenses; exclude deposits, refunds, transfers in, and payments received. If the image shows no expense transactions, return an empty array [].`,
       `Return a JSON array of transactions.`
     ].filter(Boolean).join('\n');
 
@@ -796,7 +860,8 @@ export const parseBankStatement = async (
             amount: { type: Type.NUMBER },
             category: { type: Type.STRING },
             date: { type: Type.STRING },
-            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } }
+            suggestedHabits: { type: Type.ARRAY, items: { type: Type.STRING } },
+            subBucket: { type: Type.STRING }
           },
           required: ["merchant", "amount", "category", "date"]
         }
@@ -806,10 +871,11 @@ export const parseBankStatement = async (
       validateBankTransactions
     );
 
-    // Ensure amounts are positive
+    // Ensure amounts are positive and categories are within the household's set.
     return transactions.map(tx => ({
       ...tx,
-      amount: Math.abs(tx.amount)
+      amount: Math.abs(tx.amount),
+      category: clampToAllowed(tx.category, resolvedCategories)
     }));
   });
 };
@@ -855,11 +921,10 @@ export const suggestMeal = async (
     - description: Short appetizing description
     - ingredients: Array of objects { name, quantity }
     - instructions: Array of strings (Step-by-step cooking instructions)
-    - recipeUrl: A URL to a real recipe for this dish (or a valid search URL if specific one isn't known)
     - tags: Array of strings (e.g., "Quick", "Healthy", "Comfort Food")
     - reasoning: Brief explanation of why this meal was suggested based on criteria.`;
 
-    return await generateJsonContent<MealSuggestionResponse>(
+    const suggestion = await generateJsonContent<MealSuggestionResponse>(
       householdId,
       prompt,
       {
@@ -879,16 +944,21 @@ export const suggestMeal = async (
             }
           },
           instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
-          recipeUrl: { type: Type.STRING },
           tags: { type: Type.ARRAY, items: { type: Type.STRING } },
           reasoning: { type: Type.STRING }
         },
-        required: ["name", "description", "ingredients", "instructions", "recipeUrl", "tags", "reasoning"]
+        required: ["name", "description", "ingredients", "instructions", "tags", "reasoning"]
       },
       _aiClient,
       GEMINI_MODEL,
       validateMealSuggestion
     );
+
+    // The model can't browse, so it can't know a real recipe URL — asking for one
+    // produced plausible dead links. Build a deterministic recipe-search URL from
+    // the dish name instead.
+    suggestion.recipeUrl = `https://www.google.com/search?q=${encodeURIComponent(`${suggestion.name} recipe`)}`;
+    return suggestion;
   });
 };
 
@@ -911,14 +981,13 @@ export const parseGroceryReceipt = async (
     const prompt = `Analyze this grocery receipt. Extract all purchased food/grocery items.
                 For each item:
                 1. Extract the 'name' and Normalize it (fix typos, expand abbreviations, remove unnecessary capitalization, make it user-friendly).
-                2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
+                2. Assign the 'category' by choosing exactly one of these strings: ${categoriesStr}. Use these exact strings only; if none fits, use "Uncategorized". Do not invent a new category.
                 3. Extract and Standardize 'quantity' if specified (e.g., "2" -> "2 ct", "1 lb" -> "1 lb"), otherwise "1".
                 4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco"), otherwise leave empty.
 
-                Ignore taxes, subtotal, total, and non-product lines.
-                Return a JSON array of items.`;
+                Ignore taxes, subtotal, total, and non-product lines. If the image has no grocery items, return an empty array [].`;
 
-    return await generateJsonContent<GroceryItem[]>(
+    const groceryItems = await generateJsonContent<GroceryItem[]>(
       householdId,
       prepareImageContent(base64Image, prompt),
       {
@@ -938,6 +1007,10 @@ export const parseGroceryReceipt = async (
       GEMINI_MODEL,
       validateGroceryItems
     );
+    return groceryItems.map(item => ({
+      ...item,
+      category: clampToAllowed(item.category, availableCategories, 'Uncategorized')
+    }));
   });
 };
 
@@ -975,7 +1048,7 @@ export const optimizeGroceryList = async (
 
       For each item:
       1. Normalize the 'name' (fix typos, expand abbreviations, remove unnecessary capitalization, make it user-friendly).
-      2. Assign the most appropriate 'category' from this list: ${categoriesStr}.
+      2. Assign the 'category' by choosing exactly one of these strings: ${categoriesStr}. Use these exact strings only; if none fits, use "Uncategorized". Do not invent a new category.
       3. Standardize 'quantity' if possible (e.g., "2" -> "2 ct", "1 box" -> "1 box"). Keep it brief.
       4. Suggest a 'store' if the item strongly implies one (e.g., "Kirkland" -> "Costco", "Trader Joe's" items), otherwise keep the existing store or leave empty.
       5. MUST preserve the exact 'id' for each item.
@@ -991,7 +1064,7 @@ export const optimizeGroceryList = async (
       Return a JSON array of objects with keys: id, name, category, quantity, store.
     `;
 
-    return await generateJsonContent<import('./geminiService.types').OptimizableItem[]>(
+    const optimized = await generateJsonContent<import('./geminiService.types').OptimizableItem[]>(
       householdId,
       prompt,
       {
@@ -1012,6 +1085,10 @@ export const optimizeGroceryList = async (
       GEMINI_MODEL,
       validateOptimizableItems
     );
+    return optimized.map(item => ({
+      ...item,
+      category: item.category ? clampToAllowed(item.category, availableCategories, 'Uncategorized') : item.category
+    }));
   } catch (error) {
     console.error("Gemini Optimization Error:", error);
     const errorMessage =
@@ -1097,7 +1174,7 @@ export const generateInsight = async (
                     newLimit: { type: Type.NUMBER },
                     title: { type: Type.STRING },
                     description: { type: Type.STRING },
-                    category: { type: Type.STRING },
+                    category: { type: Type.STRING, enum: ['Health', 'Productivity', 'Mindfulness', 'Chores', 'Finance'] },
                     type: { type: Type.STRING, enum: ['positive', 'negative'] },
                     period: { type: Type.STRING, enum: ['daily', 'weekly'] },
                     text: { type: Type.STRING },
@@ -1109,7 +1186,7 @@ export const generateInsight = async (
                       type: Type.OBJECT,
                       properties: {
                         title: { type: Type.STRING },
-                        category: { type: Type.STRING },
+                        category: { type: Type.STRING, enum: ['Health', 'Productivity', 'Mindfulness', 'Chores', 'Finance'] },
                         type: { type: Type.STRING, enum: ['positive', 'negative'] },
                         period: { type: Type.STRING, enum: ['daily', 'weekly'] }
                       }
@@ -1149,29 +1226,27 @@ export const parseMagicAction = async (
 ): Promise<import('./geminiService.types').MagicActionResponse> => {
   try {
     const sanitizedInput = sanitizeForPrompt(input);
-    const categoryList = context.categories.length > 0
-      ? sanitizeList(context.categories)
-      : "No predefined categories";
+    const hasCategories = context.categories.length > 0;
+    const categoryList = hasCategories ? sanitizeList(context.categories) : '';
     const groceryCategoryList = sanitizeList(context.groceryCategories);
 
     const prompt = `
       Analyze this user input: "${sanitizedInput}".
       Determine the intent: 'transaction', 'todo', or 'shopping'.
-      Today's date is ${context.todayDate}.
+
+      Dates: resolve relative dates against today (${context.todayDate}) in the user's local timezone — "today" = ${context.todayDate}, "yesterday" = today - 1 day, "tomorrow" = today + 1 day, a weekday name = the nearest upcoming matching day. If no year is given, assume the current year. Always output dates as YYYY-MM-DD.
 
       1. Transaction: User spent money or wants to log an expense.
-         Extract: merchant, amount (number), category (match one of: ${categoryList}), date (YYYY-MM-DD).
+         Extract: merchant, amount (a positive number in US dollars), ${hasCategories ? `category (choose exactly one of: ${categoryList}; if none fits, use "${FALLBACK_CATEGORY}")` : `category (a short, sensible category name)`}, date.
       2. Todo: User wants to remember a task.
-         Extract: text (task description), completeByDate (YYYY-MM-DD). If no date is specified, set completeByDate to today's date. If the user says "tomorrow", set completeByDate to tomorrow's date (today + 1 day).
+         Extract: text (task description), completeByDate. If no date is specified, set completeByDate to today's date.
       3. Shopping: User wants to buy something later.
-         Extract: item (name), quantity (string), category (match one of: ${groceryCategoryList}), store (optional).
+         Extract: item (name), quantity (string), category (choose exactly one of: ${groceryCategoryList}; if none fits, use "Uncategorized"), store (optional).
 
       If unsure, default to 'unknown'.
-
-      Return JSON.
     `;
 
-    return await generateJsonContent<import('./geminiService.types').MagicActionResponse>(
+    const result = await generateJsonContent<import('./geminiService.types').MagicActionResponse>(
       householdId,
       prompt,
       {
@@ -1200,6 +1275,18 @@ export const parseMagicAction = async (
       GEMINI_MODEL,
       validateMagicAction
     );
+
+    // Clamp the category to the household's real set (the schema only constrains
+    // type). Transactions clamp to budget categories, shopping to grocery ones;
+    // skip transaction clamping when the household has no categories yet.
+    if (result.data?.category) {
+      if (result.type === 'transaction' && hasCategories) {
+        result.data.category = clampToAllowed(result.data.category, context.categories);
+      } else if (result.type === 'shopping') {
+        result.data.category = clampToAllowed(result.data.category, context.groceryCategories, 'Uncategorized');
+      }
+    }
+    return result;
   } catch (error) {
     console.error("Gemini Magic Action Parse Error:", error);
     // Fallback or rethrow? Let's return unknown to be safe. A malformed AI
@@ -1261,8 +1348,8 @@ export const analyzeHabitPoints = async (
       Principles:
       1. **Motivation:** If a habit is struggling (low streak/count), maybe increase points slightly to incentivize it.
       2. **Fairness:** If a habit is "too easy" (very high streak, always done), maybe reduce points if they seem disproportionately high, OR keep them if it's a core consistency habit.
-      3. **Balance:** Points should generally range from 1 to 50 for daily habits.
-      4. **Meaningful Change:** Only suggest changes for 5-10 habits that really need it. Do not suggest changes if the current points seem fine.
+      3. **Balance:** Points generally range 1-50 for daily habits and may go up to 100 for weekly or high-effort habits. Every suggestedPoints MUST be an integer between 1 and 100.
+      4. **Meaningful Change:** Only suggest changes for the habits that genuinely need it (at most 10). It is fine to return fewer, or an empty array, if the current points already seem reasonable — do not invent changes.
 
       Analyze the following habits:
       ${habitsJson}
@@ -1377,10 +1464,10 @@ export const analyzeHabitPatterns = async (
       Today's date is ${today}.
 
       Look for:
-      - Strong streaks (Praise)
-      - "Weekend warrior" patterns (Suggestion)
-      - Habits that are often skipped together (Observation)
-      - Slumps or dropped streaks (Encouragement)
+      - Strong streaks (praise)
+      - "Weekend warrior" patterns (suggestion)
+      - Habits that are often skipped together (critique)
+      - Slumps or dropped streaks (suggestion)
 
       Analyze the following habits:
       ${habitsJson}
@@ -1388,7 +1475,7 @@ export const analyzeHabitPatterns = async (
       Return a JSON array of insights. Each insight must have:
       - title: Short, punchy headline (e.g., "Weekend Slump Detected", "On Fire!")
       - description: 1-2 sentences explaining the insight. Be conversational and supportive.
-      - type: 'praise' (for good streaks), 'critique' (for missing consistency), or 'suggestion' (general advice).
+      - type: MUST be exactly one of 'praise' (for good streaks), 'critique' (for missing consistency), or 'suggestion' (general advice).
       - relatedHabitId: (Optional) The ID of the specific habit this insight is about.
     `;
 
@@ -1451,7 +1538,8 @@ export const parseNaturalLanguageCommand = async (
 
     // Shopping List
     if (type === 'shopping') {
-      const categoriesStr = availableCategories?.shopping?.join(', ') || GROCERY_CATEGORIES.join(', ');
+      const shoppingCats = availableCategories?.shopping?.length ? availableCategories.shopping : [...GROCERY_CATEGORIES];
+      const categoriesStr = shoppingCats.join(', ');
 
       const prompt = `Parse this shopping list command into JSON:
 "${sanitizedText}"
@@ -1459,9 +1547,9 @@ export const parseNaturalLanguageCommand = async (
 Extract all items mentioned. For each item:
 - item: The item name (normalized, singular form)
 - quantity: Numeric quantity (default 1 if not specified)
-- category: Most appropriate category from: ${categoriesStr}
+- category: choose exactly one of: ${categoriesStr}. Use these exact strings only; if none fits, use "Uncategorized".
 
-Return ONLY a JSON object with this structure (no markdown, no explanation):
+Use this structure:
 {
   "items": [
     { "item": "Milk", "quantity": 1, "category": "Dairy" },
@@ -1496,7 +1584,8 @@ If no items found, return {"items": []}`;
         GEMINI_MODEL,
         validateParsedShoppingList
       );
-      return { ...result, detectedType: 'shopping', confidence: 1 };
+      const items = result.items.map(it => ({ ...it, category: clampToAllowed(it.category, shoppingCats, 'Uncategorized') }));
+      return { ...result, items, detectedType: 'shopping', confidence: 1 };
     }
 
     // To-Do List
@@ -1508,7 +1597,7 @@ Extract all distinct tasks. For each task:
 - task: Clear, concise task description
 - priority: Infer priority level (high, medium, low) - default to 'medium'
 
-Return ONLY a JSON object:
+Use this structure:
 {
   "tasks": [
     { "task": "Fix the sink", "priority": "medium" },
@@ -1547,22 +1636,25 @@ If no tasks found, return {"tasks": []}`;
 
     // Expense
     if (type === 'expense') {
-      const categoriesStr = availableCategories?.expense?.join(', ') || 'Groceries, Dining, Entertainment, Utilities, Gas, Healthcare, Shopping, Other';
+      const expenseCats = availableCategories?.expense?.length
+        ? availableCategories.expense
+        : ['Groceries', 'Dining', 'Entertainment', 'Utilities', 'Gas', 'Healthcare', 'Shopping', 'Other'];
+      const categoriesStr = expenseCats.join(', ');
 
       const prompt = `Parse this expense command into JSON:
 "${sanitizedText}"
 
 Extract:
-- amount: The dollar amount (required, as a number)
+- amount: The dollar amount in US dollars (required, as a positive number)
 - merchant: The merchant/store name
-- category: Most appropriate category from: ${categoriesStr}
+- category: choose exactly one of: ${categoriesStr}. Use these exact strings only; if none fits, use "Other".
 - notes: Any additional details mentioned
 
-Return ONLY a JSON object:
+Use this structure:
 {
   "amount": 45.00,
   "merchant": "Target",
-  "category": "Household",
+  "category": "Shopping",
   "notes": "household items"
 }
 
@@ -1585,28 +1677,33 @@ If no amount found, return { "error": "No amount found" }`;
         GEMINI_MODEL,
         validateParsedExpense
       );
-      return { ...result, detectedType: 'expense', confidence: 1 };
+      const category = result.category ? clampToAllowed(result.category, expenseCats) : result.category;
+      return { ...result, category, detectedType: 'expense', confidence: 1 };
     }
 
     // Unknown - detect type AND parse in one shot
-    const shoppingCategories = availableCategories?.shopping?.join(', ') || GROCERY_CATEGORIES.join(', ');
-    const expenseCategories = availableCategories?.expense?.join(', ') || 'Groceries, Dining, Entertainment, Utilities, Gas, Healthcare, Shopping, Other';
+    const shoppingCats = availableCategories?.shopping?.length ? availableCategories.shopping : [...GROCERY_CATEGORIES];
+    const expenseCats = availableCategories?.expense?.length
+      ? availableCategories.expense
+      : ['Groceries', 'Dining', 'Entertainment', 'Utilities', 'Gas', 'Healthcare', 'Shopping', 'Other'];
+    const shoppingCategories = shoppingCats.join(', ');
+    const expenseCategories = expenseCats.join(', ');
 
     const prompt = `Analyze this command: "${sanitizedText}"
 
     1. Determine the intent: 'shopping', 'todo', or 'expense'.
     2. Extract relevant data based on the intent.
 
-    - If 'shopping': Extract 'items' (array of {item, quantity, category}). Categories: ${shoppingCategories}.
+    - If 'shopping': Extract 'items' (array of {item, quantity, category}). Category must be exactly one of: ${shoppingCategories} (if none fits, use "Uncategorized").
     - If 'todo': Extract 'tasks' (array of {task, priority}).
-    - If 'expense': Extract 'amount', 'merchant', 'category', 'notes'. Categories: ${expenseCategories}.
+    - If 'expense': Extract 'amount' (positive USD number), 'merchant', 'category', 'notes'. Category must be exactly one of: ${expenseCategories} (if none fits, use "Other").
 
     Return JSON with 'detectedType', 'confidence', and the extracted data fields.
     If intent is unclear, set detectedType to 'unclear'.
     `;
 
     // Define a loose schema that covers all possibilities
-    return await generateJsonContent<NaturalLanguageResult>(
+    const oneShot = await generateJsonContent<NaturalLanguageResult>(
       householdId,
       prompt,
       {
@@ -1655,6 +1752,21 @@ If no amount found, return { "error": "No amount found" }`;
       (raw): NaturalLanguageResult =>
         validateNaturalLanguageUnknown(raw) as unknown as NaturalLanguageResult
     );
+
+    // Clamp the categories on whichever branch the model detected.
+    const loose = oneShot as {
+      detectedType: string;
+      items?: { category?: string }[];
+      category?: string;
+    };
+    if (loose.detectedType === 'shopping' && Array.isArray(loose.items)) {
+      loose.items.forEach(it => {
+        if (it.category) it.category = clampToAllowed(it.category, shoppingCats, 'Uncategorized');
+      });
+    } else if (loose.detectedType === 'expense' && loose.category) {
+      loose.category = clampToAllowed(loose.category, expenseCats);
+    }
+    return oneShot;
 
   } catch (error) {
     console.error("Gemini Natural Language Parse Error:", error);
@@ -1715,10 +1827,11 @@ export const reorganizeHabits = async (
 
       Return a JSON object with:
       - habits: Array of objects { id, category, order }. "order" should be a number (0, 1, 2...) representing the sort order. The order should be global or per category (it doesn't matter as long as sorting by it produces the desired result). Let's use a global order: 0 is the very first habit in the first category, 1 is the next, etc.
+      - IMPORTANT: include EVERY input habit exactly once. Every id from the input MUST appear in the output habits array — do not drop, merge, add, or invent ids.
       - reasoning: Brief explanation of the new structure (e.g., "I grouped morning tasks together and moved health habits to the top for better visibility.").
     `;
 
-    return await generateJsonContent<import('./geminiService.types').HabitReorganizationPlan>(
+    const plan = await generateJsonContent<import('./geminiService.types').HabitReorganizationPlan>(
       householdId,
       prompt,
       {
@@ -1744,6 +1857,27 @@ export const reorganizeHabits = async (
       GEMINI_MODEL,
       validateHabitReorganization
     );
+
+    // Reconcile against the input so the plan can never silently drop a habit
+    // (the returned array IS the whole plan; an omitted id would lose its
+    // category/order). Keep only real input ids, dedupe, then append any the
+    // model missed — preserving each missing habit's current category.
+    const inputById = new Map(habits.map(h => [h.id, h]));
+    const seen = new Set<string>();
+    const reconciled = plan.habits.filter(entry => {
+      if (!inputById.has(entry.id) || seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    });
+    // Append after the highest order the model used, so missing habits land at
+    // the END even when the model returns sparse/non-sequential order values.
+    let nextOrder = reconciled.reduce((max, h) => Math.max(max, h.order), -1) + 1;
+    for (const h of habits) {
+      if (!seen.has(h.id)) {
+        reconciled.push({ id: h.id, category: h.category || 'Uncategorized', order: nextOrder++ });
+      }
+    }
+    return { ...plan, habits: reconciled };
 
   } catch (error) {
     console.error("Gemini Habit Reorganization Error:", error);
@@ -1775,10 +1909,8 @@ export const parseRecipe = async (
       - tags: Array of strings (e.g., "Vegetarian", "Quick", "Dinner"). Infer 2-3 tags if not explicit.
       - recipeUrl: If a URL is present in the text, extract it. Otherwise, leave empty.
 
-      Input Text:
+      Input Text (may be truncated):
       "${sanitizedText}"
-
-      Return JSON.
     `;
 
     return await generateJsonContent<Partial<Meal>>(
@@ -1893,7 +2025,7 @@ export const generateWeeklyPlan = async (
       `- prep[] and cook[] steps. Each step: { t (title), min (WALL-CLOCK minutes, REQUIRED, used to schedule cook times), det (detail bullets), kid (true if a kid can help), off (true if hands-off like simmering/smoking), timer (minutes if it starts a timer) }. Front-load prep (wash/cut/measure).`,
       `- uses[] ({item, from}) and saves[] ({item, to}) for cross-night hand-offs; leftovers[] notes.`,
       ``,
-      `SHOPPING LIST (items[]): combine ingredients across all meals into a deduped grocery list. Each item: { n (name), q (quantity), sec (one of: meat, produce, dairy, frozen, pantry), store (a store key from the stores you define), p (estimated price in dollars), staple (true for oil/butter/spices the household likely already owns), warn (true if a substitution check is needed) }.`,
+      `SHOPPING LIST (items[]): combine ingredients across all meals into a deduped grocery list. Each item: { n (name), q (quantity), sec (one of: meat, produce, dairy, frozen, pantry — if none fits, use "pantry"), store (a store key from the stores you define), p (a ROUGH ballpark price in US dollars; omit it if you are unsure rather than guessing), staple (true for oil/butter/spices the household likely already owns), warn (true if a substitution check is needed) }.`,
       stores ? `Split groceries across these stores, assigning a short lowercase "key" to each: ${stores}.` : `Use a single store with key "store" named "Grocery".`,
       ``,
       `Return a JSON object: { weekLabel, subtitle, stores: [{key,name,why}], meals: [...], items: [...] }.`,
@@ -1926,7 +2058,7 @@ export const generateWeeklyPlan = async (
               properties: {
                 cuisine: { type: Type.STRING },
                 name: { type: Type.STRING },
-                effort: { type: Type.STRING },
+                effort: { type: Type.STRING, enum: ['Low', 'Med', 'High'] },
                 activeMin: { type: Type.NUMBER },
                 defaultServe: { type: Type.STRING },
                 servesNote: { type: Type.STRING },
@@ -1962,7 +2094,7 @@ export const generateWeeklyPlan = async (
               properties: {
                 n: { type: Type.STRING },
                 q: { type: Type.STRING },
-                sec: { type: Type.STRING },
+                sec: { type: Type.STRING, enum: ['meat', 'produce', 'dairy', 'frozen', 'pantry'] },
                 store: { type: Type.STRING },
                 p: { type: Type.NUMBER },
                 note: { type: Type.STRING },
@@ -1990,6 +2122,12 @@ export const generateWeeklyPlan = async (
       storeOrder.push(s.key);
     });
 
+    // Drop non-positive prices — `p` is a rough estimate and a 0/negative value
+    // is noise the UI shouldn't present as data.
+    const items = (generated.items ?? []).map(it =>
+      typeof it.p === 'number' && it.p <= 0 ? { ...it, p: undefined } : it
+    );
+
     return {
       weekOf,
       weekLabel: generated.weekLabel,
@@ -1998,7 +2136,7 @@ export const generateWeeklyPlan = async (
       stores: storesRecord,
       storeOrder,
       meals: generated.meals ?? [],
-      items: generated.items ?? [],
+      items,
     };
   } catch (error) {
     console.error("Gemini Weekly Plan Error:", error);
