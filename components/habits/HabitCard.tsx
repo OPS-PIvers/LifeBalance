@@ -61,14 +61,15 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
     !habit.completedDates.includes(yesterday) &&
     (freezeBank?.tokens || 0) > 0;
 
-  // Grouped-flat surface: solid panel, hairline border, deliberate radius, NO
-  // shadow/glass. Active state is a quiet left tint (money-pos / money-neg),
-  // not a floating elevated card.
+  // Grouped-flat ROW: borderless and hairline-separated by the parent
+  // SurfaceList (HabitCategoryList) — never a floating, individually-bordered
+  // card. Hierarchy comes from spacing + a quiet active tint (money-pos /
+  // money-neg), not from a per-card border/shadow.
   const containerClasses = cn(
-    "relative flex items-center justify-between p-4 rounded-card border transition-colors duration-(--duration-base) ease-(--ease-standard) select-none group/card",
-    !isActive && "bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 hover:border-brand-300 dark:hover:border-brand-600",
-    isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10 border-money-pos/30 dark:border-money-pos/30",
-    isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10 border-money-neg/30 dark:border-money-neg/30"
+    "relative flex items-center justify-between px-4 py-3.5 transition-colors duration-(--duration-base) ease-(--ease-standard) select-none group/card",
+    !isActive && "bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40",
+    isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10",
+    isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10"
   );
 
   const buttonClasses = cn(

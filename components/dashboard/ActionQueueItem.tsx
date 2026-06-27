@@ -269,7 +269,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
   }, [item]);
 
   return (
-    <div className="surface-section overflow-hidden transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/30 group">
+    <div className="relative hairline-divider transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:bg-brand-50 dark:hover:bg-brand-700/30 group">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}

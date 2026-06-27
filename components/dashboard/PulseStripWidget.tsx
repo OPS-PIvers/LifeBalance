@@ -7,6 +7,7 @@ import { sumMoney, roundMoney } from '@/utils/money';
 import { startOfWeek, parseISO, isSameWeek } from 'date-fns';
 import { Flame, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { Section } from '@/components/ui/Section';
 
 /**
  * PulseStripWidget — the app's thesis metric, finally surfaced on Home.
@@ -117,17 +118,11 @@ export const PulseStripWidget: React.FC = () => {
         : Minus;
 
   return (
-    <section
-      aria-label="This week at a glance"
-      className="surface-section overflow-hidden"
-    >
-      <header className="px-4 pt-3 pb-2">
-        <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400">
-          This week
-        </h2>
-      </header>
-
-      <div className="grid grid-cols-3 divide-x divide-brand-200 dark:divide-brand-700 border-t border-brand-200 dark:border-brand-700">
+    <Section title="This week" aria-label="This week at a glance">
+      {/* A hairline-edged stat BAND on the canvas — deliberately not a rounded
+          card, so it reads as a lightweight ledger strip under the hero rather
+          than another peer surface competing for weight. */}
+      <div className="grid grid-cols-3 divide-x divide-brand-200 dark:divide-brand-700 border-y border-brand-200 dark:border-brand-700">
         {/* Points earned — the habit/gamification signal (warm) */}
         <PulseCell label="Points">
           <span className="font-mono text-2xl font-bold tabular-nums text-warm-600 dark:text-warm-300">
@@ -202,7 +197,7 @@ export const PulseStripWidget: React.FC = () => {
           )}
         </PulseCell>
       </div>
-    </section>
+    </Section>
   );
 };
 

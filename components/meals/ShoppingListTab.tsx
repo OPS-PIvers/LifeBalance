@@ -506,7 +506,7 @@ const ShoppingListTab: React.FC = () => {
              <button
                 onClick={handleOptimize}
                 disabled={isOptimizing || shoppingList.length === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-warm-600 hover:bg-warm-50 hover:border-warm-200 dark:hover:text-warm-300 dark:hover:bg-warm-500/15 dark:hover:border-warm-500/30 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-warm-600 hover:bg-warm-50 dark:hover:text-warm-300 dark:hover:bg-warm-500/15 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
                 title="AI optimize list"
              >
                 {isOptimizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -515,7 +515,7 @@ const ShoppingListTab: React.FC = () => {
 
              <button
                 onClick={() => setIsCatalogOpen(true)}
-                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-accent-600 hover:bg-accent-50 hover:border-accent-200 dark:hover:text-accent-300 dark:hover:bg-accent-900/30 dark:hover:border-accent-700 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                className="flex-1 flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-accent-600 hover:bg-accent-50 dark:hover:text-accent-300 dark:hover:bg-accent-900/30 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                 title="View item history"
              >
                 <Clock className="w-3.5 h-3.5" />
@@ -528,10 +528,10 @@ const ShoppingListTab: React.FC = () => {
                   aria-label={filterStore ? `Filter by store: ${filterStore}` : 'Filter by store'}
                   aria-expanded={isFilterOpen}
                   aria-haspopup="menu"
-                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 border rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+                  className={`w-full flex items-center justify-center gap-1.5 p-2.5 rounded-btn text-xs font-medium transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
                     filterStore
-                      ? 'bg-accent-50 border-accent-200 text-accent-700 dark:bg-accent-900/30 dark:border-accent-700 dark:text-accent-200'
-                      : 'bg-white dark:bg-brand-800 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 hover:text-brand-900 hover:bg-brand-50 dark:hover:text-brand-50 dark:hover:bg-brand-700/50'
+                      ? 'bg-accent-50 text-accent-700 dark:bg-accent-900/30 dark:text-accent-200'
+                      : 'text-brand-600 dark:text-brand-300 hover:text-brand-900 hover:bg-brand-50 dark:hover:text-brand-50 dark:hover:bg-brand-700/50'
                   }`}
                >
                   <Filter className="w-3.5 h-3.5" />
