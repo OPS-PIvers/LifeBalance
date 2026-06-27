@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList, SlidersHorizontal } from 'lucide-react';
@@ -125,6 +125,12 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   // pop the iOS keyboard on mount; this page is also embedded in /lists).
   const [quickText, setQuickText] = useState('');
   const quickAddRef = useAutoFocus<HTMLInputElement>();
+  // Synchronous in-flight guard: blocks a same-tick double submit (key-repeat /
+  // double-click both read the stale quickText closure before the clear
+  // re-renders, which would create duplicate tasks). A ref (not state) so the
+  // input stays enabled — the whole point of a quick-add bar is rapid-fire
+  // entry, so we deliberately do NOT disable the field between adds.
+  const submittingQuickAddRef = useRef(false);
 
   // Categorize To-Dos (Active)
   const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
@@ -243,12 +249,13 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   const handleQuickAdd = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = quickText.trim();
-    if (!trimmed) return;
+    if (!trimmed || submittingQuickAddRef.current) return;
     if (members.length === 0) {
       toast.error('No household members available. Please add members first.');
       return;
     }
     const assignee = currentUser?.uid ?? members[0]!.uid; // members[0] is defined: guarded by members.length === 0 above
+    submittingQuickAddRef.current = true;
     setQuickText('');
     try {
       await addToDo({
@@ -263,6 +270,8 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
       console.error('Error adding to-do:', error);
       toast.error('Failed to add task. Please try again.');
       setQuickText(trimmed); // restore so the user doesn't lose their input
+    } finally {
+      submittingQuickAddRef.current = false;
     }
   }, [quickText, members, currentUser, addToDo]);
 
