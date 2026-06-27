@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/CustomHabitForm';
 import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // UUID generator with fallback for non-secure contexts
@@ -253,15 +253,15 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   }, [onClose, resetForm]);
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={handleClose}
-      maxWidth="max-w-lg"
+      height="tall"
+      noPadding
       ariaLabelledBy={titleId}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700 shrink-0">
-        <div className="flex items-center gap-3">
+      header={
+        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700">
+          <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
                 onClick={() => setView('main')}
@@ -283,12 +283,30 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
             <X size={20} />
           </button>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 scroll-contain-y">
-
-          {/* Main View */}
-          {view === 'main' && (
+      }
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700">
+          {view === 'main' ? (
+            <button
+              onClick={handleClose}
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            >
+              Done
+            </button>
+          ) : (
+            <button
+              onClick={handleSaveCustom}
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            >
+              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
+            </button>
+          )}
+        </div>
+      }
+    >
+      {/* Content — single Drawer scroll container */}
+      {/* Main View */}
+      {view === 'main' && (
             <div className="p-4 space-y-6">
 
               {/* Create Custom Button */}
@@ -335,26 +353,6 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               onDelete={confirmDelete}
             />
           )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 shrink-0">
-          {view === 'main' ? (
-            <button
-              onClick={handleClose}
-              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-            >
-              Done
-            </button>
-          ) : (
-            <button
-              onClick={handleSaveCustom}
-              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-            >
-              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
-            </button>
-          )}
-        </div>
 
       <ConfirmDialog
         isOpen={!!deleteConfirmHabit}
@@ -365,7 +363,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         confirmLabel="Delete"
         confirmVariant="destructive"
       />
-    </Modal>
+    </Drawer>
   );
 };
 

@@ -12,6 +12,13 @@ interface DrawerProps {
   title?: string;
   /** Optional fixed header content (won't scroll) */
   header?: React.ReactNode;
+  /**
+   * Optional fixed footer content rendered as a shrink-0 bar BELOW the
+   * scrollable body (won't scroll). Use for sticky action bars (Save/Cancel)
+   * so the body remains the single scroll container — avoids nesting a second
+   * scroller inside the drawer body.
+   */
+  footer?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   /** Disable default content padding */
@@ -39,6 +46,7 @@ export const Drawer: React.FC<DrawerProps> = ({
   onClose,
   title,
   header,
+  footer,
   children,
   className,
   noPadding = false,
@@ -146,9 +154,16 @@ export const Drawer: React.FC<DrawerProps> = ({
              )}
 
              {/* Content */}
-             <div className={twMerge("scroll-contain-y flex-1 pb-safe", !noPadding && "p-4")}>
+             <div className={twMerge("scroll-contain-y flex-1", !footer && "pb-safe", !noPadding && "p-4")}>
                {children}
              </div>
+
+             {/* Footer (fixed; sits below the scrollable body) */}
+             {footer && (
+               <div className="shrink-0 pb-safe">
+                 {footer}
+               </div>
+             )}
           </motion.div>
         </>
       )}
