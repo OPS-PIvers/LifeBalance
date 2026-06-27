@@ -388,6 +388,7 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
   const { rewardsInventory, totalPoints, redeemReward } = useGamification();
   const { members, household } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
+  const titleId = useId();
 
   const kids = members.filter((m) => m.role === 'kid');
   const pendingRedemptions = household?.pendingRedemptions ?? [];
@@ -398,11 +399,11 @@ const RewardsModal: React.FC<RewardsModalProps> = ({ isOpen, onClose }) => {
       onClose={onClose}
       noPadding
       className="bg-brand-50 dark:bg-brand-900"
-      ariaLabel="Rewards Store"
+      ariaLabelledBy={titleId}
       header={
         <div className="flex items-center justify-between px-6 py-4 bg-brand-800 dark:bg-brand-900 border-b border-brand-700 text-white">
           <div>
-            <h2 className="font-display text-xl font-semibold">Rewards Store</h2>
+            <h2 id={titleId} className="font-display text-xl font-semibold">Rewards Store</h2>
             <p className="text-xs text-brand-300">Lifetime Points: {totalPoints}</p>
           </div>
           <button

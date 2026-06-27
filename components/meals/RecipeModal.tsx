@@ -53,7 +53,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       noPadding
-      ariaLabel={meal.name}
+      ariaLabelledBy="recipe-modal-title"
       header={
         <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -68,7 +68,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
               </span>
             ))}
           </div>
-          <h3 className="font-display text-xl font-semibold text-brand-900 dark:text-brand-100 tracking-tight leading-snug">
+          <h3 id="recipe-modal-title" className="font-display text-xl font-semibold text-brand-900 dark:text-brand-100 tracking-tight leading-snug">
             {meal.name}
           </h3>
           {meal.description && (
