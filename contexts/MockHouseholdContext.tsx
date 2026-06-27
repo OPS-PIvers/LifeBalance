@@ -62,12 +62,16 @@ const SEED_TRANSACTIONS: Transaction[] = [
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
   {
-    // Apple Pay $0 "awaiting amount" stub — drives the on-open AwaitingAmountDrawer
-    // and the Action Queue "Add amount" affordance in Test Mode.
+    // Apple Pay $0 "awaiting amount" stub — demos the Action Queue "Add amount"
+    // affordance + edit-first flow in Test Mode. `needsAmountPromptedAt` is
+    // pre-set so it does NOT auto-open the AwaitingAmountDrawer on boot (a modal
+    // auto-popping over the dashboard would block the e2e smoke nav). The
+    // auto-open drawer itself is covered by AwaitingAmountDrawer.test.tsx.
     id: 'tx3', amount: 0, merchant: 'Shell Gas', category: 'Uncategorized',
     date: getLocalDateString(),
     status: 'pending_review', isRecurring: false, source: 'manual',
-    autoCategorized: false, payPeriodId: '2024-01-01', needsAmount: true
+    autoCategorized: false, payPeriodId: '2024-01-01',
+    needsAmount: true, needsAmountPromptedAt: '2024-01-01T00:00:00.000Z'
   },
 ];
 
