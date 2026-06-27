@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Star, TrendingUp, User, AlertCircle } from 'lucide-react';
 import { useFinance, useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
@@ -33,7 +33,6 @@ const TopToolbar: React.FC = () => {
     : 0;
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => preloadOnIdle(loadFeedbackModal), []);
 
@@ -119,7 +118,6 @@ const TopToolbar: React.FC = () => {
 
             {/* Profile Icon */}
             <button
-              ref={profileButtonRef}
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="ml-1 w-9 h-9 rounded-full bg-brand-700 flex items-center justify-center text-brand-200 border border-brand-600 active:bg-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-400"
@@ -140,7 +138,7 @@ const TopToolbar: React.FC = () => {
           </div>
         </header>
 
-        <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} anchorRef={profileButtonRef} />
+        <ProfileMenu isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
       </div>
 
       <LazyMount when={isFeedbackOpen}>
