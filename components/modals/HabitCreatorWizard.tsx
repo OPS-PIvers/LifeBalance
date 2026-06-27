@@ -284,13 +284,29 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
           </button>
         </div>
       }
+      footer={
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700">
+          {view === 'main' ? (
+            <button
+              onClick={handleClose}
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            >
+              Done
+            </button>
+          ) : (
+            <button
+              onClick={handleSaveCustom}
+              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            >
+              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
+            </button>
+          )}
+        </div>
+      }
     >
-      <div className="flex flex-col h-full">
-        {/* Content */}
-        <div className="flex-1 scroll-contain-y">
-
-          {/* Main View */}
-          {view === 'main' && (
+      {/* Content — single Drawer scroll container */}
+      {/* Main View */}
+      {view === 'main' && (
             <div className="p-4 space-y-6">
 
               {/* Create Custom Button */}
@@ -337,27 +353,6 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
               onDelete={confirmDelete}
             />
           )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 shrink-0">
-          {view === 'main' ? (
-            <button
-              onClick={handleClose}
-              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-            >
-              Done
-            </button>
-          ) : (
-            <button
-              onClick={handleSaveCustom}
-              className="w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-            >
-              {view === 'edit-custom' ? 'Save Changes' : 'Create Habit'}
-            </button>
-          )}
-        </div>
-      </div>
 
       <ConfirmDialog
         isOpen={!!deleteConfirmHabit}
