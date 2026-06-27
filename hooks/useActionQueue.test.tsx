@@ -175,6 +175,27 @@ describe('useActionQueue', () => {
     expect(result.current.actionQueue.map((i) => i.id)).toEqual(['pending']);
   });
 
+  it('keeps an Apple Pay $0 stub in the queue even after it was dismissed from the on-open drawer', () => {
+    setMocks({
+      transactions: [
+        // Dismissed stub: needsAmount true + needsAmountPromptedAt set. It must
+        // still surface in the Action Queue (the queue filters only on status).
+        makeTransaction({
+          id: 'stub',
+          date: '2026-06-16',
+          amount: 0,
+          status: 'pending_review',
+          needsAmount: true,
+          needsAmountPromptedAt: '2026-06-16T09:00:00.000Z',
+        }),
+      ],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    const item = result.current.actionQueue.find((i) => i.id === 'stub');
+    expect(item).toBeDefined();
+    expect(item && isTransactionQueueItem(item) && item.needsAmount).toBe(true);
+  });
+
   it('skips todos with invalid dates without throwing', () => {
     setMocks({
       todos: [

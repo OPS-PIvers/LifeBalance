@@ -61,6 +61,14 @@ const SEED_TRANSACTIONS: Transaction[] = [
     status: 'verified', isRecurring: true, source: 'manual',
     autoCategorized: false, payPeriodId: '2024-01-01'
   },
+  {
+    // Apple Pay $0 "awaiting amount" stub — drives the on-open AwaitingAmountDrawer
+    // and the Action Queue "Add amount" affordance in Test Mode.
+    id: 'tx3', amount: 0, merchant: 'Shell Gas', category: 'Uncategorized',
+    date: getLocalDateString(),
+    status: 'pending_review', isRecurring: false, source: 'manual',
+    autoCategorized: false, payPeriodId: '2024-01-01', needsAmount: true
+  },
 ];
 
 const SEED_HABITS: Habit[] = [
@@ -805,6 +813,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateTransactionCategory: noOp,
     deleteTransaction,
     splitTransaction,
+    markNeedsAmountPrompted: async (ids: string[]) => {
+      const now = new Date().toISOString();
+      setTransactions(prev => prev.map(t => ids.includes(t.id) ? { ...t, needsAmountPromptedAt: now } : t));
+    },
     addCalendarItem,
     updateCalendarItem,
     deleteCalendarItem,

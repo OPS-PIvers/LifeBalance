@@ -353,9 +353,11 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('store', null), 100) &&
                               isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
                               isValidOptionalString(request.resource.data.get('subBucketId', null), 50) &&
+                              isValidOptionalString(request.resource.data.get('needsAmountPromptedAt', null), 30) && // ISO timestamp
                               // Booleans
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
+                              (request.resource.data.get('needsAmount', null) == null || isValidBoolean(request.resource.data.get('needsAmount', null))) &&
                               // Arrays (basic type check)
                               (request.resource.data.get('relatedHabitIds', null) == null || request.resource.data.relatedHabitIds is list) &&
                               // Status enum validation

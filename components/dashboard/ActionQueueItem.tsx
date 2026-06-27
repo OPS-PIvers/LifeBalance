@@ -172,8 +172,17 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       setSelectedHabitIds(item.relatedHabitIds || []);
       // Initialize with current category
       setSelectedCategory(item.category || '');
-      // Reset edit state
-      setIsEditing(false);
+      if (item.needsAmount) {
+        // Apple Pay $0 "awaiting amount" stub: open the edit form first (blank
+        // amount) so the user must enter the real amount before approving — the
+        // edit form's amount>0 validation prevents verifying a $0.
+        setEditForm({ merchant: item.merchant, amount: '', date: item.date });
+        setEditErrors({});
+        setIsEditing(true);
+      } else {
+        // Reset edit state
+        setIsEditing(false);
+      }
     } else {
       setSelectedHabitIds([]);
       setSelectedCategory('');
@@ -218,7 +227,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
           await updateTransaction(item.id, {
               merchant: editForm.merchant,
               amount: amount,
-              date: editForm.date
+              date: editForm.date,
+              // Entering a real amount resolves an Apple Pay "awaiting amount" stub.
+              ...(item.needsAmount ? { needsAmount: false } : {})
           });
           setIsEditing(false);
           // Toast is handled by updateTransaction or we can add one here if needed,
@@ -301,9 +312,13 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
         </div>
 
         <div className="flex items-center gap-3">
-          {(isTransactionQueueItem(item) || isCalendarQueueItem(item)) && (
+          {isTransactionQueueItem(item) && item.needsAmount ? (
+            <span className="text-xxs font-bold text-warm-700 dark:text-warm-300 bg-warm-100 dark:bg-warm-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">
+              Add amount
+            </span>
+          ) : (isTransactionQueueItem(item) || isCalendarQueueItem(item)) ? (
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount)}</span>
-          )}
+          ) : null}
           {!isExpanded && (
             <button
               onClick={handleExpand}
