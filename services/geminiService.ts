@@ -483,13 +483,23 @@ const DEFAULT_FINANCE_CATEGORIES = [
  * model is asked to pick from the list, but the response schema only constrains
  * the TYPE (string), not membership — so a hallucinated/off-list category would
  * otherwise be persisted verbatim and fragment the user's category set. Match is
- * case-insensitive and trimmed; anything off-list collapses to `fallback`.
+ * case-insensitive and trimmed.
+ *
+ * Contract: returns a member of `allowed`, or the `fallback` sentinel when
+ * nothing matches. The sentinel ('Other' / 'Uncategorized') is the designated
+ * catch-all and is intentionally allowed to be a NON-member of `allowed` —
+ * collapsing every unknown to ONE recognizable "uncategorized" marker is the
+ * point of clamping. We deliberately do NOT coerce to `allowed[0]`: mislabeling
+ * an unknown (e.g. a gas receipt) as some arbitrary real category is worse than
+ * a clear, unmatched "Other". When `allowed` is empty there is nothing to clamp
+ * against, so the model's own value is kept.
  */
 const clampToAllowed = (
   value: string | undefined | null,
   allowed: readonly string[],
   fallback: string = FALLBACK_CATEGORY,
 ): string => {
+  if (allowed.length === 0) return value || fallback;
   if (!value) return fallback;
   const needle = value.trim().toLowerCase();
   return allowed.find((a) => a.toLowerCase() === needle) ?? fallback;
@@ -1859,7 +1869,9 @@ export const reorganizeHabits = async (
       seen.add(entry.id);
       return true;
     });
-    let nextOrder = reconciled.length;
+    // Append after the highest order the model used, so missing habits land at
+    // the END even when the model returns sparse/non-sequential order values.
+    let nextOrder = reconciled.reduce((max, h) => Math.max(max, h.order), -1) + 1;
     for (const h of habits) {
       if (!seen.has(h.id)) {
         reconciled.push({ id: h.id, category: h.category || 'Uncategorized', order: nextOrder++ });
