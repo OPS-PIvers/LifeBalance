@@ -117,7 +117,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             role="checkbox"
                             aria-checked={isSelected}
                             tabIndex={0}
-                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus:ring-2 focus:ring-brand-500/50 ${
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 ${
                                 isSelected
                                     ? 'bg-brand-50 border-brand-200 dark:bg-brand-700/30 dark:border-brand-500/40'
                                     : 'bg-white border-brand-100 hover:border-brand-200 hover:bg-brand-50 dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-600 dark:hover:bg-brand-700/50'
@@ -125,7 +125,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                         >
                             <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
                                 isSelected
-                                    ? 'bg-brand-600 border-brand-600 text-white'
+                                    ? 'bg-accent-600 border-accent-600 text-white'
                                     : 'bg-white border-brand-300 dark:bg-brand-700 dark:border-brand-600'
                             }`}>
                                 {isSelected && <Check size={14} strokeWidth={3} />}

@@ -250,7 +250,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
           type="time"
           value={serveValue}
           onChange={(e) => onServeChange(e.target.value)}
-          className="bg-white border border-brand-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-brand-900 focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-100"
+          className="bg-white border border-brand-200 rounded-lg px-2.5 py-1.5 text-sm font-bold text-brand-900 focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-100"
         />
       </div>
       <div className="text-right">
