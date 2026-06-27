@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import ToDosPage from './ToDosPage';
 import { useTodos, useHouseholdCore, type TodosContextValue, type HouseholdCoreContextValue } from '@/contexts/FirebaseHouseholdContext';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -51,6 +51,7 @@ vi.mock('lucide-react', () => ({
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
+  SlidersHorizontal: () => <div data-testid="sliders-icon" />,
 }));
 
 describe('ToDosPage', () => {
@@ -261,6 +262,46 @@ describe('ToDosPage', () => {
           assignedTo: 'user1'
         }));
       });
+    });
+
+    it('quick-adds a task from the sticky bar with default date and current-user assignee', async () => {
+      setup();
+
+      fireEvent.change(screen.getByLabelText('Quick add task'), { target: { value: 'Quick Task' } });
+      fireEvent.click(screen.getByLabelText('Add task'));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'Quick Task',
+          completeByDate: today,
+          assignedTo: 'user1', // currentUser (members[0]) is the default assignee
+          isCompleted: false,
+        }));
+      });
+    });
+
+    it('does not quick-add when the field is empty', () => {
+      setup();
+      // Submit button is disabled with no text; clicking is a no-op.
+      const submit = screen.getByLabelText('Add task');
+      expect(submit).toBeDisabled();
+      fireEvent.click(submit);
+      expect(mockAddToDo).not.toHaveBeenCalled();
+    });
+
+    it('blocks a same-tick double quick-add so only one task is created', async () => {
+      setup();
+      const input = screen.getByLabelText('Quick add task') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'Once only' } });
+      const form = input.closest('form')!;
+      // Two synchronous submit events before React re-renders / the write
+      // resolves — the in-flight ref guard must drop the second.
+      await act(async () => {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      });
+      expect(mockAddToDo).toHaveBeenCalledTimes(1);
+      expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({ text: 'Once only' }));
     });
 
     it('duplicates a task', async () => {
