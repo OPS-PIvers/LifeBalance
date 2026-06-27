@@ -48,7 +48,10 @@ const ListsPage: React.FC = () => {
 
       <div className="flex-1">
         {activeTab === 'todos' ? (
-          <ToDosPage />
+          // Offset the to-do quick-add bar so it pins just under this page's
+          // sticky tab strip (measured ~73px: px-4 pt-4 pb-2 + TabsList) — same
+          // value the shopping tab uses.
+          <ToDosPage stickyTopOffset={72} />
         ) : (
           <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
             {{

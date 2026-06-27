@@ -51,6 +51,7 @@ vi.mock('lucide-react', () => ({
   History: () => <div data-testid="history-icon" />,
   MoreVertical: () => <div data-testid="more-vertical-icon" />,
   ClipboardList: () => <div data-testid="clipboard-list-icon" />,
+  SlidersHorizontal: () => <div data-testid="sliders-icon" />,
 }));
 
 describe('ToDosPage', () => {
@@ -261,6 +262,31 @@ describe('ToDosPage', () => {
           assignedTo: 'user1'
         }));
       });
+    });
+
+    it('quick-adds a task from the sticky bar with default date and current-user assignee', async () => {
+      setup();
+
+      fireEvent.change(screen.getByLabelText('Quick add task'), { target: { value: 'Quick Task' } });
+      fireEvent.click(screen.getByLabelText('Add task'));
+
+      await waitFor(() => {
+        expect(mockAddToDo).toHaveBeenCalledWith(expect.objectContaining({
+          text: 'Quick Task',
+          completeByDate: today,
+          assignedTo: 'user1', // currentUser (members[0]) is the default assignee
+          isCompleted: false,
+        }));
+      });
+    });
+
+    it('does not quick-add when the field is empty', () => {
+      setup();
+      // Submit button is disabled with no text; clicking is a no-op.
+      const submit = screen.getByLabelText('Add task');
+      expect(submit).toBeDisabled();
+      fireEvent.click(submit);
+      expect(mockAddToDo).not.toHaveBeenCalled();
     });
 
     it('duplicates a task', async () => {

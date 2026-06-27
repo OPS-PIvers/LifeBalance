@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList } from 'lucide-react';
+import { Plus, Calendar, Check, Trash2, Edit2, AlertCircle, X, Clock, User, Download, Layers, CheckSquare, Loader2, RotateCcw, Copy, History, MoreVertical, ClipboardList, SlidersHorizontal } from 'lucide-react';
 import { format, isToday, isTomorrow, parseISO, isBefore, addDays, startOfToday, endOfWeek, isSameDay, subDays, isSameWeek } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { ToDo, HouseholdMember } from '@/types/schema';
@@ -9,6 +9,7 @@ import { DEFAULT_TODO_POINTS } from '@/utils/todoPoints';
 import toast from 'react-hot-toast';
 import { haptic } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Drawer } from '@/components/ui/Drawer';
@@ -20,7 +21,19 @@ import Input from '@/components/ui/Input';
 import BatchRescheduleModal from '@/components/modals/BatchRescheduleModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
-const ToDosPage: React.FC = () => {
+interface ToDosPageProps {
+  /**
+   * Pixel offset for the sticky quick-add bar's `top`, to clear any sticky
+   * chrome a host renders above it. Default 0 (the standalone /todos route,
+   * where nothing is pinned above). /lists passes its sticky tab-strip height
+   * so the add bar pins just below it — mirrors ShoppingListTab.stickyTopOffset.
+   * Inline `style.top` (not a Tailwind `top-[]` class) because the value is
+   * host-driven and dynamic classes won't compile.
+   */
+  stickyTopOffset?: number;
+}
+
+const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   const {
     todos,
     addToDo,
@@ -102,10 +115,16 @@ const ToDosPage: React.FC = () => {
     };
   }, []);
 
-  // Form State
+  // Form State (full add/edit drawer)
   const [text, setText] = useState('');
   const [completeByDate, setCompleteByDate] = useState(getLocalDateString());
   const [assignedTo, setAssignedTo] = useState('');
+
+  // Sticky quick-add bar state — mirrors the shopping list's inline add. The
+  // input is desktop-only autofocused (useAutoFocus skips touch so it doesn't
+  // pop the iOS keyboard on mount; this page is also embedded in /lists).
+  const [quickText, setQuickText] = useState('');
+  const quickAddRef = useAutoFocus<HTMLInputElement>();
 
   // Categorize To-Dos (Active)
   const { immediate, upcoming, radar, allActiveCount, allActiveIds } = useMemo(() => {
@@ -207,15 +226,45 @@ const ToDosPage: React.FC = () => {
     </span>
   );
 
-  // Open modal for adding
+  // Open the full add form (date + assignee). Carries over whatever is already
+  // typed in the sticky quick-add field so switching to "details" never loses it.
   const openAddModal = useCallback(() => {
-    setText('');
+    setText(quickText.trim());
     setCompleteByDate(getLocalDateString());
     const defaultAssignee = currentUser?.uid ?? (members.length > 0 ? members[0]!.uid : ''); // members[0] is defined: guarded by members.length > 0
     setAssignedTo(defaultAssignee);
     setEditingId(null);
     setIsAddModalOpen(true);
-  }, [currentUser, members]);
+  }, [quickText, currentUser, members]);
+
+  // Quick-add (sticky bar): create a task with sensible defaults — due today,
+  // assigned to the current user (falling back to the first member). For a
+  // different date/assignee, the adjacent "details" button opens the full form.
+  const handleQuickAdd = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = quickText.trim();
+    if (!trimmed) return;
+    if (members.length === 0) {
+      toast.error('No household members available. Please add members first.');
+      return;
+    }
+    const assignee = currentUser?.uid ?? members[0]!.uid; // members[0] is defined: guarded by members.length === 0 above
+    setQuickText('');
+    try {
+      await addToDo({
+        text: trimmed,
+        completeByDate: getLocalDateString(),
+        assignedTo: assignee,
+        isCompleted: false,
+      });
+      haptic('success');
+      toast.success('Task added');
+    } catch (error) {
+      console.error('Error adding to-do:', error);
+      toast.error('Failed to add task. Please try again.');
+      setQuickText(trimmed); // restore so the user doesn't lose their input
+    }
+  }, [quickText, members, currentUser, addToDo]);
 
   // Open modal for editing
   const openEditModal = useCallback((todo: ToDo) => {
@@ -391,6 +440,7 @@ const ToDosPage: React.FC = () => {
         });
         haptic('success');
         toast.success('Task added');
+        setQuickText(''); // the detailed form consumed the carried-over text
       }
       setIsAddModalOpen(false);
     } catch (error) {
@@ -513,26 +563,18 @@ const ToDosPage: React.FC = () => {
 
           <div className="flex gap-2">
             {!isSelectionMode && (
-                <>
-                  <Button
-                    variant="secondary"
-                    onClick={handleExport}
-                    disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
-                    aria-label={`Export ${viewMode} tasks to CSV`}
-                    title={`Export ${viewMode} tasks to CSV`}
-                    leftIcon={<Download size={16} />}
-                  >
-                    <span className="hidden sm:inline">Export</span>
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={openAddModal}
-                    aria-label="Add new task"
-                    leftIcon={<Plus size={16} />}
-                  >
-                     <span className="hidden sm:inline">New Task</span>
-                  </Button>
-                </>
+                /* The primary "New Task" action now lives in the sticky quick-add
+                   bar below (mirrors the shopping list). Export stays here. */
+                <Button
+                  variant="secondary"
+                  onClick={handleExport}
+                  disabled={viewMode === 'active' ? allActiveCount === 0 : (completedToday.length + completedYesterday.length + completedWeek.length + completedOlder.length) === 0}
+                  aria-label={`Export ${viewMode} tasks to CSV`}
+                  title={`Export ${viewMode} tasks to CSV`}
+                  leftIcon={<Download size={16} />}
+                >
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
               )}
 
               <Button
@@ -557,6 +599,57 @@ const ToDosPage: React.FC = () => {
           </TabsList>
         </Tabs>
       </div>
+
+      {/* Anchored quick-add bar — same sticky inline-add structure as the
+          shopping list: pinned to the top of the <main> scroller so it stays
+          visible while the list scrolls under it. Top (not bottom) deliberately
+          clears the global Capture FAB at bottom-center. Quick-add defaults to
+          due-today / current user; the adjacent "details" button opens the full
+          form for a custom date or assignee. `stickyTopOffset` clears the /lists
+          tab strip (0 on the standalone /todos route). `-mx-4 px-4` bleeds the
+          blurred bar to the content edges. Hidden in selection mode and the
+          completed view, where adding has no context. */}
+      {viewMode === 'active' && !isSelectionMode && (
+        <div
+          className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur border-b border-brand-200 dark:border-brand-800"
+          style={{ top: `${stickyTopOffset}px` }}
+        >
+          <div className="flex items-center gap-2">
+            <form onSubmit={handleQuickAdd} className="relative flex-1">
+              <input
+                ref={quickAddRef}
+                type="text"
+                value={quickText}
+                onChange={(e) => setQuickText(e.target.value)}
+                placeholder="Add a task (e.g. Take out trash)..."
+                aria-label="Quick add task"
+                className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
+              />
+              <button
+                type="submit"
+                disabled={!quickText.trim()}
+                aria-label="Add task"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
+              >
+                <Plus size={20} />
+              </button>
+            </form>
+
+            {/* Details — opens the full form to set a custom due date / assignee.
+                Kept first-class & always visible (like the shopping filter pill).
+                Retains aria-label "Add new task" so it is the page's full-add
+                entry point. */}
+            <button
+              onClick={openAddModal}
+              aria-label="Add new task"
+              title="Add with date & assignee"
+              className="flex-none flex items-center justify-center p-3 rounded-btn text-brand-600 hover:text-brand-900 hover:bg-brand-100 dark:text-brand-300 dark:hover:text-brand-50 dark:hover:bg-brand-700/50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+            >
+              <SlidersHorizontal className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {viewMode === 'active' ? (
           <>
