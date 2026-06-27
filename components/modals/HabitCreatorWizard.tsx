@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 import CustomHabitForm, { CustomHabitFormData } from '@/components/habits/CustomHabitForm';
 import CustomHabitList from '@/components/habits/CustomHabitList';
 import PresetHabitList from '@/components/habits/PresetHabitList';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // UUID generator with fallback for non-secure contexts
@@ -253,15 +253,15 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
   }, [onClose, resetForm]);
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={handleClose}
-      maxWidth="max-w-lg"
+      height="tall"
+      noPadding
       ariaLabelledBy={titleId}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700 shrink-0">
-        <div className="flex items-center gap-3">
+      header={
+        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-200 dark:border-brand-700">
+          <div className="flex items-center gap-3">
             {view !== 'main' && (
               <button
                 onClick={() => setView('main')}
@@ -283,7 +283,9 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
             <X size={20} />
           </button>
         </div>
-
+      }
+    >
+      <div className="flex flex-col h-full">
         {/* Content */}
         <div className="flex-1 scroll-contain-y">
 
@@ -355,6 +357,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
             </button>
           )}
         </div>
+      </div>
 
       <ConfirmDialog
         isOpen={!!deleteConfirmHabit}
@@ -365,7 +368,7 @@ const HabitCreatorWizard: React.FC<HabitCreatorWizardProps> = ({ isOpen, onClose
         confirmLabel="Delete"
         confirmVariant="destructive"
       />
-    </Modal>
+    </Drawer>
   );
 };
 
