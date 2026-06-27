@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useId } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MealIngredient, ShoppingItem } from '@/types/schema';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { ShoppingCart, Check, X, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Check, AlertCircle } from 'lucide-react';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 
 interface IngredientSelectorModalProps {
@@ -22,8 +22,6 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   shoppingList,
   onConfirm
 }) => {
-  const titleId = useId();
-
   // Memoize the set of unpurchased shopping list items for O(1) lookups
   // This avoids O(N*M) complexity in the render loop
   const unpurchasedItemNames = useMemo(() =>
@@ -74,25 +72,13 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md" ariaLabelledBy={titleId}>
+    <Drawer isOpen={isOpen} onClose={onClose} noPadding title="Add Ingredients">
       <div className="flex flex-col h-full max-h-[80vh]">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex justify-between items-center bg-white dark:bg-brand-800 z-10">
-          <div>
-            <h3 id={titleId} className="text-lg font-bold text-brand-900 dark:text-brand-100">Add Ingredients</h3>
-            <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">{mealName}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
-        </div>
+        {/* Meal context */}
+        <p className="px-4 pt-3 text-xs font-medium text-brand-500 dark:text-brand-400 truncate shrink-0">{mealName}</p>
 
         {/* List */}
-        <div className="flex-1 scroll-contain-y p-4 space-y-2">
+        <div className="flex-1 scroll-contain-y px-4 pb-4 pt-2 space-y-2">
             {ingredients.length === 0 ? (
                 <div className="text-center py-8 text-brand-500 dark:text-brand-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-brand-300 dark:text-brand-600" />
@@ -185,6 +171,6 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
             </div>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 };

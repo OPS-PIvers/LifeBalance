@@ -1,7 +1,7 @@
-import React, { useState, useId } from 'react';
-import { Modal } from '@/components/ui/Modal';
+import React, { useState } from 'react';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { FileText, Loader2, X, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import type { Meal } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -20,7 +20,6 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
 }) => {
   const [text, setText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
-  const titleId = useId();
 
   const handleParse = async () => {
     if (!text.trim()) {
@@ -45,28 +44,8 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" ariaLabelledBy={titleId}>
+    <Drawer isOpen={isOpen} onClose={onClose} noPadding title="Import Recipe">
       <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex justify-between items-center bg-white dark:bg-brand-800 z-10 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="bg-brand-50 p-2 rounded-xl text-brand-600 dark:bg-brand-700/40 dark:text-brand-300">
-                <FileText size={20} />
-            </div>
-            <div>
-                <h3 id={titleId} className="text-lg font-bold text-brand-900 dark:text-brand-100 tracking-tight">Import Recipe</h3>
-                <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">Paste text from any website</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
-            aria-label="Close"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
         {/* Content */}
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
              <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 dark:bg-brand-700/40 dark:border-brand-700">
@@ -112,6 +91,6 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
             </div>
         </div>
       </div>
-    </Modal>
+    </Drawer>
   );
 };
