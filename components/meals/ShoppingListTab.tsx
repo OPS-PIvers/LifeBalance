@@ -614,7 +614,7 @@ const ShoppingListTab: React.FC = () => {
                 )}
             </div>
         ) : filterStore ? (
-             <div className="space-y-2">
+             <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
                 {items.map(item => (
                     <ShoppingItemRow
                         key={item.id}
@@ -629,7 +629,7 @@ const ShoppingListTab: React.FC = () => {
                 ))}
             </div>
         ) : (
-            <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="space-y-2">
+            <Reorder.Group axis="y" values={items} onReorder={handleReorder} className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
                 {items.map(item => (
                     <ShoppingItemRow
                         key={item.id}

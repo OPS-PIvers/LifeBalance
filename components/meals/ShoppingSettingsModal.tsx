@@ -270,7 +270,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
             Cancel
           </button>
           <button
-            className="px-2 py-1 text-xs bg-brand-600 text-white rounded-sm hover:bg-brand-700"
+            className="px-2 py-1 text-xs bg-accent-600 text-white rounded-sm hover:bg-accent-700"
             onClick={() => {
               toast.dismiss(t.id);
               setLocalCategories([...GROCERY_CATEGORIES]);
@@ -356,7 +356,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                      className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                     />
                     <button
                       type="submit"
@@ -456,12 +456,12 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             onChange={(e) => setNewCategoryName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
                             placeholder="Category Name"
-                            className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                            className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                         />
                         <button
                             onClick={addCategory}
                             disabled={!newCategoryName.trim()}
-                            className="bg-brand-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="bg-accent-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -585,7 +585,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         value={editingTemplate.name}
                         onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
                         placeholder="Template Name (e.g. Weekly Basics)"
-                        className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                         autoFocus
                       />
                     </div>
@@ -635,7 +635,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         value={itemSearch}
                         onChange={e => setItemSearch(e.target.value)}
                         placeholder="Search or add new item..."
-                        className="w-full pl-9 p-2 bg-brand-50/50 border border-brand-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="w-full pl-9 p-2 bg-brand-50/50 border border-brand-200 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                       />
                     </div>
 

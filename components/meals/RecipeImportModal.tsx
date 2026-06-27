@@ -89,7 +89,7 @@ export const RecipeImportModal: React.FC<RecipeImportModalProps> = ({
                      value={text}
                      onChange={(e) => setText(e.target.value)}
                      placeholder="Paste recipe here...&#10;&#10;Example:&#10;Spaghetti Carbonara&#10;Ingredients:&#10;- 400g spaghetti&#10;- 150g pancetta&#10;..."
-                     className="w-full h-64 p-4 bg-white border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden text-sm font-mono text-brand-700 resize-none leading-relaxed dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                     className="w-full h-64 p-4 bg-white border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden text-sm font-mono text-brand-700 resize-none leading-relaxed dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                  />
              </div>
         </div>

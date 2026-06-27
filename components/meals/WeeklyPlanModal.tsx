@@ -217,7 +217,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
               onChange={(e) => setNote(e.target.value)}
               rows={2}
               placeholder="e.g. use the ground beef in the freezer, keep it quick this week"
-              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+              className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
             />
           </div>
           <div className="flex gap-3">
@@ -252,7 +252,7 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             onChange={(e) => setImportText(e.target.value)}
             rows={6}
             placeholder='Paste week.json here…'
-            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+            className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
           />
           <div className="flex gap-3">
             <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-brand-100 text-brand-700 font-bold rounded-xl hover:bg-brand-200 transition-colors dark:bg-brand-700 dark:text-brand-200 dark:hover:bg-brand-600">Back</button>

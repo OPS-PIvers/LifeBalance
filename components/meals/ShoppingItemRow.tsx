@@ -128,7 +128,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         onDragEnd={reduceMotion ? undefined : handleDragEnd}
         style={{ x, touchAction: 'pan-y' }}
         className={clsx(
-          "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 rounded-xl border border-brand-200 dark:border-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
+          "relative z-10 flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-brand-800 transition-colors duration-(--duration-fast) ease-(--ease-standard)",
           item.isPurchased && "opacity-70 bg-brand-50 dark:bg-brand-800/60"
         )}
       >
@@ -245,7 +245,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             id={item.id}
             dragListener={false}
             dragControls={dragControls}
-            className="relative overflow-hidden mb-2 rounded-xl"
+            className="relative overflow-hidden bg-white dark:bg-brand-800 hairline-divider"
             style={{ touchAction: 'pan-y' }}
             onDragStart={onReorderDragStart}
             onDragEnd={onReorderDragEnd}
@@ -256,7 +256,7 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
   }
 
   return (
-    <div className="relative overflow-hidden mb-2 rounded-xl">
+    <div className="relative overflow-hidden bg-white dark:bg-brand-800 hairline-divider">
         {Content}
     </div>
   );

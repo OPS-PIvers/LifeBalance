@@ -11,7 +11,6 @@ import { haptic } from '@/utils/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
-import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
@@ -749,28 +748,12 @@ const ToDosPage: React.FC = () => {
         count={selectedIds.size}
       />
 
-      {/* Add/Edit Modal */}
-      <Modal
+      {/* Add/Edit Task Drawer */}
+      <Drawer
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        className="p-6"
-        ariaLabelledBy="todo-modal-title"
+        title={editingId ? 'Edit task' : 'New task'}
       >
-        <div className="flex justify-between items-center mb-6">
-          <h2 id="todo-modal-title" className="font-display text-xl font-semibold text-brand-900 dark:text-brand-50">
-            {editingId ? 'Edit task' : 'New task'}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsAddModalOpen(false)}
-            className="rounded-full hover:bg-brand-50 dark:hover:bg-brand-700/50"
-            aria-label="Close dialog"
-          >
-            <X size={20} className="text-brand-400 dark:text-brand-500" />
-          </Button>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             id="task-input"
@@ -839,7 +822,7 @@ const ToDosPage: React.FC = () => {
             {editingId ? 'Save changes' : 'Create task'}
           </Button>
         </form>
-      </Modal>
+      </Drawer>
 
       {/* Batch Delete Confirmation */}
       <ConfirmDialog

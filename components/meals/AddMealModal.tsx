@@ -153,7 +153,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         type="text"
                         value={currentMeal.name || ''}
                         onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 font-medium text-brand-900 dark:text-brand-100"
+                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 font-medium text-brand-900 dark:text-brand-100"
                         placeholder="e.g. Adobo Chicken & Rice"
                     />
                 </div>
@@ -185,7 +185,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         id="meal-description"
                         value={currentMeal.description || ''}
                         onChange={e => setCurrentMeal({...currentMeal, description: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
+                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-brand-700 dark:text-brand-200 leading-relaxed"
                         rows={2}
                         placeholder="Add notes about preparation..."
                     />
@@ -206,7 +206,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                     .filter(line => line.length > 0),
                             })
                         }
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm font-mono text-brand-600 dark:text-brand-300"
+                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm font-mono text-brand-600 dark:text-brand-300"
                         rows={4}
                         placeholder="Step 1...&#10;Step 2..."
                     />
@@ -219,7 +219,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                         type="url"
                         value={currentMeal.recipeUrl || ''}
                         onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-accent-700 dark:text-accent-300"
+                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-accent-700 dark:text-accent-300"
                         placeholder="https://example.com/recipe"
                     />
                 </div>
@@ -273,7 +273,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 onChange={e => setTagInput(e.target.value)}
                                 placeholder="Add custom tag..."
                                 aria-label="Add custom tag"
-                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 text-xs focus:border-brand-500 focus:ring-brand-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 text-xs focus:border-accent-500 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                             />
                             <button
@@ -325,7 +325,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   id="ingredient-name"
                                   type="text"
                                   placeholder="Item name"
-                                  className="flex-1 rounded-xl border-brand-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                  className="flex-1 rounded-xl border-brand-200 bg-white text-sm focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                   value={ingredientName}
                                   onChange={(e) => setIngredientName(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -334,7 +334,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   aria-label="Ingredient quantity"
                                   type="text"
                                   placeholder="Qty"
-                                  className="w-20 rounded-xl border-brand-200 bg-white text-sm focus:border-brand-500 focus:ring-brand-500 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                  className="w-20 rounded-xl border-brand-200 bg-white text-sm focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                   value={ingredientQty}
                                   onChange={(e) => setIngredientQty(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
