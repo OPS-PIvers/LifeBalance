@@ -25,24 +25,38 @@ export const plaidsynctransactions = onSchedule(
     const db = admin.firestore();
     const plaid = makePlaidClient();
 
-    const households = await db.collection("households").get();
-    for (const hh of households.docs) {
-      const householdId = hh.id;
-      const lastPaycheckDate = hh.data()?.lastPaycheckDate as string | undefined;
+    // Fetch ONLY active Plaid items across all households via a collection-group
+    // query (O(active connections), not O(all households)), then group by
+    // household so we read each active household's doc + buckets just once.
+    // Mirrors the apiKeys collection-group query (needs the matching index in
+    // firestore.indexes.json).
+    const activeItems = await db
+      .collectionGroup("plaidItems")
+      .where("status", "==", "active")
+      .get();
+    if (activeItems.empty) return;
 
-      const items = await hh.ref
-        .collection("plaidItems")
-        .where("status", "==", "active")
-        .get();
-      if (items.empty) continue;
+    const itemsByHousehold = new Map<string, typeof activeItems.docs>();
+    for (const itemDoc of activeItems.docs) {
+      const householdId = itemDoc.ref.parent.parent?.id;
+      if (!householdId) continue;
+      const list = itemsByHousehold.get(householdId);
+      if (list) list.push(itemDoc);
+      else itemsByHousehold.set(householdId, [itemDoc]);
+    }
+
+    for (const [householdId, items] of itemsByHousehold) {
+      const hhRef = db.doc(`households/${householdId}`);
+      const hhSnap = await hhRef.get();
+      const lastPaycheckDate = hhSnap.data()?.lastPaycheckDate as string | undefined;
 
       // Bucket names this household clamps categories against.
-      const bucketsSnap = await hh.ref.collection("buckets").get();
+      const bucketsSnap = await hhRef.collection("buckets").get();
       const bucketNames = bucketsSnap.docs
         .map((d) => d.data()?.name)
         .filter((n): n is string => typeof n === "string");
 
-      for (const itemDoc of items.docs) {
+      for (const itemDoc of items) {
         const { accessToken, cursor } = itemDoc.data() as {
           accessToken?: string;
           cursor?: string | null;
