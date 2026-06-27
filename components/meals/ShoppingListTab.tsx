@@ -204,6 +204,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
       store: optimized.store || original.store
     }),
     availableCategories: categories,
+    availableStores: stores.map(s => s.name),
     emptyMessage: "List is empty",
     errorMessage: "Failed to optimize your shopping list"
   });

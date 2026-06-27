@@ -21,7 +21,8 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
   const [magicLoading, setMagicLoading] = useState(false);
   // The user's own grocery categories (custom set) so the AI matches against
   // them, not just the static seed. Falls back to the seed when none exist.
-  const { groceryCategories } = useShopping();
+  // `stores` lets the AI prefer an existing store name over inventing one.
+  const { groceryCategories, stores } = useShopping();
 
   const handleMagicSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -34,6 +35,7 @@ export const CaptureMagicAction: React.FC<CaptureMagicActionProps> = ({
       const context = {
         categories: dynamicCategories,
         groceryCategories: groceryCategories?.length ? groceryCategories : GROCERY_CATEGORIES,
+        stores: stores.map(s => s.name),
         todayDate: getLocalDateString()
       };
 
