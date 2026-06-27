@@ -13,6 +13,10 @@ describe('normalizeStoreName', () => {
   it('treats other punctuation as a separator', () => {
     expect(normalizeStoreName('Stop-N-Shop')).toBe('stop n shop');
   });
+  it('preserves international and accented characters (not ASCII-only)', () => {
+    expect(normalizeStoreName('Müller')).toBe('müller');
+    expect(normalizeStoreName('華人超級市場')).toBe('華人超級市場');
+  });
   it('returns empty string for blank/nullish input', () => {
     expect(normalizeStoreName(undefined)).toBe('');
     expect(normalizeStoreName(null)).toBe('');

@@ -18,8 +18,10 @@ import type { Store } from '@/types/schema';
 export const normalizeStoreName = (name: string | undefined | null): string =>
   (name ?? '')
     .toLowerCase()
-    .replace(/['’.]/g, '')        // drop apostrophes & periods (intra-word)
-    .replace(/[^a-z0-9]+/g, ' ')  // any other punctuation -> a single space
+    .replace(/['’.]/g, '')          // drop apostrophes & periods (intra-word)
+    // Replace runs of non-letter/non-number with a single space. Unicode-aware
+    // (\p{L}\p{N}) so accented/CJK/etc. store names are preserved, not stripped.
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 
 /**
