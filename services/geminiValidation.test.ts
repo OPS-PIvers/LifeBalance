@@ -150,13 +150,19 @@ describe('geminiValidation - validateInsight', () => {
   it('accepts text with empty actions', () => {
     expect(validateInsight({ text: 'hi', actions: [] }).actions).toEqual([]);
   });
-  it('accepts a well-formed action', () => {
-    const r = validateInsight({ text: 'hi', actions: [{ type: 'update_bucket', label: 'L', payload: {} }] });
+  it('accepts a well-formed action with its required payload fields', () => {
+    const r = validateInsight({ text: 'hi', actions: [{ type: 'update_bucket', label: 'L', payload: { bucketName: 'Food', newLimit: 100 } }] });
     expect(r.actions).toHaveLength(1);
   });
-  it('rejects a hallucinated action type', () => {
-    expect(() => validateInsight({ text: 'hi', actions: [{ type: 'delete_everything', label: 'L', payload: {} }] }))
-      .toThrow(/type must be one of/);
+  it('drops an action missing its type-specific payload fields', () => {
+    // update_bucket needs bucketName + newLimit; an empty payload is malformed.
+    const r = validateInsight({ text: 'hi', actions: [{ type: 'update_bucket', label: 'L', payload: {} }] });
+    expect(r.actions).toEqual([]);
+  });
+  it('drops a hallucinated action type instead of failing the whole insight', () => {
+    const r = validateInsight({ text: 'hi', actions: [{ type: 'delete_everything', label: 'L', payload: {} }] });
+    expect(r.text).toBe('hi');
+    expect(r.actions).toEqual([]);
   });
   it('rejects when text missing', () => {
     expect(() => validateInsight({ actions: [] })).toThrow(/text must be a string/);

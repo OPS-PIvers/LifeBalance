@@ -123,6 +123,30 @@ describe('geminiService', () => {
        const result = await reorganizeHabits('household-1', []);
        expect(result.habits).toEqual([]);
     });
+
+    it('reconciles habits the model omits or invents (no silent data loss)', async () => {
+      const { reorganizeHabits } = await import('./geminiService');
+      const mockHabits = [
+        { id: '1', title: 'Habit 1', category: 'Morning', order: 1 },
+        { id: '2', title: 'Habit 2', category: 'Evening', order: 2 },
+      ] as Habit[];
+      // Model drops habit '2' and invents a non-existent 'ghost' id.
+      generateContentMock.mockResolvedValue({
+        text: JSON.stringify({
+          habits: [
+            { id: '1', category: 'New', order: 0 },
+            { id: 'ghost', category: 'X', order: 1 },
+          ],
+          reasoning: 'r',
+        }),
+      });
+      const mockClient = { models: { generateContent: generateContentMock } } as unknown as Parameters<typeof reorganizeHabits>[2];
+      const result = await reorganizeHabits('household-1', mockHabits, mockClient);
+
+      // 'ghost' dropped (not a real input id); '2' appended preserving its category.
+      expect(result.habits.map(h => h.id).sort()).toEqual(['1', '2']);
+      expect(result.habits.find(h => h.id === '2')?.category).toBe('Evening');
+    });
   });
 
   it('generateInsight correctly parses JSON response without actions', async () => {
@@ -433,6 +457,37 @@ describe('geminiService', () => {
     expect(promptText).toContain("Today's date is 2026-02-15");
 
     vi.useRealTimers();
+  });
+
+  it('analyzeReceipt clamps an off-list category to the fallback', async () => {
+    const { analyzeReceipt } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'Crypto' }),
+    });
+    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.category).toBe('Other');
+  });
+
+  it('analyzeReceipt keeps an in-list category (case-insensitive match)', async () => {
+    const { analyzeReceipt } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ merchant: 'X', amount: 10, category: 'groceries' }),
+    });
+    const result = await analyzeReceipt('test-id', VALID_TEST_IMAGE, ['Groceries', 'Dining']);
+    expect(result.category).toBe('Groceries');
+  });
+
+  it('parseMagicAction clamps an off-list transaction category to the fallback', async () => {
+    const { parseMagicAction } = await import('./geminiService');
+    generateContentMock.mockResolvedValue({
+      text: JSON.stringify({ type: 'transaction', confidence: 0.9, data: { merchant: 'X', amount: 5, category: 'Crypto', date: '2025-01-01' } }),
+    });
+    const result = await parseMagicAction('test-household', 'x', {
+      categories: ['Shopping', 'Dining'],
+      groceryCategories: ['Food'],
+      todayDate: '2025-01-01',
+    });
+    expect(result.data.category).toBe('Other');
   });
 
   it('parseBankStatement prompt includes correct date from local time', async () => {

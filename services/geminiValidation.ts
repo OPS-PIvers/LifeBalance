@@ -133,6 +133,7 @@ export function validateBankTransactions(raw: unknown): BankTransactionLike[] {
     if (!isString(o['category'])) fail(`bankStatement[${i}]`, 'category must be a string');
     if (!isString(o['date'])) fail(`bankStatement[${i}]`, 'date must be a string');
     if (!isOptStringArray(o['suggestedHabits'])) fail(`bankStatement[${i}]`, 'suggestedHabits must be string[]');
+    if (!isOptString(o['subBucket'])) fail(`bankStatement[${i}]`, 'subBucket must be a string');
     return o as unknown as BankTransactionLike;
   });
 }
@@ -155,7 +156,9 @@ export function validateMealSuggestion(raw: unknown): MealSuggestionLike {
   const o = expectRecord(raw, 'mealSuggestion');
   if (!isString(o['name'])) fail('mealSuggestion', 'name must be a string');
   if (!isString(o['description'])) fail('mealSuggestion', 'description must be a string');
-  if (!isString(o['recipeUrl'])) fail('mealSuggestion', 'recipeUrl must be a string');
+  // recipeUrl is no longer requested from the model (it can't know a real URL);
+  // suggestMeal sets it deterministically after validation. Accept it if present.
+  if (!isOptString(o['recipeUrl'])) fail('mealSuggestion', 'recipeUrl must be a string');
   if (!isString(o['reasoning'])) fail('mealSuggestion', 'reasoning must be a string');
   if (!Array.isArray(o['instructions']) || !o['instructions'].every(isString)) {
     fail('mealSuggestion', 'instructions must be string[]');
@@ -223,22 +226,41 @@ export interface InsightResult {
   actions?: InsightAction[];
 }
 
+/**
+ * Per-action-type required payload fields. The response schema shares ONE flat
+ * payload object across all four action types, so it cannot express that, say,
+ * `update_bucket` needs bucketName+newLimit. We enforce it here instead.
+ */
+function insightActionIsWellFormed(a: Record<string, unknown>): boolean {
+  if (!isString(a['type']) || !INSIGHT_ACTION_TYPES.includes(a['type'])) return false;
+  if (!isString(a['label'])) return false;
+  if (!isRecord(a['payload'])) return false;
+  const p = a['payload'];
+  switch (a['type']) {
+    case 'update_bucket':
+      return isString(p['bucketName']) && isFiniteNumber(p['newLimit']);
+    case 'create_todo':
+      return isString(p['text']);
+    case 'create_habit':
+    case 'create_challenge':
+      return isString(p['title']);
+    default:
+      return false;
+  }
+}
+
 export function validateInsight(raw: unknown): InsightResult {
   const o = expectRecord(raw, 'insight');
   if (!isString(o['text'])) fail('insight', 'text must be a string');
-  const actions = o['actions'];
-  if (actions !== undefined) {
-    const arr = expectArray(actions, 'insight.actions');
-    arr.forEach((entry, i) => {
-      const a = expectRecord(entry, `insight.actions[${i}]`);
-      if (!isString(a['type']) || !INSIGHT_ACTION_TYPES.includes(a['type'])) {
-        fail(`insight.actions[${i}]`, `type must be one of ${INSIGHT_ACTION_TYPES.join(', ')}`);
-      }
-      if (!isString(a['label'])) fail(`insight.actions[${i}]`, 'label must be a string');
-      if (!isRecord(a['payload'])) fail(`insight.actions[${i}]`, 'payload must be an object');
-    });
+  // The insight TEXT is the primary value; actions are secondary. Rather than
+  // failing the whole response on one malformed action, drop the bad ones and
+  // keep the text + any well-formed actions.
+  let cleanedActions: unknown[] | undefined;
+  if (o['actions'] !== undefined) {
+    const arr = expectArray(o['actions'], 'insight.actions');
+    cleanedActions = arr.filter((entry) => isRecord(entry) && insightActionIsWellFormed(entry));
   }
-  return o as unknown as InsightResult;
+  return { text: o['text'] as string, actions: cleanedActions as InsightResult['actions'] };
 }
 
 // ---------------------------------------------------------------------------
