@@ -12,7 +12,16 @@ import clsx from 'clsx';
 // Create map for O(1) icon lookup
 const templateIconMap = new Map(TEMPLATE_ICONS.map(i => [i.id, i.icon]));
 
-export const QuickRestockRow: React.FC = () => {
+interface QuickRestockRowProps {
+  /**
+   * Render the "Quick restock" label + divider header. The ShoppingListTab now
+   * wraps this in its own collapsed disclosure (whose toggle already carries the
+   * label), so it passes `false` to avoid a duplicate heading.
+   */
+  showHeader?: boolean;
+}
+
+export const QuickRestockRow: React.FC<QuickRestockRowProps> = ({ showHeader = true }) => {
   const { quickStockLists, groceryCatalog, shoppingList, addShoppingItems } = useShopping();
 
   if (!quickStockLists || quickStockLists.length === 0) return null;
@@ -58,10 +67,12 @@ export const QuickRestockRow: React.FC = () => {
 
   return (
     <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-(--duration-slow)">
-      <div className="flex items-center gap-2 px-1">
-        <span className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick restock</span>
-        <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
-      </div>
+      {showHeader && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick restock</span>
+          <div className="h-px bg-brand-200 dark:bg-brand-700 flex-1"></div>
+        </div>
+      )}
 
       <div
         className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1"
