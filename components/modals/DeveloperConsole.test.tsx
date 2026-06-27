@@ -82,6 +82,7 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
   openSignup: false,
   billingEnabled: false,
   kidModeEnabled: false,
+  plaidEnabled: false,
   [AI_ENABLED_FLAG_KEY]: true,
 };
 
@@ -141,22 +142,40 @@ describe('DeveloperConsole', () => {
       });
     };
 
-    it('renders all four flags with their effective ON/OFF state', async () => {
+    it('renders all five flags with their effective ON/OFF state', async () => {
       const user = userEvent.setup();
       await openFlagsTab(user);
 
-      // All four flag labels render.
+      // All five flag labels render.
       const kidRow = screen.getByText('Kid Mode').closest('div')!;
       const billingRow = screen.getByText('Billing / Freemium').closest('div')!;
       const signupRow = screen.getByText('Open Signup').closest('div')!;
+      const plaidRow = screen.getByText('Plaid Bank Link').closest('div')!;
       const aiRow = screen.getByText('AI Enabled').closest('div')!;
 
-      // Three gates default OFF...
+      // Four gates default OFF (incl. Plaid)...
       expect(within(kidRow).getByText('OFF')).toBeInTheDocument();
       expect(within(billingRow).getByText('OFF')).toBeInTheDocument();
       expect(within(signupRow).getByText('OFF')).toBeInTheDocument();
+      expect(within(plaidRow).getByText('OFF')).toBeInTheDocument();
       // ...and the AI master switch is fail-open ON by default.
       expect(within(aiRow).getByText('ON')).toBeInTheDocument();
+    });
+
+    it('confirm-gates the Plaid flag flip and writes plaidEnabled (no AI cache reset)', async () => {
+      const user = userEvent.setup();
+      await openFlagsTab(user);
+
+      const plaidToggle = screen.getByRole('checkbox', { name: /Turn Plaid Bank Link ON/i });
+      await user.click(plaidToggle);
+      expect(mockedSetFlag).not.toHaveBeenCalled();
+      const confirmBtn = await screen.findByRole('button', { name: /Turn ON/i });
+      await user.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(mockedSetFlag).toHaveBeenCalledWith('plaidEnabled', true);
+      });
+      expect(mockedResetAiCache).not.toHaveBeenCalled();
     });
 
     it('shows aiEnabled as ON when the field is absent (fail-open default)', async () => {

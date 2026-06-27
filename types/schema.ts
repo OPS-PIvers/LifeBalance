@@ -119,7 +119,7 @@ export interface Transaction {
   date: string;
   status: 'verified' | 'pending_review';
   isRecurring: boolean;
-  source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring';
+  source: 'manual' | 'camera-scan' | 'file-upload' | 'telegram' | 'recurring' | 'shortcut' | 'plaid';
   autoCategorized: boolean;
   payPeriodId?: string; // Pay period ID (YYYY-MM-DD of period start), empty string if no period tracking
   relatedHabitIds?: string[];
@@ -138,6 +138,11 @@ export interface Transaction {
    *  stub lives only in the Action Queue). Stored on the shared transaction doc
    *  so the suppression is cross-device. */
   needsAmountPromptedAt?: string;
+  /** Plaid `transaction_id` for transactions synced from a linked bank
+   *  (`source: 'plaid'`). The dedup key: a sync skips any item whose
+   *  `plaidTransactionId` already exists, so re-syncs never duplicate. Absent on
+   *  manual / scan / shortcut transactions. */
+  plaidTransactionId?: string;
 }
 
 export interface CalendarItem {

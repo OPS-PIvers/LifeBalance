@@ -162,6 +162,45 @@ export const getKidModeEnabled = (): Promise<boolean> => {
   return kidModeEnabledPromise;
 };
 
+/** How long (ms) to reuse a cached plaid-enabled value before re-fetching. */
+const PLAID_ENABLED_CACHE_TTL_MS = 60_000;
+
+let plaidEnabledPromise: Promise<boolean> | null = null;
+let plaidEnabledFetchedAt = 0;
+
+/**
+ * Returns the current `plaidEnabled` flag from the global app config.
+ *
+ * Gates the entire "Connect a bank (Plaid)" surface. Fails CLOSED (returns
+ * `false`) when the doc is missing, the field is absent, or the read throws, so
+ * Plaid stays **dormant** unless an operator has explicitly set the boolean
+ * `plaidEnabled: true`. While off, no bank-link UI shows. Flip it WITHOUT a
+ * deploy in the Firestore console, or live via Settings → Developer Console →
+ * Feature Flags (effective within ~60 s). No Test-Mode short-circuit (like
+ * `getBillingEnabled`): Plaid Link can't work against the mock backend.
+ */
+export const getPlaidEnabled = (): Promise<boolean> => {
+  const now = Date.now();
+  if (plaidEnabledPromise !== null && now - plaidEnabledFetchedAt < PLAID_ENABLED_CACHE_TTL_MS) {
+    return plaidEnabledPromise;
+  }
+
+  plaidEnabledFetchedAt = now;
+  plaidEnabledPromise = (async (): Promise<boolean> => {
+    try {
+      const globalConfigRef = doc(db, 'app_config', 'global');
+      const snap = await getDoc(globalConfigRef);
+      return snap.exists() ? snap.data().plaidEnabled === true : false;
+    } catch {
+      // Fail closed: keep Plaid dormant if config is unreachable.
+      plaidEnabledPromise = null;
+      return false;
+    }
+  })();
+
+  return plaidEnabledPromise;
+};
+
 /**
  * The exact field name of the AI master kill-switch on `app_config/global`, owned
  * by `geminiService.getAiEnabled()`. Unlike the other three flags it is **fail-OPEN**:
@@ -193,6 +232,7 @@ export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => 
       openSignup: data.openSignup === true,
       billingEnabled: data.billingEnabled === true,
       kidModeEnabled: data.kidModeEnabled === true,
+      plaidEnabled: data.plaidEnabled === true,
       // Fail-open: only an explicit boolean false disables AI.
       [AI_ENABLED_FLAG_KEY]: data[AI_ENABLED_FLAG_KEY] !== false,
     };
@@ -202,6 +242,7 @@ export const readAppConfigFlags = async (): Promise<Record<string, boolean>> => 
       openSignup: false,
       billingEnabled: false,
       kidModeEnabled: false,
+      plaidEnabled: false,
       [AI_ENABLED_FLAG_KEY]: true,
     };
   }
@@ -238,4 +279,6 @@ export const invalidateAppConfigCaches = (): void => {
   billingEnabledFetchedAt = 0;
   kidModeEnabledPromise = null;
   kidModeEnabledFetchedAt = 0;
+  plaidEnabledPromise = null;
+  plaidEnabledFetchedAt = 0;
 };

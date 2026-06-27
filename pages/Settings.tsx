@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useHouseholdCore,
@@ -53,8 +53,13 @@ import DeveloperConsole from '@/components/modals/DeveloperConsole';
 import PaywallModal from '@/components/modals/PaywallModal';
 import { useBillingEnabled } from '@/hooks/useBillingEnabled';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
+import { usePlaidEnabled } from '@/hooks/usePlaidEnabled';
 import { isValidPinFormat } from '@/utils/kidPin';
 import { getPlan } from '@/utils/entitlements';
+
+// Lazy so react-plaid-link stays out of the boot bundle — the chunk only loads
+// when plaidEnabled is on AND this renders (dormant by default → never loads).
+const ConnectBankCard = lazy(() => import('@/components/settings/ConnectBankCard'));
 
 const APP_VERSION = '0.8.0-alpha';
 
@@ -115,6 +120,7 @@ const Settings: React.FC = () => {
   // Kid Mode (Plan 080) — dormant until kidModeEnabled is turned on. Manages the
   // parent PIN required to EXIT a kid's scoped view.
   const kidModeEnabled = useKidModeEnabled();
+  const plaidEnabled = usePlaidEnabled();
   const [pinDraft, setPinDraft] = useState('');
   const [pinConfirm, setPinConfirm] = useState('');
   const [isSavingPin, setIsSavingPin] = useState(false);
@@ -895,6 +901,14 @@ const Settings: React.FC = () => {
             </SurfaceList>
           </div>
         </CollapsibleCard>
+
+        {/* Connect a bank (Plaid) — dormant until the plaidEnabled flag is on.
+            Lazy + flag-gated so react-plaid-link never enters the boot bundle. */}
+        {plaidEnabled && (
+          <Suspense fallback={null}>
+            <ConnectBankCard />
+          </Suspense>
+        )}
 
         {/* iOS Shortcuts Section */}
         <CollapsibleCard

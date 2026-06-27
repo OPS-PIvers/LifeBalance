@@ -116,6 +116,44 @@ describe('getBillingEnabled', () => {
   });
 });
 
+describe('getPlaidEnabled', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const importFresh = async () => (await import('./appConfig')).getPlaidEnabled;
+
+  it('returns true only when plaidEnabled is explicitly true', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { plaidEnabled: true }));
+    await expect((await importFresh())()).resolves.toBe(true);
+  });
+
+  it('returns false (dormant) when absent, explicitly false, non-boolean, or doc missing', async () => {
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { openSignup: true }));
+    await expect((await importFresh())()).resolves.toBe(false);
+    vi.resetModules();
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { plaidEnabled: false }));
+    await expect((await importFresh())()).resolves.toBe(false);
+    vi.resetModules();
+    vi.mocked(getDoc).mockResolvedValue(snapshot(true, { plaidEnabled: 'true' }));
+    await expect((await importFresh())()).resolves.toBe(false);
+    vi.resetModules();
+    vi.mocked(getDoc).mockResolvedValue(snapshot(false));
+    await expect((await importFresh())()).resolves.toBe(false);
+  });
+
+  it('fails closed (returns false) when getDoc rejects', async () => {
+    vi.mocked(getDoc).mockRejectedValue(new Error('firestore unreachable'));
+    await expect((await importFresh())()).resolves.toBe(false);
+  });
+});
+
 describe('setAppFlag', () => {
   beforeEach(() => {
     vi.clearAllMocks();
