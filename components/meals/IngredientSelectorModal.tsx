@@ -72,13 +72,11 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} noPadding title="Add Ingredients">
-      <div className="flex flex-col h-full max-h-[80vh]">
-        {/* Meal context */}
-        <p className="px-4 pt-3 text-xs font-medium text-brand-500 dark:text-brand-400 truncate shrink-0">{mealName}</p>
+    <Drawer isOpen={isOpen} onClose={onClose} title="Add Ingredients">
+      {/* Single scroll container is the Drawer body — no nested scrollers. */}
+      <p className="text-xs font-medium text-brand-500 dark:text-brand-400 truncate -mt-1 mb-3">{mealName}</p>
 
-        {/* List */}
-        <div className="flex-1 scroll-contain-y px-4 pb-4 pt-2 space-y-2">
+      <div className="space-y-2">
             {ingredients.length === 0 ? (
                 <div className="text-center py-8 text-brand-500 dark:text-brand-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-brand-300 dark:text-brand-600" />
@@ -137,39 +135,38 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                     );
                 })
             )}
-        </div>
+      </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800/60 flex flex-col gap-3">
-            <div className="flex justify-between items-center px-1">
-                {ingredients.length > 0 && (
-                    <button
-                        onClick={handleSelectAll}
-                        className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-300 dark:hover:text-brand-200"
-                    >
-                        {selectedIndices.size === ingredients.length ? 'Deselect All' : 'Select All'}
-                    </button>
-                )}
-                <span className="text-xs text-brand-500 dark:text-brand-400 font-medium">
-                    {selectedIndices.size} selected
-                </span>
-            </div>
+      {/* Footer (flows after the list) */}
+      <div className="mt-4 pt-3 border-t border-brand-200 dark:border-brand-700 flex flex-col gap-3">
+          <div className="flex justify-between items-center px-1">
+              {ingredients.length > 0 && (
+                  <button
+                      onClick={handleSelectAll}
+                      className="text-xs font-bold text-brand-600 hover:text-brand-700 hover:underline dark:text-brand-300 dark:hover:text-brand-200"
+                  >
+                      {selectedIndices.size === ingredients.length ? 'Deselect All' : 'Select All'}
+                  </button>
+              )}
+              <span className="text-xs text-brand-500 dark:text-brand-400 font-medium">
+                  {selectedIndices.size} selected
+              </span>
+          </div>
 
-            <div className="flex gap-3">
-                <Button variant="ghost" className="flex-1" onClick={onClose}>
-                    Cancel
-                </Button>
-                <Button
-                    variant="primary"
-                    className="flex-1"
-                    onClick={handleConfirm}
-                    disabled={selectedIndices.size === 0}
-                    leftIcon={<ShoppingCart size={18} />}
-                >
-                    Add Items
-                </Button>
-            </div>
-        </div>
+          <div className="flex gap-3">
+              <Button variant="ghost" className="flex-1" onClick={onClose}>
+                  Cancel
+              </Button>
+              <Button
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleConfirm}
+                  disabled={selectedIndices.size === 0}
+                  leftIcon={<ShoppingCart size={18} />}
+              >
+                  Add Items
+              </Button>
+          </div>
       </div>
     </Drawer>
   );
