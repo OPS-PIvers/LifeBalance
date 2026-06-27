@@ -8,6 +8,8 @@ import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.
 import { Transaction } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
+import { useStoreResolver } from '@/hooks/useStoreResolver';
+import { normalizeStoreName } from '@/utils/storeMatch';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl, SegmentedControlOption } from '@/components/ui/SegmentedControl';
@@ -52,6 +54,9 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const { currentUser, members, householdId } = useHouseholdCore();
   const { addToDo } = useTodos();
   const { addShoppingItem, stores } = useShopping();
+  // Resolve AI-returned store names to existing stores, creating new ones only
+  // when they're certainly not duplicates.
+  const { ensureStores } = useStoreResolver();
 
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
 
@@ -248,7 +253,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           }
         });
 
-        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, subBucketsMap);
+        const data: ReceiptData = await analyzeReceipt(householdId, base64Image, dynamicCategories, habitTitles, subBucketsMap, stores.map(s => s.name));
         const category = matchCategory(data.category);
 
         const newTransaction: Transaction = {
@@ -308,7 +313,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       const transactions = await parseBankStatement(householdId, base64, dynamicCategories, habitTitles, subBucketsMap);
       if (transactions.length === 0) {
         setProcessingMessage('Trying receipt analysis...');
-        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, subBucketsMap);
+        const receipt = await analyzeReceipt(householdId, base64, dynamicCategories, habitTitles, subBucketsMap, stores.map(s => s.name));
         const category = matchCategory(receipt.category);
         setParsedTransactions([{
           id: crypto.randomUUID(),
@@ -368,8 +373,12 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
     setView('processing');
     setProcessingMessage(`Adding ${selectedTx.length} transaction(s)...`);
+    // Resolve AI store names to canonical stores (creating non-duplicates once)
+    // before writing, so each transaction references a real household store.
+    const storeMap = await ensureStores(selectedTx.map(tx => tx.store));
     const results = await Promise.allSettled(
       selectedTx.map(tx => {
+        const resolvedStore = tx.store ? (storeMap.get(normalizeStoreName(tx.store)) ?? tx.store) : tx.store;
         const newTransaction: Transaction = {
           id: tx.id,
           amount: tx.amount,
@@ -382,7 +391,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           autoCategorized: true,
           relatedHabitIds: tx.relatedHabitIds,
           subBucketId: tx.subBucketId,
-          store: tx.store,
+          store: resolvedStore,
           accountId: tx.accountId
         };
         return addTransaction(newTransaction);
@@ -441,11 +450,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       return;
     }
     try {
+      // Resolve the store to an existing one, or create it if it's certainly new.
+      const storeMap = await ensureStores([shoppingStore]);
+      const resolvedStore = shoppingStore.trim()
+        ? storeMap.get(normalizeStoreName(shoppingStore))
+        : undefined;
       await addShoppingItem({
         name: shoppingName.trim(),
         category: shoppingCategory,
         quantity: shoppingQuantity.trim() || undefined,
-        store: shoppingStore.trim() || undefined,
+        store: resolvedStore || undefined,
         isPurchased: false
       });
       toast.success('Added to list');

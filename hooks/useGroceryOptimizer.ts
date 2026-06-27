@@ -10,6 +10,7 @@ interface UseGroceryOptimizerConfig<T> {
   mapToOptimizable: (item: T) => OptimizableItem;
   mapFromOptimizable: (original: T, optimized: OptimizableItem) => T;
   availableCategories?: string[];
+  availableStores?: string[];
   emptyMessage?: string;
   errorMessage?: string;
 }
@@ -60,6 +61,7 @@ export const useGroceryOptimizer = <T extends { id: string }>({
   mapToOptimizable,
   mapFromOptimizable,
   availableCategories,
+  availableStores,
   emptyMessage = "List is empty",
   errorMessage = "Failed to optimize list"
 }: UseGroceryOptimizerConfig<T>) => {
@@ -86,7 +88,8 @@ export const useGroceryOptimizer = <T extends { id: string }>({
       const optimizedItems = await optimizeGroceryList(
         householdId,
         optimizableItems,
-        availableCategories
+        availableCategories,
+        availableStores
       );
 
       // Update items concurrently with partial failure handling
