@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Meal } from '@/types/schema';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
@@ -89,16 +89,21 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" ariaLabelledBy="cookbook-modal-title">
-      <div className="flex flex-col flex-1 min-h-0">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center justify-between shrink-0">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      noPadding
+      ariaLabelledBy="cookbook-modal-title"
+      header={
+        <>
+        {/* Title row */}
+        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="bg-brand-100 p-2 rounded-lg text-brand-600 dark:bg-brand-700/40 dark:text-brand-300">
+            <div className="bg-brand-100 p-2 rounded-btn text-brand-600 dark:bg-brand-700/40 dark:text-brand-300">
                 <ChefHat size={20} />
             </div>
             <div>
-                <h3 id="cookbook-modal-title" className="text-lg font-bold text-brand-900 dark:text-brand-100 tracking-tight">Cookbook</h3>
+                <h3 id="cookbook-modal-title" className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100 tracking-tight">Cookbook</h3>
                 <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">{filteredMeals.length} recipes found</p>
             </div>
           </div>
@@ -112,8 +117,8 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           </button>
         </div>
 
-        {/* Search & Filter Controls */}
-        <div className="px-6 py-4 space-y-3 bg-brand-50 dark:bg-brand-800/40 border-b border-brand-200 dark:border-brand-700 shrink-0">
+        {/* Search & Filter Controls (stay fixed above the scrolling list) */}
+        <div className="px-6 py-4 space-y-3 bg-brand-50 dark:bg-brand-800/40 border-b border-brand-200 dark:border-brand-700">
           <Input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -174,9 +179,11 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
              ))}
           </div>
         </div>
-
-        {/* List */}
-        <div className="flex-1 scroll-contain-y p-4 space-y-2">
+        </>
+      }
+    >
+        {/* List (single Drawer scroll container) */}
+        <div className="p-4 space-y-2">
           {filteredMeals.length === 0 ? (
             <div className="text-center py-12 text-brand-400 dark:text-brand-500">
                 <p>No matching recipes found.</p>
@@ -235,13 +242,12 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800/40 shrink-0">
+        {/* Footer (flows after the list) */}
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800/40">
             <Button variant="secondary" onClick={onClose} className="w-full">
                 Close
             </Button>
         </div>
-      </div>
-    </Modal>
+    </Drawer>
   );
 };

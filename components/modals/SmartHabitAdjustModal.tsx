@@ -1,7 +1,7 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Modal } from '@/components/ui/Modal';
+import { Drawer } from '@/components/ui/Drawer';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 
@@ -13,7 +13,6 @@ interface SmartHabitAdjustModalProps {
 const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, onClose }) => {
   const { habits, updateHabit } = useGamification();
   const { householdId } = useHouseholdCore();
-  const titleId = useId();
   const [suggestions, setSuggestions] = useState<HabitPointAdjustmentSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,34 +93,14 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
   };
 
   return (
-    <Modal
+    <Drawer
       isOpen={isOpen}
       onClose={onClose}
-      maxWidth="max-w-2xl"
-      ariaLabelledBy={titleId}
+      noPadding
+      title="Smart Adjustments"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-warm-200 dark:border-warm-800/60 bg-warm-50 dark:bg-warm-900/20 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-white dark:bg-brand-800 rounded-xl text-warm-700 dark:text-warm-300 border border-warm-200 dark:border-warm-800/60">
-            <Sparkles size={20} />
-          </div>
-          <div>
-            <h2 id={titleId} className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">Smart Adjustments</h2>
-            <p className="text-xs text-warm-700 dark:text-warm-300 font-medium">AI-powered optimization for your habits</p>
-          </div>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-2 text-warm-500 dark:text-warm-300 hover:bg-white/60 dark:hover:bg-brand-700/50 rounded-full transition-colors"
-          aria-label="Close"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
       {/* Content */}
-      <div className="p-6 scroll-contain-y max-h-[70vh]">
+      <div className="p-6">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Loader size={32} className="text-warm-700 dark:text-warm-300 animate-spin mb-4" />
@@ -207,7 +186,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
 
       {/* Footer */}
       {suggestions.length > 0 && !isLoading && (
-        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 rounded-b-card">
+        <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50">
           <button
             onClick={onClose}
             className="w-full py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:text-brand-700 dark:hover:text-brand-200 transition-colors"
@@ -216,7 +195,7 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
           </button>
         </div>
       )}
-    </Modal>
+    </Drawer>
   );
 };
 
