@@ -786,6 +786,7 @@ const Settings: React.FC = () => {
               </div>
               <Switch
                 aria-label="Toggle To-Dos tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
                 checked={isModuleEnabled(householdSettings, 'todos')}
                 onCheckedChange={(value) => handleModuleToggle('todos', value)}
               />
@@ -796,6 +797,7 @@ const Settings: React.FC = () => {
               </div>
               <Switch
                 aria-label="Toggle Meals tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
                 checked={isModuleEnabled(householdSettings, 'meals')}
                 onCheckedChange={(value) => handleModuleToggle('meals', value)}
               />
@@ -806,6 +808,7 @@ const Settings: React.FC = () => {
               </div>
               <Switch
                 aria-label="Toggle Shopping tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
                 checked={isModuleEnabled(householdSettings, 'shopping')}
                 onCheckedChange={(value) => handleModuleToggle('shopping', value)}
               />
