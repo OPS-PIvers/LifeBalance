@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import BudgetCalendar from '@/components/budget/BudgetCalendar';
 import BudgetBuckets from '@/components/budget/BudgetBuckets';
 import BudgetAccounts from '@/components/budget/BudgetAccounts';
 import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
-import BudgetTrends from '@/components/budget/BudgetTrends';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+
+// recharts is heavy — lazy-load the Trends chart body so it only enters the
+// bundle when the Trends tab is actually opened (keeps the Money page boot lean).
+const BudgetTrends = React.lazy(() => import('@/components/budget/BudgetTrends'));
 
 // Allowed Money sub-tabs. Module-level so the array identity is stable and
 // other screens can deep-link via `navigate('/budget', { state: { tab } })`.
@@ -105,7 +108,16 @@ const Budget: React.FC = () => {
               <TransactionMasterList />
             </TabsContent>
             <TabsContent value="trends">
-              <BudgetTrends />
+              <Suspense
+                fallback={
+                  <div className="space-y-6" aria-busy="true">
+                    <Skeleton className="h-80 w-full rounded-2xl" />
+                    <Skeleton className="h-56 w-full rounded-2xl" />
+                  </div>
+                }
+              >
+                <BudgetTrends />
+              </Suspense>
             </TabsContent>
           </div>
         </div>
