@@ -3,7 +3,7 @@ import { usePlaidLink } from 'react-plaid-link';
 import { httpsCallable } from 'firebase/functions';
 import { Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { functions } from '@/firebase.config';
+import { getFunctionsInstance } from '@/firebase.config';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -30,6 +30,7 @@ const ConnectBankCard: React.FC = () => {
       if (!householdId) return;
       try {
         setBusy(true);
+        const functions = await getFunctionsInstance();
         const exchange = httpsCallable(functions, 'plaidexchangepublictoken');
         await exchange({ householdId, publicToken });
         toast.success('Bank connected — new transactions will appear in your review queue.');
@@ -63,6 +64,7 @@ const ConnectBankCard: React.FC = () => {
     if (!householdId) return;
     try {
       setBusy(true);
+      const functions = await getFunctionsInstance();
       const createLink = httpsCallable<{ householdId: string }, { linkToken: string }>(
         functions,
         'plaidcreatelinktoken',
@@ -79,6 +81,7 @@ const ConnectBankCard: React.FC = () => {
     if (!householdId) return;
     try {
       setDisconnecting(true);
+      const functions = await getFunctionsInstance();
       const disconnect = httpsCallable<{ householdId: string }, { removed: number }>(
         functions,
         'plaiddisconnectbank',

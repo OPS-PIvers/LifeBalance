@@ -1,10 +1,24 @@
-import { getToken, onMessage, type MessagePayload } from 'firebase/messaging';
+import type { MessagePayload } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion, getDoc } from 'firebase/firestore';
-import { messaging, db, auth } from '@/firebase.config';
+import { getMessagingInstance, db, auth } from '@/firebase.config';
+import { isIOSDevice, isPWA, supportsPush, parseIOSVersion } from '@/utils/platform';
 import toast from 'react-hot-toast';
 
-// Store the unsubscribe function to allow cleanup and prevent duplicate listeners
-let foregroundListenerUnsubscribe: (() => void) | null = null;
+// Re-export the pure platform helpers so existing
+// `import ... from '@/services/notificationService'` call sites keep working.
+// Eager consumers (authService, NotificationSettings) should import these from
+// '@/utils/platform' directly to avoid pulling this messaging-touching module
+// onto the boot path.
+export { isIOSDevice, isPWA, supportsPush };
+
+// Memoized in-flight (or settled) foreground-listener setup. Registration spans
+// multiple awaits (resolve messaging, then dynamically import onMessage), so a
+// plain "check a flag then assign it later" guard is NOT atomic: two rapid calls
+// (React StrictMode mount→cleanup→mount, or a permission flip within the resolve
+// window) could both pass the check and both call onMessage, leaking a second
+// listener. Caching the PROMISE makes concurrent callers share one registration.
+// The cleanup resets this to null so a later mount can re-register after teardown.
+let foregroundListenerSetup: Promise<(() => void) | null> | null = null;
 
 /**
  * Validate URL to prevent XSS attacks
@@ -30,47 +44,6 @@ const navigateToUrl = (url: string): void => {
   // Normalize URL by stripping leading # to prevent double hash (##/path)
   const normalizedUrl = url.startsWith('#') ? url.slice(1) : url;
   window.location.hash = normalizedUrl;
-};
-
-/**
- * Detect if the current device is running iOS
- */
-export const isIOSDevice = (): boolean => {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent || '';
-  // Check for iOS devices including iPad on iOS 13+ (which reports as Mac)
-  // Add pointer:coarse check to avoid false positives on MacBook Pro with Touch Bar
-  const isIOSUserAgent = /iPad|iPhone|iPod/.test(userAgent);
-  const isPadOnMac = navigator.platform === 'MacIntel' &&
-    navigator.maxTouchPoints > 1 &&
-    window.matchMedia('(pointer: coarse)').matches;
-
-  return isIOSUserAgent || isPadOnMac;
-};
-
-/**
- * Detect if the app is running as a PWA (added to home screen)
- */
-export const isPWA = (): boolean => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  // Check if running in standalone mode (PWA)
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    // iOS Safari specific check
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-};
-
-/**
- * Check if the browser supports Web Push (feature detection, not device detection)
- * This is the recommended approach per Web Push standards
- */
-export const supportsPush = (): boolean => {
-  return 'serviceWorker' in navigator && 'PushManager' in window;
 };
 
 /**
@@ -142,115 +115,115 @@ export const checkNotificationSupport = (): {
 };
 
 /**
- * Parse iOS version from user agent
- */
-const parseIOSVersion = (): number | null => {
-  const match = navigator.userAgent.match(/OS (\d+)_(\d+)/);
-  if (match) {
-    return parseFloat(`${match[1]}.${match[2]}`);
-  }
-  return null;
-};
-
-/**
  * Set up foreground message listener to display notifications when app is open.
  * This handles the case when the user has the app open and a push arrives.
  * Background notifications on iOS 16.4+ are handled by the service worker's
  * native 'push' event listener.
  */
-export const setupForegroundNotificationListener = (): (() => void) | null => {
-  if (!messaging) {
-    console.warn('[Notifications] Firebase Messaging not available');
-    return null;
-  }
-
-  // Return existing unsubscribe function if already initialized
-  if (foregroundListenerUnsubscribe) {
+export const setupForegroundNotificationListener = (): Promise<(() => void) | null> => {
+  // Atomic guard: if a setup is already in flight or settled, return the SAME
+  // promise so concurrent callers can never register a second onMessage listener.
+  // Assigning the promise happens synchronously (no await before this point), so
+  // the check+assign is atomic within a single tick.
+  if (foregroundListenerSetup) {
     console.log('[Notifications] Foreground listener already initialized');
-    return foregroundListenerUnsubscribe;
+    return foregroundListenerSetup;
   }
 
-  console.log('[Notifications] Setting up foreground message listener');
+  foregroundListenerSetup = (async (): Promise<(() => void) | null> => {
+    const messaging = await getMessagingInstance();
+    if (!messaging) {
+      console.warn('[Notifications] Firebase Messaging not available');
+      // Reset so a later call can retry once messaging becomes available.
+      foregroundListenerSetup = null;
+      return null;
+    }
 
-  const unsubscribe = onMessage(messaging, (payload: MessagePayload) => {
-    console.log('[Notifications] Foreground message received:', payload);
+    console.log('[Notifications] Setting up foreground message listener');
 
-    const title = payload.notification?.title || 'LifeBalance';
-    const body = payload.notification?.body || '';
-    const url = payload.data?.url || '/';
+    const { onMessage } = await import('firebase/messaging');
+    const unsubscribe = onMessage(messaging, (payload: MessagePayload) => {
+      console.log('[Notifications] Foreground message received:', payload);
 
-    // Show in-app toast notification
-    toast(
-      (t) => (
-        <div
-          className="flex items-start gap-3 cursor-pointer"
-          onClick={() => {
-            toast.dismiss(t.id);
-            // Navigate to the notification's target URL using validated navigation
+      const title = payload.notification?.title || 'LifeBalance';
+      const body = payload.notification?.body || '';
+      const url = payload.data?.url || '/';
+
+      // Show in-app toast notification
+      toast(
+        (t) => (
+          <div
+            className="flex items-start gap-3 cursor-pointer"
+            onClick={() => {
+              toast.dismiss(t.id);
+              // Navigate to the notification's target URL using validated navigation
+              if (url && url !== '/') {
+                navigateToUrl(url);
+              }
+            }}
+          >
+            <div className="flex-shrink-0 w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center">
+              <span className="text-lg">🔔</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-brand-800 text-sm">{title}</p>
+              {body && <p className="text-brand-600 text-xs mt-0.5">{body}</p>}
+              <p className="text-brand-400 text-xs mt-1">Tap to view</p>
+            </div>
+          </div>
+        ),
+        {
+          duration: 8000,
+          style: {
+            background: 'white',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.15)',
+            maxWidth: '400px',
+          },
+        }
+      );
+
+      // Also try to show a native notification if permission granted and document is hidden
+      // Skip on iOS as the Notification constructor is not available in iOS Safari PWAs
+      if (!isIOSDevice() && Notification.permission === 'granted' && document.hidden) {
+        try {
+          const notification = new Notification(title, {
+            body: body,
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
+            tag: payload.messageId || 'lifebalance-notification',
+            data: { url }
+          });
+
+          notification.onclick = () => {
+            window.focus();
             if (url && url !== '/') {
               navigateToUrl(url);
             }
-          }}
-        >
-          <div className="flex-shrink-0 w-8 h-8 bg-brand-100 rounded-full flex items-center justify-center">
-            <span className="text-lg">🔔</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-brand-800 text-sm">{title}</p>
-            {body && <p className="text-brand-600 text-xs mt-0.5">{body}</p>}
-            <p className="text-brand-400 text-xs mt-1">Tap to view</p>
-          </div>
-        </div>
-      ),
-      {
-        duration: 8000,
-        style: {
-          background: 'white',
-          padding: '12px 16px',
-          borderRadius: '12px',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.15)',
-          maxWidth: '400px',
-        },
+            notification.close();
+          };
+        } catch (e) {
+          // Native notifications may not work in all contexts, toast is the fallback
+          console.log('[Notifications] Native notification failed, using toast:', e);
+        }
       }
-    );
+    });
 
-    // Also try to show a native notification if permission granted and document is hidden
-    // Skip on iOS as the Notification constructor is not available in iOS Safari PWAs
-    if (!isIOSDevice() && Notification.permission === 'granted' && document.hidden) {
-      try {
-        const notification = new Notification(title, {
-          body: body,
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: payload.messageId || 'lifebalance-notification',
-          data: { url }
-        });
+    // Wrap unsubscribe to also clear the memoized setup so a future mount can
+    // re-register after teardown (works even if the promise resolves after the
+    // caller unmounted — App.tsx still invokes this cleanup).
+    const cleanup = () => {
+      unsubscribe();
+      foregroundListenerSetup = null;
+      console.log('[Notifications] Foreground listener cleaned up');
+    };
 
-        notification.onclick = () => {
-          window.focus();
-          if (url && url !== '/') {
-            navigateToUrl(url);
-          }
-          notification.close();
-        };
-      } catch (e) {
-        // Native notifications may not work in all contexts, toast is the fallback
-        console.log('[Notifications] Native notification failed, using toast:', e);
-      }
-    }
-  });
+    console.log('[Notifications] Foreground listener active');
+    return cleanup;
+  })();
 
-  // Wrap unsubscribe to also clear the stored reference
-  const cleanup = () => {
-    unsubscribe();
-    foregroundListenerUnsubscribe = null;
-    console.log('[Notifications] Foreground listener cleaned up');
-  };
-
-  foregroundListenerUnsubscribe = cleanup;
-  console.log('[Notifications] Foreground listener active');
-
-  return cleanup;
+  return foregroundListenerSetup;
 };
 
 export const requestNotificationPermission = async (
@@ -263,6 +236,7 @@ export const requestNotificationPermission = async (
       return false;
     }
 
+    const messaging = await getMessagingInstance();
     if (!messaging) {
       console.warn('Firebase Messaging not initialized.');
       toast.error('Notifications not supported on this device.');
@@ -280,7 +254,7 @@ export const requestNotificationPermission = async (
     // Validate that the user is actually a member of the specified household
     const memberRef = doc(db, `households/${householdId}/members/${userId}`);
     const memberDoc = await getDoc(memberRef);
-    
+
     if (!memberDoc.exists()) {
       console.error('Security violation: User is not a member of the specified household.');
       toast.error('You are not a member of this household.');
@@ -316,6 +290,7 @@ export const requestNotificationPermission = async (
           return false;
         }
 
+        const { getToken } = await import('firebase/messaging');
         token = await getToken(messaging, {
           vapidKey,
           serviceWorkerRegistration: registration
@@ -345,7 +320,7 @@ export const requestNotificationPermission = async (
       if (token) {
         // Save token to user's member profile in the household
         const memberRef = doc(db, `households/${householdId}/members/${userId}`);
-        
+
         try {
           // IMPORTANT: arrayUnion prevents exact duplicates but DOES NOT remove stale tokens.
           // Over time, this array will accumulate invalid tokens from:
@@ -426,6 +401,7 @@ export const refreshFCMTokenIfNeeded = async (
 
     console.log('[Notifications] Refreshing FCM token...');
 
+    const messaging = await getMessagingInstance();
     if (!messaging) {
       console.warn('[Notifications] Firebase Messaging not available for token refresh');
       return false;
@@ -456,6 +432,7 @@ export const refreshFCMTokenIfNeeded = async (
     }
 
     // Get a fresh token
+    const { getToken } = await import('firebase/messaging');
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: registration

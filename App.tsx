@@ -63,9 +63,15 @@ const App: React.FC = () => {
       // Dynamic import ensures notification service (and heavy Firebase Messaging)
       // is only loaded when actually needed/authorized.
       import('./services/notificationService')
-        .then(({ setupForegroundNotificationListener }) => {
+        .then(({ setupForegroundNotificationListener }) =>
+          setupForegroundNotificationListener(),
+        )
+        .then((cleanup) => {
           if (isMounted) {
-            cleanupFn = setupForegroundNotificationListener();
+            cleanupFn = cleanup;
+          } else {
+            // Effect was cleaned up before the listener resolved; tear it down now.
+            cleanup?.();
           }
         })
         .catch((error) => {

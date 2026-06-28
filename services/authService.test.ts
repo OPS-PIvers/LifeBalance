@@ -8,7 +8,7 @@ import {
 
 // Mock the firebase config so importing authService doesn't initialize a real app.
 vi.mock('@/firebase.config', () => ({ auth: {}, googleProvider: {} }));
-vi.mock('@/services/notificationService', () => ({ isPWA: vi.fn() }));
+vi.mock('@/utils/platform', () => ({ isPWA: vi.fn() }));
 vi.mock('@/services/analytics', () => ({ track: vi.fn() }));
 vi.mock('firebase/auth', () => ({
   signInWithPopup: vi.fn(),
@@ -33,7 +33,7 @@ describe('authService', () => {
 
   describe('signInWithGoogle', () => {
     it('uses the redirect flow (returning null) when running as a PWA', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(true);
       vi.mocked(signInWithRedirect).mockResolvedValue(undefined as never);
@@ -46,7 +46,7 @@ describe('authService', () => {
     });
 
     it('returns the popup user when not a PWA and popup succeeds', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(false);
       const user = { uid: 'u1' };
@@ -62,7 +62,7 @@ describe('authService', () => {
     });
 
     it('tracks sign_up for a new user on popup sign-in', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { getAdditionalUserInfo } = await import('firebase/auth');
       const { track } = await import('@/services/analytics');
       const { signInWithGoogle } = await import('@/services/authService');
@@ -80,7 +80,7 @@ describe('authService', () => {
     });
 
     it('tracks login for a returning user on popup sign-in', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { getAdditionalUserInfo } = await import('firebase/auth');
       const { track } = await import('@/services/analytics');
       const { signInWithGoogle } = await import('@/services/authService');
@@ -98,7 +98,7 @@ describe('authService', () => {
     });
 
     it('falls back to redirect (returns null) when popup fails with auth/popup-blocked', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(false);
       vi.mocked(signInWithPopup).mockRejectedValue(
@@ -113,7 +113,7 @@ describe('authService', () => {
     });
 
     it('falls back to redirect for operation-not-supported error', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(false);
       vi.mocked(signInWithPopup).mockRejectedValue(
@@ -128,7 +128,7 @@ describe('authService', () => {
     });
 
     it('rethrows (without redirect) for a FirebaseError with a non-fallback code', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(false);
       vi.mocked(signInWithPopup).mockRejectedValue(
@@ -140,7 +140,7 @@ describe('authService', () => {
     });
 
     it('rethrows (without redirect) for a plain Error', async () => {
-      const { isPWA } = await import('@/services/notificationService');
+      const { isPWA } = await import('@/utils/platform');
       const { signInWithGoogle } = await import('@/services/authService');
       vi.mocked(isPWA).mockReturnValue(false);
       vi.mocked(signInWithPopup).mockRejectedValue(new Error('boom'));

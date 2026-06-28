@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore';
-import { getMessaging, type Messaging } from 'firebase/messaging';
-import { getFunctions } from 'firebase/functions';
+import type { Messaging } from 'firebase/messaging';
+import type { Functions } from 'firebase/functions';
 
 // Fallback to mock config if env vars are missing (for Test Mode/CI)
 const mockConfig = {
@@ -86,21 +86,52 @@ function initFirestore(): Firestore {
 }
 export const db = initFirestore();
 
-// Initialize Cloud Functions (callable functions, e.g. deletehousehold).
-export const functions = getFunctions(app);
+// Cloud Functions and Messaging are initialized LAZILY (dynamic import) so
+// firebase/functions and firebase/messaging stay OFF the eager boot path and out
+// of the always-loaded vendor-firebase chunk. They only load the first time a
+// callable is invoked or notifications are set up. The instances are cached.
 
-// Initialize Messaging with conditional check for browser environment
-// to prevent errors in SSR, tests, or unsupported contexts.
-let messagingInstance: Messaging | null = null;
-if (typeof window !== 'undefined') {
+// undefined = getter not yet run; a Functions value once resolved.
+let functionsInstance: Functions | undefined;
+
+/**
+ * Lazily initialize Cloud Functions (callable functions, e.g. deletehousehold),
+ * caching the instance. Dynamically imports firebase/functions so it leaves the
+ * eager boot bundle.
+ */
+export async function getFunctionsInstance(): Promise<Functions> {
+  if (functionsInstance) return functionsInstance;
+  const { getFunctions } = await import('firebase/functions');
+  functionsInstance = getFunctions(app);
+  return functionsInstance;
+}
+
+// undefined = getter not yet run; null = unsupported / failed to init;
+// a Messaging value once resolved successfully.
+let messagingInstance: Messaging | null | undefined;
+
+/**
+ * Lazily initialize Firebase Messaging, caching the instance. Returns null when
+ * messaging is unavailable (SSR, tests, unsupported contexts) so callers can
+ * no-op exactly as before. Dynamically imports firebase/messaging so it leaves
+ * the eager boot bundle.
+ */
+export async function getMessagingInstance(): Promise<Messaging | null> {
+  if (messagingInstance !== undefined) return messagingInstance;
+  if (typeof window === 'undefined') {
+    messagingInstance = null;
+    return messagingInstance;
+  }
   try {
+    const { getMessaging } = await import('firebase/messaging');
     messagingInstance = getMessaging(app);
   } catch (e) {
     console.warn('Firebase Messaging failed to initialize', e);
+    messagingInstance = null;
   }
+  return messagingInstance;
 }
 
-export const messaging = messagingInstance;
 export const googleProvider = new GoogleAuthProvider();
 
 // Configure Google provider
