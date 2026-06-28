@@ -32,6 +32,7 @@ export { geminiproxy } from "./geminiProxy";
 export { plaidcreatelinktoken } from "./plaid/links";
 export { plaidexchangepublictoken } from "./plaid/exchange";
 export { plaidsynctransactions } from "./plaid/sync";
+export { plaiddisconnectbank } from "./plaid/disconnect";
 
 const db = admin.firestore();
 const messaging = admin.messaging();
