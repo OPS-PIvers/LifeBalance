@@ -12,6 +12,10 @@ vi.mock('./contexts/AuthContext', () => ({
 
 vi.mock('./contexts/FirebaseHouseholdContext', () => ({
   FirebaseHouseholdProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // ModuleRoute (route guards, Plan 090) reads household settings via
+  // useHouseholdCore(); supply an empty settings object so module visibility
+  // fails open (all modules enabled) and every route renders as before.
+  useHouseholdCore: () => ({ householdSettings: {} }),
 }));
 
 // Mock react-hot-toast

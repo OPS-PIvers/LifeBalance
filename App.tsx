@@ -6,6 +6,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { FirebaseHouseholdProvider } from './contexts/FirebaseHouseholdContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import ModuleRoute from './components/auth/ModuleRoute';
 import MainLayout from './components/layout/MainLayout';
 import OfflineBanner from './components/layout/OfflineBanner';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -171,7 +172,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <ListsPage />
+                        <ModuleRoute module="plan">
+                          <ListsPage />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }
@@ -181,7 +184,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <Budget />
+                        <ModuleRoute module="money">
+                          <Budget />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }
@@ -191,7 +196,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <Habits />
+                        <ModuleRoute module="habits">
+                          <Habits />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }
@@ -201,7 +208,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <MealsPage />
+                        <ModuleRoute module="meals">
+                          <MealsPage />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }
@@ -211,7 +220,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <ShoppingPage />
+                        <ModuleRoute module="shopping">
+                          <ShoppingPage />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }
@@ -221,7 +232,9 @@ const App: React.FC = () => {
                   element={
                     <ProtectedRoute>
                       <MainLayout>
-                        <ToDosPage />
+                        <ModuleRoute module="todos">
+                          <ToDosPage />
+                        </ModuleRoute>
                       </MainLayout>
                     </ProtectedRoute>
                   }

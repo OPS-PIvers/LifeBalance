@@ -27,7 +27,8 @@ import {
   YearlyGoal,
   BucketPeriodSnapshot,
   Household,
-  FreezeBank
+  FreezeBank,
+  ModuleKey
 } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -227,6 +228,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [quickStockLists, setQuickStockLists] = useState<QuickStockList[]>([]);
   const [currency, setCurrency] = useState<string>('USD');
   const [kidModePinHash, setKidModePinHash] = useState<string | undefined>(undefined);
+  // Plan 090 — module visibility starts empty (fail-open => all-on), mirroring a
+  // legacy household. Toggling a module mutates this in-memory map so the dynamic
+  // footer / route guards / Plan-tab fallback are all walkable in Test Mode.
+  const [moduleVisibility, setModuleVisibilityState] = useState<Partial<Record<ModuleKey, boolean>>>({});
 
   // Account operations
   const addAccount = useCallback(async (account: Omit<Account, 'id'>) => {
@@ -251,6 +256,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const setHouseholdCurrency = useCallback(async (newCurrency: string) => {
     setCurrency(newCurrency);
     toast.success('Mock: Currency updated');
+  }, []);
+
+  const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
+    setModuleVisibilityState(prev => ({ ...prev, [key]: value }));
+    toast.success(`Mock: ${key} ${value ? 'enabled' : 'disabled'}`);
   }, []);
 
   const setKidModePin = useCallback(async (pin: string | null) => {
@@ -726,6 +736,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     currency,
     kidModePinHash,
     pendingRedemptions,
+    moduleVisibility,
 
   } as unknown as Household;
   const bucketSpentMap = new Map();
@@ -909,6 +920,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    setModuleVisibility,
     setKidModePin,
     addKidProfile,
     updateKidProfile,
