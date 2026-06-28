@@ -1,6 +1,7 @@
 import React, { useState, useCallback, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFinance, useGamification, useTodos, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { AccountPicker } from '@/components/budget/AccountPicker';
 import { BarChart2 } from 'lucide-react';
 // Lazy-loaded so their heavy dependencies (e.g. recharts) stay out of the
@@ -38,6 +39,7 @@ const Dashboard: React.FC = () => {
   } = useFinance();
   const { habits } = useGamification();
   const { updateToDo, deleteToDo, completeToDo } = useTodos();
+  const { isModuleEnabled } = useModuleVisibility();
   const navigate = useNavigate();
 
   const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
@@ -73,19 +75,25 @@ const Dashboard: React.FC = () => {
             Let&apos;s make today count.
           </p>
         </div>
-        <button
-          onClick={() => navigate('/budget', { state: { tab: 'trends' } })}
-          className="shrink-0 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 hover:border-brand-300 dark:hover:border-brand-600 active:scale-95 transition-[transform,color,border-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
-          aria-label="View money trends"
-        >
-          <BarChart2 size={22} />
-        </button>
+        {/* Money trends shortcut (money domain — Plan 090). Hidden when money is
+            off; the greeting then occupies the full header width. */}
+        {isModuleEnabled('money') && (
+          <button
+            onClick={() => navigate('/budget', { state: { tab: 'trends' } })}
+            className="shrink-0 p-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 hover:border-brand-300 dark:hover:border-brand-600 active:scale-95 transition-[transform,color,border-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+            aria-label="View money trends"
+          >
+            <BarChart2 size={22} />
+          </button>
+        )}
       </div>
 
       <div className="px-4 space-y-6">
 
-        {/* Hero: Safe to Spend — the single elevated surface on Home */}
-        <SafeToSpendHero />
+        {/* Hero: Safe to Spend — the single elevated surface on Home (money
+            domain — Plan 090). The `space-y-6` stack collapses cleanly when it's
+            removed (no doubled gap). */}
+        {isModuleEnabled('money') && <SafeToSpendHero />}
 
         {/* The Pulse strip — money + habits balance, the app's thesis metric */}
         <PulseStripWidget />
@@ -155,8 +163,8 @@ const Dashboard: React.FC = () => {
           )}
         </Section>
 
-        {/* Today's Habits — compact tracker */}
-        <DailyHabitsWidget />
+        {/* Today's Habits — compact tracker (habits domain — Plan 090). */}
+        {isModuleEnabled('habits') && <DailyHabitsWidget />}
 
         {/* Kids' Chores (parent overview) — self-nulls unless Kid Mode is on and a
             managed kid has a chore, so this is dormant by default. */}
