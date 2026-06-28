@@ -197,6 +197,71 @@ describe('useDashboardTransactionStats', () => {
     expect(row.timestamp.getTime()).toBe(new Date('2026-06-16T08:30:00Z').getTime());
   });
 
+  // The hook pre-limits `transactionActivityRows` to the top 5 by the SAME
+  // timestamp-desc comparator ActivityFeed uses, so the widget merges ≤5 tx rows
+  // with completed to-dos instead of the full history. These tests lock in that
+  // the pre-limit is byte-identical to slicing AFTER a full stable sort — the
+  // tricky case being ties (same-day rows with no createdAt share an identical
+  // midnight timestamp), where stability must preserve input order.
+  describe('activity-feed top-5 pre-limit (stable, tie-safe)', () => {
+    // ActivityFeed's exact comparator. Kept in sync with the widget + hook.
+    const byTimestampDesc = (a: { timestamp: Date }, b: { timestamp: Date }) =>
+      b.timestamp.getTime() - a.timestamp.getTime();
+
+    it('returns the first 5 in stable input order when all timestamps tie', () => {
+      // 6 transactions, same day, NO createdAt → identical midnight timestamps.
+      const txs = Array.from({ length: 6 }, (_, i) =>
+        makeTransaction({ id: `t${i}`, merchant: `M${i}`, amount: i + 1, date: '2026-06-16' })
+      );
+      setTransactions(txs);
+      const rows = render().transactionActivityRows;
+
+      // Stable sort over all-tied items preserves input order, so top 5 = first 5.
+      expect(rows.map((r) => r.id)).toEqual(['t0', 't1', 't2', 't3', 't4']);
+
+      // Equivalence proof: identical to mapping ALL rows then full-sort + slice(5).
+      const allRows = txs.map((tx) => ({
+        id: tx.id,
+        type: 'transaction' as const,
+        title: tx.merchant,
+        subtitle: tx.category,
+        timestamp: new Date(`${tx.date}T00:00:00`),
+        amount: tx.amount,
+      }));
+      const reference = [...allRows].sort(byTimestampDesc).slice(0, 5);
+      expect(rows.map((r) => r.id)).toEqual(reference.map((r) => r.id));
+    });
+
+    it('orders mixed createdAt + date-fallback rows identically to a full sort', () => {
+      const txs = [
+        // Date-fallback (midnight 06-16) — tie group A, in input order.
+        makeTransaction({ id: 'a1', amount: 1, date: '2026-06-16' }),
+        makeTransaction({ id: 'a2', amount: 2, date: '2026-06-16' }),
+        // Newest via createdAt.
+        makeTransaction({ id: 'newest', amount: 3, date: '2026-06-16', createdAt: '2026-06-16T23:00:00Z' }),
+        // Oldest via createdAt (earlier day).
+        makeTransaction({ id: 'oldest', amount: 4, date: '2026-06-10', createdAt: '2026-06-10T06:00:00Z' }),
+        // Mid via createdAt.
+        makeTransaction({ id: 'mid', amount: 5, date: '2026-06-16', createdAt: '2026-06-16T09:00:00Z' }),
+        // Another date-fallback (midnight 06-16) — tie group A continues.
+        makeTransaction({ id: 'a3', amount: 6, date: '2026-06-16' }),
+      ];
+      setTransactions(txs);
+      const rows = render().transactionActivityRows;
+
+      // Reference: full map → stable full-sort → slice(5), using the same
+      // createdAt||date timestamp rule and the same comparator.
+      const allRows = txs.map((tx) => ({
+        id: tx.id,
+        timestamp: new Date(tx.createdAt ?? `${tx.date}T00:00:00`),
+      }));
+      const reference = [...allRows].sort(byTimestampDesc).slice(0, 5);
+      expect(rows.map((r) => r.id)).toEqual(reference.map((r) => r.id));
+      // Sanity: exactly 5 rows survive the pre-limit (6 inputs).
+      expect(rows).toHaveLength(5);
+    });
+  });
+
   // DST spring-forward: the two last-week anchors diverge ~1/year. MoneyPulse
   // uses `subWeeks(startOfWeek(now), 1)`; PulseStrip uses the raw
   // `startOfWeek(weekStart - 7*24h)`. This test locks in that each accumulator

@@ -62,7 +62,8 @@ export interface CategorySpendItem {
 /**
  * A verified, non-income transaction mapped into ActivityFeed's row shape. The
  * widget still merges these with completed to-dos and applies the final
- * sort+slice (the sort interleaves both sources, so it must stay in the widget).
+ * sort+slice (the sort interleaves both sources, so it must stay in the widget);
+ * the hook pre-limits to the top 5 by timestamp desc (see field doc).
  */
 export interface TransactionActivityRow {
   id: string;
@@ -94,7 +95,14 @@ export interface DashboardTransactionStats {
   monthTotalSpent: number;
   /** Most-recent 3 cleared, non-income transactions, sorted by `date` desc. */
   recentTransactions: RecentTransaction[];
-  /** All verified, non-income transactions mapped to ActivityFeed rows (unsorted). */
+  /**
+   * Top 5 verified, non-income transactions mapped to ActivityFeed rows, sorted
+   * by `timestamp` desc with the SAME comparator ActivityFeed uses. Pre-limited
+   * to 5 because ActivityFeed merges these (tx-first) with completed to-dos and
+   * keeps the top 5 — and a stable sort over a tx-first merge means dropping tx
+   * rows beyond the top 5 here cannot change that merged top 5. See the in-body
+   * comment for the full equivalence argument.
+   */
   transactionActivityRows: TransactionActivityRow[];
 }
 
@@ -227,6 +235,19 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
         relativeDate: formatDistanceToNow(parseISO(tx.date), { addSuffix: true }),
       }));
 
+    // ActivityFeed pre-limit: sort by the IDENTICAL comparator ActivityFeed uses
+    // (timestamp desc) and keep the top 5, so the widget merges ≤5 tx rows with
+    // its completed-to-do rows instead of the full transaction history. This is
+    // byte-identical to the widget merging the FULL tx list because: ActivityFeed
+    // merges tx rows BEFORE todo rows and Array.sort is stable, so ties (common —
+    // same-day `date`-fallback rows share an identical midnight timestamp) resolve
+    // in the same relative order; and any tx row dropped here already has ≥5 tx
+    // rows ranked at-or-above it, so it could never reach the merged top-5. The
+    // comparator MUST stay in sync with ActivityFeed's for this proof to hold.
+    const topTransactionActivityRows = [...transactionActivityRows]
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+      .slice(0, 5);
+
     return {
       thisWeekSpend,
       lastWeekSpend,
@@ -234,7 +255,7 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       monthCategoryItems,
       monthTotalSpent: roundMoney(monthTotalSpent),
       recentTransactions,
-      transactionActivityRows,
+      transactionActivityRows: topTransactionActivityRows,
     };
   }, [transactions]);
 };
