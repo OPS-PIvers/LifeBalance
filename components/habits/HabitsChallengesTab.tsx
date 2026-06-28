@@ -84,10 +84,11 @@ export interface HabitsChallengesTabProps {
 const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallengeHub }) => {
   const { activeChallenge, habits, primaryYearlyGoal, freezeBank } = useGamification();
 
-  const linkedHabits = useMemo(
-    () => (activeChallenge ? habits.filter(h => activeChallenge.relatedHabitIds.includes(h.id)) : []),
-    [activeChallenge, habits]
-  );
+  const linkedHabits = useMemo(() => {
+    if (!activeChallenge) return [];
+    const relatedHabitIdSet = new Set(activeChallenge.relatedHabitIds);
+    return habits.filter(h => relatedHabitIdSet.has(h.id));
+  }, [activeChallenge, habits]);
 
   const progressData = useMemo(
     () => (activeChallenge ? calculateChallengeProgress(activeChallenge, linkedHabits) : null),

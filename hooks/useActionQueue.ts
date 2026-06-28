@@ -93,7 +93,10 @@ export const useActionQueue = () => {
   // 4. Combined & Sorted (Chronological: Oldest First)
   const actionQueue = useMemo(() => {
     return [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      // All queue items carry a zero-padded ISO yyyy-MM-dd date, so lexical order
+      // matches chronological order — compare directly instead of allocating a
+      // Date per comparison.
+      return a.date.localeCompare(b.date);
     });
   }, [dueCalendarItems, pendingTx, immediateToDos]);
 

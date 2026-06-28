@@ -19,7 +19,7 @@ import { Section, SurfaceList, Row } from '@/components/ui/Section';
  *
  * Theme: warm-amber household/kid accents (the redesign replaces the old purple).
  */
-export const KidsChoresWidget: React.FC = () => {
+export const KidsChoresWidget: React.FC = React.memo(() => {
   const { members } = useHouseholdCore();
   const { habits } = useGamification();
   const kidModeEnabled = useKidModeEnabled();
@@ -99,4 +99,6 @@ export const KidsChoresWidget: React.FC = () => {
       </SurfaceList>
     </Section>
   );
-};
+});
+
+KidsChoresWidget.displayName = 'KidsChoresWidget';
