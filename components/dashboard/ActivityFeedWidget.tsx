@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Receipt, CheckSquare } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -17,34 +18,45 @@ interface ActivityItem {
 export const ActivityFeedWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
   const fmt = useFormatCurrency();
 
-  const recentActivity = useMemo(() => {
-    const transactionActivities: ActivityItem[] = transactions
-      .filter(tx => tx.status === 'verified' && tx.category !== 'Income')
-      .map(tx => ({
-        id: tx.id,
-        type: 'transaction',
-        title: tx.merchant,
-        subtitle: tx.category,
-        timestamp: parseISO(tx.createdAt || tx.date),
-        amount: tx.amount,
-      }));
+  // Plan 090 (graceful degradation): transaction rows are money, completed-todo
+  // rows follow the Plan→To-Dos cascade. Drop the disabled domain's rows; the
+  // widget self-hides below if nothing is left to show.
+  const showMoney = isModuleEnabled('money');
+  const showTodos = isPlanTabVisible('todos');
 
-    const todoActivities: ActivityItem[] = todos
-      .filter(todo => todo.isCompleted && todo.completedAt)
-      .map(todo => ({
-        id: todo.id,
-        type: 'todo',
-        title: todo.text,
-        subtitle: 'Task completed',
-        timestamp: parseISO(todo.completedAt!),
-      }));
+  const recentActivity = useMemo(() => {
+    const transactionActivities: ActivityItem[] = showMoney
+      ? transactions
+          .filter(tx => tx.status === 'verified' && tx.category !== 'Income')
+          .map(tx => ({
+            id: tx.id,
+            type: 'transaction',
+            title: tx.merchant,
+            subtitle: tx.category,
+            timestamp: parseISO(tx.createdAt || tx.date),
+            amount: tx.amount,
+          }))
+      : [];
+
+    const todoActivities: ActivityItem[] = showTodos
+      ? todos
+          .filter(todo => todo.isCompleted && todo.completedAt)
+          .map(todo => ({
+            id: todo.id,
+            type: 'todo',
+            title: todo.text,
+            subtitle: 'Task completed',
+            timestamp: parseISO(todo.completedAt!),
+          }))
+      : [];
 
     return [...transactionActivities, ...todoActivities]
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 5);
-  }, [transactions, todos]);
+  }, [showMoney, showTodos, transactions, todos]);
 
   if (recentActivity.length === 0) return null;
 

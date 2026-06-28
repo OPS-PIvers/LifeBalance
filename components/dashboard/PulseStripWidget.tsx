@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { streakForHabit } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -34,10 +35,26 @@ interface PulseMetrics {
   topStreak: number;
 }
 
+// Tailwind's JIT can only see full, literal class names, so map a cell count to
+// a complete `grid-cols-N` string rather than building `grid-cols-${n}` (which
+// the purge would strip). Keys cover every count this widget can render (1-3).
+const GRID_COLS_BY_COUNT: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+};
+
 export const PulseStripWidget: React.FC = () => {
   const { transactions } = useFinance();
   const { habits, weeklyPoints } = useGamification();
+  const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
+
+  // Plan 090 (graceful degradation): drop the Spent cell when money is off and
+  // the Points/Consistency cells when habits are off. The grid column count and
+  // `divide-x` dividers follow whichever cells actually render.
+  const showSpend = isModuleEnabled('money');
+  const showHabits = isModuleEnabled('habits');
 
   const metrics = useMemo<PulseMetrics>(() => {
     const now = new Date();
@@ -100,6 +117,11 @@ export const PulseStripWidget: React.FC = () => {
     };
   }, [transactions, habits, weeklyPoints]);
 
+  // Both domains off — there is nothing this strip would show.
+  if (!showSpend && !showHabits) {
+    return null;
+  }
+
   // Nothing to balance yet — stay quiet on a brand-new household.
   if (
     metrics.weekPoints === 0 &&
@@ -109,6 +131,11 @@ export const PulseStripWidget: React.FC = () => {
   ) {
     return null;
   }
+
+  // Cell count drives the grid column count (and the divider layout, since
+  // `divide-x` only paints between siblings — no stray leading/trailing rule).
+  const cellCount = (showSpend ? 1 : 0) + (showHabits ? 2 : 0);
+  const gridColsClass = GRID_COLS_BY_COUNT[cellCount] ?? 'grid-cols-1';
 
   const SpendTrendIcon =
     metrics.spendTrend === 'up'
@@ -122,8 +149,14 @@ export const PulseStripWidget: React.FC = () => {
       {/* A hairline-edged stat BAND on the canvas — deliberately not a rounded
           card, so it reads as a lightweight ledger strip under the hero rather
           than another peer surface competing for weight. */}
-      <div className="grid grid-cols-3 divide-x divide-brand-200 dark:divide-brand-700 border-y border-brand-200 dark:border-brand-700">
+      <div
+        className={cn(
+          'grid divide-x divide-brand-200 dark:divide-brand-700 border-y border-brand-200 dark:border-brand-700',
+          gridColsClass
+        )}
+      >
         {/* Points earned — the habit/gamification signal (warm) */}
+        {showHabits && (
         <PulseCell label="Points">
           <span className="font-mono text-2xl font-bold tabular-nums text-warm-600 dark:text-warm-300">
             {metrics.weekPoints}
@@ -140,8 +173,10 @@ export const PulseStripWidget: React.FC = () => {
             </span>
           )}
         </PulseCell>
+        )}
 
         {/* Spending — the money signal (evergreen) */}
+        {showSpend && (
         <PulseCell label="Spent">
           <span className="font-mono text-2xl font-bold tabular-nums text-accent-700 dark:text-accent-300">
             {fmt(metrics.weekSpend, { decimals: 0 })}
@@ -172,8 +207,10 @@ export const PulseStripWidget: React.FC = () => {
             </span>
           )}
         </PulseCell>
+        )}
 
         {/* Consistency — the bridge metric (slate-teal) */}
+        {showHabits && (
         <PulseCell label="Consistency">
           {metrics.consistencyTotal > 0 ? (
             <>
@@ -196,6 +233,7 @@ export const PulseStripWidget: React.FC = () => {
             </>
           )}
         </PulseCell>
+        )}
       </div>
     </Section>
   );

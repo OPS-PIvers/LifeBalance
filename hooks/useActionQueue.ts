@@ -5,6 +5,7 @@ import {
 } from 'date-fns';
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
 import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 
 // ToDoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
@@ -41,6 +42,15 @@ export const isTodoQueueItem = (item: ActionQueueItem): item is ToDoActionQueueI
 export const useActionQueue = () => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
+
+  // Plan 090 (graceful degradation): gate each queue source by its domain so a
+  // disabled module never surfaces an item whose destination page is hidden.
+  // Bills (calendar) + pending transactions are money; to-dos are gated by the
+  // Plan→To-Dos cascade (the master toggle, not the raw `todos` flag), matching
+  // the route/capture guards.
+  const showMoney = isModuleEnabled('money');
+  const showTodos = isPlanTabVisible('todos');
 
   // Use startOfToday for stable date reference across renders for the same day
   // This prevents unnecessary re-calculations if the component re-renders
@@ -54,19 +64,19 @@ export const useActionQueue = () => {
   const windowEnd = useMemo(() => addMonths(today, 3), [today]);
   const expandedCalendarItems = useExpandedCalendarItems(windowStart, windowEnd);
 
-  // 1. Due Calendar Items (Past or Today, Unpaid)
-  const dueCalendarItems: ActionQueueItem[] = useMemo(() => expandedCalendarItems.filter(item =>
+  // 1. Due Calendar Items (Past or Today, Unpaid) — money domain
+  const dueCalendarItems: ActionQueueItem[] = useMemo(() => showMoney ? expandedCalendarItems.filter(item =>
     !item.isPaid && (isBefore(parseISO(item.date), endToday) || isSameDay(parseISO(item.date), today))
-  ).map(i => ({ ...i, queueType: 'calendar' as const })), [expandedCalendarItems, endToday, today]);
+  ).map(i => ({ ...i, queueType: 'calendar' as const })) : [], [showMoney, expandedCalendarItems, endToday, today]);
 
-  // 2. Pending Transactions
-  const pendingTx: ActionQueueItem[] = useMemo(() => transactions.filter(t =>
+  // 2. Pending Transactions — money domain
+  const pendingTx: ActionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
     t.status === 'pending_review'
-  ).map(t => ({ ...t, queueType: 'transaction' as const })), [transactions]);
+  ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions]);
 
-  // 3. Immediate To-Dos (Overdue, Today or Tomorrow)
+  // 3. Immediate To-Dos (Overdue, Today or Tomorrow) — Plan→To-Dos domain
   // Filter out todos with invalid dates early to prevent issues downstream
-  const immediateToDos: ActionQueueItem[] = useMemo(() => todos.filter(t => {
+  const immediateToDos: ActionQueueItem[] = useMemo(() => !showTodos ? [] : todos.filter(t => {
     if (t.isCompleted) return false;
     const date = parseISO(t.completeByDate);
     // Validate the parsed date before using it
@@ -78,7 +88,7 @@ export const useActionQueue = () => {
     }
     // Use consistent date-only comparisons: Overdue (before today), Today, or Tomorrow
     return isBefore(date, today) || isToday(date) || isTomorrow(date);
-  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate })), [todos, today]);
+  }).map(t => ({ ...t, queueType: 'todo' as const, date: t.completeByDate })), [showTodos, todos, today]);
 
   // 4. Combined & Sorted (Chronological: Oldest First)
   const actionQueue = useMemo(() => {

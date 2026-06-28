@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import type { Transaction, CalendarItem, ToDo } from '@/types/schema';
+import type { Transaction, CalendarItem, ToDo, ModuleKey } from '@/types/schema';
 import {
   useActionQueue,
   isTransactionQueueItem,
@@ -13,12 +13,31 @@ import {
   useTodos,
   useExpandedCalendarItems,
 } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 
 vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useFinance: vi.fn(),
   useTodos: vi.fn(),
   useExpandedCalendarItems: vi.fn(),
 }));
+
+// Module visibility (Plan 090): mocked so each test can choose which domains
+// are enabled. Defaults to all-on (pre-090 behavior).
+vi.mock('@/hooks/useModuleVisibility', () => ({
+  useModuleVisibility: vi.fn(),
+}));
+
+/** Configure the mocked hook so only `enabled` modules are on. */
+const setEnabledModules = (enabled: ModuleKey[]) => {
+  vi.mocked(useModuleVisibility).mockReturnValue({
+    isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
+    isPlanVisible:
+      enabled.includes('plan') &&
+      (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
+    // A to-do is only reachable when the Plan master AND the To-Dos tab are on.
+    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+  });
+};
 
 // Minimal fixture builders.
 const makeCalendarItem = (overrides: Partial<CalendarItem>): CalendarItem =>
@@ -76,6 +95,8 @@ describe('useActionQueue', () => {
   beforeEach(() => {
     // Pin "today" to 2026-06-16 noon.
     vi.useFakeTimers({ now: new Date('2026-06-16T12:00:00') });
+    // Default: every domain on (pre-090 behavior). Plan on so to-dos surface.
+    setEnabledModules(['habits', 'money', 'plan', 'todos', 'meals', 'shopping']);
   });
 
   afterEach(() => {
@@ -208,6 +229,49 @@ describe('useActionQueue', () => {
       result = renderHook(() => useActionQueue()).result;
     }).not.toThrow();
     expect(result?.current.actionQueue.map((i) => i.id)).toEqual(['good']);
+  });
+
+  // --- Plan 090: graceful degradation (per-domain gating) ---
+
+  it('drops bills + pending transactions when money is off, keeps to-dos', () => {
+    setEnabledModules(['habits', 'plan', 'todos']); // money OFF, todos reachable
+    setMocks({
+      calendar: [makeCalendarItem({ id: 'cal-1', date: '2026-06-15', isPaid: false })],
+      transactions: [
+        makeTransaction({ id: 'tx-1', date: '2026-06-10', status: 'pending_review' }),
+      ],
+      todos: [makeTodo({ id: 'todo-1', completeByDate: '2026-06-16' })],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map((i) => i.id)).toEqual(['todo-1']);
+  });
+
+  it('drops to-dos when the Plan→To-Dos destination is unreachable, keeps money items', () => {
+    // todos flag on, but Plan master off → the To-Dos page is unreachable, so
+    // to-do items must not surface; bills + pending transactions remain.
+    setEnabledModules(['habits', 'money', 'todos']); // Plan OFF
+    setMocks({
+      calendar: [makeCalendarItem({ id: 'cal-1', date: '2026-06-15', isPaid: false })],
+      transactions: [
+        makeTransaction({ id: 'tx-1', date: '2026-06-10', status: 'pending_review' }),
+      ],
+      todos: [makeTodo({ id: 'todo-1', completeByDate: '2026-06-16' })],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue.map((i) => i.id).sort()).toEqual(['cal-1', 'tx-1']);
+  });
+
+  it('returns an empty queue when both money and the To-Dos destination are off', () => {
+    setEnabledModules(['habits']); // money OFF, Plan/To-Dos OFF
+    setMocks({
+      calendar: [makeCalendarItem({ id: 'cal-1', date: '2026-06-15', isPaid: false })],
+      transactions: [
+        makeTransaction({ id: 'tx-1', date: '2026-06-10', status: 'pending_review' }),
+      ],
+      todos: [makeTodo({ id: 'todo-1', completeByDate: '2026-06-16' })],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    expect(result.current.actionQueue).toEqual([]);
   });
 
   it('type guards correctly narrow tagged items', () => {
