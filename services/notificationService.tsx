@@ -131,6 +131,7 @@ export const setupForegroundNotificationListener = (): Promise<(() => void) | nu
   }
 
   foregroundListenerSetup = (async (): Promise<(() => void) | null> => {
+   try {
     const messaging = await getMessagingInstance();
     if (!messaging) {
       console.warn('[Notifications] Firebase Messaging not available');
@@ -221,6 +222,16 @@ export const setupForegroundNotificationListener = (): Promise<(() => void) | nu
 
     console.log('[Notifications] Foreground listener active');
     return cleanup;
+   } catch (e) {
+    // A transient failure (e.g. dynamic chunk-load error, onMessage throwing)
+    // must NOT poison the memo forever — reset it so a later mount can retry.
+    // Return null (never rethrow): App.tsx/Settings.tsx call this with `.then`
+    // and no `.catch`, so rethrowing would surface an unhandled rejection;
+    // returning null lets callers no-op exactly like the unsupported path.
+    console.error('[Notifications] Failed to set up foreground listener', e);
+    foregroundListenerSetup = null;
+    return null;
+   }
   })();
 
   return foregroundListenerSetup;

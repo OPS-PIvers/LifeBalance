@@ -100,4 +100,27 @@ describe('setupForegroundNotificationListener', () => {
     expect(cleanup).not.toBeNull();
     expect(onMessageMock).toHaveBeenCalledTimes(1);
   });
+
+  it('recovers when setup throws once: resolves null (no throw), resets memo, retries successfully', async () => {
+    // Simulate a transient failure during registration (e.g. chunk-load error
+    // surfacing as onMessage throwing).
+    onMessageMock.mockImplementationOnce(() => {
+      throw new Error('transient chunk load failure');
+    });
+    const { setupForegroundNotificationListener } = await import('./notificationService');
+
+    // First call must resolve to null rather than reject (no unhandled rejection
+    // for App.tsx/Settings.tsx, which call without a .catch).
+    const failed = await setupForegroundNotificationListener();
+    expect(failed).toBeNull();
+    expect(onMessageMock).toHaveBeenCalledTimes(1);
+
+    // The rejected/failed attempt must NOT be cached forever — a subsequent call
+    // retries and registers a working listener.
+    onMessageMock.mockReturnValue(unsubscribeMock);
+    const cleanup = await setupForegroundNotificationListener();
+    expect(cleanup).not.toBeNull();
+    expect(typeof cleanup).toBe('function');
+    expect(onMessageMock).toHaveBeenCalledTimes(2);
+  });
 });
