@@ -103,6 +103,16 @@ export function canUseFreezeBankToken(
   // Check 4: Date must be in the past (not today or future)
   try {
     const targetTime = parseISO(targetDate).getTime();
+    // parseISO returns an Invalid Date (NaN time) for unparseable input rather
+    // than throwing, so the catch below never fires for e.g. 'not-a-date'. Guard
+    // explicitly — otherwise every NaN comparison below is false and an invalid
+    // date slips through as allowed.
+    if (Number.isNaN(targetTime)) {
+      return {
+        allowed: false,
+        reason: 'Invalid date format. Expected YYYY-MM-DD.',
+      };
+    }
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
