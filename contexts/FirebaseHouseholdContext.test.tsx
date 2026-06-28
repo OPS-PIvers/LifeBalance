@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { format, startOfWeek, subDays } from 'date-fns';
 import type {
   Account,
+  BudgetBucket,
   CalendarItem,
   FreezeBank,
   Habit,
@@ -42,6 +43,15 @@ interface CapturedBatch {
 }
 
 let batches: CapturedBatch[] = [];
+
+// Commit-failure controller (gap §1 rollback tests). When `failNextCommit` is
+// set, the NEXT writeBatch().commit() rejects with `commitError` instead of
+// resolving, simulating a Firestore write rejection so we can prove the mutation
+// applied NO partial write outside the (failed) batch. Hoisted so the vi.mock
+// factory below can read it. Reset to a clean state in beforeEach.
+const { commitController } = vi.hoisted(() => ({
+  commitController: { failNextCommit: false, commitError: new Error('commit rejected') },
+}));
 
 const incrementMock = vi.fn((n: number) => ({ __increment: n }));
 
@@ -106,6 +116,14 @@ vi.mock('firebase/firestore', () => {
           batch.ops.push({ kind: 'delete', path: pathOf(ref) });
         },
         commit: vi.fn(async () => {
+          // Simulate a rejected Firestore commit for the rollback tests. The
+          // batch is left `committed=false` and NO ops are applied (the mock only
+          // records ops in-memory; a real failed commit applies nothing), so a
+          // test can assert the documents were never partially written.
+          if (commitController.failNextCommit) {
+            commitController.failNextCommit = false;
+            throw commitController.commitError;
+          }
           batch.committed = true;
         }),
       };
@@ -239,6 +257,7 @@ beforeEach(() => {
   batches = [];
   snapshotCallbacks.clear();
   captured.value = null;
+  commitController.failNextCommit = false;
   incrementMock.mockClear();
   addDocMock.mockClear();
   updateDocMock.mockClear();
@@ -799,5 +818,450 @@ describe('FirebaseHouseholdContext — cross-mutation invariant', () => {
       expect(batch.committed).toBe(true);
       expect(batch.ops.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ===========================================================================
+// §1 — writeBatch COMMIT-REJECTION / rollback.
+// The happy-path tests above prove every multi-doc mutation puts all of its
+// writes in ONE batch. These prove the *atomicity guarantee against the failure
+// it exists to prevent*: when commit() REJECTS, no write is applied outside the
+// (failed) batch. The only write path for each of these mutations is the batch
+// itself, so a rejected commit means nothing landed. We assert:
+//   (a) the mutation's promise rejects (or swallows-and-returns, per its
+//       contract — toggleHabit/useFreezeBankToken/updateTransactionCategory
+//       re-throw; payCalendarItem/addMember re-throw after a toast),
+//   (b) the batch was NOT marked committed, and
+//   (c) NO single-doc write API (updateDoc/setDoc/addDoc/deleteDoc) was called —
+//       i.e. nothing leaked outside the atomic batch.
+// ===========================================================================
+describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)', () => {
+  // Shared assertion: no out-of-batch single-doc write happened, and the batch
+  // never reached committed=true.
+  function expectNoPartialWrite() {
+    expect(updateDocMock).not.toHaveBeenCalled();
+    expect(setDocMock).not.toHaveBeenCalled();
+    expect(addDocMock).not.toHaveBeenCalled();
+    expect(deleteDocMock).not.toHaveBeenCalled();
+    // Whatever batch was opened must NOT be marked committed.
+    for (const b of batches) {
+      expect(b.committed).toBe(false);
+    }
+  }
+
+  it('toggleHabit: a rejected commit propagates and writes nothing outside the batch', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/members`, [
+      docSnap('user1', { uid: 'user1', points: { daily: 0, weekly: 0, total: 0 } }),
+    ]);
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(captured.value!.gamification.toggleHabit('hb1', 'up')).rejects.toThrow(
+        'commit rejected',
+      );
+    });
+
+    // Exactly one batch was opened (the toggle's), and it failed.
+    expect(batches).toHaveLength(1);
+    expectNoPartialWrite();
+  });
+
+  it('payCalendarItem: a rejected commit re-throws and applies no partial write', async () => {
+    renderProvider();
+    const account: Account = {
+      id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+      lastUpdated: new Date().toISOString(),
+    } as Account;
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+    const item: CalendarItem = {
+      id: 'cal1', title: 'Electric Bill', amount: 5000,
+      date: format(new Date(), 'yyyy-MM-dd'), type: 'expense', isPaid: false, isRecurring: false,
+    } as CalendarItem;
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal1', item)]);
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(captured.value!.finance.payCalendarItem('cal1', 'acc1')).rejects.toThrow(
+        'commit rejected',
+      );
+    });
+
+    // The one expense pay-batch failed; calendar item is NOT marked paid, the
+    // account balance is NOT moved, and the transaction is NOT created, because
+    // all three writes only existed inside the failed batch.
+    expect(batches).toHaveLength(1);
+    expectNoPartialWrite();
+  });
+
+  it('useFreezeBankToken: a rejected commit propagates; no token spent / day patched outside the batch', async () => {
+    renderProvider();
+    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', completedDates: [] })),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: {
+        tokens: 2, maxTokens: 3,
+        lastRolloverDate: format(new Date(), 'yyyy-MM-dd'),
+        lastRolloverMonth: format(new Date(), 'yyyy-MM'),
+        history: [],
+      } satisfies FreezeBank,
+    });
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(
+        captured.value!.gamification.useFreezeBankToken('hb1', yesterday),
+      ).rejects.toThrow('commit rejected');
+    });
+
+    expect(batches).toHaveLength(1);
+    expectNoPartialWrite();
+  });
+
+  it('updateTransactionCategory: a rejected commit propagates; transaction/habit/points untouched outside the batch', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/members`, [
+      docSnap('user1', { uid: 'user1', points: { daily: 0, weekly: 0, total: 0 } }),
+    ]);
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
+    ]);
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(
+        captured.value!.finance.updateTransactionCategory('tx1', 'Groceries', ['hb1']),
+      ).rejects.toThrow('commit rejected');
+    });
+
+    expect(batches).toHaveLength(1);
+    expectNoPartialWrite();
+  });
+
+  it('addMember: a rejected commit re-throws; member doc + memberUids never partially applied', async () => {
+    renderProvider();
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+
+    commitController.failNextCommit = true;
+    await act(async () => {
+      await expect(
+        captured.value!.core.addMember({ displayName: 'New Member', email: 'n@e.com' }),
+      ).rejects.toThrow('commit rejected');
+    });
+
+    // The member set() and the memberUids update() lived only in the failed batch.
+    expect(batches).toHaveLength(1);
+    expectNoPartialWrite();
+  });
+});
+
+// ===========================================================================
+// §2 — Paycheck approval + period rollover.
+// handlePaycheckApproval / resetBucketsForNewPeriod / initializeFirstPeriod are
+// NOT on the public context value — they're reached only via payCalendarItem
+// with an `income` calendar item (which calls handlePaycheckApproval before its
+// own expense-style batch). currentPeriodId is derived from
+// householdSettings.lastPaycheckDate, so seeding the household doc with (or
+// without) lastPaycheckDate selects the rollover branch vs. the first-period
+// branch.
+// ===========================================================================
+describe('FirebaseHouseholdContext — paycheck approval / period rollover', () => {
+  const account: Account = {
+    id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+    lastUpdated: new Date().toISOString(),
+  } as Account;
+
+  const bucket = (id: string, name: string, limit: number): BudgetBucket => ({
+    id, name, limit, color: 'blue', isVariable: false, isCore: true,
+  } as BudgetBucket);
+
+  function seedBucketsAndAccount(buckets: BudgetBucket[]) {
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+    emitCollection(
+      `${householdPath}/buckets`,
+      buckets.map(b => docSnap(b.id, b)),
+    );
+  }
+
+  function incomeItem(id: string, date: string): CalendarItem {
+    return {
+      id, title: 'Paycheck', amount: 200000, date, type: 'income',
+      isPaid: false, isRecurring: false,
+    } as CalendarItem;
+  }
+
+  it('rollover branch: snapshots + per-bucket currentPeriodId + lastPaycheckDate land in ONE batch', async () => {
+    renderProvider();
+    seedBucketsAndAccount([bucket('b1', 'Groceries', 50000), bucket('b2', 'Gas', 20000)]);
+    // OLD period present => currentPeriodId is non-empty => rollover branch.
+    const oldPeriod = '2026-06-01';
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      lastPaycheckDate: oldPeriod,
+    });
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal_income', incomeItem('cal_income', '2026-06-15'))]);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
+    });
+
+    // Two batches total: [0] = resetBucketsForNewPeriod (the rollover), [1] =
+    // payCalendarItem's own income batch (calendar item + balance + transaction).
+    expect(batches.length).toBe(2);
+    const resetBatch = batches[0]!;
+    expect(resetBatch.committed).toBe(true);
+
+    const newPeriod = '2026-06-15';
+    const periodEnd = '2026-06-14'; // newPeriodId − 1 day
+
+    // One bucketHistory snapshot per bucket, all in the reset batch.
+    const snapshotSets = resetBatch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/bucketHistory`),
+    );
+    expect(snapshotSets).toHaveLength(2);
+    for (const snap of snapshotSets) {
+      expect(snap.data).toMatchObject({
+        periodId: oldPeriod,
+        periodStartDate: oldPeriod,
+        periodEndDate: periodEnd,
+      });
+    }
+
+    // Each bucket's currentPeriodId advances to the new period, in the SAME batch.
+    const b1Ops = opsForPath(resetBatch, `${householdPath}/buckets/b1`);
+    const b2Ops = opsForPath(resetBatch, `${householdPath}/buckets/b2`);
+    expect(b1Ops).toHaveLength(1);
+    expect(b2Ops).toHaveLength(1);
+    expect(b1Ops[0]!.data).toMatchObject({ currentPeriodId: newPeriod, lastResetDate: oldPeriod });
+    expect(b2Ops[0]!.data).toMatchObject({ currentPeriodId: newPeriod, lastResetDate: oldPeriod });
+
+    // The household lastPaycheckDate advance is in the SAME reset batch.
+    const hhOps = opsForPath(resetBatch, householdPath);
+    expect(hhOps).toHaveLength(1);
+    expect(hhOps[0]!.data).toMatchObject({ lastPaycheckDate: newPeriod });
+  });
+
+  it('first-period branch: no prior period → initializeFirstPeriod sets lastPaycheckDate + each bucket, no snapshots', async () => {
+    renderProvider();
+    seedBucketsAndAccount([bucket('b1', 'Groceries', 50000)]);
+    // NO lastPaycheckDate => currentPeriodId === '' => first-period branch.
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/calendarItems`, [docSnap('cal_income', incomeItem('cal_income', '2026-06-15'))]);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
+    });
+
+    expect(batches.length).toBe(2);
+    const initBatch = batches[0]!;
+    expect(initBatch.committed).toBe(true);
+
+    const paycheckDate = '2026-06-15';
+
+    // First-period init writes the household lastPaycheckDate...
+    const hhOps = opsForPath(initBatch, householdPath);
+    expect(hhOps).toHaveLength(1);
+    expect(hhOps[0]!.data).toMatchObject({ lastPaycheckDate: paycheckDate });
+
+    // ...and seeds each bucket's currentPeriodId to the paycheck date...
+    const b1Ops = opsForPath(initBatch, `${householdPath}/buckets/b1`);
+    expect(b1Ops).toHaveLength(1);
+    expect(b1Ops[0]!.data).toMatchObject({
+      currentPeriodId: paycheckDate,
+      lastResetDate: paycheckDate,
+    });
+
+    // ...but creates NO bucketHistory snapshots (nothing to close on the first period).
+    const snapshotSets = initBatch.ops.filter(
+      o => o.path.startsWith(`${householdPath}/bucketHistory`),
+    );
+    expect(snapshotSets).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// §3 — reallocateBucket: documents CURRENT behavior. The two limit changes land
+// in one batch (source increment(-amount), dest increment(+amount)). There is
+// NO validation against negative/over-balance amounts; the negative-amount test
+// below DOCUMENTS that an out-of-range amount currently goes through unguarded.
+// Do NOT add a guard — flagged as a potential follow-up.
+// ===========================================================================
+describe('FirebaseHouseholdContext — reallocateBucket (current behavior)', () => {
+  const bucket = (id: string, name: string, limit: number): BudgetBucket => ({
+    id, name, limit, color: 'blue', isVariable: false, isCore: true,
+  } as BudgetBucket);
+
+  function seedTwoBuckets() {
+    emitCollection(`${householdPath}/buckets`, [
+      docSnap('src', bucket('src', 'Groceries', 50000)),
+      docSnap('dst', bucket('dst', 'Gas', 20000)),
+    ]);
+  }
+
+  it('debits the source and credits the destination via increment() in ONE batch', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', 10000);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    const srcOps = opsForPath(batch, `${householdPath}/buckets/src`);
+    const dstOps = opsForPath(batch, `${householdPath}/buckets/dst`);
+    expect(srcOps).toHaveLength(1);
+    expect(dstOps).toHaveLength(1);
+    // Mirror-image increments: source −amount, destination +amount.
+    expect(srcOps[0]!.data!['limit']).toEqual({ __increment: -10000 });
+    expect(dstOps[0]!.data!['limit']).toEqual({ __increment: 10000 });
+  });
+
+  // DOCUMENTS CURRENT (possibly-undesirable) BEHAVIOR: there is no guard against
+  // a negative or over-balance amount. A negative amount silently REVERSES the
+  // transfer (debits the destination, credits the source); an amount larger than
+  // the source limit would drive it negative. FLAGGED as a potential follow-up —
+  // not fixed here (tests-only).
+  it('DOCUMENTS: a negative amount currently goes through unguarded (reverses the transfer)', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', -5000);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    // No validation: the negative amount flows straight into the increments,
+    // crediting the source and debiting the destination.
+    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
+      .toEqual({ __increment: 5000 });
+    expect(opsForPath(batch, `${householdPath}/buckets/dst`)[0]!.data!['limit'])
+      .toEqual({ __increment: -5000 });
+  });
+
+  it('DOCUMENTS: an over-balance amount (> source limit) currently goes through unguarded', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    // Source limit is 50000; transfer 999999 — far more than available.
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', 999999);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    // It commits anyway: no balance check. The source increment(-999999) would
+    // drive the limit negative server-side.
+    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
+      .toEqual({ __increment: -999999 });
+  });
+});
+
+// ===========================================================================
+// §7 — useFreezeBankToken weekly boundary: when targetDate is in a PRIOR week,
+// the patched day's points credit points.total but NOT points.weekly (and never
+// points.daily for a past day). Clock is pinned so "this week" and the 30-day
+// validity window are deterministic.
+// ===========================================================================
+describe('FirebaseHouseholdContext — useFreezeBankToken weekly boundary', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Wednesday 2026-06-17 (local). This week's Monday is 2026-06-15.
+    vi.setSystemTime(new Date(2026, 5, 17, 12, 0, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('credits points.total but NOT points.weekly when the patched day is in a prior week', async () => {
+    renderProvider();
+    // 2026-06-10 (Wed of the PRIOR week): in the past, within 30 days, before
+    // this week's Monday (2026-06-15).
+    const priorWeekDate = '2026-06-10';
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] })),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: {
+        tokens: 2, maxTokens: 3,
+        lastRolloverDate: '2026-06-01',
+        lastRolloverMonth: '2026-06',
+        history: [],
+      } satisfies FreezeBank,
+    });
+
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', priorWeekDate);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    const hhOps = opsForPath(batch, householdPath);
+    expect(hhOps).toHaveLength(1);
+    const hhData = hhOps[0]!.data!;
+    // Lifetime total is always credited.
+    expect(hhData['points.total']).toEqual({ __increment: 10 });
+    // Prior week => weekly NOT credited; daily never for a past day.
+    expect(hhData['points.weekly']).toBeUndefined();
+    expect(hhData['points.daily']).toBeUndefined();
+    // Token still spent + history recorded in the same batch.
+    const writtenBank = hhData['freezeBank'] as FreezeBank;
+    expect(writtenBank.tokens).toBe(1);
+    expect(writtenBank.history).toHaveLength(1);
+  });
+
+  it('credits points.weekly when the patched day IS in the current week (control)', async () => {
+    renderProvider();
+    // 2026-06-16 (Tue of THIS week): past, within the current Mon-anchored week.
+    const thisWeekDate = '2026-06-16';
+    emitCollection(`${householdPath}/habits`, [
+      docSnap('hb1', baseHabit({ id: 'hb1', type: 'positive', basePoints: 10, completedDates: [] })),
+    ]);
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      freezeBank: {
+        tokens: 2, maxTokens: 3,
+        lastRolloverDate: '2026-06-01',
+        lastRolloverMonth: '2026-06',
+        history: [],
+      } satisfies FreezeBank,
+    });
+
+    await act(async () => {
+      await captured.value!.gamification.useFreezeBankToken('hb1', thisWeekDate);
+    });
+
+    const hhData = opsForPath(batches[0]!, householdPath)[0]!.data!;
+    expect(hhData['points.total']).toEqual({ __increment: 10 });
+    expect(hhData['points.weekly']).toEqual({ __increment: 10 });
+    expect(hhData['points.daily']).toBeUndefined();
   });
 });

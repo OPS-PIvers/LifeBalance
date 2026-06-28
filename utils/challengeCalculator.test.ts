@@ -130,3 +130,76 @@ describe('calculateChallengeProgress — divide-by-zero protection', () => {
     expect(result).toEqual({ currentValue: 0, progress: 0, completedHabitsCount: 0 });
   });
 });
+
+describe('calculateChallengeProgress — percentage boundaries (0% / 100% / overshoot)', () => {
+  describe('count type', () => {
+    it('is exactly 0% when no progress has been made against a valid target', () => {
+      const c = challenge({ targetType: 'count', targetValue: 100 });
+      const habits = [habit({ type: 'positive', totalCount: 0 })];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      expect(result.currentValue).toBe(0);
+      expect(result.progress).toBe(0);
+    });
+
+    it('is exactly 100% when currentValue equals the target', () => {
+      const c = challenge({ targetType: 'count', targetValue: 30 });
+      const habits = [habit({ type: 'positive', totalCount: 30 })];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      expect(result.currentValue).toBe(30);
+      expect(result.progress).toBe(100);
+    });
+
+    it('clamps overshoot (currentValue > target) to 100% but reports the true currentValue', () => {
+      const c = challenge({ targetType: 'count', targetValue: 30 });
+      const habits = [habit({ type: 'positive', totalCount: 75 })];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      // Percentage is capped, but the raw count is preserved for display.
+      expect(result.progress).toBe(100);
+      expect(result.currentValue).toBe(75);
+      expect(result.completedHabitsCount).toBe(75);
+    });
+
+    it('sums totalCount across multiple positive habits (negatives ignored in count mode)', () => {
+      const c = challenge({ targetType: 'count', targetValue: 100 });
+      const habits = [
+        habit({ type: 'positive', totalCount: 20 }),
+        habit({ type: 'positive', totalCount: 10 }),
+        habit({ type: 'negative', totalCount: 999 }), // not counted in count mode
+      ];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      expect(result.currentValue).toBe(30);
+      expect(result.progress).toBe(30);
+    });
+  });
+
+  describe('percentage type', () => {
+    it('is exactly 0% when no days were completed in the challenge month', () => {
+      const c = challenge({ targetType: 'percentage', targetValue: 100, month: '2026-01' });
+      const habits = [habit({ type: 'positive', completedDates: [] })];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      expect(result.daysCompleted).toBe(0);
+      expect(result.currentValue).toBe(0);
+      expect(result.progress).toBe(0);
+    });
+
+    it('produces no division-by-zero (finite) regardless of completion, even with target 0', () => {
+      const c = challenge({ targetType: 'percentage', targetValue: 0, month: '2026-01' });
+      const habits = [habit({ type: 'positive', completedDates: ['2026-01-05'] })];
+
+      const result = calculateChallengeProgress(c, habits);
+
+      expect(Number.isFinite(result.progress)).toBe(true);
+      expect(Number.isNaN(result.progress)).toBe(false);
+    });
+  });
+});
