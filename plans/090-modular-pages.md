@@ -1,15 +1,19 @@
 # Plan 090 — Modular pages: per-household page/tab on-off toggles
 
-> **Status:** 📝 **PLAN WRITTEN — not started.** Design fully grilled & locked with the owner
-> (via `/grill-me`, 8 decisions below). No code written yet. · **Tag:** `[C]` (pure client feature,
-> **no `firestore.rules` change** — the household-doc update rule is field-permissive) · **Risk:** LOW
-> (ships live, default **all-on** → zero behavior change for existing data; reversible) · **Effort:** M
-> (splits into 4 small independent PRs; PR1 is the bulk of the value). · **Planned against:** branch
-> `claude/practical-meitner-21686e`, main at `c096364`.
+> **Status:** ✅ **SHIPPED 2026-06-28** — all 4 PRs squash-merged to `main` + auto-deployed, default
+> **all-on** (zero change for existing households), **no `firestore.rules` change**. · **Tag:** `[C]` ·
+> **Risk:** LOW (reversible). · PRs:
+> [#720](https://github.com/OPS-PIvers/LifeBalance/pull/720) core ·
+> [#721](https://github.com/OPS-PIvers/LifeBalance/pull/721) capture cascade ·
+> [#722](https://github.com/OPS-PIvers/LifeBalance/pull/722) dashboard/toolbar pure cascade ·
+> [#723](https://github.com/OPS-PIvers/LifeBalance/pull/723) graceful degradation.
 >
-> **Resume instruction:** This doc is self-contained. To pick up after a compaction, read it top to
-> bottom, then start **PR1** (§Phasing). Everything decided is in §Locked decisions; everything to
-> touch is in §Blast-radius map with file:line anchors.
+> **Consistency note (applies everywhere):** to-do/shopping content is gated by `isPlanTabVisible(tab)`
+> (Plan master + sub-tab), not the raw flag — because `/todos`/`/shopping` are only reachable when Plan
+> is on, so we never surface a nav/capture/queue/insight item whose destination page is hidden.
+>
+> **Design record below** is preserved as-built (8 grilled+locked decisions). Toggle modules in
+> Settings → "App Modules".
 
 ## The ask (owner, verbatim)
 
