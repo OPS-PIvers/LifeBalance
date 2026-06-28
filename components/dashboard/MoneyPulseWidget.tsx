@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { startOfWeek, subWeeks, isSameWeek, parseISO, formatDistanceToNow } from 'date-fns';
+import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import { roundMoney } from '@/utils/money';
 import { TrendingUp, TrendingDown, Receipt, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -9,53 +9,19 @@ import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 export const MoneyPulseWidget: React.FC = () => {
   const { transactions } = useFinance();
+  const { thisWeekSpend, lastWeekSpend, recentTransactions } = useDashboardTransactionStats();
   const fmt = useFormatCurrency();
 
-  // 1. Calculate Spending Pulse
-  const spendingStats = useMemo(() => {
-    const now = new Date();
-    const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
-    const lastWeekStart = subWeeks(currentWeekStart, 1);
-
-    let thisWeekTotal = 0;
-    let lastWeekTotal = 0;
-
-    transactions.forEach(t => {
-      if (t.category === 'Income') return;
-      if (t.status === 'pending_review') return;
-
-      const date = parseISO(t.date);
-      if (isSameWeek(date, now, { weekStartsOn: 1 })) {
-        thisWeekTotal += t.amount;
-      } else if (isSameWeek(date, lastWeekStart, { weekStartsOn: 1 })) {
-        lastWeekTotal += t.amount;
-      }
-    });
-
-    thisWeekTotal = roundMoney(thisWeekTotal);
-    lastWeekTotal = roundMoney(lastWeekTotal);
-    const diff = roundMoney(thisWeekTotal - lastWeekTotal);
-    const percentChange = lastWeekTotal > 0 ? (diff / lastWeekTotal) * 100 : 0;
-
-    return {
-      thisWeek: thisWeekTotal,
-      lastWeek: lastWeekTotal,
-      percentChange,
-      isHigher: diff > 0
-    };
-  }, [transactions]);
-
-  // 2. Get Recent Transactions — precompute relative-time strings here.
-  const recentTransactions = useMemo(() => {
-    return transactions
-      .filter(t => t.category !== 'Income' && t.status !== 'pending_review')
-      .sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
-      .slice(0, 3)
-      .map(tx => ({
-        ...tx,
-        relativeDate: formatDistanceToNow(parseISO(tx.date), { addSuffix: true }),
-      }));
-  }, [transactions]);
+  // Spending pulse — week deltas derived from the shared single-pass totals.
+  // Identical arithmetic to the prior local useMemo (the week totals are now
+  // accumulated in integer cents upstream, exactly equal for cent-valued money).
+  const diff = roundMoney(thisWeekSpend - lastWeekSpend);
+  const spendingStats = {
+    thisWeek: thisWeekSpend,
+    lastWeek: lastWeekSpend,
+    percentChange: lastWeekSpend > 0 ? (diff / lastWeekSpend) * 100 : 0,
+    isHigher: diff > 0,
+  };
 
   if (transactions.length === 0) return null;
 

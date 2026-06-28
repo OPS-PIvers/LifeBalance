@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
-import { useFinance, useGamification } from '@/contexts/FirebaseHouseholdContext';
+import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import { streakForHabit } from '@/utils/habitLogic';
 import { getLocalDateString } from '@/utils/dateHelpers';
-import { sumMoney, roundMoney } from '@/utils/money';
-import { startOfWeek, parseISO, isSameWeek } from 'date-fns';
+import { roundMoney } from '@/utils/money';
 import { Flame, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Section } from '@/components/ui/Section';
@@ -45,7 +45,11 @@ const GRID_COLS_BY_COUNT: Record<number, string> = {
 };
 
 export const PulseStripWidget: React.FC = React.memo(() => {
-  const { transactions } = useFinance();
+  // PulseStrip uses `lastWeekSpendPulse` (its ORIGINAL raw-7×24h last-week
+  // anchor), NOT MoneyPulse's `subWeeks` anchor — they differ only on the DST
+  // spring-forward week, so consuming PulseStrip's own window keeps this refactor
+  // strictly behavior-preserving. See the useDashboardTransactionStats docstring.
+  const { thisWeekSpend, lastWeekSpendPulse: lastWeekSpend } = useDashboardTransactionStats();
   const { habits, weeklyPoints } = useGamification();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
@@ -57,27 +61,11 @@ export const PulseStripWidget: React.FC = React.memo(() => {
   const showHabits = isModuleEnabled('habits');
 
   const metrics = useMemo<PulseMetrics>(() => {
-    const now = new Date();
     const today = getLocalDateString();
-    const weekStart = startOfWeek(now, { weekStartsOn: 1 });
 
     // --- Spending this week vs last week (cleared, non-income only) ---
-    let thisWeekSpend = 0;
-    let lastWeekSpend = 0;
-    const lastWeekStart = startOfWeek(
-      new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000),
-      { weekStartsOn: 1 }
-    );
-    const thisWeekAmts: number[] = [];
-    const lastWeekAmts: number[] = [];
-    transactions.forEach((t) => {
-      if (t.category === 'Income' || t.status === 'pending_review') return;
-      const d = parseISO(t.date);
-      if (isSameWeek(d, now, { weekStartsOn: 1 })) thisWeekAmts.push(t.amount);
-      else if (isSameWeek(d, lastWeekStart, { weekStartsOn: 1 })) lastWeekAmts.push(t.amount);
-    });
-    thisWeekSpend = sumMoney(thisWeekAmts);
-    lastWeekSpend = sumMoney(lastWeekAmts);
+    // Week totals come from the shared single-pass hook (integer-cents); the
+    // trend/percent arithmetic below is byte-identical to the prior local pass.
     const diff = roundMoney(thisWeekSpend - lastWeekSpend);
 
     let spendTrend: SpendTrend = 'none';
@@ -115,7 +103,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
       consistencyPercent,
       topStreak,
     };
-  }, [transactions, habits, weeklyPoints]);
+  }, [thisWeekSpend, lastWeekSpend, habits, weeklyPoints]);
 
   // Stay quiet when none of the ENABLED modules have active content. This covers
   // both the "both domains off" case AND the degraded case where one domain is
