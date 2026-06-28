@@ -53,7 +53,6 @@ describe('useDashboardTransactionStats', () => {
     const stats = render();
     expect(stats.thisWeekSpend).toBe(0);
     expect(stats.lastWeekSpend).toBe(0);
-    expect(stats.lastWeekSpendPulse).toBe(0);
     expect(stats.monthTotalSpent).toBe(0);
     expect(stats.monthCategoryItems).toEqual([]);
     expect(stats.recentTransactions).toEqual([]);
@@ -101,9 +100,6 @@ describe('useDashboardTransactionStats', () => {
     const stats = render();
     expect(stats.thisWeekSpend).toBe(22); // 10 + 5 + 7
     expect(stats.lastWeekSpend).toBe(5); // 3 + 2
-    // Outside the DST spring-forward week, PulseStrip's last-week window is
-    // identical to MoneyPulse's.
-    expect(stats.lastWeekSpendPulse).toBe(5);
   });
 
   it('groups current-month spend by category and ignores other months', () => {
@@ -262,15 +258,14 @@ describe('useDashboardTransactionStats', () => {
     });
   });
 
-  // DST spring-forward: the two last-week anchors diverge ~1/year. MoneyPulse
-  // uses `subWeeks(startOfWeek(now), 1)`; PulseStrip uses the raw
-  // `startOfWeek(weekStart - 7*24h)`. This test locks in that each accumulator
-  // buckets transactions into its OWN original window — the behavior we must
-  // preserve. It is TZ-adaptive: it derives both anchors with the same date-fns
-  // primitives the hook uses, so it asserts divergence on DST-observing runtimes
-  // (e.g. America/Chicago) and exact coincidence on non-DST runtimes (e.g. the
-  // UTC CI runner), and is correct in either case.
-  describe('DST spring-forward last-week windows', () => {
+  // DST spring-forward: last-week is now unified on the calendar-correct
+  // `subWeeks(startOfWeek(now), 1)` window (both MoneyPulse and PulseStrip
+  // consume `lastWeekSpend`). This test locks in that, even on the DST
+  // spring-forward week, last-week spend buckets into that `subWeeks` window —
+  // the CORRECT behavior. It is TZ-adaptive: it derives the anchor with the
+  // same date-fns primitive the hook uses, so it's correct on DST-observing
+  // runtimes (e.g. America/Chicago) and the UTC CI runner alike.
+  describe('DST spring-forward last-week window', () => {
     // The week AFTER US spring-forward (Sun 2026-03-08). Mon 2026-03-09.
     const DST_NOW_ISO = '2026-03-09T12:00:00';
 
@@ -278,42 +273,20 @@ describe('useDashboardTransactionStats', () => {
       vi.setSystemTime(new Date(DST_NOW_ISO));
     });
 
-    it("buckets last-week spend into each widget's original anchor", () => {
+    it('buckets last-week spend into the subWeeks(startOfWeek(now), 1) window', () => {
       const now = new Date(DST_NOW_ISO);
       const weekStart = startOfWeek(now, { weekStartsOn: 1 });
-      // Reproduce both anchors exactly as the hook does.
-      const mpAnchor = subWeeks(weekStart, 1);
-      const psAnchor = startOfWeek(new Date(weekStart.getTime() - 7 * 24 * 60 * 60 * 1000), {
-        weekStartsOn: 1,
-      });
+      // Reproduce the (single, correct) last-week anchor exactly as the hook does.
+      const lastWeekAnchor = subWeeks(weekStart, 1);
 
-      // A Wednesday inside each anchor's Monday-week — unambiguous mid-window
-      // dates that can't flip across local-vs-UTC date-only parsing.
-      const mpDate = format(addDays(mpAnchor, 2), 'yyyy-MM-dd');
-      const psDate = format(addDays(psAnchor, 2), 'yyyy-MM-dd');
+      // A Wednesday inside the anchor's Monday-week — an unambiguous mid-window
+      // date that can't flip across local-vs-UTC date-only parsing.
+      const lastWeekDate = format(addDays(lastWeekAnchor, 2), 'yyyy-MM-dd');
 
-      const diverges = mpDate !== psDate;
-
-      if (diverges) {
-        // DST-observing runtime: windows are disjoint. Each transaction lands in
-        // exactly one widget's last-week and is invisible to the other.
-        setTransactions([
-          makeTransaction({ id: 'mp-only', amount: 11, date: mpDate }),
-          makeTransaction({ id: 'ps-only', amount: 22, date: psDate }),
-        ]);
-        const stats = render();
-        expect(stats.lastWeekSpend).toBe(11); // MoneyPulse window only
-        expect(stats.lastWeekSpendPulse).toBe(22); // PulseStrip window only
-        expect(stats.thisWeekSpend).toBe(0);
-      } else {
-        // Non-DST runtime (e.g. UTC): the anchors coincide, so both fields must
-        // agree on the same single last-week window.
-        setTransactions([makeTransaction({ id: 'shared', amount: 33, date: mpDate })]);
-        const stats = render();
-        expect(stats.lastWeekSpend).toBe(33);
-        expect(stats.lastWeekSpendPulse).toBe(33);
-        expect(stats.thisWeekSpend).toBe(0);
-      }
+      setTransactions([makeTransaction({ id: 'lw', amount: 33, date: lastWeekDate })]);
+      const stats = render();
+      expect(stats.lastWeekSpend).toBe(33);
+      expect(stats.thisWeekSpend).toBe(0);
     });
   });
 });

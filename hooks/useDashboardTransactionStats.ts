@@ -33,18 +33,9 @@ import { roundMoney, sumMoney } from '@/utils/money';
  * `!== 'pending_review'` / `=== 'pending_review'` / `=== 'verified'` predicates
  * are all equivalent; we keep the cleared (non-`pending_review`) set.
  *
- * THIS-WEEK spend is shared (MoneyPulse and PulseStrip used the identical
- * `startOfWeek(now)` window). LAST-WEEK spend, however, is computed TWICE — once
- * per each widget's ORIGINAL anchor — because the two definitions differ on the
- * DST spring-forward week (~1/year):
- *   - MoneyPulse:  `subWeeks(startOfWeek(now), 1)` → `lastWeekSpend`
- *   - PulseStrip:  `startOfWeek(weekStart - 7*24h)` → `lastWeekSpendPulse`
- * Subtracting a raw 7×24h across the DST gap lands an hour early, which
- * `startOfWeek` can snap to the prior Monday — so on that one week the windows
- * (and PulseStrip's trend %) diverge. This is a PRE-EXISTING inconsistency,
- * intentionally PRESERVED here (not fixed) so this refactor stays strictly
- * behavior-preserving. Known follow-up: unify on `subWeeks` once a behavior
- * change is acceptable.
+ * THIS-WEEK and LAST-WEEK spend are both shared. Last-week uses the
+ * calendar-correct `subWeeks(startOfWeek(now), 1)` window (MoneyPulse and
+ * PulseStrip both consume it).
  */
 
 /** A recent transaction with a precomputed relative-time label (MoneyPulse). */
@@ -78,17 +69,11 @@ export interface DashboardTransactionStats {
   /** Cleared, non-income spend in the current Monday-week (rounded dollars). */
   thisWeekSpend: number;
   /**
-   * Cleared, non-income spend in the prior Monday-week, anchored MoneyPulse-style
-   * via `subWeeks(startOfWeek(now), 1)` (rounded dollars). Consumed by MoneyPulse.
+   * Cleared, non-income spend in the prior Monday-week, anchored via
+   * `subWeeks(startOfWeek(now), 1)` (rounded dollars). Consumed by MoneyPulse and
+   * PulseStrip.
    */
   lastWeekSpend: number;
-  /**
-   * Same as {@link lastWeekSpend} EXCEPT anchored PulseStrip-style via
-   * `startOfWeek(weekStart - 7*24h)`. Identical to `lastWeekSpend` every week
-   * except the DST spring-forward week — see the hook docstring. Consumed by
-   * PulseStrip to preserve its exact original behavior.
-   */
-  lastWeekSpendPulse: number;
   /** Top categories (top 3 + "Others") of current-month cleared, non-income spend. */
   monthCategoryItems: CategorySpendItem[];
   /** Total current-month cleared, non-income spend (rounded dollars). */
@@ -119,23 +104,15 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
   return useMemo<DashboardTransactionStats>(() => {
     const now = new Date();
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
-    // MoneyPulse's last-week anchor (calendar-correct across DST).
+    // Last-week anchor (calendar-correct across DST).
     const lastWeekStart = subWeeks(currentWeekStart, 1);
-    // PulseStrip's ORIGINAL last-week anchor (raw 7×24h subtraction). Differs
-    // from `lastWeekStart` only on the DST spring-forward week — preserved
-    // verbatim, NOT fixed, so the refactor is behavior-preserving (see docstring).
-    const lastWeekStartPulse = startOfWeek(
-      new Date(currentWeekStart.getTime() - 7 * 24 * 60 * 60 * 1000),
-      { weekStartsOn: 1 }
-    );
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
 
     // Week spend accumulated in integer cents (matches PulseStrip's sumMoney and,
     // for cent-valued money inputs, MoneyPulse's roundMoney(float-sum) exactly).
     let thisWeekCents = 0;
-    let lastWeekCents = 0; // MoneyPulse window
-    let lastWeekCentsPulse = 0; // PulseStrip window (DST-divergent)
+    let lastWeekCents = 0;
 
     // Current-month category breakdown, accumulated in integer cents per key.
     const monthCents: Record<string, number> = {};
@@ -170,21 +147,12 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
       const date = parseISO(t.date);
       const amountCents = Math.round(t.amount * 100);
 
-      // Week buckets (Monday-anchored). This-week is shared. Each widget's
-      // last-week is evaluated against its OWN anchor, each preserving the
-      // original `if thisWeek … else if lastWeek` structure independently.
+      // Week buckets (Monday-anchored). This-week and last-week are both shared.
       const inThisWeek = isSameWeek(date, now, { weekStartsOn: 1 });
       if (inThisWeek) {
         thisWeekCents += amountCents;
-      } else {
-        // MoneyPulse window.
-        if (isSameWeek(date, lastWeekStart, { weekStartsOn: 1 })) {
-          lastWeekCents += amountCents;
-        }
-        // PulseStrip window (identical except on the DST spring-forward week).
-        if (isSameWeek(date, lastWeekStartPulse, { weekStartsOn: 1 })) {
-          lastWeekCentsPulse += amountCents;
-        }
+      } else if (isSameWeek(date, lastWeekStart, { weekStartsOn: 1 })) {
+        lastWeekCents += amountCents;
       }
 
       // Current-month category breakdown (inclusive interval), matching CategorySpend.
@@ -197,7 +165,6 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
 
     const thisWeekSpend = thisWeekCents / 100;
     const lastWeekSpend = lastWeekCents / 100;
-    const lastWeekSpendPulse = lastWeekCentsPulse / 100;
     const monthTotalSpent = monthTotalCents / 100;
 
     // CategorySpend: round each category, sort desc, top 3 + "Others".
@@ -251,7 +218,6 @@ export const useDashboardTransactionStats = (): DashboardTransactionStats => {
     return {
       thisWeekSpend,
       lastWeekSpend,
-      lastWeekSpendPulse,
       monthCategoryItems,
       monthTotalSpent: roundMoney(monthTotalSpent),
       recentTransactions,

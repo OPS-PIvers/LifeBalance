@@ -45,11 +45,7 @@ const GRID_COLS_BY_COUNT: Record<number, string> = {
 };
 
 export const PulseStripWidget: React.FC = React.memo(() => {
-  // PulseStrip uses `lastWeekSpendPulse` (its ORIGINAL raw-7×24h last-week
-  // anchor), NOT MoneyPulse's `subWeeks` anchor — they differ only on the DST
-  // spring-forward week, so consuming PulseStrip's own window keeps this refactor
-  // strictly behavior-preserving. See the useDashboardTransactionStats docstring.
-  const { thisWeekSpend, lastWeekSpendPulse: lastWeekSpend } = useDashboardTransactionStats();
+  const { thisWeekSpend, lastWeekSpend } = useDashboardTransactionStats();
   const { habits, weeklyPoints } = useGamification();
   const { isModuleEnabled } = useModuleVisibility();
   const fmt = useFormatCurrency();
