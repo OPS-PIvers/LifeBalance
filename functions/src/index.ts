@@ -24,6 +24,17 @@ export { geminiproxy } from "./geminiProxy";
 //   export { createcheckoutsession } from "./stripe/checkout";
 //   export { stripewebhook } from "./stripe/webhook";
 
+// Plaid bank-link functions (./plaid) are fully implemented and unit-tested but,
+// like Stripe above, are intentionally NOT exported yet: exporting them deploys
+// them, which binds the PLAID_CLIENT_ID / PLAID_SECRET / PLAID_ENV secrets that a
+// non-interactive `firebase deploy` (our CI) requires to already exist — failing
+// the deploy otherwise. Creating those secrets is a human step. ACTIVATION: set
+// the secrets (docs/PLAID_SETUP_RUNBOOK.md §1), then wire them in here and
+// redeploy:
+//   export { plaidcreatelinktoken } from "./plaid/links";
+//   export { plaidexchangepublictoken } from "./plaid/exchange";
+//   export { plaidsynctransactions } from "./plaid/sync";
+
 const db = admin.firestore();
 const messaging = admin.messaging();
 

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { db } from '@/firebase.config';
-import { collection, query, getDocs, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { collection, query, getDocs, getDoc, addDoc, updateDoc, doc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { readAppConfigFlags, setAppFlag, AI_ENABLED_FLAG_KEY } from '@/services/appConfig';
 import { BetaTester, FeedbackReport, Household } from '@/types/schema';
 import { Loader2, Plus, Trash2, Copy, X, AlertTriangle } from 'lucide-react';
@@ -58,6 +58,13 @@ const FEATURE_FLAGS: readonly FeatureFlagDef[] = [
       'Master AI kill-switch for all Gemini features. Fails OPEN: AI stays ON unless this is explicitly turned off. Turn OFF to halt all AI usage instantly across every household.',
     danger: false,
   },
+  {
+    key: 'plaidEnabled',
+    label: 'Plaid Bank Link',
+    description:
+      "Gates the \"Connect a bank (Plaid)\" entry and all Plaid linking UI. Fails CLOSED: off unless explicitly enabled, so no bank-link UI shows while dormant. Requires the PLAID_* secrets in Secret Manager and the deployed plaidcreatelinktoken / plaidexchangepublictoken functions (see docs/PLAID_SETUP_RUNBOOK.md) BEFORE turning ON.",
+    danger: false,
+  },
 ];
 
 /** Tab strip, rendered from data so the nav stays a single horizontally-scrollable row. */
@@ -85,6 +92,8 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [pendingFlag, setPendingFlag] = useState<FeatureFlagDef | null>(null);
   const [flagSaving, setFlagSaving] = useState(false);
+  // Ops-only Plaid status (count of connected bank items; never reads a token).
+  const [plaidItemCount, setPlaidItemCount] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -103,6 +112,15 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
         setHouseholds(snap.docs.map(d => ({ ...d.data(), id: d.id } as Household & { id: string })));
       } else if (activeTab === 'flags') {
         setFlags(await readAppConfigFlags());
+        // Server-maintained count (incremented by plaidexchangepublictoken); a
+        // plain number, never a token. Best-effort — a read error just hides it.
+        try {
+          const cfgSnap = await getDoc(doc(db, 'app_config', 'global'));
+          const count = cfgSnap.exists() ? cfgSnap.data().plaidItemCount : 0;
+          setPlaidItemCount(typeof count === 'number' ? count : 0);
+        } catch {
+          setPlaidItemCount(null);
+        }
       }
     } catch (error) {
       console.error("Failed to load data", error);
@@ -479,6 +497,16 @@ const DeveloperConsole: React.FC<DeveloperConsoleProps> = ({ isOpen, onClose }) 
                       </div>
                     );
                   })}
+
+                  {/* Read-only Plaid status. The secret lives in Secret Manager
+                      (set via CLI) — never surfaced here. This only shows the
+                      flag state + a connected-account COUNT (no tokens). */}
+                  <div className="mt-1 rounded-xl border border-brand-200 bg-brand-50/50 p-4 text-xs text-brand-500 dark:border-brand-700/60 dark:bg-brand-700/30 dark:text-brand-400">
+                    Plaid: {flags['plaidEnabled'] ? 'enabled ✓' : 'disabled ✗'} · connected accounts: {plaidItemCount ?? '—'}
+                    <span className="mt-1 block opacity-80">
+                      Secret is set via <span className="font-mono">firebase functions:secrets:set</span> (see docs/PLAID_SETUP_RUNBOOK.md), not here.
+                    </span>
+                  </div>
                 </div>
               )}
             </>

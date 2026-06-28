@@ -354,6 +354,7 @@ service cloud.firestore {
                               isValidOptionalString(request.resource.data.get('accountId', null), 50) &&
                               isValidOptionalString(request.resource.data.get('subBucketId', null), 50) &&
                               isValidOptionalString(request.resource.data.get('needsAmountPromptedAt', null), 30) && // ISO timestamp
+                              isValidOptionalString(request.resource.data.get('plaidTransactionId', null), 100) && // Plaid dedup key (server writes via Admin SDK; this is defense-in-depth)
                               // Booleans
                               (request.resource.data.get('isRecurring', null) == null || isValidBoolean(request.resource.data.isRecurring)) &&
                               (request.resource.data.get('autoCategorized', null) == null || isValidBoolean(request.resource.data.autoCategorized)) &&
@@ -770,17 +771,28 @@ service cloud.firestore {
         allow delete: if isMemberOf(householdId);
       }
 
+      // Plaid Items — holds the per-item Plaid access_token, which grants full
+      // bank-account access. SERVER-ONLY: written and read exclusively by the
+      // Cloud Functions via the Admin SDK (which bypasses these rules). Clients
+      // must NEVER read or write it. Denied here AND excluded from the catch-all
+      // below (Firestore grants access if ANY rule allows, so the exclusion is
+      // load-bearing, not the deny alone).
+      match /plaidItems/{itemId} {
+        allow read, write: if false;
+      }
+
       // All other subcollections that do not have explicit match blocks
       // Proper multi-household isolation using member document checks
       // Specific collections with custom rules are excluded via the conditions below
       match /{subcollection}/{document} {
-        // 🛡️ CRITICAL: Exclude apiKeys from read to prevent bypass of admin-only access
-        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys';
+        // 🛡️ CRITICAL: Exclude apiKeys + plaidItems from read to prevent bypass of admin-only / server-only access
+        allow read: if isMemberOf(householdId) && subcollection != 'apiKeys' && subcollection != 'plaidItems';
         allow write: if isMemberOf(householdId) &&
                      subcollection != 'members' &&
                      subcollection != 'habits' &&
                      subcollection != 'shoppingList' &&
                      subcollection != 'apiKeys' &&
+                     subcollection != 'plaidItems' &&
                      subcollection != 'apiUsage' &&
                      subcollection != 'transactions' &&
                      subcollection != 'accounts' &&
