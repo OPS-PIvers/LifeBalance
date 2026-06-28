@@ -1,14 +1,20 @@
-import React from 'react';
+import React, { Suspense, useEffect } from 'react';
 import BudgetCalendar from '@/components/budget/BudgetCalendar';
 import BudgetBuckets from '@/components/budget/BudgetBuckets';
 import BudgetAccounts from '@/components/budget/BudgetAccounts';
 import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
-import BudgetTrends from '@/components/budget/BudgetTrends';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
+import { preloadOnIdle } from '@/utils/preloadOnIdle';
+
+// recharts is heavy — lazy-load the Trends chart body so it only enters the
+// bundle when the Trends tab is actually opened (keeps the Money page boot lean).
+// Named loader so React.lazy and the idle-preload share one dynamic import.
+const loadBudgetTrends = () => import('@/components/budget/BudgetTrends');
+const BudgetTrends = React.lazy(loadBudgetTrends);
 
 // Allowed Money sub-tabs. Module-level so the array identity is stable and
 // other screens can deep-link via `navigate('/budget', { state: { tab } })`.
@@ -59,6 +65,11 @@ const Budget: React.FC = () => {
   // deep-link straight to a tab (Overview / Trends) instead of opening a modal.
   const [activeTab, setActiveTab] = useDeepLinkTab('overview', MONEY_TABS);
 
+  // Warm the heavy recharts/Trends chunk during browser idle once the Money
+  // page is open, so switching to the Trends tab is instant — without competing
+  // with app boot (the chunk stays off the eager modulepreload path).
+  useEffect(() => preloadOnIdle(loadBudgetTrends), []);
+
   if (isLoading) {
     return <BudgetSkeleton />;
   }
@@ -105,7 +116,16 @@ const Budget: React.FC = () => {
               <TransactionMasterList />
             </TabsContent>
             <TabsContent value="trends">
-              <BudgetTrends />
+              <Suspense
+                fallback={
+                  <div className="space-y-6" aria-busy="true">
+                    <Skeleton className="h-80 w-full rounded-2xl" />
+                    <Skeleton className="h-56 w-full rounded-2xl" />
+                  </div>
+                }
+              >
+                <BudgetTrends />
+              </Suspense>
             </TabsContent>
           </div>
         </div>

@@ -62,7 +62,7 @@ export default defineConfig(({ command }) => {
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
-        }
+        },
       },
       // In production builds, tree-shake noisy debug logging while keeping
       // console.warn and console.error (they carry real diagnostics).
@@ -77,35 +77,67 @@ export default defineConfig(({ command }) => {
         minify: 'esbuild',
         rollupOptions: {
           output: {
-            // Function form (not the object form) on purpose: the object form
-            // only assigns the listed entry modules, so package *subpaths*
-            // ('react-dom/client', 'react/jsx-runtime') and the virtual
-            // CommonJS-interop modules Rollup generates for them escaped
-            // their vendor chunk — react-dom's renderer (~177 kB) landed in
-            // the app index chunk (cache-busted every deploy) and the
-            // jsx-runtime interop landed in vendor-motion, dragging
-            // framer-motion into the eager boot path for every JSX module.
-            // Matching on the module path catches subpaths and interop ids.
-            manualChunks(id: string) {
-              // Rollup's virtual CJS interop helpers (\0commonjsHelpers.js)
-              // are imported by every CommonJS-wrapped vendor, React included.
-              // Pin them to the always-eager react chunk; left unassigned they
-              // gravitate into a lazy chunk and create a circular
-              // vendor-react -> vendor-charts -> vendor-react import.
-              if (id.includes('commonjsHelpers')) return 'vendor-react';
-              if (!id.includes('node_modules')) return undefined;
-              if (id.includes('@google/genai')) return 'vendor-ai';
-              if (/node_modules\/@?firebase\//.test(id)) return 'vendor-firebase';
-              if (/node_modules\/(recharts|victory-vendor|d3-[^/]+|decimal\.js)/.test(id)) return 'vendor-charts';
-              if (/node_modules\/(framer-motion|motion-dom|motion-utils)\//.test(id)) return 'vendor-motion';
-              if (id.includes('node_modules/lucide-react/')) return 'vendor-icons';
-              if (/node_modules\/(date-fns|clsx|tailwind-merge|react-hot-toast|goober)\//.test(id)) return 'vendor-utils';
-              // use-sync-external-store is shared by react-router (eager) and
-              // react-redux/recharts (lazy); keep it with react so the eager
-              // chunk never has to import from the lazy charts chunk.
-              if (/node_modules\/(react|react-dom|react-router|react-router-dom|scheduler|use-sync-external-store)\//.test(id)) return 'vendor-react';
-              return undefined;
-            }
+            // Vendor chunking via rolldown's codeSplitting groups (Vite 8 =
+            // rolldown 1.x; this is the successor to the deprecated
+            // `advancedChunks` key — same `{ groups: [...] }` shape).
+            // Groups are claimed by descending `priority`; a module matching a
+            // higher-priority group is pinned there and is NOT merged back into
+            // a lower group by rolldown's post-split pass. That ordering is the
+            // whole point here: recharts bundles its OWN CommonJS copies of
+            // react/react-dom/react-is, and the prior function-form manualChunks
+            // could not keep them out of vendor-charts (rolldown merged the
+            // single-importer CJS React back into the recharts chunk). The eager
+            // entry graph then imported React *from* vendor-charts, force-
+            // preloading all ~124 kB-gz of recharts on first paint. Giving the
+            // React core the highest priority claims those CJS copies for
+            // vendor-react first, so vendor-charts stays fully lazy.
+            //
+            // We also match on the module *path* (not just package entry) so
+            // package subpaths ('react-dom/client', 'react/jsx-runtime') and the
+            // virtual CJS-interop ids land in the right chunk — the object-form
+            // manualChunks used to miss those, bloating index/vendor-motion.
+            codeSplitting: {
+              groups: [
+                {
+                  name: 'vendor-react',
+                  priority: 50,
+                  // React core + the CJS variants recharts/redux pull in. Highest
+                  // priority so they never head the lazy charts chunk. (The app's
+                  // own eager code resolves React via the CJS build, so these
+                  // bytes belong on the eager path regardless of recharts.)
+                  test: /[\\/]node_modules[\\/](\.pnpm[\\/][^\\/]*[\\/]node_modules[\\/])?(react|react-dom|react-router|react-router-dom|scheduler|use-sync-external-store|react-is)[\\/]/,
+                },
+                {
+                  name: 'vendor-react',
+                  priority: 49,
+                  // Rollup/rolldown virtual CJS interop helpers are imported by
+                  // every CommonJS-wrapped vendor, React included. Pin them to
+                  // the eager react chunk; left unassigned they gravitate into a
+                  // lazy chunk and create a circular react -> charts -> react import.
+                  test: /commonjsHelpers/,
+                },
+                { name: 'vendor-ai', priority: 40, test: /[\\/]node_modules[\\/]@google[\\/]genai[\\/]/ },
+                { name: 'vendor-firebase', priority: 40, test: /[\\/]node_modules[\\/]@?firebase[\\/]/ },
+                {
+                  name: 'vendor-charts',
+                  priority: 30,
+                  // recharts + its chart deps. redux family (react-redux/redux/
+                  // @reduxjs) is recharts-only (lazy) so it belongs here too.
+                  test: /[\\/]node_modules[\\/](\.pnpm[\\/][^\\/]*[\\/]node_modules[\\/])?(recharts|victory-vendor|d3-[^\\/]+|decimal\.js|decimal\.js-light|react-redux|redux|redux-thunk|@reduxjs|reselect|immer|internmap|es-toolkit|eventemitter3|tiny-invariant)[\\/]/,
+                },
+                { name: 'vendor-motion', priority: 30, test: /[\\/]node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/ },
+                { name: 'vendor-icons', priority: 30, test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+                // vendor-utils must OUTRANK vendor-charts (35 > 30). clsx +
+                // tailwind-merge back the app's cn() helper used by core eager
+                // primitives (Button, ConfirmDialog…). At an equal priority,
+                // vendor-charts (declared first) wins the tie for shared utils
+                // like clsx — which would let any eager <Button>/cn() consumer
+                // drag vendor-charts back onto the boot path. These deps are
+                // app-only (none are charts-internal), so claiming them here is
+                // safe and pulls nothing chart-related into the eager utils chunk.
+                { name: 'vendor-utils', priority: 35, test: /[\\/]node_modules[\\/](date-fns|clsx|tailwind-merge|react-hot-toast|goober)[\\/]/ },
+              ],
+            },
           }
         }
       }
