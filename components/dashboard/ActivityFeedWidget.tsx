@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { useFinance, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useTodos } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
 import { Receipt, CheckSquare } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
@@ -16,7 +17,7 @@ interface ActivityItem {
 }
 
 export const ActivityFeedWidget: React.FC = React.memo(() => {
-  const { transactions } = useFinance();
+  const { transactionActivityRows } = useDashboardTransactionStats();
   const { todos } = useTodos();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
   const fmt = useFormatCurrency();
@@ -28,18 +29,10 @@ export const ActivityFeedWidget: React.FC = React.memo(() => {
   const showTodos = isPlanTabVisible('todos');
 
   const recentActivity = useMemo(() => {
-    const transactionActivities: ActivityItem[] = showMoney
-      ? transactions
-          .filter(tx => tx.status === 'verified' && tx.category !== 'Income')
-          .map(tx => ({
-            id: tx.id,
-            type: 'transaction',
-            title: tx.merchant,
-            subtitle: tx.category,
-            timestamp: parseISO(tx.createdAt || tx.date),
-            amount: tx.amount,
-          }))
-      : [];
+    // Transaction rows (verified, non-income) come pre-mapped from the shared
+    // single-pass hook; the money gate + final merge/sort/slice stay local since
+    // the sort interleaves transactions with completed to-dos.
+    const transactionActivities: ActivityItem[] = showMoney ? transactionActivityRows : [];
 
     const todoActivities: ActivityItem[] = showTodos
       ? todos
@@ -56,7 +49,7 @@ export const ActivityFeedWidget: React.FC = React.memo(() => {
     return [...transactionActivities, ...todoActivities]
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 5);
-  }, [showMoney, showTodos, transactions, todos]);
+  }, [showMoney, showTodos, transactionActivityRows, todos]);
 
   if (recentActivity.length === 0) return null;
 
