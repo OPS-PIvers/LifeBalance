@@ -43,11 +43,11 @@ const TopToolbar: React.FC = () => {
   return (
     <>
       <div className="relative z-dropdown">
-        <header className="z-sticky w-full bg-brand-800 dark:bg-brand-900 border-b border-brand-700 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center justify-between text-white">
+        <header className="z-sticky w-full bg-brand-800 dark:bg-brand-900 border-b border-brand-700 px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 flex items-center text-white">
           {/* Left Container: Safe-to-Spend (money domain — Plan 090). When money
-              is off, render an empty spacer so `justify-between` keeps the right
-              cluster pinned to the right edge instead of floating left. */}
-          {isModuleEnabled('money') ? (
+              is off it's simply omitted; the right cluster uses `ml-auto` to stay
+              pinned to the right edge. */}
+          {isModuleEnabled('money') && (
             <button
               type="button"
               aria-label="View Safe to Spend details"
@@ -63,12 +63,10 @@ const TopToolbar: React.FC = () => {
                 Safe to Spend
               </span>
             </button>
-          ) : (
-            <div aria-hidden="true" />
           )}
 
           {/* Right Container: Points Cluster + Profile */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 ml-auto">
             <button
               onClick={() => setIsFeedbackOpen(true)}
               className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard)"
