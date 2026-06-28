@@ -1,14 +1,38 @@
 import React from 'react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useInsightActions } from '@/hooks/useInsightActions';
 import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Trophy } from 'lucide-react';
-import { CreateChallengePayload } from '@/types/schema';
+import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
   onCreateChallenge?: (payload: CreateChallengePayload) => void;
 }
+
+/**
+ * Plan 090 (graceful degradation): map an action pill to the domain its
+ * destination belongs to, so a pill is dropped when that module is off. Returns
+ * a flag-checker; `null`-domain actions (none today) would always show.
+ */
+const isInsightActionVisible = (
+  action: InsightAction,
+  isModuleEnabled: (key: 'money' | 'habits') => boolean,
+  isPlanTabVisible: (tab: 'todos') => boolean,
+): boolean => {
+  switch (action.type) {
+    case 'update_bucket':
+      return isModuleEnabled('money');
+    case 'create_habit':
+    case 'create_challenge':
+      return isModuleEnabled('habits');
+    case 'create_todo':
+      return isPlanTabVisible('todos');
+    default:
+      return true;
+  }
+};
 
 export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onCreateChallenge }) => {
   const {
@@ -17,6 +41,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
     isGeneratingInsight,
     insightsHistory,
   } = useHouseholdCore();
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
   const { handleAction } = useInsightActions();
 
@@ -24,10 +49,26 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
     (text ?? '').replace(/\s+/g, ' ').trim();
 
   const latestInsight = insightsHistory.length > 0 ? insightsHistory[0] : null;
-  const insightActions =
-    latestInsight && normalizeInsightText(latestInsight.text) === normalizeInsightText(insight)
-      ? latestInsight.actions
-      : [];
+  // The displayed `insight` is a plain string; we can only attribute a domain to
+  // it when it matches the latest history entry (which carries a `type`).
+  const isLatestShown =
+    !!latestInsight &&
+    normalizeInsightText(latestInsight.text) === normalizeInsightText(insight);
+
+  // Hide the widget only when the shown insight is *definitively* domain-scoped
+  // to a disabled module. 'general' insights (and the placeholder/unmatched
+  // string, which has no type) always show — best-effort, no fragile classifier.
+  const insightDomainHidden =
+    isLatestShown &&
+    ((latestInsight.type === 'spending' && !isModuleEnabled('money')) ||
+      (latestInsight.type === 'habits' && !isModuleEnabled('habits')));
+  if (insightDomainHidden) return null;
+
+  const insightActions: Insight['actions'] = isLatestShown
+    ? (latestInsight.actions ?? []).filter((a) =>
+        isInsightActionVisible(a, isModuleEnabled, isPlanTabVisible),
+      )
+    : [];
 
   const getActionIcon = (type: string) => {
     switch (type) {
