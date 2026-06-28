@@ -4,11 +4,22 @@ import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
 import { LazyMount } from '@/components/ui/LazyMount';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 
 // Lazy-loaded so the Capture drawer (tabs, AI capture, presets) stays out of
 // the boot bundle; preloaded on idle below so the first FAB tap is instant.
 const loadCaptureModal = () => import('@/components/modals/CaptureModal');
 const CaptureModal = React.lazy(loadCaptureModal);
+
+/** A single footer nav destination. `badgeCount` drives the Money pending badge. */
+interface NavItem {
+  key: string;
+  to: string;
+  end?: boolean;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badgeCount?: number;
+}
 
 const BottomNav: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,7 +32,39 @@ const BottomNav: React.FC = () => {
     [transactions]
   );
 
+  // Plan 090 — which top-level pages are enabled for this household.
+  const { isModuleEnabled, isPlanVisible } = useModuleVisibility();
+
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
+
+  // Build the enabled nav items. Home is ALWAYS shown; the rest are gated by
+  // visibility. Order matters: it determines the balanced left/right split below.
+  const navItems = useMemo<NavItem[]>(() => {
+    const items: NavItem[] = [
+      { key: 'home', to: '/', end: true, label: 'Home', icon: LayoutDashboard },
+    ];
+    if (isModuleEnabled('habits')) {
+      items.push({ key: 'habits', to: '/habits', label: 'Habits', icon: Activity });
+    }
+    if (isModuleEnabled('money')) {
+      items.push({ key: 'money', to: '/budget', label: 'Money', icon: Wallet, badgeCount: pendingReviewCount });
+    }
+    if (isPlanVisible) {
+      items.push({ key: 'plan', to: '/lists', label: 'Plan', icon: List });
+    }
+    return items;
+  }, [isModuleEnabled, isPlanVisible, pendingReviewCount]);
+
+  // Balanced split around the centered FAB (decision 7): Home always anchors the
+  // left group; the remaining items fill left up to half (ceil), the rest right.
+  // 4 -> 2|2, 3 -> 2|1, 2 -> 1|1, 1 -> Home|∅.
+  const { leftItems, rightItems } = useMemo(() => {
+    const leftCount = Math.ceil(navItems.length / 2);
+    return {
+      leftItems: navItems.slice(0, leftCount),
+      rightItems: navItems.slice(leftCount),
+    };
+  }, [navItems]);
 
   // Active tab reads in the evergreen accent (the app's primary), inactive in the
   // calm paper neutrals. No glass — a solid surface with a hairline top edge.
@@ -35,6 +78,36 @@ const BottomNav: React.FC = () => {
   const iconClass = (isActive: boolean) =>
     `w-6 h-6 ${isActive ? 'stroke-[2.5px]' : 'stroke-2'}`;
 
+  const renderNavItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const badge = item.badgeCount ?? 0;
+    return (
+      <NavLink key={item.key} to={item.to} end={item.end} className={navLinkClass}>
+        {({ isActive }) => (
+          <>
+            <div className="relative">
+              <Icon className={iconClass(isActive)} />
+              {badge > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-brand-800"
+                  aria-hidden="true"
+                >
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-semibold">
+              {item.label}
+              {badge > 0 && (
+                <span className="sr-only">, {badge} pending review</span>
+              )}
+            </span>
+          </>
+        )}
+      </NavLink>
+    );
+  };
+
   return (
     <>
       <nav
@@ -45,22 +118,7 @@ const BottomNav: React.FC = () => {
 
           {/* Left Group */}
           <div className="flex items-center flex-1 justify-around">
-            <NavLink to="/" end className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <LayoutDashboard className={iconClass(isActive)} />
-                  <span className="text-xs font-semibold">Home</span>
-                </>
-              )}
-            </NavLink>
-            <NavLink to="/habits" className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <Activity className={iconClass(isActive)} />
-                  <span className="text-xs font-semibold">Habits</span>
-                </>
-              )}
-            </NavLink>
+            {leftItems.map(renderNavItem)}
           </div>
 
           {/* Center FAB Placeholder to maintain spacing */}
@@ -68,37 +126,7 @@ const BottomNav: React.FC = () => {
 
           {/* Right Group */}
           <div className="flex items-center flex-1 justify-around">
-            <NavLink to="/budget" className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <div className="relative">
-                    <Wallet className={iconClass(isActive)} />
-                    {pendingReviewCount > 0 && (
-                      <span
-                        className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-brand-800"
-                        aria-hidden="true"
-                      >
-                        {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs font-semibold">
-                    Money
-                    {pendingReviewCount > 0 && (
-                      <span className="sr-only">, {pendingReviewCount} pending review</span>
-                    )}
-                  </span>
-                </>
-              )}
-            </NavLink>
-            <NavLink to="/lists" className={navLinkClass}>
-              {({ isActive }) => (
-                <>
-                  <List className={iconClass(isActive)} />
-                  <span className="text-xs font-semibold">Plan</span>
-                </>
-              )}
-            </NavLink>
+            {rightItems.map(renderNavItem)}
           </div>
 
           {/* Actual FAB positioned absolutely — evergreen accent, the app's

@@ -3,6 +3,11 @@
 // creates/manages, never added to the household memberUids array (no credential).
 export type Role = 'admin' | 'member' | 'kid';
 
+// Plan 090 (Modular pages): the toggleable surfaces. 'plan' is the footer page;
+// 'todos' | 'meals' | 'shopping' are its sub-tabs. 'habits' and 'money' are
+// top-level footer pages. Home and Settings are always-on and not in this set.
+export type ModuleKey = 'habits' | 'money' | 'plan' | 'todos' | 'meals' | 'shopping';
+
 export const INCOME_CATEGORY = 'Income';
 
 export interface NotificationPreferences {
@@ -430,6 +435,13 @@ export interface Household {
   // ISO-4217 currency code (e.g. 'USD', 'EUR') used to format money throughout the
   // app. Absent on legacy households, which fall back to the default (USD).
   currency?: string;
+
+  // Plan 090 (Modular pages): per-household on/off toggles for the toggleable
+  // pages/sub-tabs (see ModuleKey). Fail-open: an absent map or absent key means
+  // that module is ENABLED, so every legacy household keeps all pages (no
+  // migration needed). Only an explicit `false` hides a module. Read through
+  // utils/moduleVisibility.ts — the single source of truth.
+  moduleVisibility?: Partial<Record<ModuleKey, boolean>>;
 
   // Plan 080 (Kid Mode): salted hash of the parent PIN required to EXIT a kid
   // profile view back to a parent view (Netflix-Kids pattern). Absent until a

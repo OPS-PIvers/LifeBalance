@@ -74,7 +74,8 @@ import {
   Store,
   QuickStockList,
   HouseholdApiKey,
-  PendingItem
+  PendingItem,
+  ModuleKey
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -342,6 +343,9 @@ export interface HouseholdContextType {
   /** Set the household's display currency (ISO-4217 code, e.g. 'USD', 'EUR'). */
   setHouseholdCurrency: (currency: string) => Promise<void>;
 
+  /** Plan 090 — toggle a module on/off for the household (merge-writes moduleVisibility.<key>). */
+  setModuleVisibility: (key: ModuleKey, value: boolean) => Promise<void>;
+
   /** Set (raw PIN, salted+hashed before write) or clear (null) the Kid Mode exit PIN. */
   setKidModePin: (pin: string | null) => Promise<void>;
 
@@ -451,7 +455,7 @@ export type HouseholdCoreContextValue = Pick<HouseholdContextType,
   | 'pendingItemsCount' | 'apiKeys'
   | 'householdId' | 'householdSettings' | 'household'
   | 'refreshInsight' | 'addMember' | 'updateMember' | 'removeMember' | 'deleteHousehold'
-  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setKidModePin'
+  | 'completeOnboarding' | 'setHouseholdCurrency' | 'setModuleVisibility' | 'setKidModePin'
   | 'addKidProfile' | 'updateKidProfile' | 'removeKidProfile'
   | 'activeMemberId' | 'actAs' | 'exitToParent'
 >;
@@ -3580,6 +3584,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     await updateDoc(doc(db, 'households', householdId), { currency });
   }, [householdId]);
 
+  // Plan 090 — merge-write a single module flag using a dotted field path so
+  // sibling keys in moduleVisibility are preserved (updateDoc merges nested
+  // fields by dotted path; a plain { moduleVisibility: {...} } would overwrite
+  // the whole map). Fail-open default means absent keys stay enabled.
+  const setModuleVisibility = useCallback(async (key: ModuleKey, value: boolean) => {
+    if (!householdId) return;
+    await updateDoc(doc(db, 'households', householdId), { [`moduleVisibility.${key}`]: value });
+  }, [householdId]);
+
   // Plan 080b: set/clear the Kid Mode exit PIN. A raw PIN is salted+hashed here
   // (never stored plaintext); passing null removes the PIN so exiting needs none.
   const setKidModePin = useCallback(async (pin: string | null): Promise<void> => {
@@ -4393,6 +4406,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     deleteHousehold,
     completeOnboarding,
     setHouseholdCurrency,
+    setModuleVisibility,
     setKidModePin,
     addKidProfile,
     updateKidProfile,
@@ -4404,7 +4418,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     isLoading, currentUser, members, insight, insightsHistory, isGeneratingInsight, hasMoreInsights, loadAllInsights,
     pendingItemsCount, apiKeys,
     householdId, householdSettings, refreshInsight, addMember, updateMember, removeMember, deleteHousehold,
-    completeOnboarding, setHouseholdCurrency, setKidModePin,
+    completeOnboarding, setHouseholdCurrency, setModuleVisibility, setKidModePin,
     addKidProfile, updateKidProfile, removeKidProfile, activeMemberId, actAs, exitToParent,
   ]);
 

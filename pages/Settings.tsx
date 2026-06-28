@@ -28,7 +28,8 @@ import {
   Terminal,
   AlertTriangle,
   Sparkles,
-  Baby
+  Baby,
+  LayoutGrid
 } from 'lucide-react';
 import HouseholdInviteCard from '@/components/auth/HouseholdInviteCard';
 import MemberModal from '@/components/modals/MemberModal';
@@ -40,9 +41,12 @@ import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { isModuleEnabled } from '@/utils/moduleVisibility';
+import type { ModuleKey } from '@/types/schema';
 import { requestNotificationPermission, setupForegroundNotificationListener } from '@/services/notificationService';
 import { generateJsonBackup, generateCsvExport } from '@/utils/exportUtils';
 import { HouseholdMember, NotificationPreferences, Transaction } from '@/types/schema';
@@ -85,6 +89,7 @@ const Settings: React.FC = () => {
     deleteHousehold,
     householdSettings,
     setHouseholdCurrency,
+    setModuleVisibility,
     setKidModePin,
     apiKeys,
   } = useHouseholdCore();
@@ -149,6 +154,15 @@ const Settings: React.FC = () => {
     } catch (error) {
       console.error('[Settings] Failed to update currency:', error);
       toast.error('Failed to update currency');
+    }
+  };
+
+  const handleModuleToggle = async (key: ModuleKey, value: boolean) => {
+    try {
+      await setModuleVisibility(key, value);
+    } catch (error) {
+      console.error('[Settings] Failed to update module visibility:', error);
+      toast.error('Failed to update modules');
     }
   };
 
@@ -715,6 +729,91 @@ const Settings: React.FC = () => {
                 ))}
             </SurfaceList>
           </div>
+        </CollapsibleCard>
+
+        {/* App Modules (Plan 090) — per-household page/tab on-off toggles. Any
+            member can edit (like the currency picker). Default all-on. */}
+        <CollapsibleCard
+          id="modules"
+          title="App Modules"
+          icon={<LayoutGrid className="w-5 h-5" />}
+          isOpen={openSection === 'modules'}
+          onToggle={() => handleToggleSection('modules')}
+          contentClassName="space-y-4"
+        >
+          <p className="text-xs text-brand-500 dark:text-brand-400">
+            Turn off pages you don&apos;t use — they&apos;ll disappear from navigation.
+          </p>
+
+          <SurfaceList>
+            {/* Top-level pages */}
+            <Row>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Habits</p>
+              </div>
+              <Switch
+                aria-label="Toggle Habits page"
+                checked={isModuleEnabled(householdSettings, 'habits')}
+                onCheckedChange={(value) => handleModuleToggle('habits', value)}
+              />
+            </Row>
+            <Row>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Money</p>
+              </div>
+              <Switch
+                aria-label="Toggle Money page"
+                checked={isModuleEnabled(householdSettings, 'money')}
+                onCheckedChange={(value) => handleModuleToggle('money', value)}
+              />
+            </Row>
+            <Row>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Plan</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">To-Dos, Meals, and Shopping</p>
+              </div>
+              <Switch
+                aria-label="Toggle Plan page"
+                checked={isModuleEnabled(householdSettings, 'plan')}
+                onCheckedChange={(value) => handleModuleToggle('plan', value)}
+              />
+            </Row>
+
+            {/* Plan sub-tabs — indented under Plan */}
+            <Row className="pl-10">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">To-Dos</p>
+              </div>
+              <Switch
+                aria-label="Toggle To-Dos tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                checked={isModuleEnabled(householdSettings, 'todos')}
+                onCheckedChange={(value) => handleModuleToggle('todos', value)}
+              />
+            </Row>
+            <Row className="pl-10">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">Meals</p>
+              </div>
+              <Switch
+                aria-label="Toggle Meals tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                checked={isModuleEnabled(householdSettings, 'meals')}
+                onCheckedChange={(value) => handleModuleToggle('meals', value)}
+              />
+            </Row>
+            <Row className="pl-10">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-brand-700 dark:text-brand-300 text-sm">Shopping</p>
+              </div>
+              <Switch
+                aria-label="Toggle Shopping tab"
+                disabled={!isModuleEnabled(householdSettings, 'plan')}
+                checked={isModuleEnabled(householdSettings, 'shopping')}
+                onCheckedChange={(value) => handleModuleToggle('shopping', value)}
+              />
+            </Row>
+          </SurfaceList>
         </CollapsibleCard>
 
         {/* Kid Mode (Plan 080) — dormant until kidModeEnabled is flipped on. */}
