@@ -2,6 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import CaptureModal from './CaptureModal';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import type { ModuleKey } from '@/types/schema';
 
 // Mock dependencies
 vi.mock('react-hot-toast', () => ({
@@ -35,6 +37,24 @@ vi.mock('@/contexts/FirebaseHouseholdContext', () => ({
   useTodos: () => mockUseHousehold,
   useShopping: () => mockUseHousehold,
 }));
+
+// Module visibility (Plan 090): mocked so each test can choose which capture
+// modules are enabled. Defaults to all-on (full 3-tab layout = pre-090 behavior).
+vi.mock('@/hooks/useModuleVisibility', () => ({
+  useModuleVisibility: vi.fn(),
+}));
+
+/** Configure the mocked hook so only `enabled` capture modules are on. */
+const setEnabledModules = (enabled: ModuleKey[]) => {
+  vi.mocked(useModuleVisibility).mockReturnValue({
+    isModuleEnabled: (key: ModuleKey) => enabled.includes(key),
+    isPlanVisible:
+      enabled.includes('plan') &&
+      (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
+    // To-Do/Shop capture require the Plan master AND the sub-tab to be on.
+    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
+  });
+};
 
 // Mock child components to simplify testing
 vi.mock('@/components/ui/Drawer', () => ({
@@ -78,6 +98,9 @@ describe('CaptureModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: all capture modules enabled (pre-090 behavior). Plan is on so the
+    // To-Do/Shop sub-tab destinations are reachable.
+    setEnabledModules(['money', 'plan', 'todos', 'shopping']);
   });
 
   it('renders correctly when open', () => {
@@ -140,5 +163,60 @@ describe('CaptureModal', () => {
     fireEvent.click(screen.getByText('Expense'));
     expect(screen.getByTestId('capture-menu')).toBeInTheDocument();
     expect(screen.getByText('Add Transaction')).toBeInTheDocument();
+  });
+
+  // --- Plan 090: capture-tab cascade ---
+
+  it('only renders tabs whose module is enabled', () => {
+    setEnabledModules(['plan', 'todos', 'shopping']);
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    expect(screen.queryByText('Expense')).not.toBeInTheDocument();
+    expect(screen.getByText('To-Do')).toBeInTheDocument();
+    expect(screen.getByText('Shop')).toBeInTheDocument();
+  });
+
+  it('gates To-Do/Shop tabs behind the Plan master (only Expense when Plan is off)', () => {
+    // todos + shopping flags on, but Plan off → their destinations are hidden,
+    // so only the Expense (money) capture tab remains.
+    setEnabledModules(['money', 'todos', 'shopping']);
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    expect(screen.getByText('Add Transaction')).toBeInTheDocument(); // Expense active
+    expect(screen.queryByText('To-Do')).not.toBeInTheDocument();
+    expect(screen.queryByText('Shop')).not.toBeInTheDocument();
+  });
+
+  it('defaults the active tab to the first enabled tab when the default (money) is off', () => {
+    // Money disabled, so the Expense (transaction) default is unavailable.
+    setEnabledModules(['plan', 'todos', 'shopping']);
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    // First enabled tab is To-Do — its content + title should be active.
+    expect(screen.getByText('New Task')).toBeInTheDocument();
+    expect(screen.getByTestId('capture-todo-tab')).toBeInTheDocument();
+    expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
+  });
+
+  it('hides the tab switcher when only one capture module is enabled', () => {
+    setEnabledModules(['plan', 'shopping']);
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    // Single enabled tab renders its content with no switchable strip.
+    expect(screen.getByTestId('capture-shopping-tab')).toBeInTheDocument();
+    expect(screen.getByText('Add Item')).toBeInTheDocument();
+    expect(screen.queryByText('Expense')).not.toBeInTheDocument();
+    expect(screen.queryByText('To-Do')).not.toBeInTheDocument();
+    // Sole tab's own label is not rendered as a switcher option.
+    expect(screen.queryByText('Shop')).not.toBeInTheDocument();
+  });
+
+  it('renders a graceful empty state when no capture module is enabled', () => {
+    setEnabledModules([]);
+    render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+    // No crash on tabOptions[0]; a guidance message is shown instead.
+    expect(screen.getByText(/No capture types are enabled/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('capture-menu')).not.toBeInTheDocument();
   });
 });

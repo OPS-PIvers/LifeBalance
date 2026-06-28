@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } from '@/contexts/FirebaseHouseholdContext';
+import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
 import { Transaction } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
@@ -28,6 +29,20 @@ interface CaptureModalProps {
 
 type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
 type ModalTab = 'transaction' | 'todo' | 'shopping';
+
+/**
+ * Plan 090 (capture cascade) — the canonical capture-tab order plus the module
+ * each tab belongs to. A tab is only shown when its destination is reachable:
+ * Expense→money; To-Do→todos and Shop→shopping are gated by the Plan page too
+ * (isPlanTabVisible), so we never capture into a page the household has hidden
+ * (there is no Meals capture tab).
+ */
+const CAPTURE_TAB_ORDER: readonly ModalTab[] = ['transaction', 'todo', 'shopping'] as const;
+const CAPTURE_TAB_MODULE: Record<ModalTab, 'money' | 'todos' | 'shopping'> = {
+  transaction: 'money',
+  todo: 'todos',
+  shopping: 'shopping',
+};
 
 interface ManualInitialData {
   amount?: string;
@@ -59,8 +74,30 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // Resolve AI-returned store names to existing stores, creating new ones only
   // when they're certainly not duplicates.
   const { ensureStores } = useStoreResolver();
+  // Plan 090 — only show capture tabs whose destination is reachable for this
+  // household (To-Do/Shop also require the Plan page to be on).
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
+  // `activeTab` is the user's PREFERENCE; the tab actually shown (`effectiveTab`)
+  // is derived in render so a disabled preference falls back to the first enabled
+  // tab WITHOUT a setState-in-effect (mirrors ListsPage from PR1).
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
+
+  // The capture tabs this household has enabled, in canonical order. The money
+  // tab follows its top-level flag; todo/shopping follow the derived plan-tab
+  // visibility (Plan master + the sub-tab) so they vanish whenever their
+  // destination page would be unreachable.
+  const isCaptureTabVisible = (tab: ModalTab): boolean => {
+    const moduleKey = CAPTURE_TAB_MODULE[tab];
+    return moduleKey === 'money' ? isModuleEnabled('money') : isPlanTabVisible(moduleKey);
+  };
+  const enabledTabs = CAPTURE_TAB_ORDER.filter(isCaptureTabVisible);
+  // Effective tab: the preference if it's enabled, else the first enabled tab.
+  // `null` only when every capture module is off (extreme — the FAB is hidden in
+  // that case), handled by the empty-state guard in the render body.
+  const effectiveTab: ModalTab | null = enabledTabs.includes(activeTab)
+    ? activeTab
+    : enabledTabs[0] ?? null;
 
   // --- Transaction State ---
   const [view, setView] = useState<ModalView>('menu');
@@ -537,49 +574,48 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const tabOptions: SegmentedControlOption<ModalTab>[] = [
-    {
-      value: 'transaction',
-      label: (
-        <div className="flex items-center justify-center gap-2">
-          <Wallet size={16} />
-          <span>Expense</span>
-        </div>
-      )
-    },
-    {
-      value: 'todo',
-      label: (
-        <div className="flex items-center justify-center gap-2">
-          <CheckSquare size={16} />
-          <span>To-Do</span>
-        </div>
-      )
-    },
-    {
-      value: 'shopping',
-      label: (
-        <div className="flex items-center justify-center gap-2">
-          <ShoppingBag size={16} />
-          <span>Shop</span>
-        </div>
-      )
-    }
-  ];
+  // Tab definitions keyed by value; the visible list is filtered to enabled
+  // modules below, preserving the canonical order.
+  const TAB_LABELS: Record<ModalTab, React.ReactNode> = {
+    transaction: (
+      <div className="flex items-center justify-center gap-2">
+        <Wallet size={16} />
+        <span>Expense</span>
+      </div>
+    ),
+    todo: (
+      <div className="flex items-center justify-center gap-2">
+        <CheckSquare size={16} />
+        <span>To-Do</span>
+      </div>
+    ),
+    shopping: (
+      <div className="flex items-center justify-center gap-2">
+        <ShoppingBag size={16} />
+        <span>Shop</span>
+      </div>
+    ),
+  };
+
+  const tabOptions: SegmentedControlOption<ModalTab>[] = enabledTabs.map((tab) => ({
+    value: tab,
+    label: TAB_LABELS[tab],
+  }));
 
   const headerContent = (
     <div className="flex flex-col border-b border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
       <div className="flex items-center justify-between px-6 py-4">
         <h2 id="capture-drawer-title" className="font-display text-xl font-semibold text-brand-800 dark:text-brand-100">
-          {activeTab === 'transaction' && (
+          {effectiveTab === 'transaction' && (
             view === 'menu' ? 'Add Transaction' :
             view === 'camera' ? 'Scan Receipt' :
             view === 'upload' ? 'Upload Image' :
             view === 'manual' ? 'Manual Entry' :
             view === 'processing' ? 'Processing' : 'Review'
           )}
-          {activeTab === 'todo' && 'New Task'}
-          {activeTab === 'shopping' && 'Add Item'}
+          {effectiveTab === 'todo' && 'New Task'}
+          {effectiveTab === 'shopping' && 'Add Item'}
+          {effectiveTab === null && 'Capture'}
         </h2>
         <Button
           variant="subtle"
@@ -592,12 +628,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
         </Button>
       </div>
 
-      {/* Tab Switcher - Only show if not in deep transaction flow */}
-      {view === 'menu' && (
+      {/* Tab Switcher - only show in the menu view, and only when more than one
+          capture tab is enabled (nothing to switch between otherwise). */}
+      {view === 'menu' && tabOptions.length > 1 && effectiveTab !== null && (
         <div className="px-6 pb-4">
           <SegmentedControl<ModalTab>
             options={tabOptions}
-            value={activeTab}
+            value={effectiveTab}
             onChange={setActiveTab}
             name="Capture type"
           />
@@ -620,8 +657,16 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       {/* Body Content */}
       <div className="p-6">
 
+        {/* Empty-state guard: every capture module is disabled. The FAB that
+            opens this modal is hidden in that case, so this is defensive only. */}
+        {effectiveTab === null && (
+          <p className="py-12 text-center text-brand-500 dark:text-brand-400">
+            No capture types are enabled. Turn on Money, To-Dos, or Shopping in Settings.
+          </p>
+        )}
+
         {/* 1. TRANSACTION TAB */}
-        {activeTab === 'transaction' && (
+        {effectiveTab === 'transaction' && (
             <>
               {/* Processing View */}
               {view === 'processing' && (
@@ -698,7 +743,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           )}
 
           {/* 2. TO-DO TAB */}
-          {activeTab === 'todo' && (
+          {effectiveTab === 'todo' && (
             <CaptureTodoTab
               text={todoText}
               setText={setTodoText}
@@ -712,7 +757,7 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           )}
 
           {/* 3. SHOPPING TAB */}
-          {activeTab === 'shopping' && (
+          {effectiveTab === 'shopping' && (
             <CaptureShoppingTab
               name={shoppingName}
               setName={setShoppingName}

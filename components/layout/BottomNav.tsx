@@ -33,7 +33,14 @@ const BottomNav: React.FC = () => {
   );
 
   // Plan 090 — which top-level pages are enabled for this household.
-  const { isModuleEnabled, isPlanVisible } = useModuleVisibility();
+  const { isModuleEnabled, isPlanVisible, isPlanTabVisible } = useModuleVisibility();
+
+  // The capture FAB opens the CaptureModal. Mirror the modal's tab gating exactly:
+  // money follows its top-level flag, while todo/shop follow plan-tab visibility
+  // (Plan master + the sub-tab) so we never offer a capture whose destination page
+  // is hidden. Hidden only when none of the three are available.
+  const showCaptureFab =
+    isModuleEnabled('money') || isPlanTabVisible('todos') || isPlanTabVisible('shopping');
 
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
@@ -130,23 +137,28 @@ const BottomNav: React.FC = () => {
           </div>
 
           {/* Actual FAB positioned absolutely — evergreen accent, the app's
-              primary action color. */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-6">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="group flex items-center justify-center w-16 h-16 bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400 text-white rounded-full shadow-raised border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
-              aria-label="Capture transaction, task, or item"
-            >
-              <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-(--duration-slow) ease-(--ease-standard)" />
-            </button>
-          </div>
+              primary action color. Hidden when no capture module is enabled; the
+              centered spacer above keeps the balanced left/right split intact. */}
+          {showCaptureFab && (
+            <div className="absolute left-1/2 -translate-x-1/2 -top-6">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="group flex items-center justify-center w-16 h-16 bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400 text-white rounded-full shadow-raised border-4 border-brand-50 dark:border-brand-900 active:scale-95 transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+                aria-label="Capture transaction, task, or item"
+              >
+                <Plus className="w-7 h-7 group-hover:rotate-90 transition-transform duration-(--duration-slow) ease-(--ease-standard)" />
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
-      {/* Capture Modal Overlay */}
-      <LazyMount when={isModalOpen}>
-        <CaptureModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      </LazyMount>
+      {/* Capture Modal Overlay — only mountable when the FAB exists. */}
+      {showCaptureFab && (
+        <LazyMount when={isModalOpen}>
+          <CaptureModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+        </LazyMount>
+      )}
     </>
   );
 };
