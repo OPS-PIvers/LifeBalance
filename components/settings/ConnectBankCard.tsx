@@ -115,7 +115,7 @@ const ConnectBankCard: React.FC = () => {
               variant="primary"
               onClick={handleConnect}
               isLoading={busy}
-              disabled={!householdId}
+              disabled={!householdId || disconnecting}
             >
               Connect a bank
             </Button>
@@ -123,7 +123,7 @@ const ConnectBankCard: React.FC = () => {
               variant="ghost-destructive"
               size="sm"
               onClick={() => setConfirmDisconnect(true)}
-              disabled={!householdId || busy}
+              disabled={!householdId || busy || disconnecting}
             >
               Disconnect
             </Button>
