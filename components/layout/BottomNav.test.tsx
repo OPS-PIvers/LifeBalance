@@ -35,7 +35,8 @@ const setEnabledModules = (enabled: ModuleKey[]) => {
     isPlanVisible:
       enabled.includes('plan') &&
       (enabled.includes('todos') || enabled.includes('meals') || enabled.includes('shopping')),
-    isPlanTabVisible: () => true,
+    // A sub-tab is only reachable when the Plan master AND the sub-tab are on.
+    isPlanTabVisible: (tab) => enabled.includes('plan') && enabled.includes(tab),
   });
 };
 
@@ -59,10 +60,25 @@ describe('BottomNav', () => {
     expect(screen.getByRole('button', { name: FAB_LABEL })).toBeInTheDocument();
   });
 
-  it('shows the FAB when only one capture module (todos) is enabled', () => {
-    setEnabledModules(['todos']);
+  it('shows the FAB via the Plan path when Plan + a sub-tab (todos) are on but money is off', () => {
+    setEnabledModules(['plan', 'todos']);
     renderNav();
     expect(screen.getByRole('button', { name: FAB_LABEL })).toBeInTheDocument();
+  });
+
+  it('shows the FAB via the money path when only money is enabled', () => {
+    setEnabledModules(['money']);
+    renderNav();
+    expect(screen.getByRole('button', { name: FAB_LABEL })).toBeInTheDocument();
+  });
+
+  it('hides the FAB when sub-tab flags are on but Plan is off (destinations unreachable)', () => {
+    // todos + shopping flags on, but Plan master off → their capture
+    // destinations are hidden, so no capture type is actually reachable.
+    setEnabledModules(['habits', 'todos', 'shopping']);
+    renderNav();
+    expect(screen.queryByRole('button', { name: FAB_LABEL })).not.toBeInTheDocument();
+    expect(screen.getByText('Home')).toBeInTheDocument();
   });
 
   it('hides the FAB when money, todos, and shopping are all disabled', () => {

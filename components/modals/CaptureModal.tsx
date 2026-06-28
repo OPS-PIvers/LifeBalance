@@ -7,7 +7,6 @@ import { useFinance, useGamification, useHouseholdCore, useShopping, useTodos } 
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import type { ReceiptData, MagicActionResponse } from '@/services/geminiService.types';
 import { Transaction } from '@/types/schema';
-import type { ModuleKey } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
@@ -33,11 +32,13 @@ type ModalTab = 'transaction' | 'todo' | 'shopping';
 
 /**
  * Plan 090 (capture cascade) — the canonical capture-tab order plus the module
- * each tab belongs to. A tab is only shown when its module is enabled:
- * Expense→money, To-Do→todos, Shop→shopping (there is no Meals capture tab).
+ * each tab belongs to. A tab is only shown when its destination is reachable:
+ * Expense→money; To-Do→todos and Shop→shopping are gated by the Plan page too
+ * (isPlanTabVisible), so we never capture into a page the household has hidden
+ * (there is no Meals capture tab).
  */
 const CAPTURE_TAB_ORDER: readonly ModalTab[] = ['transaction', 'todo', 'shopping'] as const;
-const CAPTURE_TAB_MODULE: Record<ModalTab, ModuleKey> = {
+const CAPTURE_TAB_MODULE: Record<ModalTab, 'money' | 'todos' | 'shopping'> = {
   transaction: 'money',
   todo: 'todos',
   shopping: 'shopping',
@@ -73,16 +74,24 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   // Resolve AI-returned store names to existing stores, creating new ones only
   // when they're certainly not duplicates.
   const { ensureStores } = useStoreResolver();
-  // Plan 090 — only show capture tabs whose module is enabled for this household.
-  const { isModuleEnabled } = useModuleVisibility();
+  // Plan 090 — only show capture tabs whose destination is reachable for this
+  // household (To-Do/Shop also require the Plan page to be on).
+  const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
 
   // `activeTab` is the user's PREFERENCE; the tab actually shown (`effectiveTab`)
   // is derived in render so a disabled preference falls back to the first enabled
   // tab WITHOUT a setState-in-effect (mirrors ListsPage from PR1).
   const [activeTab, setActiveTab] = useState<ModalTab>('transaction');
 
-  // The capture tabs this household has enabled, in canonical order.
-  const enabledTabs = CAPTURE_TAB_ORDER.filter((tab) => isModuleEnabled(CAPTURE_TAB_MODULE[tab]));
+  // The capture tabs this household has enabled, in canonical order. The money
+  // tab follows its top-level flag; todo/shopping follow the derived plan-tab
+  // visibility (Plan master + the sub-tab) so they vanish whenever their
+  // destination page would be unreachable.
+  const isCaptureTabVisible = (tab: ModalTab): boolean => {
+    const moduleKey = CAPTURE_TAB_MODULE[tab];
+    return moduleKey === 'money' ? isModuleEnabled('money') : isPlanTabVisible(moduleKey);
+  };
+  const enabledTabs = CAPTURE_TAB_ORDER.filter(isCaptureTabVisible);
   // Effective tab: the preference if it's enabled, else the first enabled tab.
   // `null` only when every capture module is off (extreme — the FAB is hidden in
   // that case), handled by the empty-state guard in the render body.

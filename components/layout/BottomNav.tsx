@@ -33,13 +33,14 @@ const BottomNav: React.FC = () => {
   );
 
   // Plan 090 — which top-level pages are enabled for this household.
-  const { isModuleEnabled, isPlanVisible } = useModuleVisibility();
+  const { isModuleEnabled, isPlanVisible, isPlanTabVisible } = useModuleVisibility();
 
-  // The capture FAB opens the CaptureModal, whose tabs map to money/todos/shopping.
-  // Hide it entirely only in the extreme case where all three are disabled (no
-  // capture type would be available).
+  // The capture FAB opens the CaptureModal. Mirror the modal's tab gating exactly:
+  // money follows its top-level flag, while todo/shop follow plan-tab visibility
+  // (Plan master + the sub-tab) so we never offer a capture whose destination page
+  // is hidden. Hidden only when none of the three are available.
   const showCaptureFab =
-    isModuleEnabled('money') || isModuleEnabled('todos') || isModuleEnabled('shopping');
+    isModuleEnabled('money') || isPlanTabVisible('todos') || isPlanTabVisible('shopping');
 
   useEffect(() => preloadOnIdle(loadCaptureModal), []);
 
