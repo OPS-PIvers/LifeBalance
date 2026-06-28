@@ -5,17 +5,6 @@ import {
 } from 'date-fns';
 import { sumMoney, roundMoney } from '@/utils/money';
 
-// Colors for Heatmap
-export const HEATMAP_COLORS = {
-  0: '#f1f5f9', // slate-100
-  1: '#6ee7b7', // emerald-300
-  2: '#34d399', // emerald-400
-  3: '#10b981', // emerald-500
-  4: '#047857', // emerald-700
-} as const;
-
-export const CHART_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#6366F1'];
-
 // Helper to check negative habit safely
 const isNegativeHabit = (h: Habit): boolean => {
   return h.type === 'negative';
@@ -166,88 +155,6 @@ export const calculateHeatmapData = (habits: Habit[]) => {
 };
 
 // --- View 3: Wallet (Finance) ---
-
-export const calculateNetFlowData = (transactions: Transaction[]) => {
-  const buckets = new Map<string, { income: number; expense: number }>();
-
-  // Initialize last 6 months
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const d = subMonths(new Date(), 5 - i);
-    const key = format(d, 'yyyy-MM');
-    buckets.set(key, { income: 0, expense: 0 });
-    return key;
-  });
-
-  // Single pass through transactions
-  // months[0] is always defined: Array.from({length:6},...) always has 6 elements
-  const sixMonthsAgo = months[0]!;
-  transactions.forEach(t => {
-    const monthKey = t.date.substring(0, 7); // YYYY-MM
-    if (monthKey >= sixMonthsAgo && buckets.has(monthKey)) {
-      const bucket = buckets.get(monthKey)!;
-      if (t.category === 'Income') {
-        bucket.income += t.amount;
-      } else {
-        bucket.expense += t.amount;
-      }
-    }
-  });
-
-  return months.map(monthKey => {
-    const { income, expense } = buckets.get(monthKey)!;
-    return {
-      month: format(parseISO(monthKey + '-01'), 'MMM'),
-      Income: Math.round(income),
-      Expense: Math.round(expense),
-      Net: Math.round(income - expense)
-    };
-  });
-};
-
-export const calculateSpendingCategories = (transactions: Transaction[]) => {
-  const thirtyDaysAgo = format(subDays(new Date(), 30), 'yyyy-MM-dd');
-  const totals = new Map<string, number>();
-
-  transactions
-    .filter(t => t.date >= thirtyDaysAgo && t.category !== 'Income')
-    .forEach(t => {
-      totals.set(t.category, (totals.get(t.category) || 0) + t.amount);
-    });
-
-  const totalAllCategories = sumMoney(Array.from(totals.values()));
-
-  const getCategoryColor = (categoryName: string) => {
-    let hash = 0;
-    for (let i = 0; i < categoryName.length; i++) {
-      hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return CHART_COLORS[Math.abs(hash) % CHART_COLORS.length];
-  };
-
-  const allCategories = Array.from(totals.entries())
-    .map(([name, value]) => ({
-      name,
-      value: Math.round(value),
-      percent: totalAllCategories > 0 ? Math.round((value / totalAllCategories) * 100) : 0,
-      fill: getCategoryColor(name),
-    }))
-    .sort((a, b) => b.value - a.value);
-
-  const top6 = allCategories.slice(0, 6);
-  const remaining = allCategories.slice(6);
-
-  if (remaining.length > 0) {
-    const otherTotal = sumMoney(remaining.map(cat => cat.value));
-    top6.push({
-      name: 'Other',
-      value: otherTotal,
-      percent: totalAllCategories > 0 ? Math.round((otherTotal / totalAllCategories) * 100) : 0,
-      fill: '#94a3b8',
-    });
-  }
-
-  return top6;
-};
 
 export const calculateCategoryTrend = (transactions: Transaction[]) => {
   // Initialize buckets for each month

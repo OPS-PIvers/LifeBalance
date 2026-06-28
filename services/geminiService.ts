@@ -759,8 +759,7 @@ export const analyzeReceipt = async (
       subBucketContext += 'If the selected category has sub-buckets, please choose the most appropriate one as "subBucket".';
     }
 
-    const now = new Date();
-    const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    const today = getLocalDateString();
     const prompt = [
       `Analyze this receipt image. Extract the merchant name, total amount, date (YYYY-MM-DD format), and suggest the most appropriate category.`,
       `The amount is in US dollars — return it as a positive decimal number (e.g. 12.34); ignore currency symbols, treat "." as the decimal separator and "," as a thousands separator.`,
@@ -837,8 +836,7 @@ export const parseBankStatement = async (
       subBucketContext += 'If the chosen category has sub-buckets, also return the most appropriate one as "subBucket".';
     }
 
-    const now = new Date();
-    const today = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+    const today = getLocalDateString();
     const prompt = [
       `Analyze this bank statement or transaction list screenshot. Extract ALL visible expense transactions. For each transaction, provide:`,
       `- merchant: The merchant or payee name`,

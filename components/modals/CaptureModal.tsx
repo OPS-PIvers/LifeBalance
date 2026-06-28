@@ -10,6 +10,7 @@ import { Transaction } from '@/types/schema';
 import { ParsedTransaction } from '@/types/ui';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useStoreResolver } from '@/hooks/useStoreResolver';
+import { getLocalDateString } from '@/utils/dateHelpers';
 import { normalizeStoreName } from '@/utils/storeMatch';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -53,17 +54,6 @@ interface ManualInitialData {
   store?: string;
   accountId?: string;
 }
-
-/**
- * Returns today's date in YYYY-MM-DD format using local timezone
- */
-const getLocalDateString = (): string => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const { addTransaction, updateTransaction, buckets, transactions, accounts } = useFinance();
