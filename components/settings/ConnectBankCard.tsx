@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { functions } from '@/firebase.config';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /**
  * "Connect a bank (Plaid)" entry. Rendered ONLY when the `plaidEnabled` flag is
@@ -21,6 +22,8 @@ const ConnectBankCard: React.FC = () => {
   const { householdId } = useHouseholdCore();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const onSuccess = useCallback(
     async (publicToken: string) => {
@@ -72,6 +75,28 @@ const ConnectBankCard: React.FC = () => {
     }
   };
 
+  const handleDisconnect = async () => {
+    if (!householdId) return;
+    try {
+      setDisconnecting(true);
+      const disconnect = httpsCallable<{ householdId: string }, { removed: number }>(
+        functions,
+        'plaiddisconnectbank',
+      );
+      const { data } = await disconnect({ householdId });
+      toast.success(
+        data.removed > 0
+          ? `Disconnected ${data.removed} bank connection${data.removed > 1 ? 's' : ''}.`
+          : 'No bank connections to remove.',
+      );
+    } catch {
+      toast.error('Could not disconnect your bank.');
+    } finally {
+      setDisconnecting(false);
+      setConfirmDisconnect(false);
+    }
+  };
+
   return (
     <div className="surface-section p-4">
       <div className="flex items-start gap-3">
@@ -85,17 +110,36 @@ const ConnectBankCard: React.FC = () => {
           <p className="text-sm text-brand-500 dark:text-brand-400 mt-0.5">
             Securely link an account via Plaid. New transactions sync into your review queue automatically — no manual entry.
           </p>
-          <Button
-            variant="primary"
-            onClick={handleConnect}
-            isLoading={busy}
-            disabled={!householdId}
-            className="mt-3"
-          >
-            Connect a bank
-          </Button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              onClick={handleConnect}
+              isLoading={busy}
+              disabled={!householdId || disconnecting}
+            >
+              Connect a bank
+            </Button>
+            <Button
+              variant="ghost-destructive"
+              size="sm"
+              onClick={() => setConfirmDisconnect(true)}
+              disabled={!householdId || busy || disconnecting}
+            >
+              Disconnect
+            </Button>
+          </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDisconnect}
+        onClose={() => setConfirmDisconnect(false)}
+        onConfirm={handleDisconnect}
+        title="Disconnect bank?"
+        message="This removes all linked bank connections for your household and stops transactions from syncing. You can reconnect any time."
+        confirmLabel="Disconnect"
+        isConfirming={disconnecting}
+      />
     </div>
   );
 };
