@@ -94,9 +94,9 @@ export const useActionQueue = () => {
   const actionQueue = useMemo(() => {
     return [...dueCalendarItems, ...pendingTx, ...immediateToDos].sort((a, b) => {
       // All queue items carry a zero-padded ISO yyyy-MM-dd date, so lexical order
-      // matches chronological order — compare directly instead of allocating a
-      // Date per comparison.
-      return a.date.localeCompare(b.date);
+      // matches chronological order. Plain >/< beats localeCompare (no V8 collation
+      // cost) and avoids the per-comparison Date allocation. (asc, oldest first)
+      return a.date > b.date ? 1 : a.date < b.date ? -1 : 0;
     });
   }, [dueCalendarItems, pendingTx, immediateToDos]);
 
