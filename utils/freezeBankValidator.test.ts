@@ -193,15 +193,20 @@ describe('canUseFreezeBankToken — deterministic window boundaries', () => {
     expect(res.allowed).toBe(true);
   });
 
-  // DOCUMENTS CURRENT (possibly-undesirable) BEHAVIOR: an unparseable date does
-  // NOT take the "Invalid date format" branch. parseISO('not-a-date') returns an
-  // Invalid Date (NaN time) instead of throwing, so the try/catch never fires;
-  // every subsequent numeric comparison against NaN is false, so the function
-  // falls through to { allowed: true }. The "Invalid date format" reason is
-  // effectively dead code for this input. FLAGGED as a potential follow-up — not
-  // fixed here (tests-only).
-  it('DOCUMENTS: an unparseable date currently slips through as allowed (NaN comparisons)', () => {
+  // KNOWN BUG (flagged follow-up, not fixed here — tests-only PR): an unparseable
+  // date does NOT take the "Invalid date format" branch. parseISO('not-a-date')
+  // returns an Invalid Date (NaN time) instead of throwing, so the try/catch never
+  // fires; every numeric comparison against NaN is false, so the function falls
+  // through to { allowed: true }. The "Invalid date format" reason is dead code for
+  // this input.
+  //
+  // Written with `it.fails` asserting the CORRECT behavior (allowed: false): it
+  // PASSES now because the assertion fails as expected (the bug is present), and it
+  // will START FAILING — prompting conversion to a regular `it` — the moment
+  // canUseFreezeBankToken is fixed to reject invalid dates. This avoids codifying
+  // the bug as expected behavior.
+  it.fails('rejects an unparseable date (currently slips through as allowed due to NaN comparisons)', () => {
     const res = canUseFreezeBankToken(freezable(), 'not-a-date', 3);
-    expect(res.allowed).toBe(true);
+    expect(res.allowed).toBe(false);
   });
 });
