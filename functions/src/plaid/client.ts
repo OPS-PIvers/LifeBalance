@@ -30,9 +30,12 @@ export function makePlaidClient(): PlaidApi {
   const env = plaidEnv.value();
   const basePath =
     (PlaidEnvironments as Record<string, string>)[env] ?? PlaidEnvironments.sandbox;
-  // Log the resolved environment (name only — never a credential) so the
-  // function logs confirm which Plaid env a deploy is bound to.
-  logger.info("Plaid client initialized", { env });
+  // Log the resolved environment so the function logs confirm which Plaid env a
+  // deploy is bound to. Only emit recognized env names — if PLAID_ENV is
+  // misconfigured (e.g. a secret pasted into the wrong field), log "unknown"
+  // rather than the raw value, which both avoids leaking it and flags the misconfig.
+  const safeEnv = Object.prototype.hasOwnProperty.call(PlaidEnvironments, env) ? env : "unknown";
+  logger.info("Plaid client initialized", { env: safeEnv });
   const config = new Configuration({
     basePath,
     baseOptions: {
