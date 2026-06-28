@@ -117,18 +117,16 @@ export const PulseStripWidget: React.FC = () => {
     };
   }, [transactions, habits, weeklyPoints]);
 
-  // Both domains off — there is nothing this strip would show.
-  if (!showSpend && !showHabits) {
-    return null;
-  }
+  // Stay quiet when none of the ENABLED modules have active content. This covers
+  // both the "both domains off" case AND the degraded case where one domain is
+  // off and the other is empty (e.g. a brand-new household) — so we never render
+  // a zeroed strip just because the disabled domain has stale data.
+  const hasSpendContent = showSpend && metrics.weekSpend > 0;
+  const hasHabitsContent =
+    showHabits &&
+    (metrics.weekPoints > 0 || metrics.consistencyTotal > 0 || metrics.topStreak > 0);
 
-  // Nothing to balance yet — stay quiet on a brand-new household.
-  if (
-    metrics.weekPoints === 0 &&
-    metrics.weekSpend === 0 &&
-    metrics.consistencyTotal === 0 &&
-    metrics.topStreak === 0
-  ) {
+  if (!hasSpendContent && !hasHabitsContent) {
     return null;
   }
 

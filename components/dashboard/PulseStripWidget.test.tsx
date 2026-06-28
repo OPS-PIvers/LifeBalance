@@ -127,4 +127,23 @@ describe('PulseStripWidget', () => {
     const { container } = render(<PulseStripWidget />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('stays quiet when the only enabled domain (habits) is empty, despite stale spend data', () => {
+    // Money is OFF but a transaction still exists (stale). Habits ON but empty.
+    // The guard must weigh only enabled-domain content, so the widget hides
+    // rather than rendering a zeroed Points/Consistency strip.
+    const value = {
+      transactions: [makeTransaction()],
+      habits: [] as Habit[],
+      weeklyPoints: 0,
+    };
+    vi.mocked(useFinance).mockReturnValue(value as unknown as ReturnType<typeof useFinance>);
+    vi.mocked(useGamification).mockReturnValue(
+      value as unknown as ReturnType<typeof useGamification>,
+    );
+    setEnabledModules(['habits', 'plan', 'todos']);
+
+    const { container } = render(<PulseStripWidget />);
+    expect(container).toBeEmptyDOMElement();
+  });
 });
