@@ -169,7 +169,22 @@ const MealPlanTab: React.FC = () => {
   // Calendar Logic — memoized so re-renders caused by unrelated state (modals, etc.)
   // don't recompute the week grid on every keystroke.
   const weekStart = useMemo(() => startOfWeek(selectedDate, { weekStartsOn: 1 }), [selectedDate]);
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  // Pre-format the per-day label strings here (once per week change) so the
+  // day-strip render doesn't call `format` four times per day on every render.
+  const weekDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const date = addDays(weekStart, i);
+        return {
+          date,
+          dateStr: format(date, 'yyyy-MM-dd'),
+          dayLetter: format(date, 'EEEEE'),
+          dayNumber: format(date, 'd'),
+          ariaLabel: format(date, 'EEEE, MMMM d'),
+        };
+      }),
+    [weekStart]
+  );
 
   const addIngredientsToShoppingList = async (mealIngredients: MealIngredient[]) => {
       const ingredientsToAdd = mealIngredients.filter(ing => {
@@ -642,7 +657,7 @@ const MealPlanTab: React.FC = () => {
         {/* Day strip — whole week at a glance */}
         <div className="flex gap-1 sm:gap-1.5">
             {weekDays.map(day => {
-                const dateStr = format(day, 'yyyy-MM-dd');
+                const { dateStr } = day;
                 const count = countByDate.get(dateStr) || 0;
                 const isSelected = dateStr === selectedDateStr;
                 const isToday = dateStr === todayStr;
@@ -650,8 +665,8 @@ const MealPlanTab: React.FC = () => {
                 return (
                     <button
                         key={dateStr}
-                        onClick={() => setSelectedDate(day)}
-                        aria-label={`${format(day, 'EEEE, MMMM d')}${count > 0 ? `, ${count} meals planned` : ''}`}
+                        onClick={() => setSelectedDate(day.date)}
+                        aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
                         aria-pressed={isSelected}
                         className={clsx(
                             "flex-1 flex flex-col items-center gap-1 py-2 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
@@ -664,7 +679,7 @@ const MealPlanTab: React.FC = () => {
                             "text-xxs font-bold uppercase tracking-wide",
                             isSelected ? "text-white/80" : "text-brand-400 dark:text-brand-500"
                         )}>
-                            {format(day, 'EEEEE')}
+                            {day.dayLetter}
                         </span>
                         <span className={clsx(
                             "w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold tabular-nums transition-colors",
@@ -674,7 +689,7 @@ const MealPlanTab: React.FC = () => {
                                     ? "bg-accent-100 text-accent-700 ring-1 ring-accent-300 dark:bg-accent-900/40 dark:text-accent-200 dark:ring-accent-700"
                                     : "text-brand-700 dark:text-brand-300"
                         )}>
-                            {format(day, 'd')}
+                            {day.dayNumber}
                         </span>
                         <span className="flex items-center justify-center gap-0.5 h-1.5">
                             {Array.from({ length: Math.min(count, 3) }).map((_, i) => (

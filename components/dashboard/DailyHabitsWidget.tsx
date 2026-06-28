@@ -10,7 +10,7 @@ import { cn } from '@/utils/cn';
 const MAX_VISIBLE_HABITS = 5;
 const DEFAULT_ORDER_FALLBACK = 999;
 
-export const DailyHabitsWidget: React.FC = () => {
+export const DailyHabitsWidget: React.FC = React.memo(() => {
   const { habits, toggleHabit } = useGamification();
 
   // Computed on every render (date formatting is cheap) so the value stays
@@ -174,4 +174,6 @@ export const DailyHabitsWidget: React.FC = () => {
       </SurfaceList>
     </Section>
   );
-};
+});
+
+DailyHabitsWidget.displayName = 'DailyHabitsWidget';

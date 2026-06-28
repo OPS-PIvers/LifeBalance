@@ -51,6 +51,8 @@ const Dashboard: React.FC = () => {
     setIsChallengeModalOpen(true);
   }, []);
 
+  const handleOpenArchive = useCallback(() => setIsArchiveOpen(true), []);
+
   // --- ACTION QUEUE LOGIC ---
   const { actionQueue } = useActionQueue();
 
@@ -172,7 +174,7 @@ const Dashboard: React.FC = () => {
 
         {/* One AI Insight */}
         <InsightWidget
-          onOpenArchive={() => setIsArchiveOpen(true)}
+          onOpenArchive={handleOpenArchive}
           onCreateChallenge={handleCreateChallenge}
         />
 

@@ -44,7 +44,7 @@ const GRID_COLS_BY_COUNT: Record<number, string> = {
   3: 'grid-cols-3',
 };
 
-export const PulseStripWidget: React.FC = () => {
+export const PulseStripWidget: React.FC = React.memo(() => {
   const { transactions } = useFinance();
   const { habits, weeklyPoints } = useGamification();
   const { isModuleEnabled } = useModuleVisibility();
@@ -235,7 +235,9 @@ export const PulseStripWidget: React.FC = () => {
       </div>
     </Section>
   );
-};
+});
+
+PulseStripWidget.displayName = 'PulseStripWidget';
 
 const PulseCell: React.FC<{ label: string; children: React.ReactNode }> = ({
   label,

@@ -57,7 +57,10 @@ const BudgetHistory: React.FC = () => {
     });
 
     return Array.from(groups.values()).sort((a, b) =>
-      new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+      // startDate is a zero-padded ISO yyyy-MM-dd string, so lexical order matches
+      // chronological order. Plain >/< beats localeCompare (no V8 collation cost)
+      // and avoids the Date allocation the old comparator made per pair. (desc)
+      b.startDate > a.startDate ? 1 : b.startDate < a.startDate ? -1 : 0
     );
   }, [bucketHistory]);
 

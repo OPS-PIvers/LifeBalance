@@ -34,7 +34,7 @@ const isInsightActionVisible = (
   }
 };
 
-export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onCreateChallenge }) => {
+export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenArchive, onCreateChallenge }) => {
   const {
     insight,
     refreshInsight,
@@ -145,4 +145,6 @@ export const InsightWidget: React.FC<InsightWidgetProps> = ({ onOpenArchive, onC
       </div>
     </div>
   );
-};
+});
+
+InsightWidget.displayName = 'InsightWidget';

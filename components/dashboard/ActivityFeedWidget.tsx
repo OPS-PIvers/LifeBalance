@@ -15,7 +15,7 @@ interface ActivityItem {
   amount?: number;
 }
 
-export const ActivityFeedWidget: React.FC = () => {
+export const ActivityFeedWidget: React.FC = React.memo(() => {
   const { transactions } = useFinance();
   const { todos } = useTodos();
   const { isModuleEnabled, isPlanTabVisible } = useModuleVisibility();
@@ -96,4 +96,6 @@ export const ActivityFeedWidget: React.FC = () => {
       </SurfaceList>
     </Section>
   );
-};
+});
+
+ActivityFeedWidget.displayName = 'ActivityFeedWidget';
