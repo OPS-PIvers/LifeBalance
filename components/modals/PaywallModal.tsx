@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { functions } from '@/firebase.config';
+import { getFunctionsInstance } from '@/firebase.config';
 import { httpsCallable } from 'firebase/functions';
 import { FREE_LIMITS, PREMIUM_LIMITS } from '@/utils/entitlements';
 import { Sparkles, Check } from 'lucide-react';
@@ -44,6 +44,7 @@ const PaywallModal: React.FC<PaywallModalProps> = ({ isOpen, onClose, householdI
     try {
       // HashRouter app — return to /settings after checkout.
       const returnUrl = `${window.location.origin}/#/settings`;
+      const functions = await getFunctionsInstance();
       const createCheckout = httpsCallable<CheckoutRequest, CheckoutResult>(
         functions,
         'createcheckoutsession'

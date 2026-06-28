@@ -46,8 +46,7 @@ import {
   transactionConverter,
   todoConverter,
 } from '@/utils/firestoreConverters';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/firebase.config';
+import { db, getFunctionsInstance } from '@/firebase.config';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Account,
@@ -3473,6 +3472,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const deleteHousehold = useCallback(async () => {
     if (!householdId) return;
+    const [{ httpsCallable }, functions] = await Promise.all([
+      import('firebase/functions'),
+      getFunctionsInstance(),
+    ]);
     const fn = httpsCallable(functions, 'deletehousehold');
     await fn({ householdId });
     toast.success('Household deleted');

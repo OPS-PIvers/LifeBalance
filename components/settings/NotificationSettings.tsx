@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Bell, Clock, DollarSign, Flame, Calendar, ListTodo, Send, Info } from 'lucide-react';
 import { NotificationPreferences } from '@/types/schema';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
-import { isIOSDevice, isPWA, supportsPush } from '@/services/notificationService';
+import { getFunctionsInstance } from '@/firebase.config';
+import { isIOSDevice, isPWA, supportsPush } from '@/utils/platform';
 import Card from '@/components/ui/Card';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
@@ -159,7 +159,10 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   const handleSendTest = async () => {
     const toastId = toast.loading('Sending test notification...');
     try {
-      const functions = getFunctions();
+      const [{ httpsCallable }, functions] = await Promise.all([
+        import('firebase/functions'),
+        getFunctionsInstance(),
+      ]);
       const sendTest = httpsCallable(functions, 'sendtestnotification');
 
       await sendTest({ householdId });

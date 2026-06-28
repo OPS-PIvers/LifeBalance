@@ -42,7 +42,7 @@ vi.mock('firebase/functions', () => ({
 
 vi.mock('@/firebase.config', () => ({
   db: {},
-  functions: { __isFunctions: true },
+  getFunctionsInstance: vi.fn().mockResolvedValue({ __isFunctions: true }),
 }));
 
 // Firestore mock so the quota check/increment + audit logging are no-ops.

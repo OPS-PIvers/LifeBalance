@@ -117,6 +117,26 @@ export default defineConfig(({ command }) => {
                   test: /commonjsHelpers/,
                 },
                 { name: 'vendor-ai', priority: 40, test: /[\\/]node_modules[\\/]@google[\\/]genai[\\/]/ },
+                // Shared low-level Firebase packages (app/util/component/logger/
+                // installations) are used by the EAGER auth+firestore core. Claim
+                // them into a dedicated eager chunk at the HIGHEST firebase priority
+                // so they are NOT hoisted into the lazy messaging/functions chunks
+                // below. Without this, rolldown places these shared modules in the
+                // higher-priority messaging chunk (its first matching claimant), and
+                // the eager core then imports them FROM there — dragging the whole
+                // messaging chunk back onto the boot path (modulepreload). A distinct
+                // name (not 'vendor-firebase') avoids two same-named eager chunks.
+                { name: 'vendor-firebase-core', priority: 43, test: /[\\/]node_modules[\\/]@firebase[\\/](app|util|component|logger|installations)[\\/]/ },
+                // firebase/messaging and firebase/functions are imported LAZILY
+                // (see firebase.config.ts getMessagingInstance/getFunctionsInstance
+                // and their consumers). Claim them into dedicated chunks at a HIGHER
+                // priority than the catch-all vendor-firebase group so rolldown does
+                // not merge them back into the eager firebase chunk — otherwise the
+                // lazy code split is undone and they stay modulepreloaded on boot.
+                // Nothing on the eager graph imports them, so these chunks load only
+                // when notifications are set up / a callable runs.
+                { name: 'vendor-firebase-messaging', priority: 42, test: /[\\/]node_modules[\\/]@?firebase[\\/]messaging[\\/]/ },
+                { name: 'vendor-firebase-functions', priority: 42, test: /[\\/]node_modules[\\/]@?firebase[\\/]functions[\\/]/ },
                 { name: 'vendor-firebase', priority: 40, test: /[\\/]node_modules[\\/]@?firebase[\\/]/ },
                 {
                   name: 'vendor-charts',

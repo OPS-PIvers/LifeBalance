@@ -2,7 +2,7 @@ import { GoogleGenAI, Type, Schema, Part } from "@google/genai";
 import { Meal, Transaction, Habit, InsightAction, Household } from "@/types/schema";
 import { WeeklyPlan, WeeklyPlanConstraints, WeeklyPlanStore } from "@/types/weeklyPlan";
 import { GROCERY_CATEGORIES } from "@/data/groceryCategories";
-import { db } from "@/firebase.config";
+import { db, getFunctionsInstance } from "@/firebase.config";
 import {
   doc,
   runTransaction,
@@ -611,9 +611,9 @@ interface GeminiGenerateResult {
  * out of the boot bundle when the flag is off.
  */
 const callViaProxy = async (req: GeminiGenerateRequest): Promise<GeminiGenerateResult> => {
-  const [{ httpsCallable }, { functions }] = await Promise.all([
+  const [{ httpsCallable }, functions] = await Promise.all([
     import("firebase/functions"),
-    import("@/firebase.config"),
+    getFunctionsInstance(),
   ]);
   const callable = httpsCallable<GeminiGenerateRequest, GeminiGenerateResult>(
     functions,

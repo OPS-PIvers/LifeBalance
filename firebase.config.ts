@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from 'firebase/firestore';
-import { getMessaging, type Messaging } from 'firebase/messaging';
-import { getFunctions } from 'firebase/functions';
+import type { Messaging } from 'firebase/messaging';
+import type { Functions } from 'firebase/functions';
 
 // Fallback to mock config if env vars are missing (for Test Mode/CI)
 const mockConfig = {
@@ -86,21 +86,71 @@ function initFirestore(): Firestore {
 }
 export const db = initFirestore();
 
-// Initialize Cloud Functions (callable functions, e.g. deletehousehold).
-export const functions = getFunctions(app);
+// Cloud Functions and Messaging are initialized LAZILY (dynamic import) so
+// firebase/functions and firebase/messaging stay OFF the eager boot path and out
+// of the always-loaded vendor-firebase chunk. They only load the first time a
+// callable is invoked or notifications are set up. The instances are cached.
 
-// Initialize Messaging with conditional check for browser environment
-// to prevent errors in SSR, tests, or unsupported contexts.
-let messagingInstance: Messaging | null = null;
-if (typeof window !== 'undefined') {
-  try {
-    messagingInstance = getMessaging(app);
-  } catch (e) {
-    console.warn('Firebase Messaging failed to initialize', e);
+// undefined = getter not yet run; a Functions value once resolved.
+let functionsInstance: Functions | undefined;
+// In-flight init promise so concurrent boot-time callers (e.g. App.tsx and the
+// household provider) share ONE dynamic import + getFunctions(app) instead of
+// each kicking off their own. Once the instance resolves, the instance cache
+// short-circuits and this promise is only ever live during the init window.
+let functionsPromise: Promise<Functions> | null = null;
+
+/**
+ * Lazily initialize Cloud Functions (callable functions, e.g. deletehousehold),
+ * caching the instance. Dynamically imports firebase/functions so it leaves the
+ * eager boot bundle.
+ */
+export function getFunctionsInstance(): Promise<Functions> {
+  if (functionsInstance) return Promise.resolve(functionsInstance);
+  if (!functionsPromise) {
+    functionsPromise = (async () => {
+      const { getFunctions } = await import('firebase/functions');
+      functionsInstance = getFunctions(app);
+      return functionsInstance;
+    })();
   }
+  return functionsPromise;
 }
 
-export const messaging = messagingInstance;
+// undefined = getter not yet run; null = unsupported / failed to init;
+// a Messaging value once resolved successfully.
+let messagingInstance: Messaging | null | undefined;
+// In-flight init promise so concurrent callers share ONE init attempt. Like the
+// instance cache, messaging init is single-shot: on failure we cache null
+// permanently (matching the old module-init behavior — NOT retryable).
+let messagingPromise: Promise<Messaging | null> | null = null;
+
+/**
+ * Lazily initialize Firebase Messaging, caching the instance. Returns null when
+ * messaging is unavailable (SSR, tests, unsupported contexts) so callers can
+ * no-op exactly as before. Dynamically imports firebase/messaging so it leaves
+ * the eager boot bundle.
+ */
+export function getMessagingInstance(): Promise<Messaging | null> {
+  if (messagingInstance !== undefined) return Promise.resolve(messagingInstance);
+  if (typeof window === 'undefined') {
+    messagingInstance = null;
+    return Promise.resolve(messagingInstance);
+  }
+  if (!messagingPromise) {
+    messagingPromise = (async () => {
+      try {
+        const { getMessaging } = await import('firebase/messaging');
+        messagingInstance = getMessaging(app);
+      } catch (e) {
+        console.warn('Firebase Messaging failed to initialize', e);
+        messagingInstance = null;
+      }
+      return messagingInstance;
+    })();
+  }
+  return messagingPromise;
+}
+
 export const googleProvider = new GoogleAuthProvider();
 
 // Configure Google provider

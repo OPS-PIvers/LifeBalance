@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { auth, googleProvider } from '@/firebase.config';
-import { isPWA } from '@/services/notificationService';
+import { isPWA } from '@/utils/platform';
 import { track } from '@/services/analytics';
 
 /**

@@ -287,7 +287,7 @@ const Settings: React.FC = () => {
       setNotificationStatus('granted');
       // Set up foreground listener to show in-app notifications when app is open
       // Background notifications on iOS 16.4+ are handled by the service worker
-      setupForegroundNotificationListener();
+      void setupForegroundNotificationListener();
     } else if ('Notification' in window) {
       // Always reflect the actual browser permission state on failure
       setNotificationStatus(Notification.permission);
