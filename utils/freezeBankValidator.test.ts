@@ -193,20 +193,30 @@ describe('canUseFreezeBankToken — deterministic window boundaries', () => {
     expect(res.allowed).toBe(true);
   });
 
-  // KNOWN BUG (flagged follow-up, not fixed here — tests-only PR): an unparseable
-  // date does NOT take the "Invalid date format" branch. parseISO('not-a-date')
-  // returns an Invalid Date (NaN time) instead of throwing, so the try/catch never
-  // fires; every numeric comparison against NaN is false, so the function falls
-  // through to { allowed: true }. The "Invalid date format" reason is dead code for
-  // this input.
-  //
-  // Written with `it.fails` asserting the CORRECT behavior (allowed: false): it
-  // PASSES now because the assertion fails as expected (the bug is present), and it
-  // will START FAILING — prompting conversion to a regular `it` — the moment
-  // canUseFreezeBankToken is fixed to reject invalid dates. This avoids codifying
-  // the bug as expected behavior.
-  it.fails('rejects an unparseable date (currently slips through as allowed due to NaN comparisons)', () => {
+  // An unparseable date is rejected: parseISO returns an Invalid Date (NaN time)
+  // rather than throwing, so canUseFreezeBankToken guards it explicitly (a NaN
+  // check) and returns { allowed: false } with the "Invalid date format" reason.
+  it('rejects an unparseable date', () => {
     const res = canUseFreezeBankToken(freezable(), 'not-a-date', 3);
     expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/invalid date/i);
+  });
+
+  // parseISO is lenient (accepts '2026', '2026-06', and full ISO timestamps); a
+  // timestamp would also bypass the completedDates check (which stores plain
+  // YYYY-MM-DD). The strict format guard rejects all non-canonical forms.
+  it('rejects partial dates and full ISO timestamps (non-YYYY-MM-DD)', () => {
+    for (const bad of ['2026', '2026-06', '2026-06-15T12:00:00Z', '2026/06/15']) {
+      const res = canUseFreezeBankToken(freezable(), bad, 3);
+      expect(res.allowed).toBe(false);
+      expect(res.reason).toMatch(/invalid date/i);
+    }
+  });
+
+  // Well-formed shape but not a real calendar date — caught by the NaN guard.
+  it('rejects a well-formed but non-calendar date', () => {
+    const res = canUseFreezeBankToken(freezable(), '2026-02-30', 3);
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/invalid date/i);
   });
 });
