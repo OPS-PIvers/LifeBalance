@@ -2652,11 +2652,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     // pure category change (delta = newImpact − oldImpact, e.g. expense→Income
     // flips the sign). before = the existing transaction; after = same amount
     // with the new category + verified status.
+    // If the transaction isn't in local state we cannot know its amount, so we
+    // can't apply the correct balance delta. Bail rather than verify it with a
+    // zero delta (which would mark it verified without ever debiting checking) —
+    // matching updateTransaction/deleteTransaction, which also require the row.
     const existingTx = transactions.find(t => t.id === id);
-    const balanceDelta = existingTx
-      ? effectiveImpact({ amount: existingTx.amount, category, status: 'verified' })
-          - effectiveImpact(existingTx)
-      : 0;
+    if (!existingTx) {
+      toast.error('Transaction not found');
+      return;
+    }
+    const balanceDelta =
+      effectiveImpact({ amount: existingTx.amount, category, status: 'verified' })
+        - effectiveImpact(existingTx);
 
     // 1. Update Transaction
     batch.update(doc(db, `households/${householdId}/transactions`, id), {

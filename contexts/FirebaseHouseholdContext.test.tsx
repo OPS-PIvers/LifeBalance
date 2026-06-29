@@ -282,6 +282,19 @@ describe('FirebaseHouseholdContext — updateTransactionCategory atomicity', () 
     emitCollection(`${householdPath}/habits`, [
       docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
     ]);
+    // Emit the household doc so the transactions listener un-gates, then seed the
+    // tx1 row updateTransactionCategory now requires (it reads the row to compute
+    // the verified-only balance delta and bails if absent). Seed it as ALREADY
+    // `verified` with an expense category so re-categorising to another expense
+    // yields a zero balance delta — no checking-account op leaks into the batch,
+    // keeping this test's tx+habit+points shape intact.
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/transactions`, [
+      docSnap('tx1', { amount: 2500, category: 'Dining', status: 'verified' }),
+    ]);
 
     expect(captured.value).not.toBeNull();
 
@@ -315,6 +328,16 @@ describe('FirebaseHouseholdContext — updateTransactionCategory atomicity', () 
     renderProvider();
     emitCollection(`${householdPath}/members`, [
       docSnap('user1', { uid: 'user1', points: { daily: 0, weekly: 0, total: 0 } }),
+    ]);
+    // Un-gate the transactions listener + seed the required tx1 row as an already
+    // `verified` expense (zero re-categorise delta => no accounts op leaks),
+    // preserving this test's "transaction op only" assertion.
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/transactions`, [
+      docSnap('tx1', { amount: 2500, category: 'Dining', status: 'verified' }),
     ]);
 
     await act(async () => {
@@ -1150,6 +1173,15 @@ describe('FirebaseHouseholdContext — cross-mutation invariant', () => {
     emitCollection(`${householdPath}/habits`, [
       docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
     ]);
+    // Un-gate the transactions listener + seed the tx1 row updateTransactionCategory
+    // now requires (already-`verified` expense => zero balance delta, no accounts op).
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/transactions`, [
+      docSnap('tx1', { amount: 2500, category: 'Dining', status: 'verified' }),
+    ]);
 
     await act(async () => {
       await captured.value!.finance.updateTransactionCategory('tx1', 'Groceries', ['hb1']);
@@ -1278,6 +1310,18 @@ describe('FirebaseHouseholdContext — batch commit REJECTION (atomic rollback)'
     ]);
     emitCollection(`${householdPath}/habits`, [
       docSnap('hb1', baseHabit({ id: 'hb1', completedDates: [], count: 0 })),
+    ]);
+    // Un-gate the transactions listener + seed the tx1 row the verify path now
+    // requires. Seeded as an already-`verified` expense so re-categorising yields
+    // a zero balance delta (no accounts op), keeping this the single failed batch
+    // expectNoPartialWrite()/toHaveLength(1) assert against. Seeding only drives
+    // onSnapshot callbacks — it does not call the single-doc write mocks.
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    emitCollection(`${householdPath}/transactions`, [
+      docSnap('tx1', { amount: 2500, category: 'Dining', status: 'verified' }),
     ]);
 
     commitController.failNextCommit = true;
