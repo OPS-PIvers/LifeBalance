@@ -111,6 +111,10 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  // Tracks whether the component is still mounted, so an in-flight getUserMedia()
+  // that resolves AFTER unmount can release its stream instead of leaking (the
+  // cleanup effect can't catch it — cameraStream was still null at unmount).
+  const isMounted = useRef(true);
 
   // Dynamic Categories from buckets (Transaction)
   const dynamicCategories = [...buckets.map(b => b.name), 'Budgeted in Calendar'];
@@ -212,6 +216,13 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' }
       });
+      // If we unmounted while getUserMedia was in flight, the cleanup effect
+      // already ran (with cameraStream still null) and won't run again — so this
+      // freshly-acquired stream would leak. Stop it and bail without setState.
+      if (!isMounted.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       setCameraStream(stream);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -229,6 +240,28 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       setCameraStream(null);
     }
   };
+
+  // Release the live MediaStream regardless of how the component leaves the
+  // screen. stopCamera() only fires from handleClose()/capturePhoto(); if the
+  // component UNMOUNTS while the camera is open (e.g. sign-out → ProtectedRoute
+  // unmounts MainLayout and the LazyMount-ed CaptureModal without routing
+  // through handleClose), the device camera would otherwise stay active until a
+  // full page reload. Keying on `cameraStream` also stops a stream when it's
+  // replaced; stopping an already-stopped track is a harmless no-op, so this
+  // never fights stopCamera().
+  useEffect(() => {
+    return () => {
+      cameraStream?.getTracks().forEach((t) => t.stop());
+    };
+  }, [cameraStream]);
+
+  // Flip the mounted flag on teardown so a late-resolving startCamera() can
+  // detect it unmounted mid-await (see startCamera). Runs once for the lifetime.
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const matchCategory = (suggestedCategory: string): string => {
     if (!suggestedCategory) return dynamicCategories[0] || '';
