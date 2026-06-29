@@ -7,6 +7,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -523,11 +524,11 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
 
             {/* Empty State */}
             {analytics.totalSubmissions === 0 && (
-              <div className="text-center py-12 text-brand-400 dark:text-brand-400">
-                <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                <p className="font-bold">No data yet</p>
-                <p className="text-xs mt-1">Start logging submissions to see analytics</p>
-              </div>
+              <EmptyState
+                icon={<BarChart3 size={48} />}
+                title="No data yet"
+                description="Start logging submissions to see analytics"
+              />
             )}
           </div>
         ) : (
@@ -605,11 +606,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             {/* Submissions List */}
             <div className="space-y-3">
               {Object.keys(groupedSubmissions).length === 0 ? (
-                <div className="text-center py-12 text-brand-400 dark:text-brand-400 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-xl">
-                  <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p className="font-bold">No submissions yet</p>
-                  <p className="text-xs mt-1">Click &quot;Add Submission&quot; to get started</p>
-                </div>
+                <EmptyState
+                  variant="dashed"
+                  icon={<Calendar size={48} />}
+                  title="No submissions yet"
+                  description={<>Click &quot;Add Submission&quot; to get started</>}
+                />
               ) : (
                 (Object.entries(groupedSubmissions) as [string, HabitSubmission[]][]).map(([date, subs]) => {
                   const dayTotal = subs.reduce((sum, s) => sum + s.pointsEarned, 0);

@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface RecurringBillsModalProps {
   isOpen: boolean;
@@ -160,15 +161,12 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
       {/* List */}
       <div className="p-4 sm:p-6 space-y-3">
           {recurringItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-12 px-6 border-2 border-dashed border-brand-300 dark:border-brand-700 rounded-card">
-              <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-                <Repeat size={28} className="text-brand-400 dark:text-brand-500" />
-              </div>
-              <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-100">No recurring items</h3>
-              <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-                Add recurring bills and income from the main calendar view to manage them here.
-              </p>
-            </div>
+            <EmptyState
+              variant="dashed"
+              icon={<Repeat size={28} />}
+              title="No recurring items"
+              description="Add recurring bills and income from the main calendar view to manage them here."
+            />
           ) : (
             recurringItems.map(item => (
               <div key={item.id} className="surface-section p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-brand-300 dark:hover:border-brand-600 transition-colors duration-(--duration-fast) ease-(--ease-standard)">

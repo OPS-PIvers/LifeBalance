@@ -11,6 +11,7 @@ import { CaptureTransactionManual } from '@/components/modals/CaptureTransaction
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -539,42 +540,38 @@ const TransactionMasterList: React.FC = () => {
       {filteredTransactions.length === 0 ? (
         transactions.length === 0 && searchTerm.trim() === '' && activeFilterCount === 0 ? (
           /* Zero-data empty state: no transactions at all and no active filters */
-          <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-300 dark:border-brand-700 rounded-card bg-white dark:bg-brand-800">
-            <div className="w-16 h-16 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
-              <Receipt size={28} />
-            </div>
-            <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">No transactions yet</h3>
-            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-              Start tracking your spending by adding your first transaction.
-            </p>
-            <Button
-              onClick={() => setIsAddingFirst(true)}
-              variant="primary"
-              size="md"
-              className="mt-5"
-              leftIcon={<PlusCircle size={16} />}
-            >
-              Add your first transaction
-            </Button>
-          </div>
+          <EmptyState
+            variant="dashed"
+            icon={<Receipt size={28} />}
+            title="No transactions yet"
+            description="Start tracking your spending by adding your first transaction."
+            action={
+              <Button
+                onClick={() => setIsAddingFirst(true)}
+                variant="primary"
+                size="md"
+                leftIcon={<PlusCircle size={16} />}
+              >
+                Add your first transaction
+              </Button>
+            }
+          />
         ) : (
           /* Filter-empty state: transactions exist but none match the current search/filters */
-          <div className="flex flex-col items-center justify-center text-center py-12 px-6">
-            <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-              <Filter className="w-7 h-7 text-brand-400 dark:text-brand-500" />
-            </div>
-            <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-100">No transactions found</h3>
-            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-              Nothing matches your current search and filters.
-            </p>
-            <Button
-              variant="link"
-              onClick={clearFilters}
-              className="mt-2 font-bold text-sm"
-            >
-              Clear all filters
-            </Button>
-          </div>
+          <EmptyState
+            icon={<Filter className="w-7 h-7" />}
+            title="No transactions found"
+            description="Nothing matches your current search and filters."
+            action={
+              <Button
+                variant="link"
+                onClick={clearFilters}
+                className="font-bold text-sm"
+              >
+                Clear all filters
+              </Button>
+            }
+          />
         )
       ) : (
         /*

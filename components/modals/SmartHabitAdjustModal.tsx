@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import EmptyState from '@/components/ui/EmptyState';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
 
@@ -121,13 +122,11 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
             </button>
           </div>
         ) : suggestions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center text-brand-400 dark:text-brand-500">
-            <Sparkles size={32} className="mb-3 opacity-30" />
-            <p className="font-bold text-brand-600 dark:text-brand-300">No adjustments needed!</p>
-            <p className="text-sm mt-1 max-w-xs">
-              Your habit point values look balanced based on your current performance. Keep it up!
-            </p>
-          </div>
+          <EmptyState
+            icon={<Sparkles size={32} />}
+            title="No adjustments needed!"
+            description="Your habit point values look balanced based on your current performance. Keep it up!"
+          />
         ) : (
           <div className="space-y-4">
             <p className="text-sm text-brand-500 dark:text-brand-400 mb-2">

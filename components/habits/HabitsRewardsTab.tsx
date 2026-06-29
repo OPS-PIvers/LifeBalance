@@ -6,6 +6,7 @@ import { Section } from '@/components/ui/Section';
 import PendingRedemptionsPanel from '@/components/habits/PendingRedemptionsPanel';
 import RedemptionHistoryPanel from '@/components/habits/RedemptionHistoryPanel';
 import RewardManagerPanel from '@/components/habits/RewardManagerPanel';
+import EmptyState from '@/components/ui/EmptyState';
 
 /**
  * HabitsRewardsTab — the Rewards sub-tab of the Habits page, and the app's single
@@ -106,15 +107,12 @@ const HabitsRewardsTab: React.FC = () => {
           </div>
         </Section>
       ) : rewardsInventory.length === 0 ? (
-        <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40">
-          <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
-            <Gift size={28} />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No rewards yet</h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-            Earn points by completing habits, then spend them on rewards your household sets up below.
-          </p>
-        </div>
+        <EmptyState
+          variant="dashed"
+          icon={<Gift size={28} />}
+          title="No rewards yet"
+          description="Earn points by completing habits, then spend them on rewards your household sets up below."
+        />
       ) : null}
 
       {/* Recently redeemed (renders nothing when empty) */}
