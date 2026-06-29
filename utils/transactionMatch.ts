@@ -117,14 +117,17 @@ export function findMatchingPendingTransaction(
  * existing pending transaction `candidate` (the result of
  * {@link findMatchingPendingTransaction}).
  *
- * Money-safety: `updateTransaction` debits checking by `(newAmount - oldAmount)`.
- * So we only include `amount` when it actually changes — for an Apple Pay `$0`
- * stub (`needsAmount`) that's the full receipt amount (its first/only debit); for
- * an already-amounted pending row it's the correction. When the amounts are
- * already equal we OMIT `amount` so the balance isn't needlessly re-touched.
- * `needsAmount` is cleared only when the candidate was a stub. Status is left
- * untouched (stays `pending_review`) so the merged receipt still flows through
- * the normal review/Action-Queue path.
+ * Money-safety: under the verified-only balance model (Plan 015) a
+ * `pending_review` transaction never touches the checking balance, and this
+ * merge leaves the status `pending_review` (see below), so the amount change
+ * here is purely cosmetic to the balance — the merged spend is reflected in
+ * Safe-to-Spend via the pendingSpend term, and the real debit happens later when
+ * the row is verified. We still only include `amount` when it actually changes
+ * (full value for a `$0` Apple Pay stub, the correction for a differing row,
+ * omitted when equal) so the stored doc and the eventual verify-time impact are
+ * exact. `needsAmount` is cleared only when the candidate was a stub. Status is
+ * left untouched (stays `pending_review`) so the merged receipt still flows
+ * through the normal review/Action-Queue path.
  */
 export function buildReceiptMergeUpdates(
   receiptTx: Transaction,

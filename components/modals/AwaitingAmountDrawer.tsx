@@ -63,11 +63,14 @@ const AwaitingAmountDrawer: React.FC<AwaitingAmountDrawerProps> = ({ stubs, isOp
   };
 
   // Promote the EXISTING stub instead of creating a new doc: we ignore the
-  // form's generated id and patch the stub via updateTransaction, so there's no
-  // duplicate and the checking-balance delta is (entered − 0) = correct single
-  // debit. We deliberately do NOT advance here — CaptureTransactionManual calls
-  // onClose() itself after a successful submit, and onClose is wired to advance,
-  // so advancing here too would skip the next card.
+  // form's generated id and patch the stub via updateTransaction. Under the
+  // verified-only balance model (Plan 015) the pending_review stub has NOT yet
+  // touched the checking balance; flipping it to `verified` here makes
+  // updateTransaction apply its full impact once (effectiveImpact goes 0 →
+  // −amount), so the entered amount debits exactly once with no duplicate. We
+  // deliberately do NOT advance here — CaptureTransactionManual calls onClose()
+  // itself after a successful submit, and onClose is wired to advance, so
+  // advancing here too would skip the next card.
   const handleSubmit = async (tx: Transaction) => {
     if (!current) return;
     const updates: Partial<Transaction> = {
