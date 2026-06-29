@@ -1154,6 +1154,24 @@ describe('FirebaseHouseholdContext — reallocateBucket', () => {
       .toEqual({ __increment: 50000 });
   });
 
+  // Sub-cent input / float drift is rounded to whole cents before writing, so no
+  // fractional cents land in the stored limit (roundMoney(1.005) === 1.01).
+  it('rounds a sub-cent amount to whole cents before writing', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', 1.005);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
+      .toEqual({ __increment: -1.01 });
+    expect(opsForPath(batch, `${householdPath}/buckets/dst`)[0]!.data!['limit'])
+      .toEqual({ __increment: 1.01 });
+  });
+
   // A negative amount would silently REVERSE the transfer — now rejected before
   // any write.
   it('rejects a negative amount without writing', async () => {
