@@ -525,7 +525,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             {/* Empty State */}
             {analytics.totalSubmissions === 0 && (
               <EmptyState
-                icon={<BarChart3 size={48} />}
+                icon={<BarChart3 size={28} />}
                 title="No data yet"
                 description="Start logging submissions to see analytics"
               />
@@ -608,7 +608,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               {Object.keys(groupedSubmissions).length === 0 ? (
                 <EmptyState
                   variant="dashed"
-                  icon={<Calendar size={48} />}
+                  icon={<Calendar size={28} />}
                   title="No submissions yet"
                   description={<>Click &quot;Add Submission&quot; to get started</>}
                 />

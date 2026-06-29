@@ -164,7 +164,7 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       <div className="p-4 space-y-2 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50vh]">
           {filteredCatalog.length === 0 ? (
             <EmptyState
-              icon={<ShoppingCart size={48} />}
+              icon={<ShoppingCart size={28} />}
               title={<>No history found matching &quot;{searchQuery}&quot;</>}
               description="Items you check off your shopping list will appear here."
             />
