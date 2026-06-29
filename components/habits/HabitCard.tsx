@@ -3,8 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Habit } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { X, MoreVertical, Edit2, Trash2, Target, Calendar, Wrench } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '@/utils/cn';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
 import { Drawer } from '@/components/ui/Drawer';
@@ -18,10 +17,6 @@ import { haptic } from '@/utils/haptics';
 import { getMultiplier } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
 import CountUp from './CountUp';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 interface HabitCardProps {
   habit: Habit;
