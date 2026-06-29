@@ -181,15 +181,16 @@ describe('EditTransactionModal', () => {
       />
     );
 
-    // Click initial delete button
-    await user.click(screen.getByRole('button', { name: /delete/i }));
+    // Click initial delete button to open the confirmation
+    await user.click(screen.getByRole('button', { name: /^delete$/i }));
 
-    // Should show confirmation
-    expect(screen.getByText(/are you sure/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /confirm delete/i })).toBeInTheDocument();
+    // The shared ConfirmDialog appears (async portal mount → findBy retries).
+    expect(await screen.findByText(/are you sure/i)).toBeInTheDocument();
 
-    // Click confirm
-    await user.click(screen.getByRole('button', { name: /confirm delete/i }));
+    // There are now two "Delete" buttons (the trigger + the dialog's confirm,
+    // which renders later in a portal). Click the dialog's confirm — the last.
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await user.click(deleteButtons[deleteButtons.length - 1]!);
 
     expect(mockDeleteTransaction).toHaveBeenCalledWith('tx123');
     expect(mockOnClose).toHaveBeenCalled();

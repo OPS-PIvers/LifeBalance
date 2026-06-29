@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 import Input from '@/components/ui/Input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -32,14 +33,6 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [deleteSubmissionId, setDeleteSubmissionId] = useState<string | null>(null);
-
-  // IDs for ARIA tab panel association
-  const logTabId = useId();
-  const statsTabId = useId();
-  const calendarTabId = useId();
-  const logPanelId = useId();
-  const statsPanelId = useId();
-  const calendarPanelId = useId();
 
   // Form state
   const [formDate, setFormDate] = useState('');
@@ -226,90 +219,35 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       title={`Habit Analytics - ${habit.title}`}
       noPadding={true}
     >
-      {/* Tab Navigation */}
-      <div className="px-4 pt-3 pb-0 border-b border-brand-200 dark:border-brand-700">
-        <div
-          role="tablist"
-          aria-label="Habit analytics tabs"
-          className="flex gap-1 bg-brand-50 dark:bg-brand-700/50 p-1 rounded-xl"
-        >
-          <button
-            role="tab"
-            id={logTabId}
-            aria-selected={activeTab === 'log'}
-            aria-controls={logPanelId}
-            tabIndex={activeTab === 'log' ? 0 : -1}
-            onClick={() => setActiveTab('log')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('stats'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('calendar'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'log'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Log
-          </button>
-          <button
-            role="tab"
-            id={statsTabId}
-            aria-selected={activeTab === 'stats'}
-            aria-controls={statsPanelId}
-            tabIndex={activeTab === 'stats' ? 0 : -1}
-            onClick={() => setActiveTab('stats')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('calendar'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('log'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'stats'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <BarChart3 className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Stats
-          </button>
-          <button
-            role="tab"
-            id={calendarTabId}
-            aria-selected={activeTab === 'calendar'}
-            aria-controls={calendarPanelId}
-            tabIndex={activeTab === 'calendar' ? 0 : -1}
-            onClick={() => setActiveTab('calendar')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('log'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('stats'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'calendar'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Calendar
-          </button>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'log' | 'stats' | 'calendar')}>
+        {/* Tab Navigation */}
+        <div className="px-4 pt-3 pb-0 border-b border-brand-200 dark:border-brand-700">
+          <TabsList>
+            <TabsTrigger value="log" className="flex-1">
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              Log
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1">
+              <BarChart3 className="w-4 h-4" aria-hidden="true" />
+              Stats
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex-1">
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              Calendar
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="scroll-contain-y">
-        {isLoading ? (
-          <div className="text-center py-12 text-brand-400 dark:text-brand-400">
-            <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
-            Loading...
-          </div>
-        ) : activeTab === 'calendar' ? (
-          <div
-            role="tabpanel"
-            id={calendarPanelId}
-            aria-labelledby={calendarTabId}
-            className="p-4 space-y-4"
-          >
+        {/* Content */}
+        <div className="scroll-contain-y">
+          {isLoading ? (
+            <div className="text-center py-12 text-brand-400 dark:text-brand-400">
+              <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
+              Loading...
+            </div>
+          ) : (
+          <>
+          <TabsContent value="calendar" className="p-4 space-y-4">
             {/* Calendar Controls */}
             <div className="flex items-center justify-between bg-white dark:bg-brand-800 p-2 rounded-xl border border-brand-200 dark:border-brand-700 shadow-xs">
               <Button
@@ -397,14 +335,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 </p>
               </div>
             </div>
-          </div>
-        ) : activeTab === 'stats' ? (
-          <div
-            role="tabpanel"
-            id={statsPanelId}
-            aria-labelledby={statsTabId}
-            className="p-4 space-y-4"
-          >
+          </TabsContent>
+
+          <TabsContent value="stats" className="p-4 space-y-4">
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-money-bgPos dark:bg-money-pos/10 p-4 rounded-xl border border-money-pos/30">
@@ -530,14 +463,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 description="Start logging submissions to see analytics"
               />
             )}
-          </div>
-        ) : (
-          <div
-            role="tabpanel"
-            id={logPanelId}
-            aria-labelledby={logTabId}
-            className="p-4"
-          >
+          </TabsContent>
+
+          <TabsContent value="log" className="p-4">
             {/* Add New Submission Button */}
             {!isAddMode && (
               <Button
@@ -681,9 +609,11 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 })
               )}
             </div>
-          </div>
-        )}
-      </div>
+          </TabsContent>
+          </>
+          )}
+        </div>
+      </Tabs>
 
       {/* Edit Modal (nested) */}
       {editingSubmission && (
