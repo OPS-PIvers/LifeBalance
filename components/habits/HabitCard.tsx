@@ -13,6 +13,7 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays, format } from 'date-fns';
 import { haptic } from '@/utils/haptics';
+import { getMultiplier } from '@/utils/habitLogic';
 import StreakFlame from './StreakFlame';
 import CountUp from './CountUp';
 
@@ -43,12 +44,31 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   // Completion Logic
   const isCompleted = habit.count >= habit.targetCount;
   
-  // Multipliers
-  const streakMultiplier = habit.streakDays >= 7 ? 2.0 : habit.streakDays >= 3 ? 1.5 : 1.0;
+  // Multipliers — period-aware (daily uses a 3/7-day ladder, weekly a 2/4-week
+  // ladder). `habit.streakDays` holds the streak in the habit's own cadence, so
+  // we feed it straight into the shared getMultiplier with habit.period.
+  const streakMultiplier = getMultiplier(habit.streakDays, isPositive, habit.period);
   const totalMultiplier = streakMultiplier;
 
   const pointsDisplay = Math.floor(habit.basePoints * totalMultiplier);
   const signedPointsDisplay = isPositive ? pointsDisplay : -pointsDisplay;
+
+  // Period-aware streak unit for the streak badge label ("Day(s)" vs "Week(s)").
+  const isWeekly = habit.period === 'weekly';
+  const streakUnitLabel = isWeekly ? 'Week' : 'Day';
+
+  // Period-aware "one period from the next tier" nudge. Thresholds mirror
+  // getMultiplier: daily 3→1.5x / 7→2x (nudge at 2 and 6), weekly 2→1.5x / 4→2x
+  // (nudge at 1 and 3). Only shown for positive habits, like the streak badge.
+  const nextTierNudge = ((): { unit: 'day' | 'week'; tier: '1.5x' | '2x' } | null => {
+    if (!isPositive) return null;
+    const oneFrom15 = isWeekly ? 1 : 2;
+    const oneFrom2 = isWeekly ? 3 : 6;
+    const unit = isWeekly ? 'week' : 'day';
+    if (habit.streakDays === oneFrom15) return { unit, tier: '1.5x' };
+    if (habit.streakDays === oneFrom2) return { unit, tier: '2x' };
+    return null;
+  })();
 
   // Streak Repair Eligibility
   // Memoized so this date string is computed once per mount rather than on
@@ -238,19 +258,24 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
             {isPositive && habit.streakDays >= 2 && (
               <span className={cn(
                 "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold transition-colors",
-                habit.streakDays >= 3
+                // "Hot" tier color once the bonus multiplier (>=1.5x) is actually
+                // earned — period-aware via streakMultiplier rather than a fixed
+                // 3-day threshold (weekly hits 1.5x at 2 weeks, not 3).
+                streakMultiplier >= 1.5
                   ? "bg-warm-100 text-habit-streak dark:bg-warm-900/30 dark:text-warm-200"
                   : "bg-brand-100 text-brand-500 dark:bg-brand-700/50 dark:text-brand-300"
               )}>
-                <StreakFlame streakDays={habit.streakDays} size={10} />
-                {habit.streakDays} Day{habit.streakDays !== 1 ? 's' : ''}
+                <StreakFlame streakDays={habit.streakDays} period={habit.period} size={10} />
+                {habit.streakDays} {streakUnitLabel}{habit.streakDays !== 1 ? 's' : ''}
               </span>
             )}
 
-            {/* Multiplier nudge: one day short of the next tier (3-day=1.5x, 7-day=2x) */}
-            {isPositive && (habit.streakDays === 2 || habit.streakDays === 6) && (
+            {/* Multiplier nudge: one period short of the next tier. Period-aware
+                in both threshold and unit — daily fires at 2d (→1.5x) / 6d (→2x),
+                weekly at 1w (→1.5x) / 3w (→2x), matching getMultiplier's ladders. */}
+            {nextTierNudge && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold bg-warm-100 text-warm-700 dark:bg-warm-900/30 dark:text-warm-200">
-                1 day from {habit.streakDays === 6 ? '2x' : '1.5x'}!
+                1 {nextTierNudge.unit} from {nextTierNudge.tier}!
               </span>
             )}
 
