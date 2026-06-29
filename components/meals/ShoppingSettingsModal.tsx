@@ -7,6 +7,7 @@ import { STORE_COLORS, DEFAULT_STORE_COLOR } from '@/data/storeColors';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
   isOpen: boolean;
@@ -204,21 +205,23 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">Delete this store? Items will lose this tag.</span>
         <div className="flex justify-end gap-2">
-          <button
-            className="px-2 py-1 text-xs bg-brand-100/50 rounded-sm hover:bg-brand-200/50"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => toast.dismiss(t.id)}
           >
             Cancel
-          </button>
-          <button
-            className="px-2 py-1 text-xs bg-money-neg text-white rounded-sm hover:opacity-90"
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={async () => {
               toast.dismiss(t.id);
               await deleteStore(id);
             }}
           >
             Delete
-          </button>
+          </Button>
         </div>
       </div>
     ), { duration: 5000 });
@@ -263,14 +266,16 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium">Reset to default categories?</span>
         <div className="flex justify-end gap-2">
-          <button
-            className="px-2 py-1 text-xs bg-brand-100/50 rounded-sm hover:bg-brand-200/50"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => toast.dismiss(t.id)}
           >
             Cancel
-          </button>
-          <button
-            className="px-2 py-1 text-xs bg-accent-600 text-white rounded-sm hover:bg-accent-700"
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               toast.dismiss(t.id);
               setLocalCategories([...GROCERY_CATEGORIES]);
@@ -278,7 +283,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
             }}
           >
             Reset
-          </button>
+          </Button>
         </div>
       </div>
     ), { duration: 5000 });
@@ -358,14 +363,14 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       placeholder="Store Name (e.g. Costco)"
                       className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                     />
-                    <button
+                    <Button
                       type="submit"
+                      variant="primary"
                       disabled={!newStoreName.trim()}
-                      className="bg-accent-600 text-white px-5 py-2 rounded-btn font-bold hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 dark:bg-accent-500 dark:hover:bg-accent-400"
+                      leftIcon={<Plus className="w-4 h-4" />}
                     >
-                      <Plus className="w-4 h-4" />
                       Add
-                    </button>
+                    </Button>
                   </div>
                 </form>
               </div>
@@ -403,8 +408,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                   onChange={e => setEditStoreName(e.target.value)}
                                   className="flex-1 p-1.5 border border-brand-300 rounded-sm text-sm outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
                                />
-                               <button onClick={handleUpdateStore} className="text-money-pos p-1 hover:bg-money-bgPos rounded-sm dark:text-money-pos dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></button>
-                               <button onClick={() => setEditingStoreId(null)} className="text-brand-400 p-1 hover:bg-brand-100/50 rounded-sm dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></button>
+                               <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:bg-money-bgPos dark:text-money-pos dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
+                               <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
                              </div>
                            </div>
                         ) : (
@@ -418,23 +423,26 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
 
                         {editingStoreId !== store.id && (
                             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                <button
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => {
                                         setEditingStoreId(store.id);
                                         setEditStoreName(store.name);
                                         setEditStoreColor(store.color || DEFAULT_STORE_COLOR);
                                     }}
-                                    className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                                    className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
                                 >
                                     <span className="text-xs font-medium">Edit</span>
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="ghost-destructive"
+                                    size="icon"
                                     onClick={() => handleDeleteStore(store.id)}
-                                    className="p-2 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-lg dark:text-brand-500 dark:hover:text-rose-300 dark:hover:bg-rose-500/15"
                                     aria-label={`Delete store ${store.name}`}
                                 >
                                     <Trash2 className="w-4 h-4" />
-                                </button>
+                                </Button>
                             </div>
                         )}
                       </div>
@@ -458,13 +466,13 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             placeholder="Category Name"
                             className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                         />
-                        <button
+                        <Button
+                            variant="primary"
                             onClick={addCategory}
                             disabled={!newCategoryName.trim()}
-                            className="bg-accent-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-accent-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
                             <Plus className="w-4 h-4" />
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -501,13 +509,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
             <div className="space-y-6">
               {!editingTemplate ? (
                 <>
-                  <button
+                  <Button
+                    variant="dashed"
+                    size="lg"
                     onClick={() => setEditingTemplate({ name: '', items: [], icon: 'ShoppingBag', color: DEFAULT_STORE_COLOR })}
-                    className="w-full py-3 border-2 border-dashed border-brand-300 rounded-xl text-brand-500 font-medium hover:border-brand-300 hover:text-brand-600 hover:bg-brand-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 dark:border-brand-600 dark:text-brand-400 dark:hover:border-brand-500/50 dark:hover:text-brand-300 dark:hover:bg-brand-700/20"
+                    leftIcon={<Plus className="w-5 h-5" />}
+                    className="w-full"
                   >
-                    <Plus className="w-5 h-5" />
                     Create New Template
-                  </button>
+                  </Button>
 
                   <div className="space-y-3">
                     {quickStockLists.map(list => {
@@ -526,26 +536,32 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                            </div>
                         </div>
                         <div className="flex gap-2">
-                           <button
+                           <Button
+                             variant="ghost"
+                             size="icon"
                              onClick={() => setEditingTemplate(list)}
-                             className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
+                             className="text-brand-400 hover:text-brand-600 hover:bg-brand-50 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/30"
                            >
                              <span className="text-xs font-medium">Edit</span>
-                           </button>
-                           <button
+                           </Button>
+                           <Button
+                             variant="ghost-destructive"
+                             size="icon"
                              onClick={() => {
                                toast((t) => (
                                  <div className="flex flex-col gap-2">
                                    <span className="text-sm font-medium">Delete template &quot;{list.name}&quot;?</span>
                                    <div className="flex justify-end gap-2">
-                                     <button
-                                       className="px-2 py-1 text-xs bg-brand-100/50 rounded-sm hover:bg-brand-200/50"
+                                     <Button
+                                       variant="secondary"
+                                       size="sm"
                                        onClick={() => toast.dismiss(t.id)}
                                      >
                                        Cancel
-                                     </button>
-                                     <button
-                                       className="px-2 py-1 text-xs bg-money-neg text-white rounded-sm hover:opacity-90"
+                                     </Button>
+                                     <Button
+                                       variant="destructive"
+                                       size="sm"
                                        onClick={async () => {
                                          toast.dismiss(t.id);
                                          await deleteQuickStockList(list.id);
@@ -553,15 +569,14 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                        }}
                                      >
                                        Delete
-                                     </button>
+                                     </Button>
                                    </div>
                                  </div>
                                ));
                              }}
-                             className="p-2 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-lg dark:text-brand-500 dark:hover:text-rose-300 dark:hover:bg-rose-500/15"
                            >
                              <Trash2 className="w-4 h-4" />
-                           </button>
+                           </Button>
                         </div>
                       </div>
                     );
@@ -575,7 +590,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                      <h4 className="font-bold text-brand-800 dark:text-brand-200">{editingTemplate.id ? 'Edit Template' : 'New Template'}</h4>
-                     <button onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-brand-400 dark:text-brand-500" /></button>
+                     <Button variant="ghost" size="icon-sm" onClick={() => setEditingTemplate(null)} aria-label="Close"><X className="w-5 h-5 text-brand-400 dark:text-brand-500" /></Button>
                   </div>
 
                   <div className="bg-white p-4 rounded-xl border border-brand-200 space-y-3 dark:bg-brand-800 dark:border-brand-700">
@@ -641,13 +656,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
 
                     {/* Add New Item Action */}
                     {itemSearch.trim() && !groceryCatalog.some(i => i.name.toLowerCase() === itemSearch.trim().toLowerCase()) && (
-                        <button
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={handleCreateAndAddItem}
-                            className="w-full flex items-center gap-2 p-2 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-lg text-sm font-medium transition-colors border border-brand-200 border-dashed dark:bg-brand-700/30 dark:text-brand-200 dark:border-brand-500/40 dark:hover:bg-brand-700/50"
+                            leftIcon={<Plus className="w-4 h-4" />}
+                            className="w-full bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200 border-dashed dark:bg-brand-700/30 dark:text-brand-200 dark:border-brand-500/40 dark:hover:bg-brand-700/50"
                         >
-                            <Plus className="w-4 h-4" />
                             Create & Add &quot;{itemSearch}&quot;
-                        </button>
+                        </Button>
                     )}
                   </div>
 
@@ -690,25 +707,29 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
 
         {activeTab === 'categories' && (
             <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <button
+                <Button
+                    variant="primary"
+                    size="lg"
                     onClick={saveCategories}
                     disabled={!hasUnsavedCategoryChanges}
-                    className="w-full py-3 bg-accent-600 text-white font-bold rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 disabled:opacity-50 disabled:active:scale-100 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400"
+                    className="w-full"
                 >
                     Save Category Changes
-                </button>
+                </Button>
             </div>
         )}
 
         {activeTab === 'templates' && editingTemplate && (
             <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-                <button
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={handleSaveTemplate}
                   disabled={!editingTemplate.name?.trim()}
-                  className="w-full py-3 bg-accent-600 text-white font-bold rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 disabled:opacity-50 disabled:active:scale-100 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400"
+                  className="w-full"
                 >
                   Save Template
-                </button>
+                </Button>
             </div>
         )}
     </Drawer>

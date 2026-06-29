@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Meal } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -281,18 +282,20 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                               <div key={`${ing.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-brand-200 rounded-lg text-sm dark:bg-brand-800 dark:border-brand-700">
                                   <span className="font-semibold text-brand-700 dark:text-brand-200">{ing.name}</span>
                                   <span className="text-brand-400 text-xs bg-brand-50 px-1.5 py-0.5 rounded-sm dark:text-brand-400 dark:bg-brand-700/50">{ing.quantity}</span>
-                                  <button
+                                  <Button
+                                      variant="ghost-destructive"
+                                      size="icon-sm"
+                                      className="ml-1 p-0"
                                       onClick={() => {
                                           setCurrentMeal(prev => ({
                                               ...prev,
                                               ingredients: prev.ingredients?.filter((_, i) => i !== idx)
                                           }));
                                       }}
-                                      className="text-brand-300 hover:text-money-neg ml-1 dark:text-brand-500 dark:hover:text-money-neg"
                                       aria-label={`Remove ${ing.name}`}
                                   >
                                       <X className="w-3.5 h-3.5" />
-                                  </button>
+                                  </Button>
                               </div>
                           ))}
                       </div>
@@ -321,14 +324,16 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   onChange={(e) => setIngredientQty(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
                               />
-                              <button
+                              <Button
+                                  variant="primary"
+                                  size="icon"
+                                  className="p-2.5"
                                   onClick={handleAddIngredient}
                                   disabled={!ingredientName.trim()}
-                                  className="p-2.5 bg-accent-600 text-white rounded-xl hover:bg-accent-700 disabled:opacity-50 disabled:hover:bg-accent-600 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                                   aria-label="Add ingredient"
                               >
                                   <Plus className="w-5 h-5" />
-                              </button>
+                              </Button>
                           </div>
                           <p className="text-xxs text-brand-400 dark:text-brand-500 mt-2 pl-1">
                               Ingredients will be added to the shopping list when creating a new meal plan.
@@ -342,26 +347,32 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex flex-col gap-2 shrink-0">
             {editingMealId && (
-                <button
+                <Button
+                    variant="link"
+                    size="sm"
+                    className="w-full text-brand-600 hover:text-brand-700 dark:text-brand-300"
                     onClick={() => onSave(true)}
-                    className="w-full py-2 text-brand-600 font-bold text-sm hover:underline dark:text-brand-300"
                 >
                     Save as New Meal (Copy)
-                </button>
+                </Button>
             )}
             <div className="flex gap-3 w-full">
-              <button
+              <Button
+                  variant="secondary"
+                  size="lg"
+                  className="flex-1"
                   onClick={onClose}
-                  className="flex-1 py-3 bg-brand-100 text-brand-700 font-bold rounded-xl hover:bg-brand-200 transition-colors dark:bg-brand-700 dark:text-brand-200 dark:hover:bg-brand-600"
               >
                   Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                  variant="primary"
+                  size="lg"
+                  className="flex-1"
                   onClick={() => onSave(false)}
-                  className="flex-1 py-3 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-500 dark:hover:bg-accent-400"
               >
                   {editingMealId ? 'Update & Save' : 'Save to Plan'}
-              </button>
+              </Button>
             </div>
         </div>
     </div>

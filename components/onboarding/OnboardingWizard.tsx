@@ -390,14 +390,16 @@ const OnboardingWizard: React.FC = () => {
         {/* Persistent skip affordance (hidden on the final step, which is itself the finish) */}
         {step !== 'done' && (
           <div className="mt-6 text-center">
-            <button
+            <Button
+              variant="link"
+              size="sm"
               type="button"
               onClick={finish}
               disabled={isSubmitting}
-              className="text-xs font-medium text-brand-400 dark:text-brand-500 hover:text-accent-600 dark:hover:text-accent-300 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+              className="font-medium text-brand-400 dark:text-brand-500 hover:text-accent-600 dark:hover:text-accent-300 hover:no-underline"
             >
               Skip setup
-            </button>
+            </Button>
           </div>
         )}
       </Card>

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
   children: React.ReactNode;
@@ -72,20 +73,23 @@ class ErrorBoundary extends React.Component<Props, State> {
             )}
 
             <div className="flex flex-col gap-3 pt-2">
-              <button
+              <Button
+                size="lg"
                 onClick={this.handleReload}
-                className="w-full bg-brand-600 text-white font-semibold py-3 px-4 rounded-xl hover:bg-brand-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className="w-full bg-brand-600 text-white hover:bg-brand-700"
+                leftIcon={<RefreshCw size={18} />}
               >
-                <RefreshCw size={18} />
                 <span>Reload Page</span>
-              </button>
+              </Button>
 
-              <button
-                 onClick={this.handleClearCacheAndReload}
-                 className="text-xs text-brand-400 hover:text-brand-600 underline"
+              <Button
+                variant="link"
+                size="sm"
+                onClick={this.handleClearCacheAndReload}
+                className="text-brand-400 hover:text-brand-600 underline"
               >
                 Clear Cache & Reload
-              </button>
+              </Button>
             </div>
           </div>
         </div>

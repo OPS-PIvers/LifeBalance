@@ -7,6 +7,7 @@ import { isIOSDevice, isPWA, supportsPush } from '@/utils/platform';
 import Card from '@/components/ui/Card';
 import { SurfaceList, Row } from '@/components/ui/Section';
 import { Switch } from '@/components/ui/Switch';
+import { Button } from '@/components/ui/Button';
 
 interface NotificationSettingsProps {
   userId?: string;
@@ -187,14 +188,15 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
           </div>
         </div>
 
-        <button
+        <Button
+          variant="subtle"
+          size="sm"
           onClick={handleSendTest}
-          className="flex items-center gap-2 px-3 py-1.5 bg-accent-50 hover:bg-accent-100 text-accent-700 text-sm font-medium rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) border border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30 dark:hover:bg-accent-500/25"
+          leftIcon={<Send className="w-4 h-4" />}
           title="Send a test notification to your device"
         >
-          <Send className="w-4 h-4" />
           <span className="hidden sm:inline">Test</span>
-        </button>
+        </Button>
       </div>
 
       {/* iOS-specific notice - show helpful guidance based on current state */}
@@ -450,13 +452,15 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
       </SurfaceList>
 
       {/* Save Button */}
-      <button
+      <Button
+        variant="primary"
+        size="lg"
         onClick={handleSave}
-        disabled={isSaving}
-        className="w-full bg-accent-600 text-white font-semibold py-3 px-4 rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 dark:bg-accent-500 dark:hover:bg-accent-600"
+        isLoading={isSaving}
+        className="w-full"
       >
-        {isSaving ? 'Saving...' : 'Save Preferences'}
-      </button>
+        Save Preferences
+      </Button>
     </Card>
   );
 };

@@ -11,6 +11,7 @@ import { db } from '@/firebase.config';
 import { streakEndingOnForHabit, getMultiplier } from '@/utils/habitLogic';
 import { HabitSubmission } from '@/types/schema';
 import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/Button';
 
 interface MigrationStats {
   habitsProcessed: number;
@@ -217,12 +218,14 @@ const MigrateSubmissions: React.FC = () => {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => navigate(-1)}
-            className="p-2 rounded-xl hover:bg-brand-100 transition-colors"
+            aria-label="Go back"
           >
             <ArrowLeft size={24} className="text-brand-600" />
-          </button>
+          </Button>
           <div>
             <h1 className="text-2xl font-bold text-brand-800">Migrate Habit Submissions</h1>
             <p className="text-sm text-brand-400">Backfill historical data for submission logs</p>
@@ -310,26 +313,25 @@ const MigrateSubmissions: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex gap-3">
           {!isComplete && (
-            <button
+            <Button
+              size="lg"
               onClick={runMigration}
-              disabled={isRunning || habitsToMigrate.length === 0}
-              className={`flex-1 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors ${
-                isRunning || habitsToMigrate.length === 0
-                  ? 'bg-brand-100 text-brand-400 cursor-not-allowed'
-                  : 'bg-brand-800 text-white hover:bg-brand-900'
-              }`}
+              isLoading={isRunning}
+              disabled={habitsToMigrate.length === 0}
+              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900"
+              leftIcon={<PlayCircle size={20} />}
             >
-              <PlayCircle size={20} />
               {isRunning ? 'Running Migration...' : 'Run Migration'}
-            </button>
+            </Button>
           )}
           {isComplete && (
-            <button
+            <Button
+              size="lg"
               onClick={() => navigate(-1)}
-              className="flex-1 py-4 bg-brand-800 text-white rounded-xl font-bold hover:bg-brand-900"
+              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900"
             >
               Done
-            </button>
+            </Button>
           )}
         </div>
 

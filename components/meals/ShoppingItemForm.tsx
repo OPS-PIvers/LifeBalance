@@ -2,6 +2,7 @@ import React from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
 import { Store, Trash2, ShoppingBag } from 'lucide-react';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
+import { Button } from '@/components/ui/Button';
 
 interface ShoppingItemFormProps {
   item: ShoppingItem;
@@ -126,23 +127,28 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
             )}
 
             {onDelete && (
-                <button
+                <Button
                     type="button"
+                    variant="ghost-danger"
+                    size="sm"
+                    leftIcon={<Trash2 size={16} />}
                     onClick={onDelete}
-                    className="flex items-center gap-2 text-sm font-medium text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/10 px-3 py-2 -mx-1 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                    className="-mx-1"
                 >
-                    <Trash2 size={16} /> Delete item
-                </button>
+                    Delete item
+                </Button>
             )}
         </div>
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800 shrink-0">
-            <button
+            <Button
+                variant="primary"
+                size="lg"
                 onClick={onSave}
                 disabled={!item.name.trim()}
-                className="w-full py-3 bg-accent-600 text-white font-bold rounded-btn active:scale-95 disabled:opacity-50 hover:bg-accent-700 transition-all duration-(--duration-fast) ease-(--ease-standard) dark:bg-accent-600 dark:hover:bg-accent-500"
+                className="w-full"
             >
                 Save changes
-            </button>
+            </Button>
         </div>
     </div>
   );
