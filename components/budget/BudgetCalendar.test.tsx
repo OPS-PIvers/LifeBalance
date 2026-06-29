@@ -330,18 +330,18 @@ describe('BudgetCalendar', () => {
     // Open Modal
     fireEvent.click(screen.getByText('Add Event'));
 
-    // Find the toggle
-    const toggle = screen.getByRole('switch', { name: /recurring/i });
+    // Find the toggle (the shared Switch renders a checkbox-role input)
+    const toggle = screen.getByRole('checkbox', { name: /recurring/i });
     expect(toggle).toBeInTheDocument();
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).not.toBeChecked();
 
     // Click it
     fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(toggle).toBeChecked();
 
     // Click again
     fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).not.toBeChecked();
   });
 
   it('shows mobile actions drawer and handles actions', async () => {

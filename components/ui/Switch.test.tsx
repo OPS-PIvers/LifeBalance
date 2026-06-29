@@ -56,4 +56,18 @@ describe('Switch', () => {
     const checkbox = screen.getByRole('checkbox', { name: 'Enable notifications' });
     expect(checkbox).toBeInTheDocument();
   });
+
+  it('uses the evergreen accent checked-track by default', () => {
+    const { container } = render(<Switch checked onCheckedChange={() => {}} />);
+    const track = container.querySelector('input + div');
+    expect(track?.className).toContain('peer-checked:bg-accent-600');
+    expect(track?.className).not.toContain('peer-checked:bg-warm-500');
+  });
+
+  it('uses the warm checked-track for tone="warm"', () => {
+    const { container } = render(<Switch checked onCheckedChange={() => {}} tone="warm" />);
+    const track = container.querySelector('input + div');
+    expect(track?.className).toContain('peer-checked:bg-warm-500');
+    expect(track?.className).not.toContain('peer-checked:bg-accent-600');
+  });
 });

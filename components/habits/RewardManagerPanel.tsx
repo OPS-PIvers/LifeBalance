@@ -4,12 +4,13 @@ import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Section } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Switch } from '@/components/ui/Switch';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import type { RewardItem, HouseholdMember } from '@/types/schema';
 import {
   type RewardDraft,
-  type RewardType,
   EMPTY_REWARD_DRAFT,
   draftFromReward,
   buildRewardPayload,
@@ -181,26 +182,16 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               {kidModeEnabled && (
                 <div>
                   <span className={labelClass}>Type</span>
-                  <div className="flex rounded-btn border border-brand-200 dark:border-brand-700 overflow-hidden">
-                    {(['realWorld', 'allowance'] as RewardType[]).map((t) => {
-                      const selected = draft.type === t;
-                      return (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setDraft((d) => ({ ...d, type: t }))}
-                          aria-pressed={selected}
-                          className={`flex-1 px-2 py-2 text-xs font-bold transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                            selected
-                              ? 'bg-warm-500 text-white'
-                              : 'bg-white dark:bg-brand-800 text-brand-600 dark:text-brand-300'
-                          }`}
-                        >
-                          {t === 'realWorld' ? 'Real-world' : 'Allowance'}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <SegmentedControl
+                    tone="warm"
+                    name="Reward type"
+                    value={draft.type}
+                    onChange={(t) => setDraft((d) => ({ ...d, type: t }))}
+                    options={[
+                      { value: 'realWorld', label: 'Real-world' },
+                      { value: 'allowance', label: 'Allowance' },
+                    ]}
+                  />
                 </div>
               )}
             </div>
@@ -234,15 +225,16 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
               </Select>
             )}
 
-            <label className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-200">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded-sm border-brand-300 text-warm-500 focus:ring-warm-500/40"
+            <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-200">
+              <Switch
+                id="reward-active"
+                tone="warm"
+                aria-label="Active (shown in the store)"
                 checked={draft.active}
-                onChange={(e) => setDraft((d) => ({ ...d, active: e.target.checked }))}
+                onCheckedChange={(checked) => setDraft((d) => ({ ...d, active: checked }))}
               />
-              Active (shown in the store)
-            </label>
+              <label htmlFor="reward-active" className="cursor-pointer">Active (shown in the store)</label>
+            </div>
 
             <div className="flex gap-2 pt-1">
               <button

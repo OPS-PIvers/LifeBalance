@@ -153,7 +153,7 @@ describe('HabitsRewardsTab — management for ALL households', () => {
     mockMembers.mockReturnValue([PARENT, KID]);
     render(<HabitsRewardsTab />);
     fireEvent.click(screen.getByRole('button', { name: /add reward/i }));
-    expect(screen.getByRole('button', { name: 'Real-world' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Real-world' })).toBeInTheDocument();
     expect(screen.getByLabelText('Target kid')).toBeInTheDocument();
   });
 });
