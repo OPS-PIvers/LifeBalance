@@ -1834,4 +1834,17 @@ describe('FirebaseHouseholdContext — updateQuickStockLists (bulk single-write)
     expect(fixedLists.find(l => l.id === 'listA')!.items).toContain('cat1');
     expect(fixedLists.find(l => l.id === 'listB')!.items).not.toContain('cat1');
   });
+
+  it('rethrows when the Firestore write fails (so the caller reports failure, not success)', async () => {
+    renderProvider();
+    seedLists([listA, listB]);
+
+    updateDocMock.mockRejectedValueOnce(new Error('firestore down'));
+
+    // Must REJECT — swallowing the error would let handleQuickListChange's try
+    // complete and show a success toast on a failed write (and double-toast).
+    await expect(
+      captured.value!.shopping.updateQuickStockLists([{ ...listA, items: ['cat1'] }, listB]),
+    ).rejects.toThrow('firestore down');
+  });
 });

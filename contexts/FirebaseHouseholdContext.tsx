@@ -4124,8 +4124,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         quickStockLists: lists
       });
     } catch (error) {
+      // Rethrow rather than swallow: the sole caller (handleQuickListChange)
+      // shows its own "Failed to update list" toast and skips the success toast
+      // on throw. Swallowing here would let the caller report success on a failed
+      // write (and double-toast the error).
       console.error('[updateQuickStockLists] Failed:', error);
-      toast.error('Failed to update list');
+      throw error;
     }
   }, [householdId]);
 
