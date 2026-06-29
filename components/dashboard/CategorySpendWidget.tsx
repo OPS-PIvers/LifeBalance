@@ -1,8 +1,7 @@
 import React from 'react';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionStats';
-import { ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
 
@@ -22,12 +21,7 @@ export const CategorySpendWidget: React.FC = () => {
     <Section
       title="Top spending this month"
       action={
-        <Link
-          to="/budget"
-          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
-        >
-          Details <ArrowRight size={12} />
-        </Link>
+        <SectionActionLink to="/budget">Details</SectionActionLink>
       }
     >
       <SurfaceList>

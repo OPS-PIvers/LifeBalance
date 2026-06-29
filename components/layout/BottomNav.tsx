@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Wallet, Plus, Activity, List } from 'lucide-react';
 import { LazyMount } from '@/components/ui/LazyMount';
+import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
@@ -94,14 +95,7 @@ const BottomNav: React.FC = () => {
           <>
             <div className="relative">
               <Icon className={iconClass(isActive)} />
-              {badge > 0 && (
-                <span
-                  className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-white dark:ring-brand-800"
-                  aria-hidden="true"
-                >
-                  {badge > 9 ? '9+' : badge}
-                </span>
-              )}
+              <CountBadge count={badge} />
             </div>
             <span className="text-xs font-semibold">
               {item.label}
