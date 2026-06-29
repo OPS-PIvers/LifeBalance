@@ -102,11 +102,21 @@ export function canUseFreezeBankToken(
 
   // Check 4: Date must be in the past (not today or future)
   try {
+    // Strictly require YYYY-MM-DD. parseISO is lenient — it also accepts partial
+    // dates ('2026', '2026-06') and full ISO timestamps ('2026-06-15T12:00:00Z').
+    // A timestamp would additionally bypass Check 3 above (completedDates stores
+    // plain YYYY-MM-DD), letting an already-completed date be frozen. Enforce the
+    // canonical format (the same one getLocalDateString emits) before parsing.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+      return {
+        allowed: false,
+        reason: 'Invalid date format. Expected YYYY-MM-DD.',
+      };
+    }
     const targetTime = parseISO(targetDate).getTime();
-    // parseISO returns an Invalid Date (NaN time) for unparseable input rather
-    // than throwing, so the catch below never fires for e.g. 'not-a-date'. Guard
-    // explicitly — otherwise every NaN comparison below is false and an invalid
-    // date slips through as allowed.
+    // Belt-and-suspenders: a well-formed but non-calendar date (e.g. 2026-02-30)
+    // matches the regex yet parseISO returns an Invalid Date (NaN) instead of
+    // throwing, so the catch never fires — guard explicitly.
     if (Number.isNaN(targetTime)) {
       return {
         allowed: false,

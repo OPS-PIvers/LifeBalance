@@ -201,4 +201,22 @@ describe('canUseFreezeBankToken — deterministic window boundaries', () => {
     expect(res.allowed).toBe(false);
     expect(res.reason).toMatch(/invalid date/i);
   });
+
+  // parseISO is lenient (accepts '2026', '2026-06', and full ISO timestamps); a
+  // timestamp would also bypass the completedDates check (which stores plain
+  // YYYY-MM-DD). The strict format guard rejects all non-canonical forms.
+  it('rejects partial dates and full ISO timestamps (non-YYYY-MM-DD)', () => {
+    for (const bad of ['2026', '2026-06', '2026-06-15T12:00:00Z', '2026/06/15']) {
+      const res = canUseFreezeBankToken(freezable(), bad, 3);
+      expect(res.allowed).toBe(false);
+      expect(res.reason).toMatch(/invalid date/i);
+    }
+  });
+
+  // Well-formed shape but not a real calendar date — caught by the NaN guard.
+  it('rejects a well-formed but non-calendar date', () => {
+    const res = canUseFreezeBankToken(freezable(), '2026-02-30', 3);
+    expect(res.allowed).toBe(false);
+    expect(res.reason).toMatch(/invalid date/i);
+  });
 });
