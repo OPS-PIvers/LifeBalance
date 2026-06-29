@@ -1980,16 +1980,40 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
     if (!sourceBucket || !targetBucket) return;
 
+    // Round to whole cents up front so sub-cent input or float drift can't write
+    // fractional cents into a bucket limit via increment() below.
+    const roundedAmount = roundMoney(amount);
+
+    // Validate input before writing — otherwise a bad amount flows straight into
+    // the increments below: source===target collapses to a single same-doc update
+    // that fabricates funds, a non-positive/non-finite amount reverses or no-ops
+    // the transfer, and an amount above the source's limit drives that limit
+    // negative. The caller is fire-and-forget, so surface the problem with a toast
+    // and bail rather than throw.
+    if (sourceId === targetId) {
+      toast.error('Pick two different buckets to move funds between.');
+      return;
+    }
+    if (!Number.isFinite(roundedAmount) || roundedAmount <= 0) {
+      toast.error('Enter an amount greater than zero to reallocate.');
+      return;
+    }
+    // Compare in integer cents so float drift can't reject an exact full move.
+    if (Math.round(roundedAmount * 100) > Math.round(sourceBucket.limit * 100)) {
+      toast.error(`${sourceBucket.name} doesn't have that much to reallocate.`);
+      return;
+    }
+
     // Commit both limit changes in a single batch so a partial write can never
     // leave the source debited without crediting the target. Use increment()
     // (server-side field value) rather than absolute values from local state so
     // concurrent edits to either bucket's limit are not clobbered.
     const batch = writeBatch(db);
     batch.update(doc(db, `households/${householdId}/buckets`, sourceId), {
-      limit: increment(-amount),
+      limit: increment(-roundedAmount),
     });
     batch.update(doc(db, `households/${householdId}/buckets`, targetId), {
-      limit: increment(amount),
+      limit: increment(roundedAmount),
     });
     await batch.commit();
 
