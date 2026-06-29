@@ -58,6 +58,7 @@ import {
   Challenge,
   RewardItem,
   RewardRedemption,
+  RewardRedemptionRecord,
   HouseholdMember,
   Household,
   BucketPeriodSnapshot,
@@ -111,7 +112,7 @@ import { newKidMemberId, buildKidMemberDoc } from '@/utils/kidProfile';
 import { getBillingEnabled } from '@/services/appConfig';
 import { kidProfileLimitReached } from '@/utils/entitlements';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
-import { redemptionMemberDelta } from '@/utils/redemption';
+import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import toast from 'react-hot-toast';
 import { isSameDay, isSameWeek, parseISO, format, subDays, startOfWeek, addDays, startOfToday, isAfter, isValid, addMonths } from 'date-fns';
@@ -3159,8 +3160,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     const reward = rewards.find(r => r.id === rewardId);
     if (!reward) return;
 
-    // Use transaction to atomically check and deduct points
-    // This prevents race conditions where multiple users redeem simultaneously
+    // Use transaction to atomically check points, deduct them, AND append the
+    // redemption-history record in one write — so the shared point total and the
+    // "Recently redeemed" log can never diverge (and concurrent redemptions can't
+    // race past the affordability check). History is a bounded, most-recent-first
+    // array on the household doc (rules-free, like pendingRedemptions); we read the
+    // current array inside the txn and prepend + slice to the cap.
     try {
       await runTransaction(db, async (transaction) => {
         const householdRef = doc(db, `households/${householdId}`);
@@ -3170,15 +3175,35 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           throw new Error('Household not found');
         }
 
-        const currentTotalPoints = householdDoc.data().points?.total || 0;
+        const data = householdDoc.data();
+        const currentTotalPoints = data.points?.total || 0;
 
         if (currentTotalPoints < reward.cost) {
           throw new Error('Not enough points');
         }
 
-        // Atomically deduct points
+        const record: RewardRedemptionRecord = {
+          id: crypto.randomUUID(),
+          rewardId: reward.id,
+          rewardTitle: reward.title,
+          icon: reward.icon,
+          cost: reward.cost,
+          // userRef (not the `user` closure) so the callback isn't recreated when
+          // Firebase refreshes the auth token hourly.
+          redeemedByUid: userRef.current?.uid ?? '',
+          redeemedAt: new Date().toISOString(),
+        };
+        // Defensive: guard against a corrupted/legacy non-array redemptionHistory
+        // so the spread below can't throw.
+        const existingHistory = Array.isArray(data.redemptionHistory)
+          ? (data.redemptionHistory as RewardRedemptionRecord[])
+          : [];
+        const nextHistory = [record, ...existingHistory].slice(0, REDEMPTION_HISTORY_LIMIT);
+
+        // Atomically deduct points and log the redemption.
         transaction.update(householdRef, {
           'points.total': increment(-reward.cost),
+          redemptionHistory: nextHistory,
         });
       });
 

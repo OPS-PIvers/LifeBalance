@@ -34,7 +34,6 @@ const HABIT_TABS = ['track', 'history', 'coach', 'rewards', 'challenges', 'insig
 // Lazy-loaded so the heavy modal/Drawer dependencies stay out of the Habits boot
 // bundle and only load when a tab's "manage" CTA is actually used (mirrors the
 // Dashboard's lazy-modal pattern).
-const RewardsModal = React.lazy(() => import('@/components/modals/RewardsModal'));
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
 
 const HabitsSkeleton: React.FC = () => (
@@ -176,7 +175,6 @@ const Habits: React.FC = () => {
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isSmartAdjustOpen, setIsSmartAdjustOpen] = useState(false);
   const [isSmartReorderOpen, setIsSmartReorderOpen] = useState(false);
-  const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [isChallengeHubOpen, setIsChallengeHubOpen] = useState(false);
   // Controlled so the toolbar points glance can deep-link straight to Rewards.
   const [activeTab, setActiveTab] = useDeepLinkTab('track', HABIT_TABS);
@@ -400,7 +398,7 @@ const Habits: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="rewards">
-            <HabitsRewardsTab onOpenRewardsModal={() => setIsRewardsModalOpen(true)} />
+            <HabitsRewardsTab />
           </TabsContent>
 
           <TabsContent value="challenges">
@@ -434,13 +432,11 @@ const Habits: React.FC = () => {
       <SmartHabitAdjustModal isOpen={isSmartAdjustOpen} onClose={() => setIsSmartAdjustOpen(false)} />
       <SmartHabitReorderModal isOpen={isSmartReorderOpen} onClose={() => setIsSmartReorderOpen(false)} />
 
-      {/* Heavy modals — lazy-mounted only once their tab CTA is used. These keep
-          the Rewards-management and Challenge create/edit/freeze-token wiring
-          intact while the new tabs own the read/light-mutation surfaces. */}
+      {/* Heavy modals — lazy-mounted only once their tab CTA is used. The Challenge
+          hub keeps its create/edit/freeze-token wiring here while the tabs own the
+          read/light-mutation surfaces. (Rewards management now lives inline in the
+          Rewards tab — the former RewardsModal was dissolved.) */}
       <Suspense fallback={<div className="fixed inset-0 z-modal bg-brand-900/50" />}>
-        {isRewardsModalOpen && (
-          <RewardsModal isOpen={isRewardsModalOpen} onClose={() => setIsRewardsModalOpen(false)} />
-        )}
         {isChallengeHubOpen && (
           <ChallengeHubModal isOpen={isChallengeHubOpen} onClose={() => setIsChallengeHubOpen(false)} />
         )}

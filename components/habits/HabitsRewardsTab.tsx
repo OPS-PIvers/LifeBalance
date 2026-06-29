@@ -1,34 +1,38 @@
 import React, { useState } from 'react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
-import { Gift, Lock, Settings2, Inbox } from 'lucide-react';
+import { Gift, Lock } from 'lucide-react';
 import { Section } from '@/components/ui/Section';
+import PendingRedemptionsPanel from '@/components/habits/PendingRedemptionsPanel';
+import RedemptionHistoryPanel from '@/components/habits/RedemptionHistoryPanel';
+import RewardManagerPanel from '@/components/habits/RewardManagerPanel';
 
 /**
- * HabitsRewardsTab — the Rewards sub-tab of the Habits page (redesign IA).
+ * HabitsRewardsTab — the Rewards sub-tab of the Habits page, and the app's single
+ * "rewards center". It composes:
  *
- * Recreates the rewards-store content from the (to-be-deleted) RewardsModal as a
- * grouped-flat, in-page surface with warm-amber gamification accents. Redeeming a
- * reward uses the FROZEN `redeemReward` mutation directly (a single context call).
+ *  - a lifetime-points header,
+ *  - the reward STORE (active rewards, instant redeem → deduct shared points),
+ *  - "Recently redeemed" history (Household.redemptionHistory),
+ *  - the parent redemption REVIEW queue (Kid Mode only, when there are requests),
+ *  - reward MANAGEMENT (create / edit / delete) — available to EVERY household.
  *
- * Kid-Mode reward MANAGEMENT (create/edit/delete) and the parent redemption
- * review queue involve heavier multi-field forms whose wiring lives in
- * RewardsModal. Per the redesign PRIORITY guardrail we do NOT re-implement that
- * here; instead, when Kid Mode is on, a calm CTA opens the existing modal so the
- * working flow is never broken. (Phase 3 may fully dissolve it.)
+ * Redeeming uses the `redeemReward` mutation (atomic: deduct points + log history).
+ * The former RewardsModal (where management/review used to live, Kid-Mode-gated)
+ * has been dissolved into this tab.
  */
-export interface HabitsRewardsTabProps {
-  /** Opens the existing RewardsModal — used for Kid-Mode management/review. */
-  onOpenRewardsModal: () => void;
-}
-
-const HabitsRewardsTab: React.FC<HabitsRewardsTabProps> = ({ onOpenRewardsModal }) => {
+const HabitsRewardsTab: React.FC = () => {
   const { rewardsInventory, totalPoints, redeemReward } = useGamification();
-  const { household } = useHouseholdCore();
+  const { household, members } = useHouseholdCore();
   const kidModeEnabled = useKidModeEnabled();
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
 
-  const pendingCount = (household?.pendingRedemptions ?? []).length;
+  const kids = members.filter((m) => m.role === 'kid');
+  const pendingRedemptions = household?.pendingRedemptions ?? [];
+  const redemptionHistory = household?.redemptionHistory ?? [];
+  // The store shows only ACTIVE rewards; inactive ones still appear (labelled) in
+  // the management list below so they can be re-activated or deleted.
+  const activeRewards = rewardsInventory.filter((r) => r.active !== false);
 
   const handleRedeem = async (rewardId: string) => {
     setRedeemingId(rewardId);
@@ -58,21 +62,11 @@ const HabitsRewardsTab: React.FC<HabitsRewardsTabProps> = ({ onOpenRewardsModal 
         </div>
       </div>
 
-      {/* Reward store grid */}
-      {rewardsInventory.length === 0 ? (
-        <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40">
-          <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
-            <Gift size={28} />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No rewards yet</h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-            Earn points by completing habits, then spend them on rewards your household sets up.
-          </p>
-        </div>
-      ) : (
+      {/* Reward store grid (active rewards only) */}
+      {activeRewards.length > 0 ? (
         <Section title="Rewards store">
           <div className="grid grid-cols-2 gap-3">
-            {rewardsInventory.map(reward => {
+            {activeRewards.map((reward) => {
               const canAfford = totalPoints >= reward.cost;
               const busy = redeemingId === reward.id;
               return (
@@ -111,38 +105,32 @@ const HabitsRewardsTab: React.FC<HabitsRewardsTabProps> = ({ onOpenRewardsModal 
             })}
           </div>
         </Section>
+      ) : rewardsInventory.length === 0 ? (
+        <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40">
+          <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
+            <Gift size={28} />
+          </div>
+          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No rewards yet</h3>
+          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
+            Earn points by completing habits, then spend them on rewards your household sets up below.
+          </p>
+        </div>
+      ) : null}
+
+      {/* Recently redeemed (renders nothing when empty) */}
+      <RedemptionHistoryPanel history={redemptionHistory} members={members} />
+
+      {/* Parent review queue — Kid Mode only, and only when there are requests. */}
+      {kidModeEnabled && pendingRedemptions.length > 0 && (
+        <PendingRedemptionsPanel
+          pending={pendingRedemptions}
+          kids={kids}
+          currency={household?.currency}
+        />
       )}
 
-      {/* Kid-Mode management / review entry point — dormant unless Kid Mode is on.
-          Keeps the heavy RewardsModal wiring intact (see component doc). */}
-      {kidModeEnabled && (
-        <Section title="Parent controls">
-          <button
-            type="button"
-            onClick={onOpenRewardsModal}
-            className="w-full flex items-center gap-3 surface-section px-4 py-3.5 text-left hover:border-warm-300 dark:hover:border-warm-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-card bg-warm-100 text-warm-600 dark:bg-warm-900/30 dark:text-warm-200 shrink-0">
-              {pendingCount > 0 ? <Inbox size={18} /> : <Settings2 size={18} />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-brand-900 dark:text-brand-50">
-                Manage rewards &amp; requests
-              </span>
-              <span className="block text-xs text-brand-500 dark:text-brand-400">
-                {pendingCount > 0
-                  ? `${pendingCount} pending request${pendingCount === 1 ? '' : 's'} to review`
-                  : 'Create, edit, and review kid reward redemptions'}
-              </span>
-            </span>
-            {pendingCount > 0 && (
-              <span className="shrink-0 rounded-full bg-warm-500 px-2 py-0.5 text-xs font-bold text-white tabular-nums">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        </Section>
-      )}
+      {/* Manage rewards (create / edit / delete) — available to every household. */}
+      <RewardManagerPanel kids={kids} kidModeEnabled={kidModeEnabled} />
     </div>
   );
 };

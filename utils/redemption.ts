@@ -1,6 +1,14 @@
 import type { RewardRedemption } from '@/types/schema';
 
 /**
+ * Cap for the bounded `Household.redemptionHistory` array (most-recent-first).
+ * Keeps the household doc small — at ~100 bytes/record this is a few KB, far under
+ * Firestore's 1 MB doc limit. Both the live context and the Test-Mode mock slice to
+ * this when prepending a new redemption so the array can never grow unbounded.
+ */
+export const REDEMPTION_HISTORY_LIMIT = 30;
+
+/**
  * Single source of truth for what APPROVING a reward redemption credits/deducts
  * on the kid's member doc (Plan 080d-2). Both the live Firebase context and the
  * Test-Mode mock call this so the two can never diverge.
