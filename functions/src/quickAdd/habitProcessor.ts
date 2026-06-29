@@ -3,7 +3,14 @@
  * Ported from utils/habitLogic.ts for use in Cloud Functions
  */
 
-import { format, parseISO, isSameDay, isSameWeek, isValid } from "date-fns";
+import {
+  format,
+  parseISO,
+  isSameDay,
+  isSameWeek,
+  isValid,
+  startOfISOWeek,
+} from "date-fns";
 import { streakForPeriod, getMultiplier } from "./streakLogic";
 
 export interface Habit {
@@ -31,35 +38,114 @@ export interface ToggleHabitResult {
 }
 
 /**
- * Check if a habit is stale (last updated in a previous period)
+ * Normalize the several shapes `lastUpdated` can take (Date, ISO string,
+ * Firestore Timestamp, or its plain-object {seconds} form) into a Date, or null
+ * when it can't be parsed into a valid date.
+ */
+function normalizeLastUpdated(
+  rawLastUpdated: Habit["lastUpdated"]
+): Date | null {
+  let lastUpdate: Date | null = null;
+  const raw = rawLastUpdated as
+    | Date
+    | string
+    | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
+
+  if (raw instanceof Date) {
+    lastUpdate = raw;
+  } else if (typeof raw === "string") {
+    lastUpdate = parseISO(raw);
+  } else if (raw && typeof raw.toDate === "function") {
+    // Firestore Timestamp
+    lastUpdate = raw.toDate();
+  } else if (raw && typeof raw.seconds === "number") {
+    // Plain object representation of Timestamp
+    lastUpdate = new Date(raw.seconds * 1000);
+  }
+
+  return lastUpdate && isValid(lastUpdate) ? lastUpdate : null;
+}
+
+/**
+ * Check if a habit is stale (last completion was in a previous period).
+ *
+ * Cloud Functions run in UTC, so any anchor derived from `new Date()` — or from
+ * the server-written `lastUpdated` (a UTC ISO instant) — can sit a full calendar
+ * day away from the user's local day in the evening UTC-rollover window. Comparing
+ * a local-day string `today` against a UTC instant mixes reference frames and was
+ * the source of the evening double-credit bug.
+ *
+ * The fix: when `today` (caller-local yyyy-MM-dd) is supplied AND the habit has
+ * completion history, decide staleness SOLELY from `completedDates` — the only
+ * data already stored in the user's LOCAL frame (the `today` strings the client/
+ * server push). `lastUpdated` is never consulted for "today" here, because a UTC
+ * instant cannot reliably be classified into a local day without the user's
+ * timezone.
+ *
+ *   - daily  → stale iff maxCompletedDate < today
+ *              (lexical compare is valid for zero-padded yyyy-MM-dd)
+ *   - weekly → stale iff ISO-week(maxCompletedDate) < ISO-week(today)
+ *   - completedDates empty (no local signal) → fall back to the legacy
+ *     parseISO(today)-vs-lastUpdated comparison.
+ *
+ * When `today` is omitted, the prior UTC `new Date()` behavior is preserved.
+ *
+ * Why completedDates alone is correct and sufficient:
+ *   - The reported bug was THRESHOLD habits double-crediting. A threshold habit
+ *     appends `today` to completedDates exactly when it crosses target (i.e.
+ *     exactly when points are awarded), so maxCompleted >= today whenever today
+ *     was already scored ⇒ not stale ⇒ no reset ⇒ no re-award — with NO timezone
+ *     guess.
+ *   - INCREMENTAL habits award points on EVERY action regardless of reset, so a
+ *     reset can NEVER double-credit incremental points; at most a target>1
+ *     incremental's display COUNT could reset mid-evening in a rare rollover edge
+ *     — a cosmetic tally issue, not a points bug, and no worse than before.
+ *   - Not consulting `lastUpdated` for "today" avoids the never-reset regression:
+ *     on a genuine new local day every completedDate is < today (or in a prior
+ *     ISO week), so the habit is correctly stale and resets.
+ *
+ * @param habit - id/period/lastUpdated are always read; completedDates drives the
+ *   local-frame branch (optional so legacy callers still type-check)
+ * @param today - Optional caller-local date (yyyy-MM-dd) to anchor "now" on
  */
 export function isHabitStale(
-  habit: Pick<Habit, "id" | "period" | "lastUpdated">
+  habit: Pick<Habit, "id" | "period" | "lastUpdated"> &
+    Partial<Pick<Habit, "completedDates">>,
+  today?: string
 ): boolean {
   try {
     if (!habit.lastUpdated) return true;
 
-    const now = new Date();
-    let lastUpdate: Date | null = null;
-    const rawLastUpdated = habit.lastUpdated as
-      | Date
-      | string
-      | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
+    const hasLocalToday = !!today && /^\d{4}-\d{2}-\d{2}$/.test(today);
 
-    // Normalize date from various possible inputs
-    if (rawLastUpdated instanceof Date) {
-      lastUpdate = rawLastUpdated;
-    } else if (typeof rawLastUpdated === "string") {
-      lastUpdate = parseISO(rawLastUpdated);
-    } else if (rawLastUpdated && typeof rawLastUpdated.toDate === "function") {
-      // Firestore Timestamp
-      lastUpdate = rawLastUpdated.toDate();
-    } else if (rawLastUpdated && typeof rawLastUpdated.seconds === "number") {
-      // Plain object representation of Timestamp
-      lastUpdate = new Date(rawLastUpdated.seconds * 1000);
+    // ---- Local-frame branch: anchor on completedDates (local yyyy-MM-dd) ----
+    if (hasLocalToday && today) {
+      const completedDates = habit.completedDates;
+      if (Array.isArray(completedDates) && completedDates.length > 0) {
+        const maxCompleted = completedDates.reduce((a, b) => (a > b ? a : b));
+
+        if (habit.period === "daily") {
+          // Lexical compare is valid for zero-padded yyyy-MM-dd.
+          return maxCompleted < today;
+        } else if (habit.period === "weekly") {
+          return (
+            startOfISOWeek(parseISO(maxCompleted)).getTime() <
+            startOfISOWeek(parseISO(today)).getTime()
+          );
+        }
+        return true;
+      }
+      // completedDates empty (no local signal): fall through to the legacy
+      // lastUpdated comparison below, anchored on `today`.
     }
 
-    if (!lastUpdate || !isValid(lastUpdate)) {
+    // ---- Legacy / fallback branch (UTC instant comparison) ----
+    // Anchor "now" on the caller-local date when provided (parsed as a local
+    // wall-clock date), otherwise fall back to the UTC server clock.
+    const now = hasLocalToday && today ? parseISO(today) : new Date();
+    const lastUpdate = normalizeLastUpdated(habit.lastUpdated);
+
+    if (!lastUpdate) {
       return true;
     }
 
@@ -173,9 +259,39 @@ export function processToggleHabit(
 }
 
 /**
- * Reset a stale habit to 0 count while preserving history
+ * Reset a stale habit to 0 count while preserving history.
+ *
+ * Mirrors the client's `getHabitResetUpdate` (utils/habitLogic.ts) when a
+ * caller-local `today` is supplied: it strips `today` from `completedDates` and
+ * recomputes the period-aware `streakDays`, preserving the invariant
+ * "completedDates contains today ⟺ count reflects today". Without dropping
+ * `today`, a habit completed earlier in the user's local day (still in
+ * completedDates) would be reset to count 0 yet remain in completedDates, and
+ * the subsequent toggle would see `wasCompletedBefore === false` and re-award
+ * points for a day already scored (the evening double-credit bug).
+ *
+ * On a genuine new-day reset, `today` is not in `completedDates` (the completion
+ * was on a prior day), so the filter is a no-op and history is preserved.
+ *
+ * When `today` is omitted, the prior behavior is preserved: count is zeroed and
+ * completedDates/streakDays are left untouched (recalculated on the next toggle).
+ *
+ * @param habit - The habit being reset (completedDates and period are read)
+ * @param today - Optional caller-local date (yyyy-MM-dd)
  */
-export function resetStaleHabit(_habit: Habit): Partial<Habit> {
+export function resetStaleHabit(habit: Habit, today?: string): Partial<Habit> {
+  if (today) {
+    const completedDates = habit.completedDates.filter((d) => d !== today);
+    return {
+      count: 0,
+      completedDates,
+      // Period-aware: daily → day-based streak, weekly → ISO-week-based streak
+      // (so a weekly habit isn't collapsed to ~0 on reset).
+      streakDays: streakForPeriod(completedDates, habit.period, today),
+      lastUpdated: new Date().toISOString(),
+    };
+  }
+
   return {
     count: 0,
     lastUpdated: new Date().toISOString(),

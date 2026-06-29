@@ -24,6 +24,7 @@ import {
   fuzzyMatchHabit,
 } from "./habitProcessor";
 import { formatCurrency } from "../utils/formatCurrency";
+import { getPayPeriodForTransaction } from "../plaid/payPeriod";
 
 const db = admin.firestore();
 
@@ -185,9 +186,14 @@ export const quickAddHabit = onRequest(
         return;
       }
 
-      // 6. Check if habit is stale and reset if needed
-      if (isHabitStale(habit)) {
-        const resetUpdate = resetStaleHabit(habit);
+      // 6. Check if habit is stale and reset if needed.
+      //    Thread the caller-local `today` (when supplied) so staleness and the
+      //    reset are anchored on the user's local day — matching
+      //    processToggleHabit below and the client's getHabitResetUpdate. This
+      //    prevents the evening double-credit bug for non-UTC users where the
+      //    UTC server day has rolled over but it's still the same local day.
+      if (isHabitStale(habit, today)) {
+        const resetUpdate = resetStaleHabit(habit, today);
         await habitRef.update(resetUpdate);
         habit = { ...habit, ...resetUpdate, count: 0 };
         logger.info(`Reset stale habit: ${habit.title}`);
@@ -412,7 +418,17 @@ export const quickAddExpense = onRequest(
       }
     }
 
-    const transactionDate = date || format(new Date(), "yyyy-MM-dd");
+    // Resolve the transaction date. Prefer the explicit `date`; otherwise fall
+    // back to the caller-local `today` (yyyy-MM-dd) — same as quickAddHabit —
+    // because Cloud Functions run in UTC and `new Date()` is the UTC server day,
+    // which is wrong for evening US users. The server date is the last resort.
+    const rawToday = (req.body || {}).today;
+    const localToday =
+      typeof rawToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday)
+        ? rawToday
+        : undefined;
+    const transactionDate =
+      date || localToday || format(new Date(), "yyyy-MM-dd");
 
     // Validate date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
@@ -430,8 +446,16 @@ export const quickAddExpense = onRequest(
       // household doc (the top-level `currency` field added by the client).
       const currency = householdData?.currency || "USD";
 
-      // Calculate pay period (simplified - just use the transaction date)
-      const payPeriodId = householdData?.lastPaycheckDate || transactionDate;
+      // Calculate the pay period for this transaction. Use the shared, ported
+      // helper rather than the old `lastPaycheckDate || transactionDate`
+      // shortcut: a back-dated expense (date < lastPaycheckDate) must NOT be
+      // scoped into the CURRENT period, or it gets wrongly counted by
+      // calculateBucketSpent / sumPendingSpend. The helper returns '' for
+      // pre-period / untracked dates.
+      const payPeriodId = getPayPeriodForTransaction(
+        transactionDate,
+        householdData?.lastPaycheckDate
+      );
 
       // 6. Create transaction document as PENDING (for review)
       const transactionData = {
