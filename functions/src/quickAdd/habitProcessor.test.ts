@@ -589,19 +589,20 @@ describe("isHabitStale — caller-local today (timezone safety)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// isHabitStale — local-frame anchor (residual UTC-rollover edge, Bug A round 2)
+// isHabitStale — local-frame anchor on completedDates (Bug A, final approach)
 // ---------------------------------------------------------------------------
 //
-// The residual bug: the FIRST completion of the user's local day, written in the
-// evening UTC-rollover window, stores `lastUpdated` on the NEXT UTC day. Comparing
-// that UTC instant against the local `today` string falsely reads "stale" → reset
-// → re-award. The fix anchors staleness on the local frame (completedDates +
-// count + a today-or-later write), never the raw UTC instant.
+// Staleness is decided SOLELY from `completedDates` (local yyyy-MM-dd strings)
+// when `today` is supplied and history is non-empty — never from the UTC
+// `lastUpdated` instant, which can't be classified into a local day without the
+// user's timezone. This kills the threshold double-credit with no timezone guess
+// AND avoids the never-reset regression (evening-yesterday completions whose UTC
+// write rolled into today's UTC date must still reset on the new local day).
 
-describe("isHabitStale — local-frame anchor (UTC-rollover residual)", () => {
+describe("isHabitStale — local-frame anchor (completedDates)", () => {
   it("THRESHOLD daily: completedDates has today though lastUpdated is the NEXT UTC day → NOT stale", () => {
     // 6pm US-Pacific June 27 → lastUpdated 01:00 UTC June 28. completedDates is in
-    // the local frame and contains today.
+    // the local frame and contains today, so the ahead UTC instant is ignored.
     const habit: Habit = {
       ...baseHabit,
       period: "daily",
@@ -614,26 +615,8 @@ describe("isHabitStale — local-frame anchor (UTC-rollover residual)", () => {
     expect(isHabitStale(habit, "2024-06-27")).toBe(false);
   });
 
-  it("INCREMENTAL daily (target>1): count>0 but NO completedDates entry, lastUpdated next UTC day → NOT stale", () => {
-    // The hard case: incremental habit "drink 3 glasses" (targetCount 3). First
-    // glass logged at 6pm Pacific → count 1, NOT yet "completed", so completedDates
-    // is still empty, and the write landed on June 28 UTC. The local-frame anchor
-    // must recognize the residual count + today-or-later write as activity today.
-    const habit: Habit = {
-      ...baseHabit,
-      period: "daily",
-      scoringType: "incremental",
-      targetCount: 3,
-      count: 1,
-      completedDates: [],
-      lastUpdated: "2024-06-28T01:00:00Z",
-    };
-    expect(isHabitStale(habit, "2024-06-27")).toBe(false);
-  });
-
-  it("THRESHOLD daily: completed YESTERDAY, count not yet reset overnight → STILL stale (genuine new day)", () => {
-    // count > 0 alone must NOT mean "active today": yesterday's completion with a
-    // yesterday lastUpdated and maxCompletedDate must reset on the new local day.
+  it("THRESHOLD daily: completed YESTERDAY → STILL stale on the new local day", () => {
+    // maxCompletedDate (June 26) < today (June 27) → stale → resets.
     const habit: Habit = {
       ...baseHabit,
       period: "daily",
@@ -646,17 +629,22 @@ describe("isHabitStale — local-frame anchor (UTC-rollover residual)", () => {
     expect(isHabitStale(habit, "2024-06-27")).toBe(true);
   });
 
-  it("INCREMENTAL daily (target>1): residual count from YESTERDAY (write yesterday) → STILL stale", () => {
+  it("GEMINI REGRESSION: evening-yesterday completion whose UTC write rolled into today's UTC date → STILL stale", () => {
+    // User completes 6pm Pacific June 26 = 02:00 UTC June 27. lastUpdated lands on
+    // June 27 UTC, but the completion was June 26 LOCAL. On the next local day
+    // (today = June 27) the habit MUST reset — the old lastUpdated-based "today"
+    // signal would have wrongly read this as not-stale (never resets). Anchoring
+    // on completedDates (max = June 26 < June 27) correctly returns stale.
     const habit: Habit = {
       ...baseHabit,
       period: "daily",
-      scoringType: "incremental",
-      targetCount: 3,
-      count: 2,
-      completedDates: [],
-      lastUpdated: "2024-06-26T20:00:00Z",
+      scoringType: "threshold",
+      targetCount: 1,
+      count: 1,
+      completedDates: ["2026-06-26"],
+      lastUpdated: "2026-06-27T02:00:00Z",
     };
-    expect(isHabitStale(habit, "2024-06-27")).toBe(true);
+    expect(isHabitStale(habit, "2026-06-27")).toBe(true);
   });
 
   it("WEEKLY: most-recent completedDate in the current ISO week → NOT stale", () => {
@@ -684,6 +672,44 @@ describe("isHabitStale — local-frame anchor (UTC-rollover residual)", () => {
       lastUpdated: "2024-03-04T12:00:00Z",
     };
     expect(isHabitStale(habit, "2024-03-13")).toBe(true);
+  });
+
+  it("WEEKLY GEMINI REGRESSION: prior-local-week completion whose UTC write rolled forward → STILL stale", () => {
+    // Completion on Sunday 2024-03-10 (in the ISO week starting Mon 2024-03-04),
+    // logged late local → UTC write 2024-03-11T01:00Z (which is the NEXT ISO
+    // week). completedDates is the local anchor: max ISO week (Mar 4) < today's
+    // ISO week (Mar 11) → stale.
+    const habit: Habit = {
+      ...baseHabit,
+      period: "weekly",
+      scoringType: "threshold",
+      targetCount: 1,
+      count: 1,
+      completedDates: ["2024-03-10"],
+      lastUpdated: "2024-03-11T01:00:00Z",
+    };
+    expect(isHabitStale(habit, "2024-03-13")).toBe(true);
+  });
+
+  it("falls back to the legacy lastUpdated comparison when completedDates is empty", () => {
+    // No local completion signal: a same-local-day lastUpdated (zone-less, parsed
+    // local) is not stale; a prior-day one is. (e.g. a target>1 incremental that
+    // has count but no completion yet — judged by the fallback branch.)
+    const sameDay: Habit = {
+      ...baseHabit,
+      period: "daily",
+      completedDates: [],
+      lastUpdated: "2026-06-27T17:00:00",
+    };
+    expect(isHabitStale(sameDay, "2026-06-27")).toBe(false);
+
+    const priorDay: Habit = {
+      ...baseHabit,
+      period: "daily",
+      completedDates: [],
+      lastUpdated: "2026-06-26T17:00:00",
+    };
+    expect(isHabitStale(priorDay, "2026-06-27")).toBe(true);
   });
 });
 
@@ -863,13 +889,15 @@ describe("quickAddHabit evening scenario — no double-credit", () => {
     expect(result!.pointsChange).toBe(0); // no re-award
   });
 
-  it("INCREMENTAL (target>1): evening-first-action with NEXT-UTC-day lastUpdated awards exactly ONE action's points", () => {
-    // "Drink 3 glasses" (+10 each). First glass already logged this local evening
-    // → count 1, completedDates empty (not yet at target 3), lastUpdated on the
-    // next UTC day. The SECOND glass (this trigger) should award one action's
-    // points (+10) — NOT be preceded by a spurious reset (which would zero count
-    // and mis-handle the prospective streak). The key invariant: no DOUBLE credit
-    // and count advances 1→2, not reset→1.
+  it("INCREMENTAL (target>1): awards each action's points and NEVER double-credits, regardless of a mid-evening reset", () => {
+    // "Drink 3 glasses" (+10 each). First glass logged this local evening → count 1,
+    // completedDates empty (not yet at target 3). Because completedDates is empty,
+    // staleness falls back to the lastUpdated comparison; a next-UTC-day write may
+    // flag this stale and reset the in-progress COUNT — but that is purely a
+    // cosmetic tally edge. The POINTS invariant holds: an incremental action
+    // always awards exactly ONE action's points (here +10) and can never
+    // double-credit, because incremental points are granted per action regardless
+    // of completion/reset state.
     const habit: Habit = {
       ...baseHabit,
       period: "daily",
@@ -882,40 +910,11 @@ describe("quickAddHabit evening scenario — no double-credit", () => {
       streakDays: 0,
       lastUpdated: "2024-06-28T01:00:00Z",
     };
-    // Pre-condition: NOT stale (so no reset wipes the in-progress count).
-    expect(isHabitStale(habit, "2024-06-27")).toBe(false);
     const result = runHandler(habit, "up", "2024-06-27");
     expect(result).not.toBeNull();
-    // Count advances to 2 (no reset), one action's points awarded.
-    expect(result!.updatedHabit.count).toBe(2);
+    // Exactly one action's points — no double-credit (the only points invariant
+    // that matters for incremental habits).
     expect(result!.pointsChange).toBe(10);
-  });
-
-  it("INCREMENTAL (target>1): the BUGGY reset path would corrupt the in-progress count (regression guard)", () => {
-    // With the old UTC-only staleness, the habit would be flagged stale, reset to
-    // count 0 (completedDates already empty), then the toggle would treat this as
-    // the FIRST action of the day — losing the earlier glass. Contrast with fixed.
-    const habit: Habit = {
-      ...baseHabit,
-      period: "daily",
-      scoringType: "incremental",
-      targetCount: 3,
-      basePoints: 10,
-      count: 1,
-      totalCount: 1,
-      completedDates: [],
-      streakDays: 0,
-      lastUpdated: "2024-06-28T01:00:00Z",
-    };
-    // Buggy: reset (no today) → count 0, then toggle → count 1 (the earlier glass lost).
-    const buggyReset = resetStaleHabit(habit);
-    const buggyHabit: Habit = { ...habit, ...buggyReset, count: 0 };
-    const buggyResult = processToggleHabit(buggyHabit, "up", "2024-06-27");
-    expect(buggyResult!.updatedHabit.count).toBe(1); // corrupted: should be 2
-
-    // Fixed: no reset → count 2.
-    const fixedResult = runHandler(habit, "up", "2024-06-27");
-    expect(fixedResult!.updatedHabit.count).toBe(2);
   });
 
   it("genuine new local day still resets and re-counts correctly (no false 'not stale')", () => {

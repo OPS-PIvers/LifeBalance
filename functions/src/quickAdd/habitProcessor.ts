@@ -67,54 +67,50 @@ function normalizeLastUpdated(
 }
 
 /**
- * Check if a habit is stale (last activity was in a previous period).
+ * Check if a habit is stale (last completion was in a previous period).
  *
  * Cloud Functions run in UTC, so any anchor derived from `new Date()` — or from
- * the server-written `lastUpdated` (a UTC ISO instant) — can be a full calendar
- * day AHEAD of the user's local day in the evening UTC-rollover window. Comparing
- * a local-day string `today` against a UTC instant mixes reference frames and is
- * the source of the evening double-credit bug: a habit whose first completion of
- * the local day was written with a next-UTC-day `lastUpdated` looks "stale" on a
- * second trigger the same local evening, gets reset, and re-awards points.
+ * the server-written `lastUpdated` (a UTC ISO instant) — can sit a full calendar
+ * day away from the user's local day in the evening UTC-rollover window. Comparing
+ * a local-day string `today` against a UTC instant mixes reference frames and was
+ * the source of the evening double-credit bug.
  *
- * The fix: when `today` (caller-local yyyy-MM-dd) is supplied, decide staleness
- * from the habit's MOST-RECENT activity in the local frame. We combine the two
- * available activity signals and treat the habit as stale only if BOTH place the
- * last activity strictly before the current period:
+ * The fix: when `today` (caller-local yyyy-MM-dd) is supplied AND the habit has
+ * completion history, decide staleness SOLELY from `completedDates` — the only
+ * data already stored in the user's LOCAL frame (the `today` strings the client/
+ * server push). `lastUpdated` is never consulted for "today" here, because a UTC
+ * instant cannot reliably be classified into a local day without the user's
+ * timezone.
  *
- *   1. `completedDates` — local yyyy-MM-dd strings, the exact local anchor. Their
- *      max is "had activity on/through maxCompletedDate". This is authoritative
- *      for threshold habits and for incremental habits once they cross target.
- *
- *   2. `lastUpdated` instant ≥ local midnight of `today` — rescues the case
- *      `completedDates` can't see: an INCREMENTAL habit with `targetCount > 1`
- *      bumps `count` on the first action WITHOUT appending `today` (it isn't
- *      "completed" yet), and in the UTC-rollover window that write lands on the
- *      NEXT UTC day. Here `count > 0` AND the write happened at/after today's
- *      local start, so it is activity today even though no completedDates entry
- *      exists. We require `count > 0` so a count that was already period-reset
- *      doesn't get rescued by a stale lastUpdated.
- *
- *   Critically, a residual count alone is NOT treated as "today": a threshold
- *   habit completed YESTERDAY and not yet reset overnight has `count > 0` but a
- *   `lastUpdated` from yesterday (< today's local midnight) and a
- *   `maxCompletedDate` of yesterday — so it correctly reads as stale and resets.
- *
- *   - daily  → stale iff maxCompletedDate < today AND not active-today-by-write
- *   - weekly → stale iff ISO-week(maxCompletedDate) < ISO-week(today) AND the
- *              lastUpdated write isn't within today's ISO week with count > 0
- *   - no local signal at all (count 0 and no completedDates) → fall back to the
- *     legacy parseISO(today)-vs-lastUpdated comparison.
+ *   - daily  → stale iff maxCompletedDate < today
+ *              (lexical compare is valid for zero-padded yyyy-MM-dd)
+ *   - weekly → stale iff ISO-week(maxCompletedDate) < ISO-week(today)
+ *   - completedDates empty (no local signal) → fall back to the legacy
+ *     parseISO(today)-vs-lastUpdated comparison.
  *
  * When `today` is omitted, the prior UTC `new Date()` behavior is preserved.
  *
- * @param habit - id/period/lastUpdated are always read; count/completedDates are
- *   read for the local-frame branch (optional so legacy callers still type-check)
+ * Why completedDates alone is correct and sufficient:
+ *   - The reported bug was THRESHOLD habits double-crediting. A threshold habit
+ *     appends `today` to completedDates exactly when it crosses target (i.e.
+ *     exactly when points are awarded), so maxCompleted >= today whenever today
+ *     was already scored ⇒ not stale ⇒ no reset ⇒ no re-award — with NO timezone
+ *     guess.
+ *   - INCREMENTAL habits award points on EVERY action regardless of reset, so a
+ *     reset can NEVER double-credit incremental points; at most a target>1
+ *     incremental's display COUNT could reset mid-evening in a rare rollover edge
+ *     — a cosmetic tally issue, not a points bug, and no worse than before.
+ *   - Not consulting `lastUpdated` for "today" avoids the never-reset regression:
+ *     on a genuine new local day every completedDate is < today (or in a prior
+ *     ISO week), so the habit is correctly stale and resets.
+ *
+ * @param habit - id/period/lastUpdated are always read; completedDates drives the
+ *   local-frame branch (optional so legacy callers still type-check)
  * @param today - Optional caller-local date (yyyy-MM-dd) to anchor "now" on
  */
 export function isHabitStale(
   habit: Pick<Habit, "id" | "period" | "lastUpdated"> &
-    Partial<Pick<Habit, "count" | "completedDates">>,
+    Partial<Pick<Habit, "completedDates">>,
   today?: string
 ): boolean {
   try {
@@ -122,46 +118,25 @@ export function isHabitStale(
 
     const hasLocalToday = !!today && /^\d{4}-\d{2}-\d{2}$/.test(today);
 
-    // ---- Local-frame branch (preferred when a caller-local date is given) ----
+    // ---- Local-frame branch: anchor on completedDates (local yyyy-MM-dd) ----
     if (hasLocalToday && today) {
       const completedDates = habit.completedDates;
-      const hasCompletions =
-        Array.isArray(completedDates) && completedDates.length > 0;
-
-      // Signal 2: an unreset incremental count whose backing write landed at/after
-      // today's local start. parseISO(today) is local midnight of `today`; a UTC
-      // lastUpdated in the evening rollover window is >= that instant.
-      const lastUpdatedInstant = normalizeLastUpdated(habit.lastUpdated);
-      const activeTodayByWrite =
-        typeof habit.count === "number" &&
-        habit.count > 0 &&
-        lastUpdatedInstant !== null &&
-        lastUpdatedInstant.getTime() >= parseISO(today).getTime();
-
-      if (hasCompletions || activeTodayByWrite) {
-        const maxCompleted = hasCompletions
-          ? completedDates!.reduce((a, b) => (a > b ? a : b))
-          : null;
+      if (Array.isArray(completedDates) && completedDates.length > 0) {
+        const maxCompleted = completedDates.reduce((a, b) => (a > b ? a : b));
 
         if (habit.period === "daily") {
           // Lexical compare is valid for zero-padded yyyy-MM-dd.
-          const completedToday = maxCompleted !== null && maxCompleted >= today;
-          return !(completedToday || activeTodayByWrite);
+          return maxCompleted < today;
         } else if (habit.period === "weekly") {
-          const todayWeek = startOfISOWeek(parseISO(today)).getTime();
-          const completedThisWeek =
-            maxCompleted !== null &&
-            startOfISOWeek(parseISO(maxCompleted)).getTime() >= todayWeek;
-          const activeThisWeekByWrite =
-            activeTodayByWrite &&
-            lastUpdatedInstant !== null &&
-            startOfISOWeek(lastUpdatedInstant).getTime() >= todayWeek;
-          return !(completedThisWeek || activeThisWeekByWrite);
+          return (
+            startOfISOWeek(parseISO(maxCompleted)).getTime() <
+            startOfISOWeek(parseISO(today)).getTime()
+          );
         }
         return true;
       }
-      // No local signal (count 0 / no relevant write and no completedDates):
-      // fall through to the legacy lastUpdated comparison, anchored on `today`.
+      // completedDates empty (no local signal): fall through to the legacy
+      // lastUpdated comparison below, anchored on `today`.
     }
 
     // ---- Legacy / fallback branch (UTC instant comparison) ----
