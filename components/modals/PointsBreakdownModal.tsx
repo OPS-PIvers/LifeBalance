@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Award, Edit2, Minus, Plus } from 'lucide-react';
 import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { streakForHabit, getMultiplier } from '@/utils/habitLogic';
+import { streakForHabit, streakEndingOnForHabit, getMultiplier } from '@/utils/habitLogic';
 import { format, startOfWeek, eachDayOfInterval } from 'date-fns';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
@@ -163,9 +163,31 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
         newCompletedDates.sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     }
 
-    // Recalculate streak based on NEW dates to get correct multiplier (period-aware)
+    // Recompute the habit's CURRENT streak from the new dates so streakDays stays
+    // accurate after the edit (period-aware). This is for the persisted streakDays
+    // field only — NOT for the edited day's points multiplier (see below).
     const newStreak = streakForHabit({ period: habit.period, completedDates: newCompletedDates });
-    const multiplier = getMultiplier(newStreak, habit.type === 'positive', habit.period);
+
+    // Points multiplier for the EDITED day must be DATE-ANCHORED, mirroring
+    // calculatePointsForDateRange (utils/habitLogic.ts): each day earns the
+    // multiplier its OWN streak (ending on that day) warranted, not the habit's
+    // current streak. Using the current streak here can credit/debit more than the
+    // corrective recompute later assigns, and computeHouseholdPointsSync only
+    // clamps points.total upward — so the over-credit drifts permanently.
+    //
+    // The streak for the edited day must be computed against the set that INCLUDES
+    // dateStr in BOTH branches:
+    //   - add/restore: newCompletedDates already includes dateStr.
+    //   - remove: the original credit was earned with dateStr present, so reverse
+    //     it symmetrically against the PRE-removal set (habit.completedDates, which
+    //     still includes dateStr) — not the post-removal set, which would use a
+    //     different streak and leave residual drift.
+    const datesForMultiplier = isCompleted ? habit.completedDates : newCompletedDates;
+    const dayStreak = streakEndingOnForHabit(
+        { period: habit.period, completedDates: datesForMultiplier },
+        dateStr,
+    );
+    const multiplier = getMultiplier(dayStreak, habit.type === 'positive', habit.period);
     const pointsPerCompletion = Math.floor(habit.basePoints * multiplier);
 
     // Determine points change
