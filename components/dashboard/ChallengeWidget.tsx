@@ -5,6 +5,7 @@ import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { isYearlyGoalOnTrack } from '@/utils/yearlyGoal';
 
 interface ChallengeWidgetProps {
   onOpenModal: () => void;
@@ -102,16 +103,12 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
               </div>
               <div
                 className={`text-xs font-bold px-2 py-1 rounded-btn ${
-                  primaryYearlyGoal.successfulMonths.length >=
-                  primaryYearlyGoal.requiredMonths - 2
+                  isYearlyGoalOnTrack(primaryYearlyGoal)
                     ? 'bg-money-pos/20 text-money-pos'
                     : 'bg-warm-500/20 text-warm-300'
                 }`}
               >
-                {primaryYearlyGoal.successfulMonths.length >=
-                primaryYearlyGoal.requiredMonths - 2
-                  ? 'On Track'
-                  : 'Needs Attention'}
+                {isYearlyGoalOnTrack(primaryYearlyGoal) ? 'On Track' : 'Needs Attention'}
               </div>
             </div>
           </div>
