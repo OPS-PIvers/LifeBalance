@@ -110,8 +110,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
           <Input
             label="Year"
             type="number"
-            value={year}
-            onChange={(e) => setYear(parseInt(e.target.value))}
+            value={year || ''}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              setYear(isNaN(val) ? new Date().getFullYear() : val);
+            }}
             min={new Date().getFullYear()}
             max={new Date().getFullYear() + 5}
             className="font-mono"
@@ -121,8 +124,11 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             label="Required Months"
             required
             type="number"
-            value={requiredMonths}
-            onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
+            value={requiredMonths || ''}
+            onChange={(e) => {
+              const val = parseInt(e.target.value, 10);
+              setRequiredMonths(isNaN(val) ? 0 : val);
+            }}
             min={1}
             max={12}
             className="font-mono"
