@@ -102,7 +102,16 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
     }
   };
 
-  const canSubmit = draft.title.trim().length > 0 && draft.cost.trim().length > 0 && !submitting;
+  // Gate on buildRewardPayload — the single source of truth for validity — so the
+  // submit button is disabled for an invalid draft (negative/non-numeric cost or
+  // allowance) instead of silently no-opping. (buildRewardPayload already rejects
+  // a negative cost, so a negative-cost reward can never be saved, defence-in-depth
+  // against a points exploit; this just reflects that in the button state.)
+  const canSubmit =
+    draft.title.trim().length > 0 &&
+    draft.cost.trim().length > 0 &&
+    buildRewardPayload(draft) !== null &&
+    !submitting;
 
   return (
     <Section

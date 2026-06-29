@@ -138,6 +138,16 @@ describe('HabitsRewardsTab — management for ALL households', () => {
     expect(screen.queryByLabelText('Target kid')).not.toBeInTheDocument();
   });
 
+  it('disables submit for a negative cost (a negative-cost reward can never be saved)', () => {
+    mockUseKidModeEnabled.mockReturnValue(false);
+    render(<HabitsRewardsTab />);
+    fireEvent.click(screen.getByRole('button', { name: /add reward/i }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Exploit' } });
+    fireEvent.change(screen.getByLabelText('Cost (points)'), { target: { value: '-10' } });
+    // When the form is open, the only /add reward/i button is the form submit.
+    expect(screen.getByRole('button', { name: /add reward/i })).toBeDisabled();
+  });
+
   it('shows the Kid-Mode reward-type field when Kid Mode is ON', () => {
     mockUseKidModeEnabled.mockReturnValue(true);
     mockMembers.mockReturnValue([PARENT, KID]);

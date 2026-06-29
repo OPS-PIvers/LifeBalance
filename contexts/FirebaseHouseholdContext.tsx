@@ -3188,11 +3188,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
           rewardTitle: reward.title,
           icon: reward.icon,
           cost: reward.cost,
-          redeemedByUid: user?.uid ?? '',
+          // userRef (not the `user` closure) so the callback isn't recreated when
+          // Firebase refreshes the auth token hourly.
+          redeemedByUid: userRef.current?.uid ?? '',
           redeemedAt: new Date().toISOString(),
         };
-        const existingHistory =
-          (data.redemptionHistory as RewardRedemptionRecord[] | undefined) ?? [];
+        // Defensive: guard against a corrupted/legacy non-array redemptionHistory
+        // so the spread below can't throw.
+        const existingHistory = Array.isArray(data.redemptionHistory)
+          ? (data.redemptionHistory as RewardRedemptionRecord[])
+          : [];
         const nextHistory = [record, ...existingHistory].slice(0, REDEMPTION_HISTORY_LIMIT);
 
         // Atomically deduct points and log the redemption.
@@ -3211,7 +3216,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         toast.error('Failed to redeem reward');
       }
     }
-  }, [householdId, rewards, user]);
+  }, [householdId, rewards]);
 
   // --- ACTIONS: REWARD CRUD (Plan 080d) ---
   // Writes to the households/{hid}/rewards subcollection (the live store). The
