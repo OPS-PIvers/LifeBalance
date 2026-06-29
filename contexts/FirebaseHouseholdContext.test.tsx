@@ -386,6 +386,229 @@ describe('FirebaseHouseholdContext — payCalendarItem atomicity', () => {
   });
 });
 
+// ===========================================================================
+// Transaction money paths — SIGNED, category-aware balance impact + atomicity.
+// A transaction's balance impact on checking is +amount for income
+// (category === INCOME_CATEGORY, a credit) and −amount otherwise (an expense
+// debit), matching payCalendarItem. These lock that sign for add/update/delete
+// and prove addTransaction now commits the txn doc + the balance delta in ONE
+// batch (it previously did two non-atomic single-doc writes).
+// ===========================================================================
+describe('FirebaseHouseholdContext — transaction balance sign + atomicity', () => {
+  const INCOME_CATEGORY = 'Income';
+
+  const checkingAccount: Account = {
+    id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+    lastUpdated: new Date().toISOString(),
+  } as Account;
+
+  function seedChecking() {
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', checkingAccount)]);
+  }
+
+  // Seed the household doc (so the transactions listener subscribes) plus the
+  // checking account, then a transactions collection so updateTransaction /
+  // deleteTransaction can find the row by id. No lastPaycheckDate => the live
+  // transactions window is unbounded and keyed on the collection path.
+  function seedHouseholdAndTransactions(txns: ReturnType<typeof docSnap>[]) {
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+    });
+    seedChecking();
+    emitCollection(`${householdPath}/transactions`, txns);
+  }
+
+  const baseTxnFields = {
+    merchant: 'Coffee',
+    date: '2026-06-20',
+    status: 'verified' as const,
+    isRecurring: false,
+    autoCategorized: false,
+  };
+
+  it('addTransaction (expense) debits checking by −amount in a SINGLE committed batch', async () => {
+    renderProvider();
+    seedChecking();
+
+    await act(async () => {
+      await captured.value!.finance.addTransaction({
+        ...baseTxnFields,
+        amount: 5000,
+        category: 'Groceries',
+        source: 'manual',
+      });
+    });
+
+    // Exactly one batch: the txn set + the checking-balance update (previously a
+    // separate addDoc + updateDoc, non-atomic).
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    const txSets = batch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets).toHaveLength(1);
+    expect(txSets[0]!.data).toMatchObject({ amount: 5000, category: 'Groceries' });
+
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -5000 });
+
+    // No out-of-batch single-doc write leaked.
+    expect(addDocMock).not.toHaveBeenCalled();
+    expect(updateDocMock).not.toHaveBeenCalled();
+  });
+
+  it('addTransaction (income) CREDITS checking by +amount in a SINGLE committed batch', async () => {
+    renderProvider();
+    seedChecking();
+
+    await act(async () => {
+      await captured.value!.finance.addTransaction({
+        ...baseTxnFields,
+        merchant: 'Paycheck',
+        amount: 200000,
+        category: INCOME_CATEGORY,
+        source: 'manual',
+      });
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    // Income credits checking — the bug previously debited −amount here.
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: 200000 });
+  });
+
+  it('updateTransaction raising an EXPENSE amount applies increment(−delta)', async () => {
+    renderProvider();
+    seedHouseholdAndTransactions([
+      docSnap('tx1', { ...baseTxnFields, amount: 5000, category: 'Groceries', payPeriodId: null }),
+    ]);
+
+    await act(async () => {
+      await captured.value!.finance.updateTransaction('tx1', { amount: 8000 });
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    // Expense grew by 3000 => checking falls a further 3000.
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -3000 });
+  });
+
+  it('updateTransaction raising an INCOME amount applies increment(+delta)', async () => {
+    renderProvider();
+    seedHouseholdAndTransactions([
+      docSnap('tx1', { ...baseTxnFields, merchant: 'Paycheck', amount: 100000, category: INCOME_CATEGORY, payPeriodId: null }),
+    ]);
+
+    await act(async () => {
+      await captured.value!.finance.updateTransaction('tx1', { amount: 150000 });
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    // Income grew by 50000 => checking rises a further 50000 (bug previously fell).
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: 50000 });
+  });
+
+  it('deleteTransaction of an EXPENSE restores increment(+amount)', async () => {
+    renderProvider();
+    seedHouseholdAndTransactions([
+      docSnap('tx1', { ...baseTxnFields, amount: 5000, category: 'Groceries', payPeriodId: null }),
+    ]);
+
+    await act(async () => {
+      await captured.value!.finance.deleteTransaction('tx1');
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    // Expense debited −5000 on create => deleting restores +5000.
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: 5000 });
+    // The transaction doc is deleted in the same batch.
+    expect(opsForPath(batch, `${householdPath}/transactions/tx1`).some(o => o.kind === 'delete')).toBe(true);
+  });
+
+  it('deleteTransaction of INCOME reverses with increment(−amount)', async () => {
+    renderProvider();
+    seedHouseholdAndTransactions([
+      docSnap('tx1', { ...baseTxnFields, merchant: 'Paycheck', amount: 200000, category: INCOME_CATEGORY, payPeriodId: null }),
+    ]);
+
+    await act(async () => {
+      await captured.value!.finance.deleteTransaction('tx1');
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    const accOps = opsForPath(batch, `${householdPath}/accounts/acc1`);
+    expect(accOps).toHaveLength(1);
+    // Income credited +200000 on create => deleting subtracts it (bug previously added).
+    expect(accOps[0]!.data!['balance']).toEqual({ __increment: -200000 });
+  });
+});
+
+describe('FirebaseHouseholdContext — payCalendarItem income files into the OPENING period', () => {
+  const account: Account = {
+    id: 'acc1', name: 'Checking', type: 'checking', balance: 100000,
+    lastUpdated: new Date().toISOString(),
+  } as Account;
+
+  const bucket = (id: string, name: string, limit: number): BudgetBucket => ({
+    id, name, limit, color: 'blue', isVariable: false, isCore: true,
+  } as BudgetBucket);
+
+  it("writes the opening paycheck transaction with payPeriodId === the just-approved date, not the closed period", async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/accounts`, [docSnap('acc1', account)]);
+    emitCollection(`${householdPath}/buckets`, [docSnap('b1', bucket('b1', 'Groceries', 50000))]);
+    // OLD period present so handlePaycheckApproval takes the rollover branch and
+    // advances lastPaycheckDate in Firestore — but the closure-captured
+    // householdSettings stays stale (still the OLD date).
+    const oldPeriod = '2026-06-01';
+    const paycheckDate = '2026-06-15';
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      lastPaycheckDate: oldPeriod,
+    });
+    emitCollection(`${householdPath}/calendarItems`, [
+      docSnap('cal_income', {
+        id: 'cal_income', title: 'Paycheck', amount: 200000, date: paycheckDate,
+        type: 'income', isPaid: false, isRecurring: false,
+      }),
+    ]);
+
+    await act(async () => {
+      await captured.value!.finance.payCalendarItem('cal_income', 'acc1');
+    });
+
+    // [0] = rollover reset batch, [1] = payCalendarItem's own income batch.
+    expect(batches.length).toBe(2);
+    const payBatch = batches[1]!;
+    const txSets = payBatch.ops.filter(
+      o => o.kind === 'set' && o.path.startsWith(`${householdPath}/transactions`),
+    );
+    expect(txSets).toHaveLength(1);
+    // The opening paycheck belongs to the NEW period it opens, not the period
+    // that just closed (the pre-fix stale-closure bug filed it under oldPeriod).
+    expect(txSets[0]!.data).toMatchObject({ payPeriodId: paycheckDate });
+    expect(txSets[0]!.data!['payPeriodId']).not.toBe(oldPeriod);
+  });
+});
+
 describe('FirebaseHouseholdContext — useFreezeBankToken atomicity', () => {
   it('patches the habit, spends a token, and credits points in ONE batch', async () => {
     renderProvider();

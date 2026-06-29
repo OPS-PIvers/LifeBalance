@@ -52,6 +52,7 @@ import {
   Account,
   BudgetBucket,
   Transaction,
+  INCOME_CATEGORY,
   CalendarItem,
   Habit,
   HabitSubmission,
@@ -2310,7 +2311,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // (specificDate), not "today" — so a bill due on the 10th but paid on the
       // 15th records against the 10th and lands in the correct pay period.
       const transactionDate = specificDate;
-      const payPeriodId = getPayPeriodForTransaction(transactionDate, householdSettings?.lastPaycheckDate);
+      // For an INCOME item we already awaited handlePaycheckApproval(specificDate)
+      // above, which advanced lastPaycheckDate in Firestore. The closure-captured
+      // householdSettings still holds the OLD date, so deriving the period from it
+      // would file the opening paycheck into the period that just closed. Use the
+      // just-approved date directly: getPayPeriodForTransaction(specificDate,
+      // specificDate) === specificDate, i.e. the new period this paycheck opens.
+      const effectiveLastPaycheck = item.type === 'income' ? specificDate : householdSettings?.lastPaycheckDate;
+      const payPeriodId = getPayPeriodForTransaction(transactionDate, effectiveLastPaycheck);
 
       // Account balance delta. Using increment() (a server-side delta) instead of
       // writing an absolute balance computed from local state prevents lost
@@ -2514,12 +2522,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     try {
+      // Round to whole cents once so the stored amount and the balance delta are
+      // guaranteed to match exactly (no float drift between doc and account).
+      const roundedAmount = roundMoney(tx.amount);
+
       // Assign pay period ID based on paycheck approval
       const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
       // Build the document data explicitly to ensure compliance with Firestore rules
       const docData: Record<string, unknown> = {
-        amount: tx.amount,
+        amount: roundedAmount,
         merchant: tx.merchant.trim(),
         category: tx.category,
         date: tx.date,
@@ -2549,17 +2561,30 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         docData.notes = tx.notes.trim();
       }
 
-      await addDoc(collection(db, `households/${householdId}/transactions`), docData);
+      // Balance impact on checking: income CREDITS (+amount), every other
+      // (expense) category DEBITS (−amount). This mirrors payCalendarItem's
+      // income handling so an income transaction (e.g. a duplicated paycheck row)
+      // no longer corrupts the checking balance.
+      const balanceImpact = tx.category === INCOME_CATEGORY ? roundedAmount : -roundedAmount;
 
-      // Update checking account balance atomically (server-side delta avoids
-      // lost updates from concurrent edits / stale local state).
+      // Commit the new transaction and the checking-balance delta in a SINGLE
+      // writeBatch so they can never partially apply (previously two separate
+      // awaits). Pre-allocate the transaction ref so it participates in the batch.
+      const batch = writeBatch(db);
+      const txRef = doc(collection(db, `households/${householdId}/transactions`));
+      batch.set(txRef, docData);
+
+      // Update checking account balance (server-side delta avoids lost updates
+      // from concurrent edits / stale local state).
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
-        await updateDoc(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(roundMoney(-tx.amount)),
+        batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          balance: increment(balanceImpact),
           lastUpdated: serverTimestamp(),
         });
       }
+
+      await batch.commit();
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
       // The bucketSpentMap effect will automatically recalculate when transactions change
@@ -2661,9 +2686,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
+      // Round any incoming amount to whole cents before it is both stored (via
+      // sanitizedUpdates below) and used for the balance delta, so the persisted
+      // amount and the account balance can't drift by sub-cent amounts.
+      if (updates.amount !== undefined) {
+        updates.amount = roundMoney(updates.amount);
+      }
       const oldAmount = transaction.amount;
       const newAmount = updates.amount ?? oldAmount;
-      const amountDifference = newAmount - oldAmount;
+
+      // Category-aware balance delta. A transaction's balance impact on checking
+      // is +amount for income (it credited) and −amount otherwise (it debited),
+      // matching addTransaction/payCalendarItem. Comparing the new impact to the
+      // old one also handles an edit that crosses the income/expense boundary
+      // (e.g. recategorising an expense as Income), not just an amount change.
+      const oldImpact = transaction.category === INCOME_CATEGORY ? oldAmount : -oldAmount;
+      const newCategory = updates.category ?? transaction.category;
+      const newImpact = newCategory === INCOME_CATEGORY ? newAmount : -newAmount;
+      const balanceDelta = newImpact - oldImpact;
 
       // Recalculate pay period if date changed
       let payPeriodId = transaction.payPeriodId;
@@ -2704,12 +2744,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         payPeriodId,
       });
 
-      // Update checking account balance if amount changed (atomic server-side delta).
-      if (amountDifference !== 0) {
+      // Update checking account balance if the impact changed (atomic server-side delta).
+      if (balanceDelta !== 0) {
         const checkingAcc = accounts.find(a => a.type === 'checking');
         if (checkingAcc) {
           updateBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: increment(roundMoney(-amountDifference)),
+            balance: increment(roundMoney(balanceDelta)),
             lastUpdated: serverTimestamp(),
           });
         }
@@ -2760,10 +2800,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // local state).
       const deleteBatch = writeBatch(db);
 
+      // Reverse the transaction's original balance impact. Income credited
+      // +amount on create, so deleting it subtracts that amount; an expense
+      // debited −amount, so deleting it restores +amount.
+      const balanceReversal = transaction.category === INCOME_CATEGORY ? -transaction.amount : transaction.amount;
+
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
         deleteBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(roundMoney(transaction.amount)),
+          balance: increment(roundMoney(balanceReversal)),
           lastUpdated: serverTimestamp(),
         });
       }
