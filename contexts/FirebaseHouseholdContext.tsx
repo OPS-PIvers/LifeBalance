@@ -2522,12 +2522,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     try {
+      // Round to whole cents once so the stored amount and the balance delta are
+      // guaranteed to match exactly (no float drift between doc and account).
+      const roundedAmount = roundMoney(tx.amount);
+
       // Assign pay period ID based on paycheck approval
       const payPeriodId = getPayPeriodForTransaction(tx.date, householdSettings?.lastPaycheckDate);
 
       // Build the document data explicitly to ensure compliance with Firestore rules
       const docData: Record<string, unknown> = {
-        amount: tx.amount,
+        amount: roundedAmount,
         merchant: tx.merchant.trim(),
         category: tx.category,
         date: tx.date,
@@ -2561,7 +2565,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // (expense) category DEBITS (−amount). This mirrors payCalendarItem's
       // income handling so an income transaction (e.g. a duplicated paycheck row)
       // no longer corrupts the checking balance.
-      const balanceImpact = tx.category === INCOME_CATEGORY ? tx.amount : -tx.amount;
+      const balanceImpact = tx.category === INCOME_CATEGORY ? roundedAmount : -roundedAmount;
 
       // Commit the new transaction and the checking-balance delta in a SINGLE
       // writeBatch so they can never partially apply (previously two separate
@@ -2575,7 +2579,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       const checkingAcc = accounts.find(a => a.type === 'checking');
       if (checkingAcc) {
         batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(roundMoney(balanceImpact)),
+          balance: increment(balanceImpact),
           lastUpdated: serverTimestamp(),
         });
       }
@@ -2682,6 +2686,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
+      // Round any incoming amount to whole cents before it is both stored (via
+      // sanitizedUpdates below) and used for the balance delta, so the persisted
+      // amount and the account balance can't drift by sub-cent amounts.
+      if (updates.amount !== undefined) {
+        updates.amount = roundMoney(updates.amount);
+      }
       const oldAmount = transaction.amount;
       const newAmount = updates.amount ?? oldAmount;
 
