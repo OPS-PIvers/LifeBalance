@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import CaptureModal from './CaptureModal';
@@ -231,6 +231,14 @@ describe('CaptureModal', () => {
   describe('camera stream cleanup on unmount', () => {
     let originalMediaDevices: MediaDevices | undefined;
 
+    // Capture the original UNCONDITIONALLY so restoration is always correct,
+    // even for a test in this block that never installs the fake — otherwise a
+    // stale-undefined `originalMediaDevices` could `delete navigator.mediaDevices`
+    // globally and break other suites in the same process.
+    beforeEach(() => {
+      originalMediaDevices = navigator.mediaDevices;
+    });
+
     afterEach(() => {
       // Restore whatever was (or wasn't) on navigator.mediaDevices.
       if (originalMediaDevices === undefined) {
@@ -243,27 +251,49 @@ describe('CaptureModal', () => {
       }
     });
 
+    /** Build two fake tracks each carrying a `stop` spy. */
+    const makeTracks = () => [{ stop: vi.fn() }, { stop: vi.fn() }];
+
     /**
      * Install a fake getUserMedia that resolves a MediaStream whose tracks each
      * carry a `stop` spy, so we can assert the tracks were released.
      */
     const mockGetUserMedia = () => {
-      const tracks = [
-        { stop: vi.fn() },
-        { stop: vi.fn() },
-      ];
+      const tracks = makeTracks();
       const fakeStream = {
         getTracks: () => tracks,
       } as unknown as MediaStream;
       const getUserMedia = vi.fn().mockResolvedValue(fakeStream);
 
-      originalMediaDevices = navigator.mediaDevices;
       Object.defineProperty(navigator, 'mediaDevices', {
         configurable: true,
         value: { getUserMedia },
       });
 
       return { tracks, getUserMedia };
+    };
+
+    /**
+     * Install a fake getUserMedia whose promise we resolve manually, so a test
+     * can unmount WHILE the call is still in flight (the async-unmount race).
+     */
+    const mockDeferredGetUserMedia = () => {
+      const tracks = makeTracks();
+      const fakeStream = {
+        getTracks: () => tracks,
+      } as unknown as MediaStream;
+      let resolveStream!: () => void;
+      const pending = new Promise<MediaStream>((resolve) => {
+        resolveStream = () => resolve(fakeStream);
+      });
+      const getUserMedia = vi.fn().mockReturnValue(pending);
+
+      Object.defineProperty(navigator, 'mediaDevices', {
+        configurable: true,
+        value: { getUserMedia },
+      });
+
+      return { tracks, getUserMedia, resolveStream };
     };
 
     it("stops every camera track when the component unmounts while the camera is open (doesn't go through handleClose)", async () => {
@@ -290,6 +320,33 @@ describe('CaptureModal', () => {
       expect(tracks[0]!.stop).toHaveBeenCalledTimes(1);
       expect(tracks[1]!.stop).toHaveBeenCalledTimes(1);
       // It left for good, not via the close handler.
+      expect(mockOnClose).not.toHaveBeenCalled();
+    });
+
+    it('stops the stream acquired by a getUserMedia call that resolves AFTER the component unmounts (async-unmount race)', async () => {
+      const { tracks, getUserMedia, resolveStream } = mockDeferredGetUserMedia();
+
+      const { unmount } = render(<CaptureModal isOpen={true} onClose={mockOnClose} />);
+
+      // Kick off startCamera(); getUserMedia is now in flight (unresolved).
+      fireEvent.click(screen.getByTestId('scan-receipt'));
+      await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(1));
+
+      // Unmount BEFORE the stream resolves. cameraStream is still null here, so
+      // the cleanup effect is a no-op and will never run again.
+      unmount();
+      expect(tracks[0]!.stop).not.toHaveBeenCalled();
+
+      // Now the camera finally becomes available — on an unmounted component.
+      // The isMounted guard must stop the orphaned stream instead of leaking it.
+      await act(async () => {
+        resolveStream();
+        // Flush the awaited continuation inside startCamera.
+        await Promise.resolve();
+      });
+
+      expect(tracks[0]!.stop).toHaveBeenCalledTimes(1);
+      expect(tracks[1]!.stop).toHaveBeenCalledTimes(1);
       expect(mockOnClose).not.toHaveBeenCalled();
     });
   });
