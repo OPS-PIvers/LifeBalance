@@ -48,7 +48,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel || placeholder}
         className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
       />
       <Button
@@ -56,7 +56,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         variant="primary"
         size="icon"
         disabled={disabled}
-        aria-label={submitLabel}
+        aria-label={submitLabel || 'Add'}
         className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5"
       >
         {icon}
