@@ -15,13 +15,15 @@ vi.mock('@/utils/habitSuggestions', () => ({
   suggestHabitsForTransaction: vi.fn().mockReturnValue([]),
 }));
 
-// Mock lucide-react icons
+// Mock lucide-react icons. Includes ChevronDown because the Store/Account fields
+// now render the shared <Select> primitive, which draws its own ChevronDown.
 vi.mock('lucide-react', () => ({
   Check: () => <div data-testid="icon-check" />,
   CheckCircle2: () => <div data-testid="icon-check-circle" />,
   Sparkles: () => <div data-testid="icon-sparkles" />,
   AlertCircle: () => <div data-testid="icon-alert-circle" />,
   Loader2: () => <div data-testid="icon-loader" />,
+  ChevronDown: () => <div data-testid="icon-chevron-down" />,
 }));
 
 describe('CaptureTransactionManual', () => {

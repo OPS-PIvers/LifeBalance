@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
@@ -224,18 +225,13 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-4">
           <h4 className="font-display font-semibold text-brand-900 dark:text-brand-100">Create New API Key</h4>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1.5">
-              Key Name
-            </label>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g., iPhone Shortcut"
-              className="w-full px-3 py-2 bg-white dark:bg-brand-900 border border-brand-200 dark:border-brand-700 rounded-btn text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
-            />
-          </div>
+          <Input
+            label="Key Name"
+            type="text"
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            placeholder="e.g., iPhone Shortcut"
+          />
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2">

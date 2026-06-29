@@ -40,6 +40,7 @@ import ApiKeyManager from '@/components/settings/ApiKeyManager';
 import ShortcutSetupGuide from '@/components/settings/ShortcutSetupGuide';
 import Card from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
@@ -848,7 +849,7 @@ const Settings: React.FC = () => {
               </div>
 
               <div className="space-y-3">
-                <input
+                <Input
                   type="password"
                   inputMode="numeric"
                   autoComplete="new-password"
@@ -856,9 +857,9 @@ const Settings: React.FC = () => {
                   onChange={(e) => setPinDraft(sanitizePin(e.target.value))}
                   placeholder={hasKidPin ? 'New PIN (4-6 digits)' : 'PIN (4-6 digits)'}
                   aria-label="Kid Mode PIN"
-                  className="w-full rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-4 py-2.5 text-brand-900 dark:text-brand-50 tracking-widest outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
+                  className="tracking-widest"
                 />
-                <input
+                <Input
                   type="password"
                   inputMode="numeric"
                   autoComplete="new-password"
@@ -866,7 +867,7 @@ const Settings: React.FC = () => {
                   onChange={(e) => setPinConfirm(sanitizePin(e.target.value))}
                   placeholder="Confirm PIN"
                   aria-label="Confirm Kid Mode PIN"
-                  className="w-full rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-4 py-2.5 text-brand-900 dark:text-brand-50 tracking-widest outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
+                  className="tracking-widest"
                 />
                 <div className="flex gap-2">
                   <Button

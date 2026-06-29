@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Meal } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -129,17 +130,13 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
             {/* Meal Details */}
             <div className="space-y-5">
-                <div>
-                    <label htmlFor="meal-name" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Meal Name</label>
-                    <input
-                        id="meal-name"
-                        type="text"
-                        value={currentMeal.name || ''}
-                        onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 font-medium text-brand-900 dark:text-brand-100"
-                        placeholder="e.g. Adobo Chicken & Rice"
-                    />
-                </div>
+                <Input
+                    label="Meal Name"
+                    type="text"
+                    value={currentMeal.name || ''}
+                    onChange={e => setCurrentMeal({...currentMeal, name: e.target.value})}
+                    placeholder="e.g. Adobo Chicken & Rice"
+                />
 
                 <div role="radiogroup" aria-labelledby="meal-type-label">
                     <label id="meal-type-label" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Meal Type</label>
@@ -195,17 +192,13 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                     />
                 </div>
 
-                <div>
-                    <label htmlFor="meal-url" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Recipe URL</label>
-                    <input
-                        id="meal-url"
-                        type="url"
-                        value={currentMeal.recipeUrl || ''}
-                        onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
-                        className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:placeholder:text-brand-500 text-sm text-accent-700 dark:text-accent-300"
-                        placeholder="https://example.com/recipe"
-                    />
-                </div>
+                <Input
+                    label="Recipe URL"
+                    type="url"
+                    value={currentMeal.recipeUrl || ''}
+                    onChange={e => setCurrentMeal({...currentMeal, recipeUrl: e.target.value})}
+                    placeholder="https://example.com/recipe"
+                />
 
                 {/* Tags Section */}
                 <div>
