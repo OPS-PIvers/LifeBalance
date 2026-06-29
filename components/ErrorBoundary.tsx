@@ -76,7 +76,7 @@ class ErrorBoundary extends React.Component<Props, State> {
               <Button
                 size="lg"
                 onClick={this.handleReload}
-                className="w-full bg-brand-600 text-white hover:bg-brand-700"
+                className="w-full bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-700"
                 leftIcon={<RefreshCw size={18} />}
               >
                 <span>Reload Page</span>
@@ -86,7 +86,7 @@ class ErrorBoundary extends React.Component<Props, State> {
                 variant="link"
                 size="sm"
                 onClick={this.handleClearCacheAndReload}
-                className="text-brand-400 hover:text-brand-600 underline"
+                className="text-brand-400 hover:text-brand-600 underline dark:text-brand-400 dark:hover:text-brand-600"
               >
                 Clear Cache & Reload
               </Button>

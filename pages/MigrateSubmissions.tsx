@@ -318,7 +318,7 @@ const MigrateSubmissions: React.FC = () => {
               onClick={runMigration}
               isLoading={isRunning}
               disabled={habitsToMigrate.length === 0}
-              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900"
+              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900 dark:bg-brand-800 dark:hover:bg-brand-900"
               leftIcon={<PlayCircle size={20} />}
             >
               {isRunning ? 'Running Migration...' : 'Run Migration'}
@@ -328,7 +328,7 @@ const MigrateSubmissions: React.FC = () => {
             <Button
               size="lg"
               onClick={() => navigate(-1)}
-              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900"
+              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900 dark:bg-brand-800 dark:hover:bg-brand-900"
             >
               Done
             </Button>

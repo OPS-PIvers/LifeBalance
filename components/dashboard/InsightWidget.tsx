@@ -133,7 +133,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
                   key={idx}
                   variant="secondary"
                   size="sm"
-                  className="py-2 text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:bg-brand-700"
+                  className="py-2 text-accent-700 hover:text-accent-700 hover:bg-accent-50 dark:text-accent-200 dark:hover:text-accent-200 dark:hover:bg-brand-700"
                   onClick={() => {
                     if (action.type === 'create_challenge' && onCreateChallenge) {
                       onCreateChallenge(action.payload);

@@ -350,7 +350,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 <Button
                     variant="link"
                     size="sm"
-                    className="w-full text-brand-600 hover:text-brand-700 dark:text-brand-300"
+                    className="w-full text-brand-600 hover:text-brand-700 dark:text-brand-300 dark:hover:text-brand-200"
                     onClick={() => onSave(true)}
                 >
                     Save as New Meal (Copy)
