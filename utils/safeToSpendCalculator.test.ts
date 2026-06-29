@@ -977,25 +977,27 @@ describe('calculateSafeToSpend', () => {
 });
 
 // ===========================================================================
-// CHARACTERIZATION TESTS — money-model pending double-count (Plan 015)
-//
-// These DOCUMENT (they do NOT fix) two opposite-signed inconsistencies between
-// how the app maintains the checking balance and how Safe-to-Spend treats
-// pending spend. They are pinned to CURRENT behavior so that a future fix is a
-// deliberate, visible change to these expectations. Full analysis:
-// plans/015-money-model-investigation.md.
+// VERIFIED-ONLY BALANCE MODEL (Plan 015 — "Option A"; was the pending
+// double-count characterization).
 //
 // The calculator subtracts `pendingSpend` ON THE ASSUMPTION that the manually-
 // entered checking balance does NOT already reflect pending_review spend
-// (safeToSpendCalculator.ts:204-206, :256). But:
-//   - addTransaction (contexts/FirebaseHouseholdContext.tsx:2447) ALSO debits
-//     checking for EVERY txn incl. pending_review — so pending is in the balance
-//     AND subtracted again  ==>  DOUBLE-COUNT (Safe-to-Spend too low).
-//   - voice handleExpense (contexts/FirebaseHouseholdContext.tsx:1273) does NOT
-//     debit and omits payPeriodId — so when a period is tracked it falls in
-//     NEITHER term  ==>  INVISIBLE (Safe-to-Spend too high).
+// (safeToSpendCalculator.ts:sumPendingSpend). Plan 015 adopted Option A and
+// fixed the WRITE side to honor that assumption: a pending_review transaction
+// NEVER debits the checking balance (addTransaction no longer pre-debits
+// pending; the debit happens only when the txn is verified — see
+// contexts/FirebaseHouseholdContext.tsx and its verified-only tests). The pure
+// calculator math here is UNCHANGED — it still subtracts pending exactly once —
+// so with the write side fixed the end-to-end number is now correct.
+//
+// The first two tests below were previously pinned to the BUGGY double-count;
+// they are now converted to assert the CORRECT Option-A behavior. The voice
+// tests pin a SEPARATE, still-open bug (the voice path omits payPeriodId, so a
+// tracked-period voice expense is invisible to pendingSpend) — its no-debit
+// behavior is now CORRECT under Option A; only the missing payPeriodId remains.
+// Full analysis: plans/015-money-model-investigation.md.
 // ===========================================================================
-describe('money-model pending double-count (characterization — Plan 015)', () => {
+describe('verified-only balance model (Plan 015 — Option A)', () => {
   const lastPaycheckDate = '2026-06-01';
   const nextPaycheckDate = '2026-06-15';
   const INITIAL_BALANCE = 5000;
@@ -1026,7 +1028,8 @@ describe('money-model pending double-count (characterization — Plan 015)', () 
   });
 
   it('CORRECT baseline: when the balance does NOT include the pending debit, pending is subtracted exactly once', () => {
-    // The calculator's intended model: the balance excludes pending spend.
+    // The calculator's model (now honored by the write side under Option A): the
+    // manually-entered balance excludes pending spend.
     const result = calculateSafeToSpend(
       checking(INITIAL_BALANCE), incomeAndBill, [], lastPaycheckDate, [pendingTx()],
     );
@@ -1034,34 +1037,52 @@ describe('money-model pending double-count (characterization — Plan 015)', () 
     expect(result).toBe(INITIAL_BALANCE - BILL - PENDING); // 4825
   });
 
-  it('BUG (double-count): addTransaction already debited checking for the pending txn, so the calculator subtracts it AGAIN', () => {
-    // Reality after addTransaction (FirebaseHouseholdContext.tsx:2447): the
-    // checking balance has ALREADY been debited by the pending amount...
-    const balanceAfterAddTransaction = INITIAL_BALANCE - PENDING; // 4925
-    // ...while the same pending txn is still passed to the calculator.
+  it('Option A (fixed): a pending_review capture does NOT debit checking, so it is counted EXACTLY ONCE (no double-count)', () => {
+    // Was the pinned DOUBLE-COUNT bug. Under Option A addTransaction no longer
+    // pre-debits a pending_review transaction (see the verified-only tests in
+    // contexts/FirebaseHouseholdContext.test.tsx), so the balance the calculator
+    // receives still equals the un-debited INITIAL_BALANCE...
+    const balanceAfterAddPendingTransaction = INITIAL_BALANCE; // 5000 — NOT debited
+    // ...and the same pending txn is passed to the calculator, subtracted once.
     const result = calculateSafeToSpend(
-      checking(balanceAfterAddTransaction), incomeAndBill, [], lastPaycheckDate, [pendingTx()],
+      checking(balanceAfterAddPendingTransaction), incomeAndBill, [], lastPaycheckDate, [pendingTx()],
     );
-    // 4925 - 100 (bill) - 75 (pending AGAIN) = 4750 — i.e. 75 LOWER than the
-    // correct 4825. Pending is counted twice. Pinning current (buggy) behavior;
-    // the fix is to NOT debit checking for pending_review transactions.
-    expect(result).toBe(INITIAL_BALANCE - BILL - 2 * PENDING); // 4750
+    // 5000 - 100 (bill) - 75 (pending, ONCE) = 4825 — identical to the baseline.
+    // The pending amount is counted exactly once; the prior 75-too-low result is
+    // gone now that pending no longer debits the balance.
+    expect(result).toBe(INITIAL_BALANCE - BILL - PENDING); // 4825
   });
 
-  it('BUG (invisible): a voice expense (no payPeriodId, no balance debit) vanishes from Safe-to-Spend when a period is tracked', () => {
-    // voice handleExpense (FirebaseHouseholdContext.tsx:1273) does NOT debit the
-    // balance and omits payPeriodId. pendingSpend filters by
-    // payPeriodId === currentPeriodId, so an undefined payPeriodId is excluded.
-    // The voice path's defining trait for this bug is the MISSING payPeriodId.
-    // (Its raw addDoc also writes source:'voice', a value not in the
-    // Transaction.source union — an incidental schema gap, immaterial here.)
+  it('Option A: once that same pending capture is VERIFIED, the debit lands in the balance and pending drops out — still counted once', () => {
+    // After verification the write side debits checking by the amount AND the
+    // transaction leaves pendingSpend (status verified). Net effect on
+    // Safe-to-Spend is unchanged from the pending state: the spend is reflected
+    // exactly once across the txn's whole lifetime.
+    const balanceAfterVerify = INITIAL_BALANCE - PENDING; // 4925 — now debited
+    const verifiedTx = pendingTx({ status: 'verified' });
+    const result = calculateSafeToSpend(
+      checking(balanceAfterVerify), incomeAndBill, [], lastPaycheckDate, [verifiedTx],
+    );
+    // 4925 - 100 (bill) - 0 (verified => excluded from pendingSpend) = 4825.
+    expect(result).toBe(INITIAL_BALANCE - BILL - PENDING); // 4825
+  });
+
+  it('SEPARATE BUG (invisible): a voice expense that omits payPeriodId vanishes from Safe-to-Spend when a period is tracked', () => {
+    // voice handleExpense writes pending_review and does NOT debit the balance —
+    // which is now CORRECT under Option A (a pending capture should not debit).
+    // The REMAINING bug is unrelated to the balance: it also omits payPeriodId,
+    // and pendingSpend filters by payPeriodId === currentPeriodId, so an
+    // undefined payPeriodId is excluded. The voice path's defining trait for THIS
+    // (still-open) bug is the MISSING payPeriodId. (Its raw addDoc also writes
+    // source:'voice', a value not in the Transaction.source union — an incidental
+    // schema gap, immaterial here.)
     const voiceExpense = pendingTx({ id: 'tx-voice', payPeriodId: undefined });
     const result = calculateSafeToSpend(
       checking(INITIAL_BALANCE), incomeAndBill, [], lastPaycheckDate, [voiceExpense],
     );
     // 5000 - 100 (bill) - 0 (voice expense EXCLUDED) = 4900. The real $75 voice
     // spend is invisible -> Safe-to-Spend overstated by 75. Pinning current
-    // behavior; the fix is for the voice path to set payPeriodId.
+    // behavior; the remaining fix is for the voice path to set payPeriodId.
     expect(result).toBe(INITIAL_BALANCE - BILL); // 4900
   });
 

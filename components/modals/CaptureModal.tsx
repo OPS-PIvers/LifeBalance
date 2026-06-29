@@ -458,11 +458,11 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
   };
 
   // Link the scanned receipt INTO the matched pending transaction (merge) rather
-  // than creating a duplicate. We go through updateTransaction so only the
-  // (newAmount - oldAmount) delta hits the checking balance — for an Apple Pay
-  // $0 stub that's the full receipt amount (its first debit); for an
-  // already-amounted pending row it's just the correction. (Mirrors
-  // AwaitingAmountDrawer's promote-the-existing-stub pattern.)
+  // than creating a duplicate. We go through updateTransaction; the merge keeps
+  // the row `pending_review`, so under the verified-only balance model (Plan 015)
+  // it does NOT move the checking balance — the merged spend stays reflected via
+  // Safe-to-Spend's pendingSpend term and debits only when the row is later
+  // verified. (Mirrors AwaitingAmountDrawer's promote-the-existing-stub pattern.)
   const handleConfirmLink = async () => {
     if (!pendingMatch) return;
     setIsResolvingMatch(true);

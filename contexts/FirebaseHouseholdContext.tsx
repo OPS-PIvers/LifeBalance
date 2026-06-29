@@ -52,7 +52,6 @@ import {
   Account,
   BudgetBucket,
   Transaction,
-  INCOME_CATEGORY,
   CalendarItem,
   Habit,
   HabitSubmission,
@@ -75,7 +74,8 @@ import {
   QuickStockList,
   HouseholdApiKey,
   PendingItem,
-  ModuleKey
+  ModuleKey,
+  INCOME_CATEGORY
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
@@ -94,7 +94,7 @@ import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
-import { roundMoney } from '@/utils/money';
+import { roundMoney, sumMoney, subtractMoney } from '@/utils/money';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
   BUCKET_HISTORY_LIMIT,
@@ -145,6 +145,41 @@ function mapTransactionDoc(d: QueryDocumentSnapshot<Transaction>): Transaction {
  */
 function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
   return d.data();
+}
+
+// ---------------------------------------------------------------------------
+// VERIFIED-ONLY BALANCE MODEL (Plan 015 — "Option A")
+//
+// The checking-account balance is entered MANUALLY and is assumed by
+// Safe-to-Spend NOT to reflect un-cleared (pending_review) spending — the
+// calculator subtracts current-period pending spend separately (see
+// utils/safeToSpendCalculator.ts:sumPendingSpend). The single invariant that
+// keeps the two consistent:
+//
+//   The checking balance reflects a transaction's category-aware impact
+//   (income +amount / expense −amount) IF AND ONLY IF the transaction is
+//   `verified`. A `pending_review` transaction NEVER touches the balance; it
+//   influences Safe-to-Spend solely through the pendingSpend term. On a
+//   pending_review → verified transition the impact is applied; on
+//   verified → pending_review it is reversed; on delete only an EFFECTIVE
+//   (i.e. verified) impact is reversed. Each transaction's impact lands on the
+//   balance exactly once over its lifetime while verified.
+//
+// `impactOf` is the category-aware signed amount; `effectiveImpact` gates it on
+// status. Every create/mutate/delete path computes its checking-balance delta as
+//   balanceDelta = effectiveImpact(after) − effectiveImpact(before)
+// (before = {amount:0} for create, after = {amount:0} for delete) and writes
+// increment(roundMoney(balanceDelta)) only when non-zero.
+// ---------------------------------------------------------------------------
+
+/** Category-aware signed balance impact of a transaction: income credits, expense debits. */
+function impactOf(tx: { amount: number; category: string }): number {
+  return tx.category === INCOME_CATEGORY ? tx.amount : -tx.amount;
+}
+
+/** Balance impact a transaction has ALREADY applied: its category-aware impact when verified, else 0. */
+function effectiveImpact(tx: { amount: number; category: string; status: Transaction['status'] }): number {
+  return tx.status === 'verified' ? impactOf(tx) : 0;
 }
 
 export interface HouseholdContextType {
@@ -2561,27 +2596,31 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         docData.notes = tx.notes.trim();
       }
 
-      // Balance impact on checking: income CREDITS (+amount), every other
-      // (expense) category DEBITS (−amount). This mirrors payCalendarItem's
-      // income handling so an income transaction (e.g. a duplicated paycheck row)
-      // no longer corrupts the checking balance.
-      const balanceImpact = tx.category === INCOME_CATEGORY ? roundedAmount : -roundedAmount;
+      // VERIFIED-ONLY BALANCE (Plan 015): a new transaction touches the checking
+      // balance only if it is created `verified`. A `pending_review` capture
+      // (receipt / AI scan / Apple Pay stub) does NOT debit — it influences
+      // Safe-to-Spend solely via the calculator's pendingSpend term, so debiting
+      // here too would subtract it twice. balanceDelta = effectiveImpact(after)
+      // with before = 0 (nothing existed yet).
+      const balanceDelta = effectiveImpact({ amount: roundedAmount, category: tx.category, status: tx.status });
 
       // Commit the new transaction and the checking-balance delta in a SINGLE
-      // writeBatch so they can never partially apply (previously two separate
-      // awaits). Pre-allocate the transaction ref so it participates in the batch.
+      // writeBatch so they can never partially apply. Pre-allocate the
+      // transaction ref so it participates in the batch.
       const batch = writeBatch(db);
       const txRef = doc(collection(db, `households/${householdId}/transactions`));
       batch.set(txRef, docData);
 
-      // Update checking account balance (server-side delta avoids lost updates
-      // from concurrent edits / stale local state).
-      const checkingAcc = accounts.find(a => a.type === 'checking');
-      if (checkingAcc) {
-        batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(balanceImpact),
-          lastUpdated: serverTimestamp(),
-        });
+      // Update checking account balance only when the (verified) impact is
+      // non-zero (server-side delta avoids lost updates from concurrent edits).
+      if (balanceDelta !== 0) {
+        const checkingAcc = accounts.find(a => a.type === 'checking');
+        if (checkingAcc) {
+          batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+            balance: increment(roundMoney(balanceDelta)),
+            lastUpdated: serverTimestamp(),
+          });
+        }
       }
 
       await batch.commit();
@@ -2598,12 +2637,33 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     if (!householdId || !currentUser) return;
 
     // Verifying a pending transaction may also increment related habits and the
-    // household points. Commit the transaction update, every habit update, and
-    // the points increment in a SINGLE writeBatch so they can never diverge
-    // (a partial failure previously left habits/points inconsistent).
+    // household points. Commit the transaction update, the checking-balance
+    // delta, every habit update, and the points increment in a SINGLE writeBatch
+    // so they can never diverge (a partial failure previously left habits/points
+    // inconsistent).
     const batch = writeBatch(db);
     let totalPointsChange = 0;
     let successfulHabitsCount = 0;
+
+    // VERIFIED-ONLY BALANCE (Plan 015): this is the primary "verify" action — it
+    // sets status to `verified` and may change the category. A pending_review
+    // transaction has NOT yet touched the balance, so promoting it to verified
+    // must apply its (now effective) impact; if it was already verified this is a
+    // pure category change (delta = newImpact − oldImpact, e.g. expense→Income
+    // flips the sign). before = the existing transaction; after = same amount
+    // with the new category + verified status.
+    // If the transaction isn't in local state we cannot know its amount, so we
+    // can't apply the correct balance delta. Bail rather than verify it with a
+    // zero delta (which would mark it verified without ever debiting checking) —
+    // matching updateTransaction/deleteTransaction, which also require the row.
+    const existingTx = transactions.find(t => t.id === id);
+    if (!existingTx) {
+      toast.error('Transaction not found');
+      return;
+    }
+    const balanceDelta =
+      effectiveImpact({ amount: existingTx.amount, category, status: 'verified' })
+        - effectiveImpact(existingTx);
 
     // 1. Update Transaction
     batch.update(doc(db, `households/${householdId}/transactions`, id), {
@@ -2611,6 +2671,18 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       status: 'verified',
       relatedHabitIds: relatedHabitIds || []
     });
+
+    // 1b. Apply the checking-balance impact of the status/category transition in
+    // the SAME batch (server-side delta avoids lost updates from concurrent edits).
+    if (balanceDelta !== 0) {
+      const checkingAcc = accounts.find(a => a.type === 'checking');
+      if (checkingAcc) {
+        batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+          balance: increment(roundMoney(balanceDelta)),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+    }
 
     // 2. Increment Habits if any
     if (relatedHabitIds && relatedHabitIds.length > 0) {
@@ -2674,7 +2746,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
 
     toast.success('Verified & Categorized!');
-  }, [householdId, currentUser, habits]);
+  }, [householdId, currentUser, habits, transactions, accounts]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
     if (!householdId) return;
@@ -2692,18 +2764,22 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       if (updates.amount !== undefined) {
         updates.amount = roundMoney(updates.amount);
       }
-      const oldAmount = transaction.amount;
-      const newAmount = updates.amount ?? oldAmount;
 
-      // Category-aware balance delta. A transaction's balance impact on checking
-      // is +amount for income (it credited) and −amount otherwise (it debited),
-      // matching addTransaction/payCalendarItem. Comparing the new impact to the
-      // old one also handles an edit that crosses the income/expense boundary
-      // (e.g. recategorising an expense as Income), not just an amount change.
-      const oldImpact = transaction.category === INCOME_CATEGORY ? oldAmount : -oldAmount;
+      // VERIFIED-ONLY BALANCE (Plan 015): the checking-balance delta is the
+      // change in EFFECTIVE (verified-only) impact, comparing the post-update
+      // {amount, category, status} against the existing transaction. This single
+      // rule handles every case:
+      //   - amount change while verified → impact delta
+      //   - pending_review → verified     → apply the full new impact (was 0)
+      //   - verified → pending_review     → reverse the old impact (now 0)
+      //   - pending amount/category change → both effective impacts are 0 (no-op)
+      //   - category change crossing income/expense while verified → sign flip
+      const newAmount = updates.amount ?? transaction.amount;
       const newCategory = updates.category ?? transaction.category;
-      const newImpact = newCategory === INCOME_CATEGORY ? newAmount : -newAmount;
-      const balanceDelta = newImpact - oldImpact;
+      const newStatus = updates.status ?? transaction.status;
+      const balanceDelta =
+        effectiveImpact({ amount: newAmount, category: newCategory, status: newStatus })
+          - effectiveImpact(transaction);
 
       // Recalculate pay period if date changed
       let payPeriodId = transaction.payPeriodId;
@@ -2744,7 +2820,8 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         payPeriodId,
       });
 
-      // Update checking account balance if the impact changed (atomic server-side delta).
+      // Update checking account balance if the effective impact changed (atomic
+      // server-side delta).
       if (balanceDelta !== 0) {
         const checkingAcc = accounts.find(a => a.type === 'checking');
         if (checkingAcc) {
@@ -2800,17 +2877,20 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       // local state).
       const deleteBatch = writeBatch(db);
 
-      // Reverse the transaction's original balance impact. Income credited
-      // +amount on create, so deleting it subtracts that amount; an expense
-      // debited −amount, so deleting it restores +amount.
-      const balanceReversal = transaction.category === INCOME_CATEGORY ? -transaction.amount : transaction.amount;
-
-      const checkingAcc = accounts.find(a => a.type === 'checking');
-      if (checkingAcc) {
-        deleteBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(roundMoney(balanceReversal)),
-          lastUpdated: serverTimestamp(),
-        });
+      // VERIFIED-ONLY BALANCE (Plan 015): reverse only the EFFECTIVE impact.
+      // A verified transaction had applied its category-aware impact, so deleting
+      // it reverses that (balanceDelta = 0 − effectiveImpact(before)); a
+      // pending_review transaction never touched the balance, so deleting it must
+      // NOT move the balance (its effectiveImpact is 0).
+      const balanceDelta = -effectiveImpact(transaction);
+      if (balanceDelta !== 0) {
+        const checkingAcc = accounts.find(a => a.type === 'checking');
+        if (checkingAcc) {
+          deleteBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+            balance: increment(roundMoney(balanceDelta)),
+            lastUpdated: serverTimestamp(),
+          });
+        }
       }
 
       deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
@@ -2853,9 +2933,28 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       });
 
-      // 3. Commit batch
-      // Note: We don't need to update account balance because the sum of new transactions
-      // equals the original transaction amount, so the net change is 0.
+      // 3. VERIFIED-ONLY BALANCE (Plan 015): the net checking-balance change is
+      // Σ effectiveImpact(newSplit) − effectiveImpact(original). When a VERIFIED
+      // expense is split into verified expenses summing to the same total this is
+      // 0 (the historical no-op). But splitting a PENDING_REVIEW capture into
+      // verified splits (the splits modal auto-verifies) must now debit the
+      // balance, since the pending original never debited it — without this the
+      // verified splits would silently skip their debit.
+      const splitsImpact = sumMoney(
+        newTransactions.map(tx => effectiveImpact({ amount: tx.amount, category: tx.category, status: tx.status }))
+      );
+      const balanceDelta = subtractMoney(splitsImpact, effectiveImpact(originalTx));
+      if (balanceDelta !== 0) {
+        const checkingAcc = accounts.find(a => a.type === 'checking');
+        if (checkingAcc) {
+          batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
+            balance: increment(roundMoney(balanceDelta)),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+      }
+
+      // 4. Commit batch
       await batch.commit();
 
       toast.success('Transaction split successfully');
@@ -2864,7 +2963,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Failed to split transaction');
       throw error;
     }
-  }, [householdId, user, transactions, householdSettings]);
+  }, [householdId, user, transactions, householdSettings, accounts]);
 
 
   // --- ACTIONS: YEARLY GOALS ---
