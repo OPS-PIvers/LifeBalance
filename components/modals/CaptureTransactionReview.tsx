@@ -157,7 +157,8 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
       <Button
         onClick={onSubmit}
         disabled={selectedCount === 0}
-        className="w-full py-4"
+        size="lg"
+        className="w-full"
       >
         Add {selectedCount} to Action Queue
       </Button>

@@ -181,11 +181,12 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       {/* Footer */}
       {plan && !isLoading && (
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 flex gap-3">
-          <Button variant="ghost" onClick={onClose} className="flex-1">
+          <Button variant="ghost" size="lg" onClick={onClose} className="flex-1">
             Cancel
           </Button>
           <Button
             variant="warning"
+            size="lg"
             onClick={handleApply}
             leftIcon={<Check size={18} />}
             className="flex-1"

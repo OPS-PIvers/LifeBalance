@@ -260,6 +260,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         <div className="flex gap-2">
           <Button
             variant="ghost"
+            size="lg"
             onClick={onClose}
             disabled={isProcessing}
             className="flex-1"
@@ -267,6 +268,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
             Cancel
           </Button>
           <Button
+            size="lg"
             onClick={handleSplit}
             disabled={!isValidTotal}
             isLoading={isProcessing}
