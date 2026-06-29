@@ -15,6 +15,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Button } from '@/components/ui/Button';
+import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
@@ -544,26 +545,15 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             style={{ top: `${stickyTopOffset}px` }}
         >
             <div className="flex items-center gap-2">
-                <form onSubmit={handleSmartAdd} className="relative flex-1">
-                    <input
-                        ref={addInputRef}
-                        type="text"
-                        value={newItemText}
-                        onChange={(e) => setNewItemText(e.target.value)}
-                        placeholder="Add item (e.g. Milk)..."
-                        className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
-                    />
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        size="icon"
-                        disabled={!newItemText.trim()}
-                        aria-label="Add item to shopping list"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5"
-                    >
-                        <Plus size={20} />
-                    </Button>
-                </form>
+                <QuickAddBar
+                    onSubmit={handleSmartAdd}
+                    inputRef={addInputRef}
+                    value={newItemText}
+                    onChange={setNewItemText}
+                    placeholder="Add item (e.g. Milk)..."
+                    disabled={!newItemText.trim()}
+                    submitLabel="Add item to shopping list"
+                />
 
                 {/* Filter — kept first-class & always visible (NOT in the overflow
                     menu) because its active store scope must stay glanceable. A
