@@ -6,12 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { Habit } from '@/types/schema';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: (string | undefined | null | false)[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '@/utils/cn';
 
 /** Pure module-level helper: stable reference, never re-created on render. */
 function getIntensityClass(count: number, maxDailyCompletions: number): string {

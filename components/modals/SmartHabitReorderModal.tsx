@@ -3,6 +3,7 @@ import { Sparkles, Check, Loader, AlertTriangle, ArrowRight } from 'lucide-react
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';
 
@@ -147,9 +148,9 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
               {previewHabits.categories.map(category => (
                 <div key={category} className="space-y-2">
                   <h3 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider ml-2">{category}</h3>
-                  <div className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden divide-y divide-brand-200">
+                  <SurfaceList>
                     {(previewHabits.grouped[category] ?? []).map(habit => (
-                      <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
+                      <Row key={habit.id} interactive className="justify-between">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}
                            <span className="font-medium text-brand-700 dark:text-brand-200 text-sm">{habit.title}</span>
@@ -168,9 +169,9 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
                             }
                             return null;
                         })()}
-                      </div>
+                      </Row>
                     ))}
-                  </div>
+                  </SurfaceList>
                 </div>
               ))}
             </div>
