@@ -48,4 +48,18 @@ describe('ProgressBar', () => {
     render(<ProgressBar value={5} max={0} ariaLabel="x" />);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
   });
+
+  it('guards against NaN (division-by-zero upstream) → 0%', () => {
+    const { container } = render(<ProgressBar value={NaN} ariaLabel="x" />);
+    const track = container.querySelector('[role="progressbar"]');
+    expect(track).toHaveAttribute('aria-valuenow', '0');
+    expect(track?.firstElementChild).toHaveStyle('width: 0%');
+  });
+
+  it('clamps a negative value to 0% (never reports a negative width/aria)', () => {
+    const { container } = render(<ProgressBar value={-25} ariaLabel="x" />);
+    const track = container.querySelector('[role="progressbar"]');
+    expect(track).toHaveAttribute('aria-valuenow', '0');
+    expect(track?.firstElementChild).toHaveStyle('width: 0%');
+  });
 });

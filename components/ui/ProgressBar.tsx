@@ -32,8 +32,12 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
   className,
   ...props
 }) => {
-  const pct = max > 0 ? (value / max) * 100 : 0;
-  const rounded = Math.round(pct);
+  // Guard against NaN (e.g. division-by-zero upstream) and negatives. The upper
+  // bound is intentionally NOT clamped so overspent buckets can report >100%.
+  const safeValue = Number.isNaN(value) ? 0 : value;
+  const safeMax = Number.isNaN(max) ? 100 : max;
+  const pct = safeMax > 0 ? (safeValue / safeMax) * 100 : 0;
+  const rounded = Math.max(0, Math.round(pct));
   return (
     <div
       role="progressbar"
@@ -49,7 +53,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
           'h-full rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)',
           barClassName
         )}
-        style={{ width: `${pct}%` }}
+        style={{ width: `${Math.max(0, pct)}%` }}
       />
     </div>
   );

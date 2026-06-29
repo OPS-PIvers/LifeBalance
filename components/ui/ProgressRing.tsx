@@ -43,7 +43,9 @@ const ProgressRing: React.FC<ProgressRingProps> = ({
   className,
   ...props
 }) => {
-  const clamped = Math.max(0, Math.min(100, percent));
+  // Guard against NaN (e.g. dividing by a zero targetCount) before clamping.
+  const safePercent = Number.isNaN(percent) ? 0 : percent;
+  const clamped = Math.max(0, Math.min(100, safePercent));
   return (
     <div
       className={cn(

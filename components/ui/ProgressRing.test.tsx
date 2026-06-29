@@ -34,6 +34,11 @@ describe('ProgressRing', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
+  it('guards against NaN percent (e.g. zero targetCount) → 0', () => {
+    const { container } = render(<ProgressRing percent={NaN} />);
+    expect(progressPath(container)).toHaveAttribute('stroke-dasharray', '0, 100');
+  });
+
   it('applies the stroke width to both arcs', () => {
     const { container } = render(<ProgressRing percent={50} strokeWidth={3} />);
     const paths = container.querySelectorAll('path');
