@@ -8,6 +8,7 @@ import { twMerge } from 'tailwind-merge';
 import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import ProgressRing from '@/components/ui/ProgressRing';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
@@ -233,45 +234,39 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
           {/* Badges */}
           <div className="flex flex-wrap gap-2">
             {/* Points Potential */}
-            <span className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold tracking-wide",
-              isPositive
-                ? "bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos"
-                : "bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300"
-            )}>
+            <Badge variant={isPositive ? 'success' : 'danger'} size="sm">
               <CountUp value={signedPointsDisplay} suffix=" pts" />
-            </span>
+            </Badge>
 
             {/* Streak (Positive Only) - Show only if streak is at least 2 days (Approaching) */}
             {isPositive && habit.streakDays >= 2 && (
-              <span className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold transition-colors",
-                // "Hot" tier color once the bonus multiplier (>=1.5x) is actually
-                // earned — period-aware via streakMultiplier rather than a fixed
-                // 3-day threshold (weekly hits 1.5x at 2 weeks, not 3).
-                streakMultiplier >= 1.5
-                  ? "bg-warm-100 text-habit-streak dark:bg-warm-900/30 dark:text-warm-200"
-                  : "bg-brand-100 text-brand-500 dark:bg-brand-700/50 dark:text-brand-300"
-              )}>
+              // "Hot" tier color once the bonus multiplier (>=1.5x) is actually
+              // earned — period-aware via streakMultiplier rather than a fixed
+              // 3-day threshold (weekly hits 1.5x at 2 weeks, not 3).
+              <Badge
+                variant={streakMultiplier >= 1.5 ? 'warning' : 'neutral'}
+                size="sm"
+                className="gap-1 transition-colors"
+              >
                 <StreakFlame streakDays={habit.streakDays} period={habit.period} size={10} />
                 {habit.streakDays} {streakUnitLabel}{habit.streakDays !== 1 ? 's' : ''}
-              </span>
+              </Badge>
             )}
 
             {/* Multiplier nudge: one period short of the next tier. Period-aware
                 in both threshold and unit — daily fires at 2d (→1.5x) / 6d (→2x),
                 weekly at 1w (→1.5x) / 3w (→2x), matching getMultiplier's ladders. */}
             {nextTierNudge && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xxs font-bold bg-warm-100 text-warm-700 dark:bg-warm-900/30 dark:text-warm-200">
+              <Badge variant="warning" size="sm">
                 1 {nextTierNudge.unit} from {nextTierNudge.tier}!
-              </span>
+              </Badge>
             )}
 
             {/* Linked Challenge Badge */}
             {isLinkedToChallenge && (
-               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold bg-accent-100 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200">
+               <Badge variant="default" size="sm" className="gap-1">
                 <Target size={10} /> Goal
-              </span>
+              </Badge>
             )}
           </div>
         </div>

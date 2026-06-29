@@ -8,6 +8,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { Badge } from '@/components/ui/Badge';
 import type { Habit, RewardItem } from '@/types/schema';
 
 /**
@@ -352,9 +353,9 @@ const KidDashboard: React.FC = () => {
                       </p>
                     </div>
                     {alreadyRequested ? (
-                      <span className="flex items-center rounded-full bg-warm-100 dark:bg-warm-500/20 px-3 min-h-11 text-center text-xs font-bold text-warm-700 dark:text-warm-300">
+                      <Badge variant="warning" size="md" className="px-3 min-h-11">
                         Requested
-                      </span>
+                      </Badge>
                     ) : canAfford ? (
                       <button
                         onClick={() => handleRequestReward(r)}
@@ -363,9 +364,9 @@ const KidDashboard: React.FC = () => {
                         Request
                       </button>
                     ) : (
-                      <span className="flex items-center rounded-full bg-brand-100 dark:bg-brand-700 px-3 min-h-11 text-center text-xs font-bold text-brand-500 dark:text-brand-300">
+                      <Badge variant="neutral" size="md" className="px-3 min-h-11">
                         {r.cost - points.total} more
-                      </span>
+                      </Badge>
                     )}
                   </li>
                 );

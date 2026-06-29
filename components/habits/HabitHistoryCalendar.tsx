@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { format, isSameMonth, isToday, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, CheckCircle2, Flame, Calendar } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useCalendarGrid } from '@/hooks/useCalendarGrid';
 import { Habit } from '@/types/schema';
@@ -176,9 +177,9 @@ const HabitHistoryCalendar: React.FC = () => {
           <h3 className="font-display font-semibold text-brand-700 dark:text-brand-200 text-sm">
             {format(selectedDate, 'MMMM d')} summary
           </h3>
-          <span className="text-xs font-medium text-brand-600 dark:text-brand-300 bg-brand-100 dark:bg-brand-700/50 px-2 py-1 rounded-full">
+          <Badge variant="neutral" size="md">
             {selectedDateHabits.length} completed
-          </span>
+          </Badge>
         </div>
 
         {selectedDateHabits.length === 0 ? (
@@ -206,12 +207,9 @@ const HabitHistoryCalendar: React.FC = () => {
                   </div>
 
                   <div className="flex flex-col items-end shrink-0">
-                    <span className={cn(
-                      "text-xs font-bold px-2 py-0.5 rounded-full",
-                      isPositive ? "bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos" : "bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300"
-                    )}>
+                    <Badge variant={isPositive ? 'success' : 'danger'} size="md">
                       {habit.basePoints} pts
-                    </span>
+                    </Badge>
                     {habit.streakDays > 0 && (
                       <span className="text-xxs text-habit-streak font-bold flex items-center gap-0.5 mt-0.5">
                         <Flame size={8} fill="currentColor" /> {habit.streakDays} day streak
