@@ -620,7 +620,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <Badge variant={dayTotal >= 0 ? 'success' : 'danger'} size="md">
+                          <Badge variant={dayTotal > 0 ? 'success' : dayTotal < 0 ? 'danger' : 'neutral'} size="md">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
                           </Badge>
                           <span className="text-xxs text-brand-400 dark:text-brand-400 font-bold">
@@ -639,7 +639,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 <Badge variant="neutral" size="md">
                                   ×{sub.count}
                                 </Badge>
-                                <Badge variant={sub.pointsEarned >= 0 ? 'success' : 'danger'} size="md">
+                                <Badge variant={sub.pointsEarned > 0 ? 'success' : sub.pointsEarned < 0 ? 'danger' : 'neutral'} size="md">
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
                                 </Badge>
                               </div>
