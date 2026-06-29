@@ -17,7 +17,8 @@ export interface CountBadgeProps {
  * the badge copy-pasted between BottomNav and TopToolbar.
  */
 const CountBadge: React.FC<CountBadgeProps> = ({ count, max = 9, className }) => {
-  if (count <= 0) return null;
+  // `!count` also guards NaN / null / undefined defensively (e.g. loading states).
+  if (!count || count <= 0) return null;
   return (
     <span
       className={cn(

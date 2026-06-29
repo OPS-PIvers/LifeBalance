@@ -28,7 +28,7 @@ const SectionActionLink: React.FC<SectionActionLinkProps> = ({
       className
     )}
   >
-    {children} <ArrowRight size={12} />
+    {children} <ArrowRight size={12} className="shrink-0" />
   </Link>
 );
 

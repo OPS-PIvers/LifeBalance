@@ -15,6 +15,11 @@ describe('CountBadge', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it('renders nothing for NaN (defensive guard)', () => {
+    const { container } = render(<CountBadge count={NaN} />);
+    expect(container.firstChild).toBeNull();
+  });
+
   it('clamps to "9+" above the default max of 9', () => {
     render(<CountBadge count={42} />);
     expect(screen.getByText('9+')).toBeInTheDocument();
