@@ -4,6 +4,7 @@ import { Pencil } from 'lucide-react';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
+import ProgressBar from '@/components/ui/ProgressBar';
 
 interface ChallengeWidgetProps {
   onOpenModal: () => void;
@@ -75,19 +76,12 @@ export const ChallengeWidget: React.FC<ChallengeWidgetProps> = React.memo(({ onO
         )}
 
         {/* Progress Bar */}
-        <div
-          className="h-2 w-full bg-brand-700 rounded-full overflow-hidden mb-2"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(challengeProgress)}
-          aria-label={`Challenge progress: ${Math.round(challengeProgress)}% complete`}
-        >
-          <div
-            className="h-full bg-habit-gold rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)"
-            style={{ width: `${challengeProgress}%` }}
-          />
-        </div>
+        <ProgressBar
+          value={challengeProgress}
+          barClassName="bg-habit-gold"
+          ariaLabel={`Challenge progress: ${Math.round(challengeProgress)}% complete`}
+          className="h-2 bg-brand-700 mb-2"
+        />
 
         {/* Progress Stats */}
         <div className="flex justify-between text-xxs font-medium text-brand-300 mb-3">

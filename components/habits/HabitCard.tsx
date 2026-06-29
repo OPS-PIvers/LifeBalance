@@ -9,6 +9,7 @@ import HabitFormModal from '@/components/modals/HabitFormModal';
 import HabitSubmissionLogModal from '@/components/modals/HabitSubmissionLogModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import ProgressRing from '@/components/ui/ProgressRing';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { subDays, format } from 'date-fns';
@@ -172,26 +173,13 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
             
             {/* Progress Ring for Threshold */}
             {isThreshold && (
-              <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-0.5" viewBox="0 0 36 36" aria-hidden="true">
-                 {/* Background Track */}
-                 <path
-                   className={isActive && !isCompleted ? "text-brand-900/10 dark:text-white/10" : "text-white/20"}
-                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                   fill="none"
-                   stroke="currentColor"
-                   strokeWidth="3"
-                 />
-                 {/* Progress Path */}
-                 <path
-                   className={isCompleted ? "text-white" : "text-accent-600 dark:text-accent-300"}
-                   strokeDasharray={`${Math.min(100, (habit.count / habit.targetCount) * 100)}, 100`}
-                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                   fill="none"
-                   stroke="currentColor"
-                   strokeWidth="3"
-                   strokeLinecap="round"
-                 />
-              </svg>
+              <ProgressRing
+                percent={(habit.count / habit.targetCount) * 100}
+                strokeWidth={3}
+                trackClassName={isActive && !isCompleted ? 'text-brand-900/10 dark:text-white/10' : 'text-white/20'}
+                barClassName={isCompleted ? 'text-white' : 'text-accent-600 dark:text-accent-300'}
+                className="absolute inset-0 w-full h-full p-0.5 pointer-events-none"
+              />
             )}
           </div>
           

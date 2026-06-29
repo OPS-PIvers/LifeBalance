@@ -6,6 +6,7 @@ import { Check, Flame, ArrowRight, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
+import ProgressRing from '@/components/ui/ProgressRing';
 
 const MAX_VISIBLE_HABITS = 5;
 const DEFAULT_ORDER_FALLBACK = 999;
@@ -76,32 +77,14 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
           </div>
 
           {/* Circular progress — aria-hidden because the % is shown as text */}
-          <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
-              <path
-                className="text-brand-200 dark:text-brand-700"
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className={cn(
-                  'transition-all duration-(--duration-slow) ease-(--ease-standard)',
-                  stats.percent === 100 ? 'text-money-pos' : 'text-warm-500'
-                )}
-                strokeDasharray={`${stats.percent}, 100`}
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="absolute font-mono text-[11px] font-bold tabular-nums text-brand-600 dark:text-brand-300">
+          <ProgressRing
+            percent={stats.percent}
+            barClassName={stats.percent === 100 ? 'text-money-pos' : 'text-warm-500'}
+          >
+            <span className="font-mono text-[11px] font-bold tabular-nums text-brand-600 dark:text-brand-300">
               {stats.percent}%
             </span>
-          </div>
+          </ProgressRing>
         </Row>
 
         {/* Habit rows */}
