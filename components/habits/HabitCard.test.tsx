@@ -278,6 +278,98 @@ describe('HabitCard - Streak Repair', () => {
   });
 });
 
+describe('HabitCard - period-aware multiplier display', () => {
+  // basePoints is 10 everywhere below, so the points badge text directly
+  // encodes the applied multiplier: "10 pts" = 1.0x, "15 pts" = 1.5x, "20 pts" = 2.0x.
+  const baseWeekly: Habit = {
+    id: 'h1',
+    title: 'Weekly Habit',
+    category: 'Health',
+    type: 'positive',
+    period: 'weekly',
+    targetCount: 1,
+    count: 0,
+    streakDays: 0,
+    basePoints: 10,
+    completedDates: [],
+    lastUpdated: '2024-02-10T00:00:00Z',
+    scoringType: 'threshold',
+    weatherSensitive: false,
+    totalCount: 0,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setupMatchMedia(true);
+  });
+
+  it('weekly habit with a 2-week streak shows the 1.5x multiplier (15 pts), not 1.0x', () => {
+    render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+
+    // 1.5x of 10 base points = 15. The hardcoded daily ladder would show 10 (1.0x).
+    expect(screen.getByText('15 pts')).toBeInTheDocument();
+    expect(screen.queryByText('10 pts')).not.toBeInTheDocument();
+  });
+
+  it('weekly habit streak badge reads "2 Weeks" (not "2 Days")', () => {
+    render(<HabitCard habit={{ ...baseWeekly, streakDays: 2 }} />);
+
+    expect(screen.getByText(/2 Weeks/)).toBeInTheDocument();
+    expect(screen.queryByText(/2 Days/)).not.toBeInTheDocument();
+  });
+
+  it('weekly habit with a 4-week streak shows the 2.0x multiplier (20 pts)', () => {
+    render(<HabitCard habit={{ ...baseWeekly, streakDays: 4 }} />);
+
+    expect(screen.getByText('20 pts')).toBeInTheDocument();
+    expect(screen.getByText(/4 Weeks/)).toBeInTheDocument();
+  });
+
+  it('weekly habit with a 1-week streak nudges "1 week from 1.5x" (week unit, not day)', () => {
+    render(<HabitCard habit={{ ...baseWeekly, streakDays: 1 }} />);
+
+    expect(screen.getByText('1 week from 1.5x!')).toBeInTheDocument();
+    // The old daily-only ladder would never nudge at streakDays === 1, and would
+    // use the "day" unit; make sure neither leaks through.
+    expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 day from/)).not.toBeInTheDocument();
+  });
+
+  it('weekly habit with a 3-week streak nudges "1 week from 2x"', () => {
+    render(<HabitCard habit={{ ...baseWeekly, streakDays: 3 }} />);
+
+    expect(screen.getByText('1 week from 2x!')).toBeInTheDocument();
+  });
+
+  it('regression: daily habit with a 3-day streak still shows 1.5x (15 pts) and "3 Days"', () => {
+    const dailyHabit: Habit = {
+      ...baseWeekly,
+      title: 'Daily Habit',
+      period: 'daily',
+      streakDays: 3,
+    };
+    render(<HabitCard habit={dailyHabit} />);
+
+    expect(screen.getByText('15 pts')).toBeInTheDocument();
+    expect(screen.getByText(/3 Days/)).toBeInTheDocument();
+    // Daily nudge ladder unchanged: no nudge fires at a 3-day streak.
+    expect(screen.queryByText(/from 1.5x/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/from 2x/)).not.toBeInTheDocument();
+  });
+
+  it('regression: daily habit with a 2-day streak still nudges "1 day from 1.5x"', () => {
+    const dailyHabit: Habit = {
+      ...baseWeekly,
+      title: 'Daily Habit',
+      period: 'daily',
+      streakDays: 2,
+    };
+    render(<HabitCard habit={dailyHabit} />);
+
+    expect(screen.getByText('1 day from 1.5x!')).toBeInTheDocument();
+  });
+});
+
 describe('HabitCard - React.memo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
