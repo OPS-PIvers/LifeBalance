@@ -8,6 +8,7 @@ import { TEMPLATE_ICONS } from '@/data/templateIcons';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface Props {
   isOpen: boolean;
@@ -32,6 +33,14 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   } = useShopping();
 
   const [activeTab, setActiveTab] = useState<'stores' | 'categories' | 'templates'>('stores');
+
+  // Shared destructive-confirmation dialog state
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: React.ReactNode;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Template Form State
   const [editingTemplate, setEditingTemplate] = useState<Partial<QuickStockList> | null>(null);
@@ -200,31 +209,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
     setEditingStoreId(null);
   };
 
-  const handleDeleteStore = async (id: string) => {
-    toast((t) => (
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Delete this store? Items will lose this tag.</span>
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => toast.dismiss(t.id)}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={async () => {
-              toast.dismiss(t.id);
-              await deleteStore(id);
-            }}
-          >
-            Delete
-          </Button>
-        </div>
-      </div>
-    ), { duration: 5000 });
+  const handleDeleteStore = (id: string) => {
+    setConfirm({
+      title: 'Delete Store',
+      message: 'Delete this store? Items will lose this tag.',
+      confirmLabel: 'Delete',
+      onConfirm: () => {
+        void deleteStore(id);
+      },
+    });
   };
 
   // Category Management
@@ -262,31 +255,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
   };
 
   const resetCategories = () => {
-    toast((t) => (
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Reset to default categories?</span>
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => toast.dismiss(t.id)}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              toast.dismiss(t.id);
-              setLocalCategories([...GROCERY_CATEGORIES]);
-              setHasUnsavedCategoryChanges(true);
-            }}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
-    ), { duration: 5000 });
+    setConfirm({
+      title: 'Reset Categories',
+      message: 'Reset to default categories?',
+      confirmLabel: 'Reset',
+      onConfirm: () => {
+        setLocalCategories([...GROCERY_CATEGORIES]);
+        setHasUnsavedCategoryChanges(true);
+      },
+    });
   };
 
   return (
@@ -548,31 +525,15 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                              variant="ghost-destructive"
                              size="icon"
                              onClick={() => {
-                               toast((t) => (
-                                 <div className="flex flex-col gap-2">
-                                   <span className="text-sm font-medium">Delete template &quot;{list.name}&quot;?</span>
-                                   <div className="flex justify-end gap-2">
-                                     <Button
-                                       variant="secondary"
-                                       size="sm"
-                                       onClick={() => toast.dismiss(t.id)}
-                                     >
-                                       Cancel
-                                     </Button>
-                                     <Button
-                                       variant="destructive"
-                                       size="sm"
-                                       onClick={async () => {
-                                         toast.dismiss(t.id);
-                                         await deleteQuickStockList(list.id);
-                                         toast.success('Template deleted');
-                                       }}
-                                     >
-                                       Delete
-                                     </Button>
-                                   </div>
-                                 </div>
-                               ));
+                               setConfirm({
+                                 title: 'Delete Template',
+                                 message: `Delete template "${list.name}"?`,
+                                 confirmLabel: 'Delete',
+                                 onConfirm: () => {
+                                   // deleteQuickStockList already toasts on success.
+                                   void deleteQuickStockList(list.id);
+                                 },
+                               });
                              }}
                            >
                              <Trash2 className="w-4 h-4" />
@@ -732,6 +693,19 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                 </Button>
             </div>
         )}
+
+        <ConfirmDialog
+          isOpen={confirm !== null}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => {
+            confirm?.onConfirm();
+            setConfirm(null);
+          }}
+          title={confirm?.title ?? ''}
+          message={confirm?.message}
+          confirmLabel={confirm?.confirmLabel}
+          confirmVariant="destructive"
+        />
     </Drawer>
   );
 };
