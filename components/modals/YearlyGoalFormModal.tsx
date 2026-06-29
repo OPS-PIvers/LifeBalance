@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { YearlyGoal } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface YearlyGoalFormModalProps {
   isOpen: boolean;
@@ -150,13 +151,15 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
       </div>
 
       <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800">
-        <button
+        <Button
+          variant="warning"
+          size="lg"
           onClick={handleSave}
           disabled={!title || requiredMonths < 1 || requiredMonths > 12}
-          className="w-full py-3 bg-warm-500 dark:bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) hover:bg-warm-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+          className="w-full"
         >
           {editingGoal ? 'Update Goal' : 'Create Goal'}
-        </button>
+        </Button>
       </div>
     </Drawer>
   );

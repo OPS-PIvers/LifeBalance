@@ -2,6 +2,7 @@ import React, { useId } from 'react';
 import { Calendar, AlertCircle } from 'lucide-react';
 import { HouseholdMember } from '@/types/schema';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
+import { Button } from '@/components/ui/Button';
 
 interface CaptureTodoTabProps {
   text: string;
@@ -98,15 +99,13 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
         )}
       </fieldset>
 
-      <button
+      <Button
         onClick={onSubmit}
         disabled={members.length === 0 || !text.trim()}
-        className={`w-full py-3.5 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) mt-4 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 ${
-          members.length === 0 || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98]'
-        }`}
+        className="w-full py-3.5 mt-4"
       >
         Create Task
-      </button>
+      </Button>
     </div>
   );
 };

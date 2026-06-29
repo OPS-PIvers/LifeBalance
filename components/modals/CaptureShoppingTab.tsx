@@ -2,6 +2,7 @@ import React from 'react';
 import { Store, ChevronDown } from 'lucide-react';
 import { GROCERY_CATEGORIES } from '@/data/groceryCategories';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
+import { Button } from '@/components/ui/Button';
 
 interface CaptureShoppingTabProps {
   name: string;
@@ -88,13 +89,14 @@ export const CaptureShoppingTab: React.FC<CaptureShoppingTabProps> = ({
       </div>
 
       <div className="pt-2">
-        <button
+        <Button
           onClick={onSubmit}
           disabled={!name.trim()}
-          className="w-full py-3 bg-accent-600 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 hover:bg-accent-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 dark:bg-accent-500 dark:hover:bg-accent-400"
+          size="lg"
+          className="w-full"
         >
           Add to Shopping List
-        </button>
+        </Button>
       </div>
     </div>
   );

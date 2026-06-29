@@ -6,6 +6,7 @@ import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOf
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
 
@@ -314,23 +315,25 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           >
             {/* Calendar Controls */}
             <div className="flex items-center justify-between bg-white dark:bg-brand-800 p-2 rounded-xl border border-brand-200 dark:border-brand-700 shadow-xs">
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Previous month"
               >
                 <ChevronLeft size={20} />
-              </button>
+              </Button>
               <h3 className="text-lg font-bold text-brand-800 dark:text-brand-100">
                 {format(calendarDate, 'MMMM yyyy')}
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Next month"
               >
                 <ChevronRight size={20} />
-              </button>
+              </Button>
             </div>
 
             {/* Calendar Grid */}
@@ -540,12 +543,15 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           >
             {/* Add New Submission Button */}
             {!isAddMode && (
-              <button
+              <Button
+                variant="warning"
+                size="lg"
                 onClick={() => setIsAddMode(true)}
-                className="w-full mb-4 py-3 bg-warm-500 text-white font-semibold rounded-btn flex items-center justify-center gap-2 hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+                leftIcon={<Plus size={16} />}
+                className="w-full mb-4"
               >
-                <Plus size={16} /> Add Submission
-              </button>
+                Add Submission
+              </Button>
             )}
 
             {/* Add Form */}
@@ -587,18 +593,20 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => setIsAddMode(false)}
-                    className="flex-1 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-lg hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
+                    className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="warning"
                     onClick={handleAdd}
-                    className="flex-1 py-2 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+                    className="flex-1"
                   >
                     Add
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -662,23 +670,25 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                               </div>
                             </div>
                             <div className="flex items-center gap-1 ml-3 shrink-0">
-                              <button
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => {
                                   setEditingSubmission(sub);
                                   setFormCount(sub.count.toString());
                                 }}
-                                className="p-2 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
                                 aria-label="Edit submission"
                               >
                                 <Edit2 size={14} />
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="ghost-destructive"
+                                size="icon"
                                 onClick={() => handleDelete(sub.id)}
-                                className="p-2 text-brand-400 hover:text-money-neg hover:bg-money-neg/10 rounded-lg transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                                 aria-label="Delete submission"
                               >
                                 <Trash2 size={14} />
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -697,13 +707,14 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
         <div className="absolute inset-0 bg-white dark:bg-brand-800 z-10 p-4 flex flex-col">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-brand-800 dark:text-brand-100">Edit Submission</h3>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setEditingSubmission(null)}
-              className="text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 p-1 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
               aria-label="Close edit"
             >
               <X size={20} />
-            </button>
+            </Button>
           </div>
 
           <div className="mb-4">
@@ -725,18 +736,22 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
 
           <div className="mt-auto flex gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => setEditingSubmission(null)}
-              className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-xl hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="warning"
+              size="lg"
               onClick={handleUpdate}
-              className="flex-1 py-3 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+              className="flex-1"
             >
               Save Changes
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import { ParsedTransaction } from '@/types/ui';
 import { BudgetBucket, Store, Account } from '@/types/schema';
 import { CompactSelect } from '@/components/ui/CompactSelect';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { Button } from '@/components/ui/Button';
 
 interface CaptureTransactionReviewProps {
   parsedTransactions: ParsedTransaction[];
@@ -153,13 +154,13 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
         </p>
       </div>
 
-      <button
+      <Button
         onClick={onSubmit}
         disabled={selectedCount === 0}
-        className="w-full py-4 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn shadow-btn-primary active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) hover:bg-accent-700 dark:hover:bg-accent-400 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+        className="w-full py-4"
       >
         Add {selectedCount} to Action Queue
-      </button>
+      </Button>
     </div>
   );
 };

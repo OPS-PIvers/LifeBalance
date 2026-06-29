@@ -3,6 +3,7 @@ import { Habit } from '@/types/schema';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -344,14 +345,16 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       </div>
 
       <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4">
-        <button
+        <Button
           type="button"
+          variant="warning"
+          size="lg"
           onClick={handleSave}
-          disabled={isSaving}
-          className={`w-full py-3 bg-warm-500 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) hover:bg-warm-600 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 ${isSaving ? 'opacity-70 cursor-not-allowed' : 'active:scale-[0.98]'}`}
+          isLoading={isSaving}
+          className="w-full"
         >
-          {isSaving ? 'Saving...' : (editingHabit ? 'Save Changes' : 'Create Habit')}
-        </button>
+          {editingHabit ? 'Save Changes' : 'Create Habit'}
+        </Button>
       </div>
     </Drawer>
   );
