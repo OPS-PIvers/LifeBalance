@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Save } from 'lucide-react';
 import { HouseholdMember, Role } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 
 interface MemberModalProps {
@@ -112,25 +113,12 @@ const MemberModal: React.FC<MemberModalProps> = ({
         </div>
 
         <div className="pt-4 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-brand-600 dark:text-brand-300 font-medium hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-xl transition-colors"
-          >
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex items-center gap-2 px-6 py-2 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:cursor-not-allowed focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
-          >
-            {loading ? (
-              <span className="animate-spin">⌛</span>
-            ) : (
-              <Save size={18} />
-            )}
+          </Button>
+          <Button type="submit" isLoading={loading} leftIcon={<Save size={18} />}>
             Save Member
-          </button>
+          </Button>
         </div>
       </form>
     </Drawer>

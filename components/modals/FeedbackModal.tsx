@@ -6,8 +6,9 @@ import { db } from '@/firebase.config';
 import { collection, addDoc } from 'firebase/firestore';
 import { FeedbackReport } from '@/types/schema';
 import toast from 'react-hot-toast';
-import { Loader2, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -68,21 +69,21 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
           />
         </div>
         <div className="flex justify-end pt-2 gap-3">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onClose}
-            className="px-4 py-2 text-brand-600 dark:text-brand-300 font-medium hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard)"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            disabled={isSubmitting || !message.trim()}
-            className="flex items-center gap-2 bg-accent-600 dark:bg-accent-500 text-white px-4 py-2 rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) font-semibold focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            disabled={!message.trim()}
+            isLoading={isSubmitting}
+            leftIcon={<Send className="w-4 h-4" />}
           >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             Send Report
-          </button>
+          </Button>
         </div>
       </form>
     </Drawer>

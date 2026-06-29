@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface ChallengeHubModalProps {
   isOpen: boolean;
@@ -274,14 +275,16 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 {kidModeEnabled && (
                   <div className="rounded-2xl border-2 border-warm-200 dark:border-warm-500/40 bg-warm-50 dark:bg-warm-500/10 p-4">
                     {!showFamilyForm ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="warning"
+                        size="lg"
                         onClick={() => setShowFamilyForm(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-warm-500 px-4 py-3 text-sm font-bold text-white active:scale-95 transition-transform"
+                        leftIcon={<Users size={18} />}
+                        className="w-full"
                       >
-                        <Users size={18} />
                         New family challenge
-                      </button>
+                      </Button>
                     ) : (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -379,21 +382,24 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                         {/* Actions */}
                         <div className="flex gap-2 pt-1">
-                          <button
+                          <Button
                             type="button"
+                            variant="secondary"
                             onClick={resetFamilyForm}
-                            className="flex-1 rounded-xl bg-warm-100 dark:bg-warm-500/20 px-4 py-2.5 text-sm font-bold text-warm-700 dark:text-warm-200 active:scale-95 transition-transform"
+                            className="flex-1"
                           >
                             Cancel
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="warning"
                             onClick={handleCreateFamilyChallenge}
-                            disabled={!familyTitle.trim() || savingFamily}
-                            className="flex-1 rounded-xl bg-warm-500 px-4 py-2.5 text-sm font-bold text-white active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!familyTitle.trim()}
+                            isLoading={savingFamily}
+                            className="flex-1"
                           >
-                            {savingFamily ? 'Creating…' : 'Create'}
-                          </button>
+                            Create
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -677,13 +683,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 ) : (
                   <div className="text-center py-12">
                     <p className="text-brand-400 dark:text-brand-400 mb-4">No yearly goal set</p>
-                    <button
+                    <Button
+                      size="lg"
                       onClick={() => setIsYearlyGoalFormOpen(true)}
-                      className="px-6 py-3 bg-brand-800 text-white font-bold rounded-xl active:scale-95 transition-transform flex items-center gap-2 mx-auto"
+                      leftIcon={<Plus size={18} />}
+                      className="mx-auto"
                     >
-                      <Plus size={18} />
                       Create Yearly Goal
-                    </button>
+                    </Button>
                   </div>
                 )}
               </TabsContent>
@@ -849,13 +856,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
           {/* Footer Actions */}
           <div className="p-4 border-t border-brand-100 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 shrink-0">
             {activeTab === 'challenge' && (
-              <button
+              <Button
+                size="lg"
                 onClick={handleSaveChallenge}
                 disabled={!title}
-                className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 Save Challenge
-              </button>
+              </Button>
             )}
             {activeTab === 'yearly' && displayYearlyGoal && (
               <div className="text-center">
@@ -865,12 +873,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
               </div>
             )}
             {activeTab === 'freeze' && (
-              <button
+              <Button
+                variant="secondary"
+                size="lg"
                 onClick={onClose}
-                className="w-full py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-700 dark:text-brand-200 font-bold rounded-xl active:scale-95 transition-transform"
+                className="w-full"
               >
                 Close
-              </button>
+              </Button>
             )}
           </div>
         </Tabs>

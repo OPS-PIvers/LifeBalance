@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Loader2, AlertCircle, Scissors } from 'lucide-react';
+import { Plus, Trash2, AlertCircle, Scissors } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import toast from 'react-hot-toast';
@@ -166,14 +167,16 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
             </div>
 
             {splits.length > 2 && (
-              <button
+              <Button
+                variant="ghost-destructive"
+                size="icon-sm"
                 onClick={() => handleRemoveSplit(split.id)}
-                className="absolute top-2 right-2 text-brand-300 dark:text-brand-600 hover:text-money-neg p-1 hover:bg-money-neg/10 rounded-sm transition-colors"
+                className="absolute top-2 right-2"
                 title="Remove split"
                 aria-label={`Remove split ${index + 1}`}
               >
                 <Trash2 size={16} />
-              </button>
+              </Button>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-4">
@@ -226,13 +229,15 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
           </div>
         ))}
 
-        <button
+        <Button
+          variant="dashed"
           onClick={handleAddSplit}
           disabled={isProcessing}
-          className="w-full py-3 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-xl text-brand-400 dark:text-brand-400 font-bold text-sm hover:border-brand-400 dark:hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-all flex items-center justify-center gap-2"
+          leftIcon={<Plus size={16} />}
+          className="w-full"
         >
-          <Plus size={16} /> Add Another Split
-        </button>
+          Add Another Split
+        </Button>
       </div>
 
       <div className="sticky bottom-0 bg-white dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 p-4 space-y-3">
@@ -253,30 +258,25 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
         </div>
 
         <div className="flex gap-2">
-          <button
+          <Button
+            variant="ghost"
+            size="lg"
             onClick={onClose}
             disabled={isProcessing}
-            className="flex-1 py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-200 dark:hover:bg-brand-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            size="lg"
             onClick={handleSplit}
-            disabled={isProcessing || !isValidTotal}
-            className="flex-1 py-3 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn hover:bg-accent-700 dark:hover:bg-accent-400 transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40"
+            disabled={!isValidTotal}
+            isLoading={isProcessing}
+            leftIcon={<Scissors size={18} />}
+            className="flex-1"
           >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Splitting...</span>
-              </>
-            ) : (
-              <>
-                <Scissors size={18} />
-                <span>Split Transaction</span>
-              </>
-            )}
-          </button>
+            <span>Split Transaction</span>
+          </Button>
         </div>
       </div>
     </Drawer>
