@@ -3,7 +3,7 @@ import { HouseholdContextType, HouseholdSliceProviders } from './FirebaseHouseho
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
 import { computeTodoCompletionCredit } from '@/utils/todoPoints';
-import { redemptionMemberDelta } from '@/utils/redemption';
+import { redemptionMemberDelta, REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 import { calculateSafeToSpendBreakdown, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
 import {
   Account,
@@ -15,6 +15,7 @@ import {
   Challenge,
   RewardItem,
   RewardRedemption,
+  RewardRedemptionRecord,
   HouseholdMember,
   Meal,
   ShoppingItem,
@@ -146,20 +147,19 @@ const SEED_GROCERY_CATALOG: GroceryCatalogItem[] = [
   { id: 'gc3', name: 'Bread', category: 'Bakery', defaultQuantity: '1', defaultStore: 'Safeway', purchaseCount: 8, lastPurchased: new Date().toISOString() },
 ];
 
-// Plan 080d Test-Mode harness: two rewards so the store + the parent-facing
-// "Manage rewards" UI (shown when Kid Mode is on) are walkable. One realWorld,
-// one allowance reward (allowanceCents in integer cents). Dormant for normal
-// households — the store renders read-only when Kid Mode is off.
+// Test-Mode harness: two rewards so the store + the (now all-households) "Manage
+// rewards" UI in the Rewards tab are walkable. One realWorld, one allowance reward
+// (allowanceCents in integer cents — the allowance kind only surfaces in Kid Mode).
 const SEED_REWARDS: RewardItem[] = [
   { id: 'rw1', title: 'Movie Night', cost: 50, icon: '🎬', type: 'realWorld', active: true, createdBy: 'test-user-id' },
   { id: 'rw2', title: '$5 Allowance', cost: 100, icon: '💵', type: 'allowance', allowanceCents: 500, active: true, createdBy: 'test-user-id' },
 ];
 
 // Plan 080d-2 Test-Mode harness: one PENDING redemption request from the seeded
-// kid so the parent review queue (in RewardsModal) + the rose badge on the
-// rewards control are both walkable in Test Mode. It targets the allowance reward
-// so approving it exercises BOTH the point deduction and the allowance IOU credit.
-// Dormant for normal households — the queue/badge are gated on Kid Mode being on.
+// kid so the parent review queue (in the Rewards tab) is walkable in Test Mode. It
+// targets the allowance reward so approving it exercises BOTH the point deduction
+// and the allowance IOU credit. Dormant for normal households — the queue is gated
+// on Kid Mode being on.
 const SEED_PENDING_REDEMPTIONS: RewardRedemption[] = [
   {
     id: 'redemption_seed_1',
@@ -175,6 +175,21 @@ const SEED_PENDING_REDEMPTIONS: RewardRedemption[] = [
   },
 ];
 
+// Rewards center Test-Mode harness: one past redemption so the "Recently redeemed"
+// history section renders (and is walkable) without first redeeming. Instant
+// redemptions append to this most-recent-first list in the mock redeemReward.
+const SEED_REDEMPTION_HISTORY: RewardRedemptionRecord[] = [
+  {
+    id: 'redemption_history_seed_1',
+    rewardId: 'rw1',
+    rewardTitle: 'Movie Night',
+    icon: '🎬',
+    cost: 50,
+    redeemedByUid: 'test-user-id',
+    redeemedAt: new Date().toISOString(),
+  },
+];
+
 export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // State management with in-memory persistence
   const [accounts, setAccounts] = useState<Account[]>(SEED_ACCOUNTS);
@@ -186,6 +201,11 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const [yearlyGoals] = useState<YearlyGoal[]>([]);
   const [rewards, setRewards] = useState<RewardItem[]>(SEED_REWARDS);
   const [pendingRedemptions, setPendingRedemptions] = useState<RewardRedemption[]>(SEED_PENDING_REDEMPTIONS);
+  const [redemptionHistory, setRedemptionHistory] = useState<RewardRedemptionRecord[]>(SEED_REDEMPTION_HISTORY);
+  // Stateful so an instant redeem in Test Mode actually deducts the shared total
+  // (production deducts household.points.total). dailyPoints/weeklyPoints stay
+  // fixed — only the redeemable lifetime total moves.
+  const [totalPoints, setTotalPoints] = useState(500);
   const [members, setMembers] = useState<HouseholdMember[]>(SEED_MEMBERS);
   // Mirror the latest members so approveRedemption can read the kid's current
   // points.total for the affordability check deterministically, without coupling
@@ -584,6 +604,34 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Kid profile removed');
   }, []);
 
+  // Instant redemption (the adult flow) — deduct from the shared lifetime total
+  // and append a most-recent-first history record (capped), mirroring the live
+  // context's atomic redeemReward so the rewards center is fully walkable in Test
+  // Mode (the previous noOp left points + history untouched).
+  const redeemReward = useCallback(async (rewardId: string) => {
+    const reward = rewards.find(r => r.id === rewardId);
+    if (!reward) {
+      toast.error('Mock: Reward not found');
+      return;
+    }
+    if (totalPoints < reward.cost) {
+      toast.error('Mock: Not enough points');
+      return;
+    }
+    const record: RewardRedemptionRecord = {
+      id: generateId(),
+      rewardId: reward.id,
+      rewardTitle: reward.title,
+      icon: reward.icon,
+      cost: reward.cost,
+      redeemedByUid: 'test-user-id',
+      redeemedAt: new Date().toISOString(),
+    };
+    setTotalPoints(prev => prev - reward.cost);
+    setRedemptionHistory(prev => [record, ...prev].slice(0, REDEMPTION_HISTORY_LIMIT));
+    toast.success(`Mock: Redeemed ${reward.title}`);
+  }, [rewards, totalPoints]);
+
   // Reward CRUD operations (Plan 080d) — mutate the stateful rewards store so the
   // parent-facing "Manage rewards" UI is walkable in Test Mode.
   const addReward = useCallback(async (input: Omit<RewardItem, 'id' | 'createdBy'>) => {
@@ -718,7 +766,6 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
   const safeToSpend = safeToSpendBreakdown.safeToSpend;
   const dailyPoints = 30;
   const weeklyPoints = 150;
-  const totalPoints = 500;
   const currentUser = members[0] || null;
   const activeChallenge = challenges[0] || null;
   const activeYearlyGoals: YearlyGoal[] = [];
@@ -740,6 +787,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     currency,
     kidModePinHash,
     pendingRedemptions,
+    redemptionHistory,
     moduleVisibility,
 
   } as unknown as Household;
@@ -905,7 +953,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateChallenge: noOp,
     addChallenge,
     markChallengeComplete: noOp,
-    redeemReward: noOp,
+    redeemReward,
     addReward,
     updateReward,
     deleteReward,

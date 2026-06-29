@@ -217,6 +217,61 @@ describe('MockHouseholdContext reward CRUD (Plan 080d)', () => {
   });
 });
 
+// Rewards center: the mock redeemReward is now a real implementation (was a
+// no-op) so the instant-redeem flow is walkable in Test Mode — it deducts the
+// shared lifetime total and logs a most-recent-first history record.
+describe('MockHouseholdContext instant redemption + history (rewards center)', () => {
+  const captureHousehold = () => renderHook(() => useHousehold(), { wrapper });
+
+  it('seeds one redemption-history record on the household doc', () => {
+    const { result } = captureHousehold();
+    const history = result.current.household?.redemptionHistory ?? [];
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ rewardTitle: 'Movie Night', cost: 50 });
+  });
+
+  it('redeemReward deducts the shared total and prepends a history record', async () => {
+    const { result } = captureHousehold();
+    const beforeTotal = result.current.totalPoints; // seeded at 500
+    const beforeHist = result.current.household?.redemptionHistory?.length ?? 0;
+
+    await act(async () => {
+      await result.current.redeemReward('rw1'); // Movie Night, cost 50
+    });
+
+    expect(result.current.totalPoints).toBe(beforeTotal - 50);
+    const history = result.current.household?.redemptionHistory ?? [];
+    expect(history).toHaveLength(beforeHist + 1);
+    expect(history[0]).toMatchObject({
+      rewardId: 'rw1',
+      rewardTitle: 'Movie Night',
+      cost: 50,
+      redeemedByUid: 'test-user-id',
+    });
+  });
+
+  it('redeemReward rejects when the shared total cannot afford the reward (no deduction, no log)', async () => {
+    const { result } = captureHousehold();
+
+    // Drain 500 → 0 via the 100-pt allowance reward (5×), then attempt a 50-pt
+    // redemption while the balance is 0.
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await result.current.redeemReward('rw2'); // cost 100
+      });
+    }
+    expect(result.current.totalPoints).toBe(0);
+
+    const histLen = result.current.household?.redemptionHistory?.length ?? 0;
+    await act(async () => {
+      await result.current.redeemReward('rw1'); // cost 50, but total is 0 → reject
+    });
+
+    expect(result.current.totalPoints).toBe(0);
+    expect(result.current.household?.redemptionHistory ?? []).toHaveLength(histLen);
+  });
+});
+
 // Plan 080d-2: reward REDEMPTION through the mock provider. Seeds one pending
 // request (redemption_seed_1, allowance reward rw2, cost 100, allowanceCents 500)
 // for kid_leo (starting total 220, allowance 0). Exercises the real mock wiring:

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, act } from '@testing-library/react';
-import type { RewardItem, RewardRedemption } from '@/types/schema';
+import type { RewardItem, RewardRedemption, RewardRedemptionRecord } from '@/types/schema';
+import { REDEMPTION_HISTORY_LIMIT } from '@/utils/redemption';
 
 /**
  * Behavior tests for the Plan 080d-2 reward-redemption context methods:
@@ -449,6 +450,86 @@ describe('denyRedemption', () => {
 
     await act(async () => {
       await captured.value!.denyRedemption('redemption_1');
+    });
+
+    expect(txUpdates).toHaveLength(0);
+  });
+});
+
+describe('redeemReward (instant, rewards center)', () => {
+  it('deducts shared points AND appends a history record in ONE transaction', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
+    householdDocData = { points: { daily: 0, weekly: 0, total: 200 } };
+
+    await act(async () => {
+      await captured.value!.redeemReward('rw1');
+    });
+
+    // One atomic update to the household doc: points deducted + history appended.
+    expect(txUpdates).toHaveLength(1);
+    const hh = txUpdates[0]!;
+    expect(hh.path).toBe(householdPath);
+    expect(hh.data['points.total']).toEqual({ __increment: -50 });
+
+    const history = hh.data.redemptionHistory as RewardRedemptionRecord[];
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      rewardId: 'rw1',
+      rewardTitle: 'Movie Night',
+      icon: '🎬',
+      cost: 50,
+      redeemedByUid: 'parent_1',
+    });
+    expect(typeof history[0]!.id).toBe('string');
+    expect(typeof history[0]!.redeemedAt).toBe('string');
+  });
+
+  it('rejects (no write) when the shared total cannot afford the reward', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
+    householdDocData = { points: { daily: 0, weekly: 0, total: 10 } }; // < cost 50
+
+    await act(async () => {
+      await captured.value!.redeemReward('rw1');
+    });
+
+    expect(txUpdates).toHaveLength(0);
+  });
+
+  it('prepends the newest record and caps history at REDEMPTION_HISTORY_LIMIT', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
+    // Seed a full history so the cap is exercised.
+    const existing: RewardRedemptionRecord[] = Array.from({ length: REDEMPTION_HISTORY_LIMIT }, (_, i) => ({
+      id: `old_${i}`,
+      rewardId: 'rwX',
+      rewardTitle: `Old ${i}`,
+      icon: '⭐',
+      cost: 5,
+      redeemedByUid: 'parent_1',
+      redeemedAt: new Date(2020, 0, 1, 0, i).toISOString(),
+    }));
+    householdDocData = { points: { daily: 0, weekly: 0, total: 999 }, redemptionHistory: existing };
+
+    await act(async () => {
+      await captured.value!.redeemReward('rw1');
+    });
+
+    const history = txUpdates[0]!.data.redemptionHistory as RewardRedemptionRecord[];
+    // Newest is first; total length is clamped to the cap (oldest entry dropped).
+    expect(history).toHaveLength(REDEMPTION_HISTORY_LIMIT);
+    expect(history[0]).toMatchObject({ rewardId: 'rw1', rewardTitle: 'Movie Night' });
+    expect(history[history.length - 1]!.id).toBe(`old_${REDEMPTION_HISTORY_LIMIT - 2}`);
+  });
+
+  it('does nothing when the reward id is unknown', async () => {
+    renderProvider();
+    emitCollection(`${householdPath}/rewards`, [docSnap('rw1', realWorldReward)]);
+    householdDocData = { points: { daily: 0, weekly: 0, total: 200 } };
+
+    await act(async () => {
+      await captured.value!.redeemReward('does-not-exist');
     });
 
     expect(txUpdates).toHaveLength(0);

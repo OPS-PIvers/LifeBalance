@@ -269,6 +269,25 @@ export interface RewardRedemption {
   requestedByUid: string; // uid of the (parent) session that submitted the request
 }
 
+/**
+ * RewardRedemptionRecord — a completed reward redemption, logged for the rewards
+ * center's "Recently redeemed" history. Each instant redemption (the adult flow:
+ * redeemReward → deduct shared household points) appends one of these. Stored as a
+ * bounded, most-recent-first array on `Household.redemptionHistory` (capped at
+ * REDEMPTION_HISTORY_LIMIT — see utils/redemption.ts), mirroring the rules-free
+ * `pendingRedemptions` array so it needs no firestore.rules change. All fields are
+ * snapshots so a later edit/delete of the reward can't rewrite history.
+ */
+export interface RewardRedemptionRecord {
+  id: string;
+  rewardId: string; // The reward that was redeemed (may be edited/deleted later)
+  rewardTitle: string; // Snapshot of the reward title at redemption time
+  icon: string; // Snapshot of the reward icon at redemption time
+  cost: number; // Points deducted from the shared household total
+  redeemedByUid: string; // uid of the member who redeemed (resolved to a name for display)
+  redeemedAt: string; // ISO timestamp
+}
+
 export interface Challenge {
   id: string;
   month: string; // YYYY-MM format
@@ -455,6 +474,13 @@ export interface Household {
   // (treat absent as empty). The household-doc update rule is field-permissive,
   // so writing this array needs no firestore.rules change.
   pendingRedemptions?: RewardRedemption[];
+
+  // Rewards center: log of completed instant redemptions (the adult flow — points
+  // are deducted from the shared household total). Bounded + most-recent-first,
+  // capped at REDEMPTION_HISTORY_LIMIT (utils/redemption.ts) so the doc stays small.
+  // Absent on legacy households (treat absent as empty). Like pendingRedemptions,
+  // it rides on the field-permissive household-doc update rule (no rules change).
+  redemptionHistory?: RewardRedemptionRecord[];
 
   // Billing / subscription (Plan 050). Absent on every legacy + free-tier
   // household — treat absent as the free plan everywhere (see utils/entitlements.ts).
