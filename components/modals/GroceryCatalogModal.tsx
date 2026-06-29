@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface GroceryCatalogModalProps {
   isOpen: boolean;
@@ -162,11 +163,11 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
       {/* List */}
       <div className="p-4 space-y-2 bg-brand-50/30 dark:bg-brand-700/20 min-h-[50vh]">
           {filteredCatalog.length === 0 ? (
-            <div className="text-center py-12 text-brand-400 dark:text-brand-500">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p>No history found matching &quot;{searchQuery}&quot;</p>
-              <p className="text-xs mt-1">Items you check off your shopping list will appear here.</p>
-            </div>
+            <EmptyState
+              icon={<ShoppingCart size={28} />}
+              title={<>No history found matching &quot;{searchQuery}&quot;</>}
+              description="Items you check off your shopping list will appear here."
+            />
           ) : (
             filteredCatalog.map(item => (
               <div

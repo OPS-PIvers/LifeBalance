@@ -3,6 +3,7 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import type { HabitPatternInsight } from '@/services/geminiService.types';
 import { Sparkles, Trophy, TrendingUp, AlertCircle, RefreshCw, Lightbulb } from 'lucide-react';
 import toast from 'react-hot-toast';
+import EmptyState from '@/components/ui/EmptyState';
 
 export const HabitCoach: React.FC = () => {
   const { habits } = useGamification();
@@ -28,13 +29,11 @@ export const HabitCoach: React.FC = () => {
 
   if (habits.length === 0) {
     return (
-      <div className="text-center py-12 px-4">
-        <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Trophy size={32} />
-        </div>
-        <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50 mb-2">No Habits Yet</h3>
-        <p className="text-brand-400 dark:text-brand-400 text-sm">Start tracking some habits to unlock coaching insights!</p>
-      </div>
+      <EmptyState
+        icon={<Trophy size={32} />}
+        title="No Habits Yet"
+        description="Start tracking some habits to unlock coaching insights!"
+      />
     );
   }
 

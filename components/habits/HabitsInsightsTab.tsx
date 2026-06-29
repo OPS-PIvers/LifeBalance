@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { BarChart2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
+import EmptyState from '@/components/ui/EmptyState';
 
 // recharts is heavy — lazy-load the chart body so it only enters the bundle when
 // the Insights tab is actually opened (keeps the Habits page boot lean).
@@ -20,15 +21,12 @@ const HabitsInsightsTab: React.FC = () => {
 
   if (habits.length === 0) {
     return (
-      <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40">
-        <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
-          <BarChart2 size={28} />
-        </div>
-        <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No insights yet</h3>
-        <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-          Track a few habits to unlock your category balance and consistency heatmap.
-        </p>
-      </div>
+      <EmptyState
+        variant="dashed"
+        icon={<BarChart2 size={28} />}
+        title="No insights yet"
+        description="Track a few habits to unlock your category balance and consistency heatmap."
+      />
     );
   }
 

@@ -7,6 +7,7 @@ import { roundMoney } from '@/utils/money';
 import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Section } from '@/components/ui/Section';
+import EmptyState from '@/components/ui/EmptyState';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 
@@ -120,15 +121,12 @@ const BudgetHistory: React.FC = () => {
   if (historyGroups.length === 0) {
     return (
       <Section title="Period history">
-        <div className="surface-section flex flex-col items-center justify-center text-center py-12 px-6">
-          <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-            <History size={28} className="text-brand-400 dark:text-brand-500" />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-brand-800 dark:text-brand-100">No history yet</h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-            Budget snapshots are created automatically when you approve a new paycheck.
-          </p>
-        </div>
+        <EmptyState
+          variant="surface"
+          icon={<History size={28} />}
+          title="No history yet"
+          description="Budget snapshots are created automatically when you approve a new paycheck."
+        />
       </Section>
     );
   }

@@ -9,6 +9,7 @@ import {
   ListChecks, Check, Flame, Star, BarChart2, Gift, Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
@@ -359,24 +360,22 @@ const Habits: React.FC = () => {
         <div className="px-4 pb-6">
           <TabsContent value="track" className="space-y-6">
             {categories.length === 0 && (
-              <div className="flex flex-col items-center text-center py-14 px-6 border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40">
-                <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
-                  <ListChecks size={28} />
-                </div>
-                <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No habits yet</h3>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-                  Start building your streak. Add a habit to begin earning points and rewards.
-                </p>
-                <Button
-                  onClick={() => setIsWizardOpen(true)}
-                  variant="primary"
-                  size="md"
-                  className="mt-5"
-                  leftIcon={<Sparkles size={16} />}
-                >
-                  Create your first habit
-                </Button>
-              </div>
+              <EmptyState
+                variant="dashed"
+                icon={<ListChecks size={28} />}
+                title="No habits yet"
+                description="Start building your streak. Add a habit to begin earning points and rewards."
+                action={
+                  <Button
+                    onClick={() => setIsWizardOpen(true)}
+                    variant="primary"
+                    size="md"
+                    leftIcon={<Sparkles size={16} />}
+                  >
+                    Create your first habit
+                  </Button>
+                }
+              />
             )}
 
             {categories.map((category) => (

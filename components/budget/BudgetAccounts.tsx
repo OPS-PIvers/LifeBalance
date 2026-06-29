@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import EmptyState from '@/components/ui/EmptyState';
 
 const BudgetAccounts: React.FC = () => {
   const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useFinance();
@@ -344,23 +345,21 @@ const BudgetAccounts: React.FC = () => {
 
       {/* Empty State */}
       {accounts.length === 0 && (
-        <div className="flex flex-col items-center justify-center text-center py-12 px-6 surface-section">
-          <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-            <Landmark size={28} className="text-brand-400 dark:text-brand-500" />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">No accounts yet</h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-            Add your checking, savings, and credit accounts to track your net worth.
-          </p>
-          <Button
-            variant="primary"
-            onClick={() => setIsAddModalOpen(true)}
-            className="mt-5"
-            leftIcon={<Plus size={18} />}
-          >
-            Add Account
-          </Button>
-        </div>
+        <EmptyState
+          variant="surface"
+          icon={<Landmark size={28} />}
+          title="No accounts yet"
+          description="Add your checking, savings, and credit accounts to track your net worth."
+          action={
+            <Button
+              variant="primary"
+              onClick={() => setIsAddModalOpen(true)}
+              leftIcon={<Plus size={18} />}
+            >
+              Add Account
+            </Button>
+          }
+        />
       )}
 
        {/* Add Account Button */}

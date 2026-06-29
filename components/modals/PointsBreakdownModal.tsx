@@ -10,6 +10,7 @@ import { doc, increment, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '@/firebase.config';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface PointsBreakdownModalProps {
   isOpen: boolean;
@@ -360,12 +361,10 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
     >
       <div className="p-4 space-y-3">
           {contributions.length === 0 ? (
-            <div className="text-center py-8 text-brand-500 dark:text-brand-400">
-                <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700/50 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Award className="w-8 h-8 text-brand-300 dark:text-brand-600" />
-                </div>
-                <p>No points recorded for this period.</p>
-            </div>
+            <EmptyState
+                icon={<Award className="w-8 h-8" />}
+                title="No points recorded for this period."
+            />
           ) : (
             contributions.map((item) => (
               <div

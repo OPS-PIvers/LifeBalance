@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { format, parseISO, isValid } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface InsightsArchiveModalProps {
   isOpen: boolean;
@@ -24,13 +25,11 @@ const InsightsArchiveModal: React.FC<InsightsArchiveModalProps> = ({ isOpen, onC
     <Drawer isOpen={isOpen} onClose={onClose} title="Insights Archive">
       <div className="space-y-4">
         {insightsHistory.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-brand-50 dark:bg-brand-700/50 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-300 dark:text-brand-600">
-              <Sparkles size={32} />
-            </div>
-            <h3 className="font-display text-brand-700 dark:text-brand-200 font-semibold mb-1">No insights yet</h3>
-            <p className="text-brand-400 dark:text-brand-500 text-sm">Generate your first insight from the dashboard!</p>
-          </div>
+          <EmptyState
+            icon={<Sparkles size={32} />}
+            title="No insights yet"
+            description="Generate your first insight from the dashboard!"
+          />
         ) : (
           insightsHistory.map((insight) => {
             // Parse date with error handling to prevent crashes

@@ -15,6 +15,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Popover } from '@/components/ui/Popover';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
@@ -648,17 +649,12 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
 
         {/* Main List */}
         {items.length === 0 ? (
-             <div className="text-center py-16 px-6 surface-section">
-                <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
-                    <ShoppingCart className="w-7 h-7" />
-                </div>
-                <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">
-                    {filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
-                </h3>
-                <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 mb-6">
-                    {filterStore ? 'No items match this store filter.' : 'Add items above to start your shopping list.'}
-                </p>
-                {filterStore ? (
+             <EmptyState
+                variant="surface"
+                icon={<ShoppingCart className="w-7 h-7" />}
+                title={filterStore ? `Nothing for ${filterStore}` : 'Your list is empty'}
+                description={filterStore ? 'No items match this store filter.' : 'Add items above to start your shopping list.'}
+                action={filterStore ? (
                     <Button variant="secondary" onClick={() => setFilterStore(null)}>
                         Clear Filter
                     </Button>
@@ -667,7 +663,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                         Add Item
                     </Button>
                 )}
-            </div>
+            />
         ) : filterStore ? (
              <div className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
                 {items.map(item => (

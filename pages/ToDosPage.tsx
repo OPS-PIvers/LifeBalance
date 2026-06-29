@@ -14,6 +14,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { SurfaceList, Row } from '@/components/ui/Section';
@@ -753,16 +754,17 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
             />
 
             {immediate.length === 0 && upcoming.length === 0 && radar.length === 0 && (
-                 <div className="text-center py-20 px-6 surface-section">
-                     <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-accent-600 dark:text-accent-300">
-                         <ClipboardList size={28} />
-                     </div>
-                     <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">All caught up</h3>
-                     <p className="text-brand-500 dark:text-brand-400 mt-1 mb-6">No active tasks. Add one to get started.</p>
-                     <Button variant="primary" onClick={openAddModal} leftIcon={<Plus size={16} />}>
-                         New Task
-                     </Button>
-                 </div>
+                 <EmptyState
+                     variant="surface"
+                     icon={<ClipboardList size={28} />}
+                     title="All caught up"
+                     description="No active tasks. Add one to get started."
+                     action={
+                         <Button variant="primary" onClick={openAddModal} leftIcon={<Plus size={16} />}>
+                             New Task
+                         </Button>
+                     }
+                 />
             )}
           </>
       ) : (
@@ -820,13 +822,12 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
             )}
 
             {completedToday.length === 0 && completedYesterday.length === 0 && completedWeek.length === 0 && completedOlder.length === 0 && !hasMoreCompletedTodos && (
-                 <div className="text-center py-20 px-6 surface-section">
-                     <div className="w-16 h-16 bg-brand-100 dark:bg-brand-700 rounded-full flex items-center justify-center mx-auto mb-4 text-brand-400 dark:text-brand-300">
-                         <History size={28} />
-                     </div>
-                     <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50">No history yet</h3>
-                     <p className="text-brand-500 dark:text-brand-400 mt-1">Completed tasks will appear here.</p>
-                 </div>
+                 <EmptyState
+                     variant="surface"
+                     icon={<History size={28} />}
+                     title="No history yet"
+                     description="Completed tasks will appear here."
+                 />
             )}
           </>
       )}

@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import EmptyState from '@/components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
 
@@ -357,23 +358,21 @@ const BudgetCalendar: React.FC = () => {
         </div>
 
         {selectedItems.length === 0 && selectedTodos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center py-12 px-6 surface-section">
-            <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-              <CalendarPlus size={28} className="text-brand-400 dark:text-brand-500" />
-            </div>
-            <h3 className="font-display text-base font-semibold text-brand-900 dark:text-brand-100">Nothing scheduled</h3>
-            <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-              No events or tasks on this day. Add a bill, income, or one-time expense.
-            </p>
-            <Button
-              variant="primary"
-              onClick={openAddModal}
-              className="mt-5"
-              leftIcon={<Plus size={18} />}
-            >
-              Create Event
-            </Button>
-          </div>
+          <EmptyState
+            variant="surface"
+            icon={<CalendarPlus size={28} />}
+            title="Nothing scheduled"
+            description="No events or tasks on this day. Add a bill, income, or one-time expense."
+            action={
+              <Button
+                variant="primary"
+                onClick={openAddModal}
+                leftIcon={<Plus size={18} />}
+              >
+                Create Event
+              </Button>
+            }
+          />
         ) : (
           <div className="space-y-3">
             {/* ToDos Section */}

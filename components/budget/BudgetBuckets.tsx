@@ -12,6 +12,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Select from '@/components/ui/Select';
+import EmptyState from '@/components/ui/EmptyState';
 import { BudgetBucketCard } from './BudgetBucketCard';
 
 const UNBUDGETED_BUCKET: BudgetBucket = {
@@ -273,23 +274,21 @@ const BudgetBuckets: React.FC = () => {
 
       {/* Empty State */}
       {buckets.length === 0 && !transactionsByBucket.has(UNBUDGETED_BUCKET.id) && (
-        <div className="flex flex-col items-center justify-center text-center py-12 px-6 surface-section">
-          <div className="w-14 h-14 rounded-card bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4">
-            <Wallet size={28} className="text-brand-400 dark:text-brand-500" />
-          </div>
-          <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">No budget buckets yet</h3>
-          <p className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-            Create spending categories to track where your money goes each pay period.
-          </p>
-          <Button
-            variant="primary"
-            onClick={handleAddBucket}
-            className="mt-5"
-            leftIcon={<Plus size={18} />}
-          >
-            Create Bucket
-          </Button>
-        </div>
+        <EmptyState
+          variant="surface"
+          icon={<Wallet size={28} />}
+          title="No budget buckets yet"
+          description="Create spending categories to track where your money goes each pay period."
+          action={
+            <Button
+              variant="primary"
+              onClick={handleAddBucket}
+              leftIcon={<Plus size={18} />}
+            >
+              Create Bucket
+            </Button>
+          }
+        />
       )}
 
       {/* Add Bucket Button */}
