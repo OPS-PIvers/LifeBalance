@@ -150,7 +150,7 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
                   <h3 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider ml-2">{category}</h3>
                   <SurfaceList>
                     {(previewHabits.grouped[category] ?? []).map(habit => (
-                      <Row key={habit.id} interactive className="justify-between">
+                      <Row key={habit.id} className="justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}
                            <span className="font-medium text-brand-700 dark:text-brand-200 text-sm">{habit.title}</span>
