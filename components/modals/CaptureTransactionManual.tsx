@@ -6,6 +6,8 @@ import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface CaptureTransactionManualProps {
   initialData?: {
@@ -194,59 +196,43 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         </div>
       </div>
 
-      <div>
-        <label htmlFor="manual-merchant" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Merchant</label>
-        <input
-          id="manual-merchant"
-          type="text"
-          value={merchant}
-          onChange={(e) => setMerchant(e.target.value)}
-          placeholder="e.g. Starbucks"
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium"
-        />
-      </div>
+      <Input
+        label="Merchant"
+        type="text"
+        value={merchant}
+        onChange={(e) => setMerchant(e.target.value)}
+        placeholder="e.g. Starbucks"
+      />
 
-      <div>
-        <label htmlFor="manual-date" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Date</label>
-        <input
-          id="manual-date"
-          type="date"
-          value={transactionDate}
-          onChange={(e) => setTransactionDate(e.target.value)}
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium"
-        />
-      </div>
+      <Input
+        label="Date"
+        type="date"
+        value={transactionDate}
+        onChange={(e) => setTransactionDate(e.target.value)}
+      />
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="manual-store" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Store (Optional)</label>
-          <select
-            id="manual-store"
-            value={store}
-            onChange={(e) => setStore(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium appearance-none"
-          >
-            <option value="">Select Store...</option>
-            {stores.map(s => (
-              <option key={s.id} value={s.name}>{s.name}</option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="Store (Optional)"
+          value={store}
+          onChange={(e) => setStore(e.target.value)}
+        >
+          <option value="">Select Store...</option>
+          {stores.map(s => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
+        </Select>
 
-        <div>
-          <label htmlFor="manual-account" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Account (Optional)</label>
-          <select
-            id="manual-account"
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium appearance-none"
-          >
-            <option value="">Select Account...</option>
-            {accounts.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="Account (Optional)"
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+        >
+          <option value="">Select Account...</option>
+          {accounts.map(a => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </Select>
       </div>
 
       <div>

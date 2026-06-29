@@ -7,6 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
+import Input from '@/components/ui/Input';
 
 interface GroceryCatalogModalProps {
   isOpen: boolean;
@@ -147,17 +148,14 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
 
       {/* Search */}
       <div className="px-6 py-3 border-b border-brand-200 dark:border-brand-700 bg-brand-50/50 dark:bg-brand-700/30">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 dark:text-brand-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search history..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/30 focus:border-accent-500 outline-hidden transition-all placeholder:text-brand-400"
-            autoFocus
-          />
-        </div>
+        <Input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search history..."
+          icon={<Search className="w-4 h-4" />}
+          autoFocus
+        />
       </div>
 
       {/* List */}
@@ -276,45 +274,33 @@ const GroceryCatalogModal: React.FC<GroceryCatalogModalProps> = ({ isOpen, onClo
         >
           <div className="space-y-4">
 
-            <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase">Name</label>
-              <input
-                type="text"
-                value={editingItem.name}
-                onChange={e => setEditingItem({...editingItem, name: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-accent-500/30 outline-hidden"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase">Category</label>
-              <input
-                type="text"
-                value={editingItem.category}
-                onChange={e => setEditingItem({...editingItem, category: e.target.value})}
-                className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-accent-500/30 outline-hidden"
-              />
-            </div>
+            <Input
+              label="Name"
+              type="text"
+              value={editingItem.name}
+              onChange={e => setEditingItem({...editingItem, name: e.target.value})}
+            />
+            <Input
+              label="Category"
+              type="text"
+              value={editingItem.category}
+              onChange={e => setEditingItem({...editingItem, category: e.target.value})}
+            />
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                 <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase">Default Qty</label>
-                 <input
-                  type="text"
-                  value={editingItem.defaultQuantity || ''}
-                  onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
-                  placeholder="e.g. 1"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-accent-500/30 outline-hidden"
-                />
-              </div>
-              <div>
-                 <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase">Default Store</label>
-                 <input
-                  type="text"
-                  value={editingItem.defaultStore || ''}
-                  onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
-                  placeholder="Optional"
-                  className="w-full mt-1 p-2 border rounded-lg focus:ring-2 focus:ring-accent-500/30 outline-hidden"
-                />
-              </div>
+              <Input
+                label="Default Qty"
+                type="text"
+                value={editingItem.defaultQuantity || ''}
+                onChange={e => setEditingItem({...editingItem, defaultQuantity: e.target.value})}
+                placeholder="e.g. 1"
+              />
+              <Input
+                label="Default Store"
+                type="text"
+                value={editingItem.defaultStore || ''}
+                onChange={e => setEditingItem({...editingItem, defaultStore: e.target.value})}
+                placeholder="Optional"
+              />
             </div>
           </div>
 

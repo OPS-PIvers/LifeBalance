@@ -9,6 +9,8 @@ import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface ChallengeHubModalProps {
   isOpen: boolean;
@@ -295,18 +297,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         </div>
 
                         {/* Title */}
-                        <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase">
-                            Title
-                          </label>
-                          <input
-                            type="text"
-                            value={familyTitle}
-                            onChange={(e) => setFamilyTitle(e.target.value)}
-                            placeholder="e.g., Family Fitness Month"
-                            className="w-full mt-1 p-3 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-500/40 rounded-xl focus:border-warm-400 outline-hidden text-brand-900 dark:text-white"
-                          />
-                        </div>
+                        <Input
+                          label="Title"
+                          type="text"
+                          value={familyTitle}
+                          onChange={(e) => setFamilyTitle(e.target.value)}
+                          placeholder="e.g., Family Fitness Month"
+                        />
 
                         {/* Description */}
                         <div>
@@ -322,20 +319,15 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         </div>
 
                         {/* Optional Target */}
-                        <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase">
-                            Target completions (Optional)
-                          </label>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            value={familyTarget}
-                            onChange={(e) => setFamilyTarget(e.target.value)}
-                            placeholder="e.g., 60"
-                            className="w-full mt-1 p-3 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-500/40 rounded-xl focus:border-warm-400 outline-hidden text-brand-900 dark:text-white"
-                          />
-                        </div>
+                        <Input
+                          label="Target completions (Optional)"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          value={familyTarget}
+                          onChange={(e) => setFamilyTarget(e.target.value)}
+                          placeholder="e.g., 60"
+                        />
 
                         {/* Habit multi-select */}
                         <div>
@@ -407,18 +399,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 )}
 
                 {/* Title */}
-                <div>
-                  <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
-                    Challenge Title
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., No Spend November"
-                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:border-brand-400 outline-hidden"
-                  />
-                </div>
+                <Input
+                  label="Challenge Title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., No Spend November"
+                />
 
                 {/* Description */}
                 <div>
@@ -486,23 +473,18 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                 {/* Yearly Goal Selector */}
                 {yearlyGoals.length > 0 && (
-                  <div>
-                    <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
-                      Link to Yearly Goal (Optional)
-                    </label>
-                    <select
-                      value={selectedYearlyGoalId}
-                      onChange={(e) => setSelectedYearlyGoalId(e.target.value)}
-                      className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:border-brand-400 outline-hidden"
-                    >
-                      <option value="">No yearly goal</option>
-                      {yearlyGoals.map((goal) => (
-                        <option key={goal.id} value={goal.id}>
-                          {goal.title} ({goal.year})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Select
+                    label="Link to Yearly Goal (Optional)"
+                    value={selectedYearlyGoalId}
+                    onChange={(e) => setSelectedYearlyGoalId(e.target.value)}
+                  >
+                    <option value="">No yearly goal</option>
+                    {yearlyGoals.map((goal) => (
+                      <option key={goal.id} value={goal.id}>
+                        {goal.title} ({goal.year})
+                      </option>
+                    ))}
+                  </Select>
                 )}
 
                 {/* Habit Selector */}

@@ -4,6 +4,7 @@ import { YearlyGoal } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 
 interface YearlyGoalFormModalProps {
   isOpen: boolean;
@@ -81,19 +82,14 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
     >
       <div className="p-4 space-y-4">
         {/* Title */}
-        <div>
-          <label htmlFor="goal-title" className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
-            Goal Title *
-          </label>
-          <input
-            id="goal-title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g., Family Trip to Disney"
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 outline-hidden transition-colors"
-          />
-        </div>
+        <Input
+          label="Goal Title"
+          required
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="e.g., Family Trip to Disney"
+        />
 
         {/* Description */}
         <div>
@@ -111,35 +107,26 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
 
         {/* Year and Required Months */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="goal-year" className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
-              Year
-            </label>
-            <input
-              id="goal-year"
-              type="number"
-              value={year}
-              onChange={(e) => setYear(parseInt(e.target.value))}
-              min={new Date().getFullYear()}
-              max={new Date().getFullYear() + 5}
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl font-mono focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 outline-hidden transition-colors"
-            />
-          </div>
+          <Input
+            label="Year"
+            type="number"
+            value={year}
+            onChange={(e) => setYear(parseInt(e.target.value))}
+            min={new Date().getFullYear()}
+            max={new Date().getFullYear() + 5}
+            className="font-mono"
+          />
 
-          <div>
-            <label htmlFor="goal-required-months" className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
-              Required Months *
-            </label>
-            <input
-              id="goal-required-months"
-              type="number"
-              value={requiredMonths}
-              onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
-              min={1}
-              max={12}
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl font-mono focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 outline-hidden transition-colors"
-            />
-          </div>
+          <Input
+            label="Required Months"
+            required
+            type="number"
+            value={requiredMonths}
+            onChange={(e) => setRequiredMonths(parseInt(e.target.value))}
+            min={1}
+            max={12}
+            className="font-mono"
+          />
         </div>
 
         <div className="bg-warm-50 dark:bg-warm-900/20 p-3 rounded-xl border border-warm-200 dark:border-warm-800/60">

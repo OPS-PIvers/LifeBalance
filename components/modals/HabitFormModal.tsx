@@ -4,6 +4,7 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 
 interface HabitFormModalProps {
   isOpen: boolean;
@@ -173,30 +174,24 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
       <div className="p-4 space-y-4">
 
         {/* Title */}
-        <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-title">Title</label>
-          <input
-            id="habit-title"
-            type="text"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="e.g. Drink Water"
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl"
-            disabled={isSaving}
-          />
-        </div>
+        <Input
+          label="Title"
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="e.g. Drink Water"
+          disabled={isSaving}
+        />
 
         {/* Type & Category */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-category">Category</label>
-            <input
-              id="habit-category"
+            <Input
+              label="Category"
               type="text"
               value={category}
               onChange={e => setCategory(e.target.value)}
               placeholder="Select or type..."
-              className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl"
               disabled={isSaving}
             />
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -304,19 +299,14 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-points">
-                {showAssignControl ? 'Chore Points' : 'Points'}
-              </label>
-              <input
-                id="habit-points"
-                type="number"
-                value={basePoints}
-                onChange={e => setBasePoints(e.target.value)}
-                className="w-full mt-1 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-center font-mono font-bold"
-                disabled={isSaving}
-              />
-            </div>
+            <Input
+              label={showAssignControl ? 'Chore Points' : 'Points'}
+              type="number"
+              value={basePoints}
+              onChange={e => setBasePoints(e.target.value)}
+              className="text-center font-mono font-bold"
+              disabled={isSaving}
+            />
             <div>
               <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase" htmlFor="habit-target">Target ({period})</label>
               <div className="flex items-center gap-2 mt-1">

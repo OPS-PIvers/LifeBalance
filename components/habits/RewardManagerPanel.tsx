@@ -4,6 +4,8 @@ import { Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Section } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import type { RewardItem, HouseholdMember } from '@/types/schema';
 import {
   type RewardDraft,
@@ -13,8 +15,6 @@ import {
   buildRewardPayload,
 } from '@/utils/rewardDraft';
 
-const inputClass =
-  'w-full rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 px-3 py-2 text-sm text-brand-900 dark:text-brand-100 focus:border-warm-500 focus:outline-hidden focus:ring-2 focus:ring-warm-500/30';
 const labelClass =
   'block text-xs font-semibold uppercase tracking-wide text-warm-600 dark:text-warm-300 mb-1';
 
@@ -147,24 +147,19 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
 
           <form onSubmit={handleSubmit} aria-labelledby={formTitleId} className="space-y-3">
             <div className="grid grid-cols-[1fr_auto] gap-3">
-              <div>
-                <label className={labelClass} htmlFor="reward-title">Title</label>
-                <input
-                  id="reward-title"
-                  type="text"
-                  className={inputClass}
-                  value={draft.title}
-                  maxLength={100}
-                  placeholder="Movie Night"
-                  onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                />
-              </div>
+              <Input
+                label="Title"
+                type="text"
+                value={draft.title}
+                maxLength={100}
+                placeholder="Movie Night"
+                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              />
               <div className="w-20">
-                <label className={labelClass} htmlFor="reward-icon">Icon</label>
-                <input
-                  id="reward-icon"
+                <Input
+                  label="Icon"
                   type="text"
-                  className={`${inputClass} text-center`}
+                  className="text-center"
                   value={draft.icon}
                   maxLength={8}
                   onChange={(e) => setDraft((d) => ({ ...d, icon: e.target.value }))}
@@ -173,18 +168,14 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
             </div>
 
             <div className={kidModeEnabled ? 'grid grid-cols-2 gap-3' : ''}>
-              <div>
-                <label className={labelClass} htmlFor="reward-cost">Cost (points)</label>
-                <input
-                  id="reward-cost"
-                  type="number"
-                  min={0}
-                  className={inputClass}
-                  value={draft.cost}
-                  placeholder="50"
-                  onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))}
-                />
-              </div>
+              <Input
+                label="Cost (points)"
+                type="number"
+                min={0}
+                value={draft.cost}
+                placeholder="50"
+                onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))}
+              />
 
               {/* Kid-Mode-only: reward type (real-world vs allowance IOU). */}
               {kidModeEnabled && (
@@ -216,39 +207,31 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
 
             {/* Kid-Mode-only: allowance amount (only for allowance rewards). */}
             {kidModeEnabled && draft.type === 'allowance' && (
-              <div>
-                <label className={labelClass} htmlFor="reward-allowance">Allowance amount ($)</label>
-                <input
-                  id="reward-allowance"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  className={inputClass}
-                  value={draft.allowanceDollars}
-                  placeholder="5.00"
-                  onChange={(e) => setDraft((d) => ({ ...d, allowanceDollars: e.target.value }))}
-                />
-              </div>
+              <Input
+                label="Allowance amount ($)"
+                type="number"
+                min={0}
+                step="0.01"
+                value={draft.allowanceDollars}
+                placeholder="5.00"
+                onChange={(e) => setDraft((d) => ({ ...d, allowanceDollars: e.target.value }))}
+              />
             )}
 
             {/* Kid-Mode-only: target a specific kid (else available to all kids). */}
             {kidModeEnabled && (
-              <div>
-                <label className={labelClass} htmlFor="reward-target">Target kid</label>
-                <select
-                  id="reward-target"
-                  className={inputClass}
-                  value={draft.targetMemberId}
-                  onChange={(e) => setDraft((d) => ({ ...d, targetMemberId: e.target.value }))}
-                >
-                  <option value="">All kids</option>
-                  {kids.map((kid) => (
-                    <option key={kid.uid} value={kid.uid}>
-                      {kid.displayName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Target kid"
+                value={draft.targetMemberId}
+                onChange={(e) => setDraft((d) => ({ ...d, targetMemberId: e.target.value }))}
+              >
+                <option value="">All kids</option>
+                {kids.map((kid) => (
+                  <option key={kid.uid} value={kid.uid}>
+                    {kid.displayName}
+                  </option>
+                ))}
+              </Select>
             )}
 
             <label className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-200">

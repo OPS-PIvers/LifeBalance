@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
+import Input from '@/components/ui/Input';
 import { Loader2 } from 'lucide-react';
 import { format, addDays, startOfToday } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -77,19 +78,13 @@ const BatchRescheduleModal: React.FC<BatchRescheduleModalProps> = ({
             </button>
         </div>
 
-        <div>
-          <label htmlFor="batch-date" className="block text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-1">
-            New Due Date
-          </label>
-          <input
-            type="date"
-            id="batch-date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            disabled={isSaving}
-            className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-colors disabled:opacity-70"
-          />
-        </div>
+        <Input
+          label="New Due Date"
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          disabled={isSaving}
+        />
       </div>
 
       <div className="sticky bottom-0 p-4 border-t border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-800 flex gap-3">

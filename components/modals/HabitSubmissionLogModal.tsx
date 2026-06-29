@@ -9,6 +9,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
+import Input from '@/components/ui/Input';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -38,11 +39,6 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const logPanelId = useId();
   const statsPanelId = useId();
   const calendarPanelId = useId();
-
-  // IDs for form label association
-  const dateInputId = useId();
-  const timeInputId = useId();
-  const countInputId = useId();
 
   // Form state
   const [formDate, setFormDate] = useState('');
@@ -559,38 +555,26 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700">
                 <h3 className="font-bold text-sm text-brand-700 dark:text-brand-200 mb-3">New Submission</h3>
                 <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div>
-                    <label htmlFor={dateInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Date</label>
-                    <input
-                      id={dateInputId}
-                      type="date"
-                      value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
-                      max={getLocalDateString()}
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={timeInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Time</label>
-                    <input
-                      id={timeInputId}
-                      type="time"
-                      value={formTime}
-                      onChange={(e) => setFormTime(e.target.value)}
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={countInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
-                    <input
-                      id={countInputId}
-                      type="number"
-                      value={formCount}
-                      onChange={(e) => setFormCount(e.target.value)}
-                      min="1"
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
+                  <Input
+                    label="Date"
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    max={getLocalDateString()}
+                  />
+                  <Input
+                    label="Time"
+                    type="time"
+                    value={formTime}
+                    onChange={(e) => setFormTime(e.target.value)}
+                  />
+                  <Input
+                    label="Count"
+                    type="number"
+                    value={formCount}
+                    onChange={(e) => setFormCount(e.target.value)}
+                    min="1"
+                  />
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -718,13 +702,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
 
           <div className="mb-4">
-            <label className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
-            <input
+            <Input
+              label="Count"
               type="number"
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
               min="1"
-              className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
             />
           </div>
 
