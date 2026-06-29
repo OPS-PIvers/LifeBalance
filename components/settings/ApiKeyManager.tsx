@@ -13,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Badge } from '@/components/ui/Badge';
 
 interface ApiKeyManagerProps {
   householdId: string;
@@ -201,14 +202,14 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               </div>
               <div className="flex flex-wrap gap-1">
                 {key.permissions.habits && (
-                  <span className="text-xs bg-warm-50 text-warm-700 border border-warm-200 px-2 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
+                  <Badge variant="warning" size="md">
                     Habits
-                  </span>
+                  </Badge>
                 )}
                 {key.permissions.expenses && (
-                  <span className="text-xs bg-accent-50 text-accent-700 border border-accent-200 px-2 py-0.5 rounded-full dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30">
+                  <Badge variant="default" size="md">
                     Expenses
-                  </span>
+                  </Badge>
                 )}
                 {key.permissions.shoppingList && (
                   <span className="text-xs bg-habit-blue/15 text-habit-blue border border-habit-blue/30 px-2 py-0.5 rounded-full">
@@ -337,9 +338,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   <span className="font-semibold text-brand-600 dark:text-brand-300 line-through">
                     {key.name}
                   </span>
-                  <span className="text-xs bg-brand-200 dark:bg-brand-700 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full">
+                  <Badge variant="neutral" size="md">
                     Revoked
-                  </span>
+                  </Badge>
                 </div>
                 <Button
                   variant="ghost-danger"

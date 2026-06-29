@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Meal, MealPlanItem } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Check, ExternalLink, ChefHat, Utensils, CheckCircle2 } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
@@ -58,14 +59,14 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
         <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             {isCooked && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-money-bgPos text-money-pos text-xs font-bold border border-money-pos/20 dark:bg-money-pos/15 dark:text-money-pos dark:border-money-pos/25">
+              <Badge variant="success" className="gap-1">
                 <CheckCircle2 size={12} /> Cooked
-              </span>
+              </Badge>
             )}
             {meal.tags?.map(tag => (
-              <span key={tag} className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-500 text-xs font-medium border border-brand-200 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600">
+              <Badge key={tag} variant="neutral">
                 {tag}
-              </span>
+              </Badge>
             ))}
           </div>
           <h3 id="recipe-modal-title" className="font-display text-xl font-semibold text-brand-900 dark:text-brand-100 tracking-tight leading-snug">

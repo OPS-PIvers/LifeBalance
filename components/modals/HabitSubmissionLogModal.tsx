@@ -6,6 +6,7 @@ import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOf
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
@@ -619,9 +620,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className="text-xs bg-money-bgPos dark:bg-money-pos/15 text-money-pos px-2 py-0.5 rounded-full font-bold">
+                          <Badge variant={dayTotal > 0 ? 'success' : dayTotal < 0 ? 'danger' : 'neutral'} size="md">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
-                          </span>
+                          </Badge>
                           <span className="text-xxs text-brand-400 dark:text-brand-400 font-bold">
                             {dayCount} log{dayCount !== 1 ? 's' : ''}
                           </span>
@@ -635,14 +636,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 <span className="text-sm font-mono font-bold text-brand-800 dark:text-brand-100">
                                   {format(parseISO(sub.timestamp), 'h:mm a')}
                                 </span>
-                                <span className="text-xs bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full font-bold">
+                                <Badge variant="neutral" size="md">
                                   ×{sub.count}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                                  sub.pointsEarned >= 0 ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                                }`}>
+                                </Badge>
+                                <Badge variant={sub.pointsEarned > 0 ? 'success' : sub.pointsEarned < 0 ? 'danger' : 'neutral'} size="md">
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
-                                </span>
+                                </Badge>
                               </div>
                               <div className="text-xxs text-brand-400 dark:text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
                                 <span>{sub.multiplierApplied}x multiplier</span>

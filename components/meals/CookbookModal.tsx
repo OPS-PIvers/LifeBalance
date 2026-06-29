@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Meal } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
@@ -202,7 +203,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 {meal.tags && meal.tags.length > 0 && (
                                     <div className="hidden sm:flex gap-1">
                                         {meal.tags.slice(0, 2).map(t => (
-                                            <span key={t} className="text-xxs px-1.5 py-0.5 bg-brand-100 text-brand-500 rounded-md font-medium dark:bg-brand-700/50 dark:text-brand-400">{t}</span>
+                                            <Badge key={t} variant="neutral" size="sm">{t}</Badge>
                                         ))}
                                         {meal.tags.length > 2 && <span className="text-xxs text-brand-400 dark:text-brand-500">+{meal.tags.length - 2}</span>}
                                     </div>

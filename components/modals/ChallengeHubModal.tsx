@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
@@ -516,18 +517,16 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                               {selectedHabitIds.includes('suggested-habit') && <Check size={14} strokeWidth={3} />}
                             </div>
                             <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                              {suggestedHabit.title} <span className="ml-2 text-xxs font-bold text-brand-500 dark:text-brand-400 bg-brand-100 dark:bg-brand-700/50 px-2 py-0.5 rounded-full">NEW</span>
+                              {suggestedHabit.title} <Badge variant="neutral" size="sm" className="ml-2">NEW</Badge>
                             </span>
                           </div>
-                          <div
-                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
-                              (suggestedHabit.type || 'positive') === 'positive'
-                                ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
-                                : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                            }`}
+                          <Badge
+                            variant={(suggestedHabit.type || 'positive') === 'positive' ? 'success' : 'danger'}
+                            size="sm"
+                            className="uppercase"
                           >
                             {(suggestedHabit.type || 'positive') === 'positive' ? 'Good' : 'Bad'}
-                          </div>
+                          </Badge>
                         </div>
                     )}
 
@@ -557,15 +556,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                               {habit.title}
                             </span>
                           </div>
-                          <div
-                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
-                              habit.type === 'positive'
-                                ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
-                                : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                            }`}
+                          <Badge
+                            variant={habit.type === 'positive' ? 'success' : 'danger'}
+                            size="sm"
+                            className="uppercase"
                           >
                             {habit.type === 'positive' ? 'Good' : 'Bad'}
-                          </div>
+                          </Badge>
                         </div>
                       );
                     })}
