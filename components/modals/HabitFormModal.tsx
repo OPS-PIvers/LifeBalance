@@ -4,6 +4,7 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 
 interface HabitFormModalProps {
@@ -212,24 +213,20 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
               ))}
             </div>
           </div>
-          <div role="group" aria-label="Habit type">
+          <div>
             <span className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Type</span>
-            <div className="flex bg-brand-50 dark:bg-brand-700/50 p-1 rounded-xl mt-1">
-               <button
-                 onClick={() => setType('positive')}
-                 disabled={isSaving}
-                 type="button"
-                 aria-pressed={type === 'positive'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'positive' ? 'bg-white dark:bg-brand-800 shadow-xs text-money-pos' : 'text-brand-400 dark:text-brand-400'}`}
-               >Good</button>
-               <button
-                 onClick={() => setType('negative')}
-                 disabled={isSaving}
-                 type="button"
-                 aria-pressed={type === 'negative'}
-                 className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 ${type === 'negative' ? 'bg-white dark:bg-brand-800 shadow-xs text-money-neg' : 'text-brand-400 dark:text-brand-400'}`}
-               >Bad</button>
-             </div>
+            <SegmentedControl
+              tone="warm"
+              name="Habit type"
+              disabled={isSaving}
+              value={type}
+              onChange={setType}
+              options={[
+                { value: 'positive', label: 'Good', activeClassName: 'text-money-pos' },
+                { value: 'negative', label: 'Bad', activeClassName: 'text-money-neg' },
+              ]}
+              className="mt-1"
+            />
           </div>
         </div>
 
@@ -275,28 +272,34 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
         <div className="bg-brand-50 dark:bg-brand-700/50 p-4 rounded-xl border border-brand-200 dark:border-brand-700">
           <h3 className="text-sm font-bold text-brand-700 dark:text-brand-200 mb-3">Scoring Strategy</h3>
 
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button
-              onClick={() => setScoringType('incremental')}
-              disabled={isSaving}
-              type="button"
-              aria-pressed={scoringType === 'incremental'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'incremental' ? 'bg-white dark:bg-brand-800 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-brand-50 dark:hover:bg-brand-700/50'}`}
-            >
-              <span className="block font-bold mb-1">Incremental</span>
-              <span className="text-brand-400 dark:text-brand-400">Points for every tap.</span>
-            </button>
-            <button
-              onClick={() => setScoringType('threshold')}
-              disabled={isSaving}
-              type="button"
-              aria-pressed={scoringType === 'threshold'}
-              className={`p-3 rounded-xl border text-left text-xs transition-all disabled:opacity-50 ${scoringType === 'threshold' ? 'bg-white dark:bg-brand-800 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200' : 'border-transparent hover:bg-brand-50 dark:hover:bg-brand-700/50'}`}
-            >
-              <span className="block font-bold mb-1">Threshold</span>
-              <span className="text-brand-400 dark:text-brand-400">Points only when target met.</span>
-            </button>
-          </div>
+          <SegmentedControl
+            tone="warm"
+            name="Scoring strategy"
+            disabled={isSaving}
+            value={scoringType}
+            onChange={setScoringType}
+            className="mb-4"
+            options={[
+              {
+                value: 'incremental',
+                label: (
+                  <span className="block text-left text-xs">
+                    <span className="block font-bold mb-1">Incremental</span>
+                    <span className="text-brand-400 dark:text-brand-400">Points for every tap.</span>
+                  </span>
+                ),
+              },
+              {
+                value: 'threshold',
+                label: (
+                  <span className="block text-left text-xs">
+                    <span className="block font-bold mb-1">Threshold</span>
+                    <span className="text-brand-400 dark:text-brand-400">Points only when target met.</span>
+                  </span>
+                ),
+              },
+            ]}
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
@@ -318,15 +321,18 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                   className="w-20 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-center font-mono font-bold"
                   disabled={isSaving}
                 />
-                <button
-                  onClick={() => setPeriod(period === 'daily' ? 'weekly' : 'daily')}
+                <SegmentedControl
+                  tone="warm"
+                  name="Target period"
                   disabled={isSaving}
-                  type="button"
-                  aria-pressed={period === 'weekly'}
-                  className="text-xxs font-bold uppercase bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 px-2 py-2.5 rounded-lg min-w-[60px] disabled:opacity-50"
-                >
-                  {period}
-                </button>
+                  value={period}
+                  onChange={setPeriod}
+                  className="flex-1"
+                  options={[
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                  ]}
+                />
               </div>
             </div>
           </div>

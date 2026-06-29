@@ -9,6 +9,7 @@ import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 
@@ -425,30 +426,32 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                   <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
                     Target Type
                   </label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setTargetType('count')}
-                      className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                        targetType === 'count'
-                          ? 'border-brand-400 dark:border-brand-600 bg-brand-50 dark:bg-brand-700/50'
-                          : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-800 dark:text-brand-100">Count</span>
-                      <span className="text-xs text-brand-400 dark:text-brand-400">Total completions</span>
-                    </button>
-                    <button
-                      onClick={() => setTargetType('percentage')}
-                      className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                        targetType === 'percentage'
-                          ? 'border-brand-400 dark:border-brand-600 bg-brand-50 dark:bg-brand-700/50'
-                          : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-800 dark:text-brand-100">Percentage</span>
-                      <span className="text-xs text-brand-400 dark:text-brand-400">% of days completed</span>
-                    </button>
-                  </div>
+                  <SegmentedControl
+                    tone="warm"
+                    name="Target type"
+                    value={targetType}
+                    onChange={setTargetType}
+                    options={[
+                      {
+                        value: 'count',
+                        label: (
+                          <span className="block">
+                            <span className="block font-bold text-brand-800 dark:text-brand-100">Count</span>
+                            <span className="text-xs text-brand-400 dark:text-brand-400">Total completions</span>
+                          </span>
+                        ),
+                      },
+                      {
+                        value: 'percentage',
+                        label: (
+                          <span className="block">
+                            <span className="block font-bold text-brand-800 dark:text-brand-100">Percentage</span>
+                            <span className="text-xs text-brand-400 dark:text-brand-400">% of days completed</span>
+                          </span>
+                        ),
+                      },
+                    ]}
+                  />
                 </div>
 
                 {/* Target Slider */}

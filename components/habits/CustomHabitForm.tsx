@@ -104,30 +104,32 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
       {/* Scoring Type */}
       <div>
         <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">Scoring Strategy</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => onFormChange({ scoringType: 'threshold' })}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              formData.scoringType === 'threshold'
-                ? 'bg-white dark:bg-brand-700 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200 dark:ring-brand-600'
-                : 'bg-brand-50 dark:bg-brand-700/50 border-transparent hover:bg-white dark:hover:bg-brand-700'
-            }`}
-          >
-            <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Threshold</span>
-            <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points when target is met</span>
-          </button>
-          <button
-            onClick={() => onFormChange({ scoringType: 'incremental' })}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              formData.scoringType === 'incremental'
-                ? 'bg-white dark:bg-brand-700 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200 dark:ring-brand-600'
-                : 'bg-brand-50 dark:bg-brand-700/50 border-transparent hover:bg-white dark:hover:bg-brand-700'
-            }`}
-          >
-            <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Incremental</span>
-            <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points for every tap</span>
-          </button>
-        </div>
+        <SegmentedControl
+          tone="warm"
+          name="Scoring Strategy"
+          value={formData.scoringType}
+          onChange={(val) => onFormChange({ scoringType: val as 'incremental' | 'threshold' })}
+          options={[
+            {
+              value: 'threshold',
+              label: (
+                <span className="block text-left">
+                  <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Threshold</span>
+                  <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points when target is met</span>
+                </span>
+              ),
+            },
+            {
+              value: 'incremental',
+              label: (
+                <span className="block text-left">
+                  <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Incremental</span>
+                  <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points for every tap</span>
+                </span>
+              ),
+            },
+          ]}
+        />
       </div>
 
       {/* Target & Period */}

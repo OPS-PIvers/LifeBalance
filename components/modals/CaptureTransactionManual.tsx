@@ -8,6 +8,7 @@ import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 
 interface CaptureTransactionManualProps {
   initialData?: {
@@ -395,15 +396,11 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
 
       <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
         <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
-        <button
-          role="switch"
-          aria-checked={isRecurring}
-          aria-labelledby="recurring-label"
-          onClick={() => setIsRecurring(!isRecurring)}
-          className={`relative w-11 h-6 rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-accent-500/40 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300 dark:bg-brand-600'}`}
-        >
-          <span className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-brand-800 rounded-full transition-transform ${isRecurring ? 'translate-x-5' : 'translate-x-0'}`} />
-        </button>
+        <Switch
+          checked={isRecurring}
+          onCheckedChange={setIsRecurring}
+          aria-label="Recurring Transaction"
+        />
       </div>
 
       <div className="flex items-center gap-2 p-3 bg-money-bgPos dark:bg-money-pos/15 rounded-xl border border-money-pos/30">

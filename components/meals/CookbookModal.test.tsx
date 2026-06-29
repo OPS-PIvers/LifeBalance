@@ -167,7 +167,7 @@ describe('CookbookModal', () => {
       />
     );
 
-    const sortButton = screen.getByLabelText('Sort by Rating');
+    const sortButton = screen.getByRole('radio', { name: 'Sort by Rating' });
     fireEvent.click(sortButton);
 
     const items = screen.getAllByText(/Adobo Chicken|Beef Stir Fry|Vegetable Curry/);
@@ -224,7 +224,7 @@ describe('CookbookModal', () => {
     );
 
     expect(screen.getByLabelText('Close')).toBeInTheDocument();
-    expect(screen.getByLabelText('Sort by Name')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Sort by Name' })).toBeInTheDocument();
     expect(screen.getAllByLabelText('Clone as New Meal')[0]).toBeInTheDocument();
 
     // Check aria-labelledby on modal

@@ -3,6 +3,7 @@ import { Meal } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { X, ChefHat, Sparkles, Plus, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
@@ -138,25 +139,19 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                     placeholder="e.g. Adobo Chicken & Rice"
                 />
 
-                <div role="radiogroup" aria-labelledby="meal-type-label">
+                <div>
                     <label id="meal-type-label" className="block text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider mb-2">Meal Type</label>
-                    <div className="flex p-1 bg-brand-100 dark:bg-brand-700/50 rounded-xl">
-                        {['breakfast', 'lunch', 'dinner', 'snack'].map((type) => (
-                            <button
-                                key={type}
-                                role="radio"
-                                aria-checked={mealType === type}
-                                onClick={() => setMealType(type as 'breakfast' | 'lunch' | 'dinner' | 'snack')}
-                                className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold capitalize transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
-                                    mealType === type
-                                        ? 'bg-white text-brand-900 dark:bg-brand-800 dark:text-brand-100'
-                                        : 'text-brand-500 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-200'
-                                }`}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
+                    <SegmentedControl
+                        name="Meal Type"
+                        value={mealType}
+                        onChange={setMealType}
+                        options={[
+                            { value: 'breakfast', label: 'Breakfast' },
+                            { value: 'lunch', label: 'Lunch' },
+                            { value: 'dinner', label: 'Dinner' },
+                            { value: 'snack', label: 'Snack' },
+                        ]}
+                    />
                 </div>
 
                 <div>

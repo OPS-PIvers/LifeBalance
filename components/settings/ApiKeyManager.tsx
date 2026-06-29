@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
@@ -238,39 +239,36 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               Permissions
             </label>
             <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={permissions.habits}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, habits: e.target.checked })
-                  }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
-                />
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-brand-700 dark:text-brand-200">Habits (toggle habits)</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={permissions.expenses}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, expenses: e.target.checked })
+                <Switch
+                  checked={permissions.habits}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, habits: checked })
                   }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
+                  aria-label="Habits (toggle habits)"
                 />
+              </div>
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-brand-700 dark:text-brand-200">Expenses (add transactions)</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={permissions.shoppingList}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, shoppingList: e.target.checked })
+                <Switch
+                  checked={permissions.expenses}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, expenses: checked })
                   }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
+                  aria-label="Expenses (add transactions)"
                 />
+              </div>
+              <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-brand-700 dark:text-brand-200">Shopping List (add items)</span>
-              </label>
+                <Switch
+                  checked={permissions.shoppingList}
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, shoppingList: checked })
+                  }
+                  aria-label="Shopping List (add items)"
+                />
+              </div>
             </div>
           </div>
 
