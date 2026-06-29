@@ -5,6 +5,7 @@ import {
   calculateWeeklyStreak,
   streakEndingOnWeek,
   streakForHabit,
+  streakEndingOnForHabit,
   getMultiplier,
   processToggleHabit,
   streakEndingOn,
@@ -941,6 +942,68 @@ describe('habitLogic', () => {
         completedDates: [today, yesterday],
       };
       expect(streakForHabit(habit)).toBe(2);
+    });
+  });
+
+  // Regression test for the habit-submission backfill bug
+  // (pages/MigrateSubmissions.tsx + scripts/migrateHabitSubmissions.ts).
+  //
+  // The backfill previously computed each historical day's streak with
+  // `calculateStreak(datesUpToNow)`, which returns the streak ending TODAY/yesterday
+  // and therefore 0 for every PAST date — so all backfilled submissions were written
+  // with streakDaysAtTime=0 / multiplier=1.0 even on days that earned a bonus. The fix
+  // is `streakEndingOnForHabit({ period, completedDates }, date)`, which reconstructs the
+  // streak that ended ON that specific date. This block proves the primitive the backfill
+  // now relies on assigns each day the streak its own position warranted (1,2,3,…) and the
+  // correct per-period multiplier, including for weekly habits.
+  describe('streakEndingOnForHabit — backfill historical streak reconstruction', () => {
+    // Fixed, real-calendar streak: 2026-06-01 .. 2026-06-10 (10 consecutive days).
+    const dailyStreak = [
+      '2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04', '2026-06-05',
+      '2026-06-06', '2026-06-07', '2026-06-08', '2026-06-09', '2026-06-10',
+    ];
+
+    it('daily: assigns each historical day the streak its own position warranted (not 0)', () => {
+      const habit = { period: 'daily' as const, completedDates: dailyStreak };
+      // The whole point of the fix: a mid-streak past day is NON-zero.
+      expect(streakEndingOnForHabit(habit, '2026-06-05')).toBe(5);
+      // Each day equals its 1-based position in the run.
+      dailyStreak.forEach((date, idx) => {
+        expect(streakEndingOnForHabit(habit, date)).toBe(idx + 1);
+      });
+    });
+
+    it('daily: the buggy calculateStreak primitive returned 0 for those same past days', () => {
+      // Documents WHY the fix was needed: calculateStreak anchors on today/yesterday,
+      // so a 2026 history is "stale" and every day scores 0.
+      expect(calculateStreak(dailyStreak, '2026-06-20')).toBe(0);
+    });
+
+    it('daily: drives the correct per-period multiplier on each backfilled day', () => {
+      const habit = { period: 'daily' as const, completedDates: dailyStreak };
+      // Days 1-2 → 1.0x, days 3-6 → 1.5x, days 7-10 → 2.0x (daily thresholds: 3→1.5, 7→2.0).
+      const expectedMultiplier = [1.0, 1.0, 1.5, 1.5, 1.5, 1.5, 2.0, 2.0, 2.0, 2.0];
+      dailyStreak.forEach((date, idx) => {
+        const streak = streakEndingOnForHabit(habit, date);
+        expect(getMultiplier(streak, true, 'daily')).toBe(expectedMultiplier[idx]);
+      });
+    });
+
+    it('weekly: reconstructs the ISO-week streak (not the daily streak) for past weeks', () => {
+      // One completion per ISO week for 4 consecutive weeks ending this week.
+      const weekly = [mondayWeeksAgo(3), mondayWeeksAgo(2), mondayWeeksAgo(1), today];
+      const habit = { period: 'weekly' as const, completedDates: weekly };
+
+      // Week-based streak, not day-based.
+      expect(streakEndingOnForHabit(habit, mondayWeeksAgo(3))).toBe(1);
+      expect(streakEndingOnForHabit(habit, mondayWeeksAgo(2))).toBe(2);
+      expect(streakEndingOnForHabit(habit, mondayWeeksAgo(1))).toBe(3);
+      expect(streakEndingOnForHabit(habit, today)).toBe(4);
+
+      // Per-period multipliers (weekly thresholds: 2→1.5, 4→2.0).
+      expect(getMultiplier(streakEndingOnForHabit(habit, mondayWeeksAgo(3)), true, 'weekly')).toBe(1.0);
+      expect(getMultiplier(streakEndingOnForHabit(habit, mondayWeeksAgo(1)), true, 'weekly')).toBe(1.5);
+      expect(getMultiplier(streakEndingOnForHabit(habit, today), true, 'weekly')).toBe(2.0);
     });
   });
 

@@ -8,7 +8,7 @@ import {
   updateDoc
 } from 'firebase/firestore';
 import { db } from '@/firebase.config';
-import { calculateStreak, getMultiplier } from '@/utils/habitLogic';
+import { streakEndingOnForHabit, getMultiplier } from '@/utils/habitLogic';
 import { HabitSubmission } from '@/types/schema';
 import toast from 'react-hot-toast';
 
@@ -129,12 +129,18 @@ const MigrateSubmissions: React.FC = () => {
           const date = sortedDates[i];
           if (date === undefined) continue; // noUncheckedIndexedAccess: i is always in-bounds here, but narrow for TS
 
-          // Calculate streak as of this date
-          const datesUpToNow = sortedDates.slice(0, i + 1);
-          const streakAtTime = calculateStreak(datesUpToNow);
+          // Reconstruct the streak that ended ON this historical date (period-aware:
+          // days for daily habits, ISO weeks for weekly). `streakEndingOnForHabit`
+          // walks backward from `date`, so passing the full `sortedDates` is correct —
+          // completions after `date` are ignored. The previous `calculateStreak` returned
+          // the streak ending today/yesterday, so it was 0 for every past date.
+          const streakAtTime = streakEndingOnForHabit(
+            { period: habit.period, completedDates: sortedDates },
+            date
+          );
 
-          // Calculate multiplier
-          const multiplier = getMultiplier(streakAtTime, habit.type === 'positive');
+          // Calculate multiplier (period-aware: weekly habits use week thresholds)
+          const multiplier = getMultiplier(streakAtTime, habit.type === 'positive', habit.period);
 
           // Calculate points for this submission
           let pointsEarned = 0;
