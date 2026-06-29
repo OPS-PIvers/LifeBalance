@@ -41,6 +41,28 @@ describe('ConfirmDialogHost', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
+  it('runs the callback only once when confirmed rapidly', async () => {
+    const user = userEvent.setup();
+    let resolveConfirm: (() => void) | undefined;
+    const onConfirm = vi.fn(() => new Promise<void>((resolve) => {
+      resolveConfirm = resolve;
+    }));
+    render(<ConfirmDialogHost />);
+
+    requestDeleteConfirmation({ onConfirm, itemName: 'task' });
+    const deleteButton = await screen.findByRole('button', { name: 'Delete' });
+
+    // Fire several clicks before the in-flight confirm resolves.
+    await user.click(deleteButton);
+    await user.click(deleteButton);
+    await user.click(deleteButton);
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+
+    resolveConfirm?.();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('does not run the callback when cancelled', async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();

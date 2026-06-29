@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ConfirmDialog } from './ConfirmDialog';
 import {
@@ -23,10 +23,17 @@ import {
 export const ConfirmDialogHost: React.FC = () => {
   const [request, setRequest] = useState<DeleteConfirmRequest | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
+  // Ref guard against concurrent confirms: the Button is disabled via
+  // `isConfirming` once it re-renders, but a fast double-click within the same
+  // frame would otherwise re-enter handleConfirm before that state lands (both
+  // closures read the stale `false`). A ref updates synchronously and closes
+  // that one-frame gap.
+  const confirmingRef = useRef(false);
 
   useEffect(() => subscribeToDeleteConfirmations((next) => {
     setRequest(next);
     setIsConfirming(false);
+    confirmingRef.current = false;
   }), []);
 
   const handleClose = () => {
@@ -35,7 +42,8 @@ export const ConfirmDialogHost: React.FC = () => {
   };
 
   const handleConfirm = async () => {
-    if (!request) return;
+    if (!request || confirmingRef.current) return;
+    confirmingRef.current = true;
     setIsConfirming(true);
     try {
       await request.onConfirm();
@@ -45,6 +53,7 @@ export const ConfirmDialogHost: React.FC = () => {
       toast.error(`Failed to delete ${request.itemName}. Please try again.`);
       setRequest(null);
     } finally {
+      confirmingRef.current = false;
       setIsConfirming(false);
     }
   };
