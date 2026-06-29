@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import ProgressBar from '@/components/ui/ProgressBar';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -203,19 +204,12 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       </div>
 
       {/* Progress Bar */}
-      <div
-        className="h-2 w-full bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden mb-4"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(percent)}
-        aria-label={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
-      >
-        <div
-          className={`h-full rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard) ${isOverspent ? 'bg-money-neg' : bucket.color}`}
-          style={{ width: `${percent}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={percent}
+        barClassName={isOverspent ? 'bg-money-neg' : bucket.color}
+        ariaLabel={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
+        className="h-2 bg-brand-100 dark:bg-brand-700 mb-4"
+      />
 
       {/* Expandable Transaction List */}
       {isExpanded && bucketTransactions.length > 0 && (

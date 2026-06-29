@@ -6,6 +6,7 @@ import { getLocalDateString } from '@/utils/dateHelpers';
 import { format, parseISO } from 'date-fns';
 import { Check, Pencil, Plus, Trophy, Target } from 'lucide-react';
 import { Section } from '@/components/ui/Section';
+import ProgressBar from '@/components/ui/ProgressBar';
 import type { Challenge } from '@/types/schema';
 
 /** The active monthly challenge rendered as the one elevated "hero" surface. */
@@ -36,19 +37,12 @@ const ActiveChallengeCard: React.FC<{
         </p>
       )}
 
-      <div
-        className="h-2 w-full bg-brand-700 rounded-full overflow-hidden mb-2 mt-3"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(progress)}
-        aria-label={`Challenge progress: ${Math.round(progress)}% complete`}
-      >
-        <div
-          className="h-full bg-habit-gold rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      <ProgressBar
+        value={progress}
+        barClassName="bg-habit-gold"
+        ariaLabel={`Challenge progress: ${Math.round(progress)}% complete`}
+        className="h-2 bg-brand-700 mb-2 mt-3"
+      />
 
       <div className="flex justify-between text-xxs font-medium text-brand-300">
         <span className="tabular-nums">

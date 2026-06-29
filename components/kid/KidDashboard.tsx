@@ -7,6 +7,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { calculateChallengeProgress } from '@/utils/challengeCalculator';
 import { verifyKidPin } from '@/utils/kidPin';
+import ProgressBar from '@/components/ui/ProgressBar';
 import type { Habit, RewardItem } from '@/types/schema';
 
 /**
@@ -224,19 +225,12 @@ const KidDashboard: React.FC = () => {
               )}
 
               {/* Overall progress bar */}
-              <div
-                className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-white/20"
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(challengeProgress.progress)}
-                aria-label={`Family challenge progress: ${Math.round(challengeProgress.progress)}% complete`}
-              >
-                <div
-                  className="h-full rounded-full bg-warm-200 transition-all duration-700"
-                  style={{ width: `${challengeProgress.progress}%` }}
-                />
-              </div>
+              <ProgressBar
+                value={challengeProgress.progress}
+                barClassName="bg-warm-200"
+                ariaLabel={`Family challenge progress: ${Math.round(challengeProgress.progress)}% complete`}
+                className="mt-3 h-2.5 bg-white/20"
+              />
               <div className="mt-2 flex items-center justify-between text-xs font-semibold text-warm-100">
                 <span>{Math.round(challengeProgress.progress)}% as a family</span>
                 {familyCompletions > 0 && (

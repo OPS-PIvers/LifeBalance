@@ -4,7 +4,7 @@ import { useDashboardTransactionStats } from '@/hooks/useDashboardTransactionSta
 import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
-import { cn } from '@/utils/cn';
+import ProgressBar from '@/components/ui/ProgressBar';
 
 export const CategorySpendWidget: React.FC = () => {
   const { monthTotalSpent, monthCategoryItems } = useDashboardTransactionStats();
@@ -37,17 +37,12 @@ export const CategorySpendWidget: React.FC = () => {
               <span>{item.name}</span>
               <span className="font-mono tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount, { decimals: 0 })}</span>
             </div>
-            <div className="h-1.5 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
-              <div
-                role="progressbar"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(item.percentage)}
-                aria-label={`${item.name}: ${Math.round(item.percentage)}% of spending`}
-                className={cn('h-full rounded-full transition-all duration-(--duration-slow) ease-(--ease-standard)', barColor(idx))}
-                style={{ width: `${item.percentage}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={item.percentage}
+              barClassName={barColor(idx)}
+              ariaLabel={`${item.name}: ${Math.round(item.percentage)}% of spending`}
+              className="h-1.5 bg-brand-100 dark:bg-brand-700"
+            />
           </Row>
         ))}
       </SurfaceList>
