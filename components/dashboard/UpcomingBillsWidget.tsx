@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { startOfToday, addDays, parseISO, isSameDay, isTomorrow, format } from 'date-fns';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { CheckCircle2 } from 'lucide-react';
+import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 const UPCOMING_DAYS_WINDOW = 14;
@@ -54,12 +54,7 @@ export const UpcomingBillsWidget: React.FC<UpcomingBillsWidgetProps> = ({ onPay 
     <Section
       title="Upcoming bills"
       action={
-        <Link
-          to="/budget"
-          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
-        >
-          Calendar <ArrowRight size={12} />
-        </Link>
+        <SectionActionLink to="/budget">Calendar</SectionActionLink>
       }
     >
       <SurfaceList>
