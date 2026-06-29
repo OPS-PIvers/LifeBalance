@@ -1098,13 +1098,12 @@ describe('FirebaseHouseholdContext — paycheck approval / period rollover', () 
 });
 
 // ===========================================================================
-// §3 — reallocateBucket: documents CURRENT behavior. The two limit changes land
-// in one batch (source increment(-amount), dest increment(+amount)). There is
-// NO validation against negative/over-balance amounts; the negative-amount test
-// below DOCUMENTS that an out-of-range amount currently goes through unguarded.
-// Do NOT add a guard — flagged as a potential follow-up.
+// §3 — reallocateBucket: a valid move lands the two limit changes in one batch
+// (source increment(-amount), dest increment(+amount)). Input is validated first
+// (PR #733): source!==target, a positive finite amount, and amount <= the
+// source's limit — an invalid amount is rejected with a toast and NO write.
 // ===========================================================================
-describe('FirebaseHouseholdContext — reallocateBucket (current behavior)', () => {
+describe('FirebaseHouseholdContext — reallocateBucket', () => {
   const bucket = (id: string, name: string, limit: number): BudgetBucket => ({
     id, name, limit, color: 'blue', isVariable: false, isCore: true,
   } as BudgetBucket);
@@ -1137,12 +1136,27 @@ describe('FirebaseHouseholdContext — reallocateBucket (current behavior)', () 
     expect(dstOps[0]!.data!['limit']).toEqual({ __increment: 10000 });
   });
 
-  // DOCUMENTS CURRENT (possibly-undesirable) BEHAVIOR: there is no guard against
-  // a negative or over-balance amount. A negative amount silently REVERSES the
-  // transfer (debits the destination, credits the source); an amount larger than
-  // the source limit would drive it negative. FLAGGED as a potential follow-up —
-  // not fixed here (tests-only).
-  it('DOCUMENTS: a negative amount currently goes through unguarded (reverses the transfer)', async () => {
+  it('allows moving the full source limit (boundary)', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    // Source limit is 50000; moving exactly that is allowed (source ends at 0).
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', 50000);
+    });
+
+    expect(batches).toHaveLength(1);
+    const batch = batches[0]!;
+    expect(batch.committed).toBe(true);
+    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
+      .toEqual({ __increment: -50000 });
+    expect(opsForPath(batch, `${householdPath}/buckets/dst`)[0]!.data!['limit'])
+      .toEqual({ __increment: 50000 });
+  });
+
+  // A negative amount would silently REVERSE the transfer — now rejected before
+  // any write.
+  it('rejects a negative amount without writing', async () => {
     renderProvider();
     seedTwoBuckets();
 
@@ -1150,18 +1164,23 @@ describe('FirebaseHouseholdContext — reallocateBucket (current behavior)', () 
       await captured.value!.finance.reallocateBucket('src', 'dst', -5000);
     });
 
-    expect(batches).toHaveLength(1);
-    const batch = batches[0]!;
-    expect(batch.committed).toBe(true);
-    // No validation: the negative amount flows straight into the increments,
-    // crediting the source and debiting the destination.
-    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
-      .toEqual({ __increment: 5000 });
-    expect(opsForPath(batch, `${householdPath}/buckets/dst`)[0]!.data!['limit'])
-      .toEqual({ __increment: -5000 });
+    expect(batches).toHaveLength(0);
   });
 
-  it('DOCUMENTS: an over-balance amount (> source limit) currently goes through unguarded', async () => {
+  it('rejects a zero amount without writing', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'dst', 0);
+    });
+
+    expect(batches).toHaveLength(0);
+  });
+
+  // An amount larger than the source limit would drive that limit negative — now
+  // rejected before any write.
+  it('rejects an amount exceeding the source limit without writing', async () => {
     renderProvider();
     seedTwoBuckets();
 
@@ -1170,12 +1189,20 @@ describe('FirebaseHouseholdContext — reallocateBucket (current behavior)', () 
       await captured.value!.finance.reallocateBucket('src', 'dst', 999999);
     });
 
-    expect(batches).toHaveLength(1);
-    const batch = batches[0]!;
-    // It commits anyway: no balance check. The source increment(-999999) would
-    // drive the limit negative server-side.
-    expect(opsForPath(batch, `${householdPath}/buckets/src`)[0]!.data!['limit'])
-      .toEqual({ __increment: -999999 });
+    expect(batches).toHaveLength(0);
+  });
+
+  // source===target would collapse to a single same-doc update that fabricates
+  // funds — now rejected before any write.
+  it('rejects reallocating a bucket to itself without writing', async () => {
+    renderProvider();
+    seedTwoBuckets();
+
+    await act(async () => {
+      await captured.value!.finance.reallocateBucket('src', 'src', 10000);
+    });
+
+    expect(batches).toHaveLength(0);
   });
 });
 
