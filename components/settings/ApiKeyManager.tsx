@@ -240,8 +240,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
             </label>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-brand-700 dark:text-brand-200">Habits (toggle habits)</span>
+                <label htmlFor="perm-habits" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Habits (toggle habits)</label>
                 <Switch
+                  id="perm-habits"
                   checked={permissions.habits}
                   onCheckedChange={(checked) =>
                     setPermissions({ ...permissions, habits: checked })
@@ -250,8 +251,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-brand-700 dark:text-brand-200">Expenses (add transactions)</span>
+                <label htmlFor="perm-expenses" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Expenses (add transactions)</label>
                 <Switch
+                  id="perm-expenses"
                   checked={permissions.expenses}
                   onCheckedChange={(checked) =>
                     setPermissions({ ...permissions, expenses: checked })
@@ -260,8 +262,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                 />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm text-brand-700 dark:text-brand-200">Shopping List (add items)</span>
+                <label htmlFor="perm-shopping" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Shopping List (add items)</label>
                 <Switch
+                  id="perm-shopping"
                   checked={permissions.shoppingList}
                   onCheckedChange={(checked) =>
                     setPermissions({ ...permissions, shoppingList: checked })

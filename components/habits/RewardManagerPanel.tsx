@@ -227,12 +227,13 @@ const RewardManagerPanel: React.FC<RewardManagerPanelProps> = ({ kids, kidModeEn
 
             <div className="flex items-center gap-2 text-sm font-medium text-brand-700 dark:text-brand-200">
               <Switch
+                id="reward-active"
                 tone="warm"
                 aria-label="Active (shown in the store)"
                 checked={draft.active}
                 onCheckedChange={(checked) => setDraft((d) => ({ ...d, active: checked }))}
               />
-              Active (shown in the store)
+              <label htmlFor="reward-active" className="cursor-pointer">Active (shown in the store)</label>
             </div>
 
             <div className="flex gap-2 pt-1">
