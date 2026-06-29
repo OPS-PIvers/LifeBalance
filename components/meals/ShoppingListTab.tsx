@@ -553,14 +553,16 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                         placeholder="Add item (e.g. Milk)..."
                         className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
                     />
-                    <button
+                    <Button
                         type="submit"
+                        variant="primary"
+                        size="icon"
                         disabled={!newItemText.trim()}
                         aria-label="Add item to shopping list"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5"
                     >
                         <Plus size={20} />
-                    </button>
+                    </Button>
                 </form>
 
                 {/* Filter — kept first-class & always visible (NOT in the overflow
@@ -637,13 +639,15 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
         {/* Clear Checked */}
         {hasPurchasedItems && (
             <div className="flex justify-end">
-                <button
+                <Button
+                    variant="subtle"
+                    size="sm"
+                    leftIcon={<RotateCcw className="w-3 h-3" />}
                     onClick={() => setIsClearCheckedConfirmOpen(true)}
-                    className="flex items-center gap-1 text-sm font-medium text-accent-600 hover:text-accent-700 px-3 py-1 bg-accent-50 hover:bg-accent-100 rounded-full transition-colors dark:text-accent-300 dark:hover:text-accent-200 dark:bg-accent-900/30 dark:hover:bg-accent-900/50"
+                    className="rounded-full"
                 >
-                    <RotateCcw className="w-3 h-3" />
                     Clear checked
-                </button>
+                </Button>
             </div>
         )}
 

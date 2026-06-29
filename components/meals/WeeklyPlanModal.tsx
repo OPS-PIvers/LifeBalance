@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import { useMealPlan, useShopping, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { WeeklyPlan, WeeklyPlanConstraints } from '@/types/weeklyPlan';
 import { mapWeeklyPlan } from '@/utils/weeklyPlanMapper';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { MealGuide } from './MealGuide';
-import { Sparkles, FileJson, Loader2, CalendarPlus, ChefHat, ClipboardPaste } from 'lucide-react';
+import { Sparkles, FileJson, CalendarPlus, ChefHat, ClipboardPaste } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Mode = 'choose' | 'generate' | 'import' | 'preview';
@@ -221,14 +222,17 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             />
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-brand-100 text-brand-700 font-bold rounded-xl hover:bg-brand-200 transition-colors dark:bg-brand-700 dark:text-brand-200 dark:hover:bg-brand-600">Back</button>
-            <button
+            <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
+            <Button
+              variant="warning"
+              size="lg"
+              className="flex-2"
               onClick={handleGenerate}
-              disabled={busy}
-              className="flex-2 flex items-center justify-center gap-2 py-3 bg-warm-500 text-white font-bold rounded-btn hover:bg-warm-600 disabled:opacity-60 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95"
+              isLoading={busy}
+              leftIcon={<Sparkles className="w-5 h-5" />}
             >
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Planning…</> : <><Sparkles className="w-5 h-5" /> Generate</>}
-            </button>
+              Generate
+            </Button>
           </div>
         </div>
       )}
@@ -240,12 +244,15 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             Copy the week.json from your weekly-meals app, then tap paste — a code fence or
             extra text around it is fine.
           </p>
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            className="w-full"
             onClick={handlePasteFromClipboard}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95"
+            leftIcon={<ClipboardPaste className="w-5 h-5" />}
           >
-            <ClipboardPaste className="w-5 h-5" /> Paste from clipboard
-          </button>
+            Paste from clipboard
+          </Button>
           <div className="text-center text-xxs font-bold uppercase tracking-wider text-brand-300 dark:text-brand-500">or paste manually</div>
           <textarea
             value={importText}
@@ -255,14 +262,17 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
             className="w-full p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs font-mono focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
           />
           <div className="flex gap-3">
-            <button onClick={() => setMode('choose')} className="flex-1 py-3 bg-brand-100 text-brand-700 font-bold rounded-xl hover:bg-brand-200 transition-colors dark:bg-brand-700 dark:text-brand-200 dark:hover:bg-brand-600">Back</button>
-            <button
+            <Button variant="secondary" size="lg" className="flex-1" onClick={() => setMode('choose')}>Back</Button>
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-2"
               onClick={handleImport}
               disabled={!importText.trim()}
-              className="flex-2 flex items-center justify-center gap-2 py-3 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 disabled:opacity-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-500 dark:hover:bg-accent-400"
+              leftIcon={<ChefHat className="w-5 h-5" />}
             >
-              <ChefHat className="w-5 h-5" /> Preview
-            </button>
+              Preview
+            </Button>
           </div>
         </div>
       )}
@@ -272,14 +282,17 @@ export const WeeklyPlanModal: React.FC<WeeklyPlanModalProps> = ({ isOpen, onClos
         <div className="space-y-4">
           <MealGuide plan={plan} />
           <div className="sticky bottom-0 bg-white dark:bg-brand-800 pt-2 pb-1 flex gap-3 border-t border-brand-200 dark:border-brand-700">
-            <button onClick={reset} className="flex-1 py-3 bg-brand-100 text-brand-700 font-bold rounded-xl hover:bg-brand-200 transition-colors dark:bg-brand-700 dark:text-brand-200 dark:hover:bg-brand-600">Discard</button>
-            <button
+            <Button variant="secondary" size="lg" className="flex-1" onClick={reset}>Discard</Button>
+            <Button
+              variant="primary"
+              size="lg"
+              className="flex-2"
               onClick={handleApply}
-              disabled={busy}
-              className="flex-2 flex items-center justify-center gap-2 py-3 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 disabled:opacity-60 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-500 dark:hover:bg-accent-400"
+              isLoading={busy}
+              leftIcon={<CalendarPlus className="w-5 h-5" />}
             >
-              {busy ? <><Loader2 className="w-5 h-5 animate-spin" /> Adding…</> : <><CalendarPlus className="w-5 h-5" /> Add to my week</>}
-            </button>
+              Add to my week
+            </Button>
           </div>
         </div>
       )}

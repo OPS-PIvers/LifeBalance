@@ -18,6 +18,7 @@ import {
   groupItemsByStore,
 } from '@/utils/weeklyPlanMapper';
 import { sumMoney } from '@/utils/money';
+import { Button } from '@/components/ui/Button';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import {
   CalendarDays, ShoppingCart, ChevronRight, ChevronLeft, Clock, Check,
@@ -226,9 +227,15 @@ interface RecipeViewProps {
 
 const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onServeChange, onBack, onStartCook }) => (
   <div>
-    <button onClick={onBack} className="inline-flex items-center gap-1 text-sm font-bold text-brand-500 hover:text-brand-800 mb-3 dark:text-brand-400 dark:hover:text-brand-200">
-      <ChevronLeft className="w-4 h-4" /> Week
-    </button>
+    <Button
+      variant="ghost"
+      size="sm"
+      className="mb-3 px-0 text-brand-500 hover:bg-transparent hover:text-brand-800 dark:text-brand-400 dark:hover:bg-transparent dark:hover:text-brand-200"
+      onClick={onBack}
+      leftIcon={<ChevronLeft className="w-4 h-4" />}
+    >
+      Week
+    </Button>
 
     {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
     <h2 className="text-2xl font-bold text-brand-900 dark:text-brand-100 tracking-tight text-balance">{meal.name}</h2>
@@ -315,12 +322,15 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
     ) : null}
 
     {schedule.steps.length > 0 && (
-      <button
+      <Button
+        variant="primary"
+        size="lg"
+        className="mt-6 w-full"
         onClick={onStartCook}
-        className="mt-6 w-full flex items-center justify-center gap-2 py-3.5 bg-accent-600 text-white font-bold rounded-btn hover:bg-accent-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-500 dark:hover:bg-accent-400"
+        leftIcon={<ChefHat className="w-5 h-5" />}
       >
-        <ChefHat className="w-5 h-5" /> Start Cook Mode
-      </button>
+        Start Cook Mode
+      </Button>
     )}
   </div>
 );
@@ -473,9 +483,9 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
         <div className="text-sm font-bold text-brand-500 dark:text-brand-400">
           {step.phase === 'prep' ? `Prep ${step.label}` : `Step ${step.label}`} · {i + 1}/{steps.length}
         </div>
-        <button onClick={onClose} className="p-2 -mr-2 text-brand-400 hover:text-brand-700 rounded-full hover:bg-brand-100 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-800" aria-label="Exit cook mode">
+        <Button variant="ghost" size="icon" className="-mr-2" onClick={onClose} aria-label="Exit cook mode">
           <X className="w-6 h-6" />
-        </button>
+        </Button>
       </div>
 
       <div className="h-1.5 bg-brand-100 dark:bg-brand-800 rounded-full mt-3 overflow-hidden">
@@ -494,27 +504,36 @@ const CookMode: React.FC<{ meal: WeeklyPlanMeal; steps: ScheduledStep[]; onClose
       </div>
 
       <div className="flex gap-3">
-        <button
+        <Button
+          variant="secondary"
+          size="lg"
+          className="flex-1"
           onClick={() => setI(v => Math.max(0, v - 1))}
           disabled={i === 0}
-          className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-brand-100 text-brand-700 font-bold rounded-btn disabled:opacity-40 active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-brand-800 dark:text-brand-200"
+          leftIcon={<ChevronLeft className="w-5 h-5" />}
         >
-          <ChevronLeft className="w-5 h-5" /> Back
-        </button>
+          Back
+        </Button>
         {i < steps.length - 1 ? (
-          <button
+          <Button
+            variant="primary"
+            size="lg"
+            className="flex-2"
             onClick={() => setI(v => Math.min(steps.length - 1, v + 1))}
-            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-accent-600 text-white font-bold rounded-btn active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-accent-500 dark:hover:bg-accent-400"
+            rightIcon={<ChevronRight className="w-5 h-5" />}
           >
-            Next <ChevronRight className="w-5 h-5" />
-          </button>
+            Next
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="success"
+            size="lg"
+            className="flex-2"
             onClick={onClose}
-            className="flex-2 flex items-center justify-center gap-2 py-3.5 bg-money-pos text-white font-bold rounded-btn active:scale-95 transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+            leftIcon={<Check className="w-5 h-5" />}
           >
-            <Check className="w-5 h-5" /> Done
-          </button>
+            Done
+          </Button>
         )}
       </div>
     </div>

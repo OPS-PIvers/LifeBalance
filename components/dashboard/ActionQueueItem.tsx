@@ -320,13 +320,15 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
             <span className="font-mono font-bold tabular-nums text-brand-900 dark:text-brand-50">{fmt(item.amount)}</span>
           ) : null}
           {!isExpanded && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
+              className="px-4 min-h-11"
               onClick={handleExpand}
-              className="text-xs font-semibold text-white px-4 min-h-11 rounded-btn active:scale-95 transition-[transform,colors] duration-(--duration-fast) ease-(--ease-standard) bg-accent-600 hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400"
               aria-label={`Review ${isTodoQueueItem(item) ? item.text : isCalendarQueueItem(item) ? item.title : isTransactionQueueItem(item) ? item.merchant || 'transaction' : 'item'}`}
             >
               Review
-            </button>
+            </Button>
           )}
         </div>
       </div>

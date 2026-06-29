@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Copy, Check, Share2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { buildInviteUrl } from '@/utils/inviteLink';
+import { Button } from '@/components/ui/Button';
 
 interface Props {
   inviteCode: string;
@@ -65,22 +66,26 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
         <span className="font-mono text-2xl font-bold tabular-nums text-brand-800 dark:text-brand-100 tracking-wider">
           {inviteCode}
         </span>
-        <button
+        <Button
+          variant="primary"
+          size="icon"
+          className="shrink-0 p-2.5"
           onClick={handleCopy}
-          className="shrink-0 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:bg-accent-500 dark:hover:bg-accent-400"
           aria-label="Copy invite code"
         >
           {copied ? <Check size={20} /> : <Copy size={20} />}
-        </button>
+        </Button>
       </div>
 
-      <button
+      <Button
+        variant="primary"
+        size="lg"
+        className="mt-4 w-full"
         onClick={handleShareLink}
-        className="mt-4 w-full flex items-center justify-center gap-2 bg-accent-600 text-white font-semibold py-3 px-4 rounded-btn hover:bg-accent-700 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:bg-accent-500 dark:hover:bg-accent-400"
+        leftIcon={<Share2 size={18} />}
       >
-        <Share2 size={18} />
         <span>Share invite link</span>
-      </button>
+      </Button>
 
       <p className="text-xs text-brand-500 dark:text-brand-400 mt-3">
         Share the link for one-tap joining, or give family members the code to enter manually

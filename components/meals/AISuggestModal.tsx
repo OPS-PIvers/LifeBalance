@@ -1,6 +1,7 @@
 import React from 'react';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 export type AIOptions = {
   cheap: boolean;
@@ -72,22 +73,26 @@ export const AISuggestModal: React.FC<AISuggestModalProps> = ({
             </label>
         </div>
 
-        <button
+        <Button
+            variant="warning"
+            size="lg"
+            className="w-full"
             onClick={onSuggest}
-            disabled={isGeneratingAI}
-            className="w-full py-3.5 bg-warm-500 text-white font-bold rounded-btn hover:bg-warm-600 disabled:opacity-50 flex justify-center items-center gap-2 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95"
+            isLoading={isGeneratingAI}
+            leftIcon={<Sparkles className="w-5 h-5" />}
         >
-            {isGeneratingAI ? <Loader2 className="animate-spin w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
-            {isGeneratingAI ? 'Consulting Chef...' : 'Suggest Meal'}
-        </button>
+            Suggest Meal
+        </Button>
 
-        <button
+        <Button
+            variant="ghost"
+            size="lg"
+            className="mt-3 w-full"
             onClick={onClose}
             disabled={isGeneratingAI}
-            className="mt-3 w-full py-3 text-brand-500 hover:bg-brand-50 hover:text-brand-700 font-bold rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:text-brand-400 dark:hover:bg-brand-700/50 dark:hover:text-brand-200"
         >
             Cancel
-        </button>
+        </Button>
     </div>
   );
 
