@@ -530,10 +530,8 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                  message: `Delete template "${list.name}"?`,
                                  confirmLabel: 'Delete',
                                  onConfirm: () => {
-                                   void (async () => {
-                                     await deleteQuickStockList(list.id);
-                                     toast.success('Template deleted');
-                                   })();
+                                   // deleteQuickStockList already toasts on success.
+                                   void deleteQuickStockList(list.id);
                                  },
                                });
                              }}

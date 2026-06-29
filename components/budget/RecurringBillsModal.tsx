@@ -207,7 +207,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         value={editFrequency}
                         onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
                         aria-label="Frequency"
-                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 appearance-none"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
                       >
                          <option value="weekly">Weekly</option>
                          <option value="bi-weekly">Bi-Weekly</option>
