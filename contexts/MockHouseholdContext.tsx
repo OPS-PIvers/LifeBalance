@@ -539,6 +539,10 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     toast.success('Mock: Template updated');
   }, []);
 
+  const updateQuickStockLists = useCallback(async (lists: QuickStockList[]) => {
+    setQuickStockLists(() => lists);
+  }, []);
+
   const deleteQuickStockList = useCallback(async (id: string) => {
     setQuickStockLists(prev => prev.filter(l => l.id !== id));
     toast.success('Mock: Template deleted');
@@ -893,6 +897,7 @@ export const MockHouseholdProvider: React.FC<{ children: ReactNode }> = ({ child
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,
+    updateQuickStockLists,
     deleteQuickStockList,
     addGroceryCatalogItem,
     updateGroceryCatalogItem: noOp,

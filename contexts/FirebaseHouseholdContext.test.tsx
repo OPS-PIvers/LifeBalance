@@ -8,6 +8,7 @@ import type {
   CalendarItem,
   FreezeBank,
   Habit,
+  QuickStockList,
   Transaction,
 } from '@/types/schema';
 
@@ -167,6 +168,7 @@ import {
   useFinance,
   useGamification,
   useHouseholdCore,
+  useShopping,
 } from './FirebaseHouseholdContext';
 // Plan 080d reward CRUD writes through these single-doc APIs (not a batch), so we
 // read their captured call args to assert path + payload. Plan 080e: addKidProfile
@@ -207,6 +209,7 @@ interface Captured {
   finance: ReturnType<typeof useFinance>;
   gamification: ReturnType<typeof useGamification>;
   core: ReturnType<typeof useHouseholdCore>;
+  shopping: ReturnType<typeof useShopping>;
 }
 
 const captured: { value: Captured | null } = { value: null };
@@ -215,10 +218,11 @@ const Capture: React.FC = () => {
   const finance = useFinance();
   const gamification = useGamification();
   const core = useHouseholdCore();
+  const shopping = useShopping();
   // Write to the module-scope holder from an effect (mutating it during render
   // is disallowed by the react-hooks/immutability lint rule).
   React.useEffect(() => {
-    captured.value = { finance, gamification, core };
+    captured.value = { finance, gamification, core, shopping };
   });
   return null;
 };
@@ -1706,5 +1710,128 @@ describe('FirebaseHouseholdContext — useFreezeBankToken weekly boundary', () =
     expect(hhData['points.total']).toEqual({ __increment: 10 });
     expect(hhData['points.weekly']).toEqual({ __increment: 10 });
     expect(hhData['points.daily']).toBeUndefined();
+  });
+});
+
+// --- Quick-stock-list move: stale-snapshot lost-update fix ----------------
+//
+// Reassigning a catalog item between quick-stock lists used to fire TWO
+// sequential updateQuickStockList() calls in one handler invocation (add to the
+// target list, remove from the source). Each rebuilt the WHOLE array from the
+// same `householdSettings` snapshot captured in its closure — React state that
+// only refreshes on the next onSnapshot tick — so the second full-array write
+// clobbered the first, and the item could vanish from every list (data loss).
+//
+// The fix is a single bulk write: updateQuickStockLists(lists) persists the
+// fully-computed array in ONE updateDoc. These tests lock that the bulk method
+// writes the whole array atomically, and that a B→A move ends with the item in
+// exactly the target list — the assertion that fails under the old two-write
+// path.
+describe('FirebaseHouseholdContext — updateQuickStockLists (bulk single-write)', () => {
+  const listA: QuickStockList = { id: 'listA', name: 'Pantry', items: [] };
+  const listB: QuickStockList = { id: 'listB', name: 'Fridge', items: ['cat1'] };
+
+  function seedLists(lists: QuickStockList[]) {
+    emitDoc(householdPath, HOUSEHOLD_ID, {
+      memberUids: ['user1'],
+      points: { daily: 0, weekly: 0, total: 0 },
+      quickStockLists: lists,
+    });
+  }
+
+  // updateDoc's data arg is typed `string | FieldPath | {...}` by the SDK
+  // overloads; the household-doc write always passes the object form. Narrow it
+  // and pull out the persisted quickStockLists array.
+  function persistedListsFromCall(call: typeof updateDocMock.mock.calls[number]): QuickStockList[] {
+    const data = call[1] as unknown as Record<string, unknown>;
+    return data['quickStockLists'] as QuickStockList[];
+  }
+
+  it('writes the ENTIRE quickStockLists array in a single updateDoc', async () => {
+    renderProvider();
+    seedLists([listA, listB]);
+
+    const next: QuickStockList[] = [
+      { ...listA, items: ['cat1'] },
+      { ...listB, items: [] },
+    ];
+
+    await act(async () => {
+      await captured.value!.shopping.updateQuickStockLists(next);
+    });
+
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const call = updateDocMock.mock.calls[0]!;
+    expect(pathOf(call[0])).toBe(householdPath);
+    expect(persistedListsFromCall(call)).toEqual(next);
+  });
+
+  it('moving a catalog item from list B to list A leaves it in EXACTLY the target list, in ONE write', async () => {
+    renderProvider();
+    // Start: cat1 lives in B only. Move it to A.
+    seedLists([listA, listB]);
+
+    const moved: QuickStockList[] = [
+      { ...listA, items: ['cat1'] }, // added to target
+      { ...listB, items: [] },        // removed from source
+    ];
+
+    await act(async () => {
+      await captured.value!.shopping.updateQuickStockLists(moved);
+    });
+
+    // Single write — two sequential full-array writes (the old bug) could never
+    // be atomic; this method is one updateDoc by construction.
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+
+    const persisted = persistedListsFromCall(updateDocMock.mock.calls[0]!);
+
+    const persistedA = persisted.find(l => l.id === 'listA')!;
+    const persistedB = persisted.find(l => l.id === 'listB')!;
+
+    // Regression assertion: present in the target (A), absent from the source (B).
+    // Under the old two-stale-writes path the second write clobbered the first,
+    // so the item could end up missing from BOTH lists — this would fail.
+    expect(persistedA.items).toContain('cat1');
+    expect(persistedB.items).not.toContain('cat1');
+  });
+
+  it('REGRESSION: two sequential singular writes from a stale snapshot lose the item; the bulk write does not', async () => {
+    renderProvider();
+    // cat1 lives in B only. Both lists are read from the SAME householdSettings
+    // snapshot, which only refreshes on the next onSnapshot tick — so two awaits
+    // in one handler invocation both rebuild the whole array from this base.
+    seedLists([listA, listB]);
+
+    // --- Reproduce the OLD buggy two-call sequence (add to A, then remove from B).
+    // Each updateQuickStockList rebuilds the WHOLE array from the stale snapshot:
+    //   write 1 → [A:{cat1}, B:{cat1}]   (added to A, B untouched in this base)
+    //   write 2 → [A:{},     B:{}]       (removed from B, but A reverts to its
+    //                                      stale empty state) → cat1 lost entirely.
+    await act(async () => {
+      await captured.value!.shopping.updateQuickStockList({ ...listA, items: ['cat1'] });
+      await captured.value!.shopping.updateQuickStockList({ ...listB, items: [] });
+    });
+
+    // The second write is the one that persists; it clobbered the first.
+    const buggyLists = persistedListsFromCall(updateDocMock.mock.calls[updateDocMock.mock.calls.length - 1]!);
+    const buggyA = buggyLists.find(l => l.id === 'listA')!;
+    const buggyB = buggyLists.find(l => l.id === 'listB')!;
+    // Data loss: cat1 is gone from BOTH lists. This is exactly the bug.
+    expect(buggyA.items).not.toContain('cat1');
+    expect(buggyB.items).not.toContain('cat1');
+
+    // --- The fix: one bulk write of the fully-computed array can't diverge.
+    updateDocMock.mockClear();
+    await act(async () => {
+      await captured.value!.shopping.updateQuickStockLists([
+        { ...listA, items: ['cat1'] },
+        { ...listB, items: [] },
+      ]);
+    });
+    expect(updateDocMock).toHaveBeenCalledTimes(1);
+    const fixedLists = persistedListsFromCall(updateDocMock.mock.calls[0]!);
+    expect(fixedLists.find(l => l.id === 'listA')!.items).toContain('cat1');
+    expect(fixedLists.find(l => l.id === 'listB')!.items).not.toContain('cat1');
   });
 });

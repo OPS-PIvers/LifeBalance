@@ -94,7 +94,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
     groceryCatalog,
     quickStockLists,
     addGroceryCatalogItem,
-    updateQuickStockList,
+    updateQuickStockLists,
   } = useShopping();
   const { householdId } = useHouseholdCore();
 
@@ -417,41 +417,33 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
                 catalogItemId = await addGroceryCatalogItem(newItem);
             }
 
-            // 2. Update Membership using Context Actions (compatible with Mock Mode)
-
-            // First, remove from any OTHER lists
-            for (const list of quickStockLists) {
-                const hasItem = list.items?.includes(catalogItemId);
+            // 2. Update Membership in ONE pass, then persist the whole array in a
+            //    SINGLE write. Building both the add (to the target) and the
+            //    remove (from every other list) into one in-memory copy avoids
+            //    two sequential context writes that would each start from the
+            //    same stale snapshot and clobber each other (data loss).
+            const newLists = quickStockLists.map(list => {
+                const items = list.items || [];
+                const hasItem = items.includes(catalogItemId);
 
                 if (list.id === newListId) {
-                    // This is the target list.
-                    // If it doesn't have it, add it.
-                    if (!hasItem) {
-                        await updateQuickStockList({
-                            ...list,
-                            items: [...(list.items || []), catalogItemId]
-                        });
-                    }
-                } else {
-                    // This is NOT the target list.
-                    // If it has it, remove it.
-                    if (hasItem) {
-                        await updateQuickStockList({
-                            ...list,
-                            items: (list.items || []).filter(id => id !== catalogItemId)
-                        });
-                    }
+                    // Target list: add it if missing (dedup), otherwise leave as-is.
+                    return hasItem ? list : { ...list, items: [...items, catalogItemId] };
                 }
-            }
+                // Any other list: remove it if present.
+                return hasItem ? { ...list, items: items.filter(id => id !== catalogItemId) } : list;
+            });
+            // Note: If newListId is empty string, no list matches the target so the
+            // item is simply removed from all lists.
 
-            // Note: If newListId is empty string, the loop correctly just removes from all.
+            await updateQuickStockLists(newLists);
 
             toast.success(newListId ? 'List updated' : 'Removed from list');
         } catch (error) {
             console.error('Failed to update quick list:', error);
             toast.error('Failed to update list');
         }
-    }, [householdId, groceryCatalog, quickStockLists, addGroceryCatalogItem, updateQuickStockList]);
+    }, [householdId, groceryCatalog, quickStockLists, addGroceryCatalogItem, updateQuickStockLists]);
 
   // Secondary/bulk actions, collapsed into one overflow "..." menu so they stop
   // eating a full button row + a 4-icon header cluster. Filter and Clear-checked

@@ -405,6 +405,14 @@ export interface HouseholdContextType {
   updateGroceryCategories: (categories: string[]) => Promise<void>;
   addQuickStockList: (list: Omit<QuickStockList, 'id'>) => Promise<void>;
   updateQuickStockList: (list: QuickStockList) => Promise<void>;
+  /**
+   * Replaces the ENTIRE quickStockLists array in a single write. Use this when a
+   * mutation touches more than one list at once (e.g. moving a catalog item from
+   * one list to another), so the change can't be split across two sequential
+   * `updateQuickStockList` calls that both start from the same stale snapshot and
+   * clobber each other.
+   */
+  updateQuickStockLists: (lists: QuickStockList[]) => Promise<void>;
   deleteQuickStockList: (id: string) => Promise<void>;
 
   // Grocery Catalog Actions
@@ -471,7 +479,7 @@ export type ShoppingContextValue = Pick<HouseholdContextType,
   | 'addShoppingItem' | 'addShoppingItems' | 'updateShoppingItem' | 'reorderShoppingItems'
   | 'deleteShoppingItem' | 'toggleShoppingItemPurchased' | 'clearPurchasedShoppingItems'
   | 'addStore' | 'updateStore' | 'deleteStore' | 'updateGroceryCategories'
-  | 'addQuickStockList' | 'updateQuickStockList' | 'deleteQuickStockList'
+  | 'addQuickStockList' | 'updateQuickStockList' | 'updateQuickStockLists' | 'deleteQuickStockList'
   | 'addGroceryCatalogItem' | 'updateGroceryCatalogItem' | 'deleteGroceryCatalogItem'
 >;
 
@@ -4103,6 +4111,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, householdSettings]);
 
+  // Replace the WHOLE quickStockLists array in one write. Callers that touch
+  // multiple lists in a single user action (e.g. reassigning a catalog item
+  // between lists) must compute the final array locally and persist it here,
+  // rather than firing two sequential updateQuickStockList() calls — both of
+  // those would start from the same stale `householdSettings` snapshot and the
+  // second write would clobber the first.
+  const updateQuickStockLists = useCallback(async (lists: QuickStockList[]) => {
+    if (!householdId) return;
+    try {
+      await updateDoc(doc(db, `households/${householdId}`), {
+        quickStockLists: lists
+      });
+    } catch (error) {
+      console.error('[updateQuickStockLists] Failed:', error);
+      toast.error('Failed to update list');
+    }
+  }, [householdId]);
+
   const deleteQuickStockList = useCallback(async (id: string) => {
     if (!householdId || !householdSettings) return;
     try {
@@ -4530,6 +4556,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     updateGroceryCategories,
     addQuickStockList,
     updateQuickStockList,
+    updateQuickStockLists,
     deleteQuickStockList,
     addGroceryCatalogItem,
     updateGroceryCatalogItem,
@@ -4538,7 +4565,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     shoppingList, groceryCatalog, stores, groceryCategories, quickStockLists,
     addShoppingItem, addShoppingItems, updateShoppingItem, reorderShoppingItems, deleteShoppingItem, toggleShoppingItemPurchased, clearPurchasedShoppingItems,
     addStore, updateStore, deleteStore, updateGroceryCategories,
-    addQuickStockList, updateQuickStockList, deleteQuickStockList,
+    addQuickStockList, updateQuickStockList, updateQuickStockLists, deleteQuickStockList,
     addGroceryCatalogItem, updateGroceryCatalogItem, deleteGroceryCatalogItem,
   ]);
 
