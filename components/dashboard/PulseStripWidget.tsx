@@ -9,6 +9,7 @@ import { roundMoney } from '@/utils/money';
 import { Flame, TrendingUp, TrendingDown, Minus, Target } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Section } from '@/components/ui/Section';
+import Eyebrow from '@/components/ui/Eyebrow';
 
 /**
  * PulseStripWidget — the app's thesis metric, finally surfaced on Home.
@@ -140,7 +141,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
         {/* Points earned — the habit/gamification signal (warm) */}
         {showHabits && (
         <PulseCell label="Points">
-          <span className="font-mono text-2xl font-bold tabular-nums text-warm-600 dark:text-warm-300">
+          <span className="stat-num text-2xl font-bold text-warm-600 dark:text-warm-300">
             {metrics.weekPoints}
           </span>
           {metrics.topStreak > 0 ? (
@@ -160,7 +161,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
         {/* Spending — the money signal (evergreen) */}
         {showSpend && (
         <PulseCell label="Spent">
-          <span className="font-mono text-2xl font-bold tabular-nums text-accent-700 dark:text-accent-300">
+          <span className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">
             {fmt(metrics.weekSpend, { decimals: 0 })}
           </span>
           {metrics.spendTrend === 'none' ? (
@@ -196,7 +197,7 @@ export const PulseStripWidget: React.FC = React.memo(() => {
         <PulseCell label="Consistency">
           {metrics.consistencyTotal > 0 ? (
             <>
-              <span className="font-mono text-2xl font-bold tabular-nums text-habit-blue">
+              <span className="stat-num text-2xl font-bold text-habit-blue">
                 {metrics.consistencyPercent}%
               </span>
               <span className="mt-1 flex items-center gap-1 text-xs font-medium text-brand-400 dark:text-brand-500">
@@ -228,9 +229,9 @@ const PulseCell: React.FC<{ label: string; children: React.ReactNode }> = ({
   children,
 }) => (
   <div className="flex flex-col items-center justify-center px-2 py-4 text-center">
-    <span className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-500">
+    <Eyebrow className="mb-1.5 text-xxs">
       {label}
-    </span>
+    </Eyebrow>
     {children}
   </div>
 );
