@@ -34,8 +34,8 @@ const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
   const isRow = layout === 'row';
   const selectClass = isRow
-    ? 'px-3 py-2 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-sm text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20 min-w-[120px]'
-    : 'w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-card text-base text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20';
+    ? 'px-3 py-2 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-sm text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40 min-w-[120px]'
+    : 'w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-base text-brand-700 dark:text-brand-200 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40';
 
   return (
     <>

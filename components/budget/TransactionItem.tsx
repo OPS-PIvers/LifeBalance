@@ -113,7 +113,7 @@ export const TransactionItem = memo(({ transaction: tx, onEdit, onDelete, onDupl
         {!isSelectionMode && (
           <>
             {/* Desktop: Hover Actions */}
-            <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="hidden sm:flex gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="icon"
