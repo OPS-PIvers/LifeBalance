@@ -1,5 +1,6 @@
 import React, { InputHTMLAttributes, forwardRef, useId, useState } from 'react';
 import { cn } from '@/utils/cn';
+import { FIELD_BASE, FIELD_ERROR } from '@/components/ui/fieldStyles';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -68,9 +69,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={error ? errorId : undefined}
             onChange={handleChange}
             className={cn(
-              "w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard) placeholder:text-brand-400 dark:placeholder:text-brand-500 disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50",
+              FIELD_BASE,
               icon && "pl-10",
-              error && "border-money-neg focus:border-money-neg focus:ring-money-neg/20",
+              error && FIELD_ERROR,
               className
             )}
             {...props}

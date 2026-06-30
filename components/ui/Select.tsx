@@ -1,6 +1,7 @@
 import React, { SelectHTMLAttributes, forwardRef, useId } from 'react';
 import { cn } from '@/utils/cn';
 import { ChevronDown } from 'lucide-react';
+import { FIELD_BASE, FIELD_ERROR } from '@/components/ui/fieldStyles';
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
@@ -36,10 +37,11 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-invalid={!!error}
             aria-describedby={error ? errorId : undefined}
             className={cn(
-              "w-full p-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard) disabled:opacity-50 disabled:bg-brand-50 dark:disabled:bg-brand-700/50 appearance-none text-brand-900 dark:text-brand-100",
+              FIELD_BASE,
+              "appearance-none",
               icon ? "pl-10" : "pl-3",
               "pr-10", // Space for the chevron
-              error && "border-money-neg focus:border-money-neg focus:ring-money-neg/20",
+              error && FIELD_ERROR,
               className
             )}
             {...props}
