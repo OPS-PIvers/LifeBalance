@@ -136,7 +136,7 @@ export const MealGuide: React.FC<MealGuideProps> = ({ plan, hideMasthead }) => {
                 onClick={() => openRecipe(i)}
                 className="w-full text-left flex items-start gap-3 p-4 rounded-2xl bg-white border border-brand-200 hover:border-brand-300 transition-colors duration-(--duration-fast) ease-(--ease-standard) dark:bg-brand-800 dark:border-brand-700 dark:hover:border-brand-600"
               >
-                <span className="font-serif text-2xl font-bold text-brand-600 dark:text-brand-300 leading-none w-7 shrink-0 tabular-nums">{i + 1}</span>
+                <span className="font-display text-2xl font-bold text-brand-600 dark:text-brand-300 leading-none w-7 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
                   {meal.cuisine && <div className="text-xxs font-bold uppercase tracking-wide text-brand-400 dark:text-brand-500">{meal.cuisine}</div>}
                   <div className="font-bold text-brand-900 dark:text-brand-100 tracking-tight leading-snug text-balance">{meal.name}</div>
@@ -202,7 +202,7 @@ const Tag: React.FC<{ children: React.ReactNode; icon?: React.ReactNode; tone?: 
   <span className={clsx(
     'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xxs font-bold border',
     tone === 'save' && 'bg-brand-50 text-brand-700 border-brand-200 dark:bg-brand-700/40 dark:text-brand-200 dark:border-brand-500/40',
-    tone === 'warn' && 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20',
+    tone === 'warn' && 'bg-warm-50 text-warm-700 border-warm-200 dark:bg-warm-900/40 dark:text-warm-200 dark:border-warm-700',
     tone === 'default' && 'bg-white text-brand-600 border-brand-200 dark:bg-brand-800 dark:text-brand-300 dark:border-brand-700'
   )}>
     {icon}{children}
@@ -311,11 +311,11 @@ const RecipeView: React.FC<RecipeViewProps> = ({ meal, schedule, serveValue, onS
 
     {/* Leftovers */}
     {meal.leftovers?.length ? (
-      <section className="mt-6 rounded-2xl bg-amber-50 border border-amber-200 p-4 dark:bg-amber-500/15 dark:border-amber-500/20">
-        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700 dark:text-amber-300 mb-2">
+      <section className="mt-6 rounded-card bg-warm-50 border border-warm-200 p-4 dark:bg-warm-900/40 dark:border-warm-700">
+        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-warm-700 dark:text-warm-200 mb-2">
           <Box className="w-4 h-4" /> Leftovers
         </h3>
-        <ul className="space-y-1 text-sm text-amber-900 dark:text-amber-200">
+        <ul className="space-y-1 text-sm text-warm-900 dark:text-warm-200">
           {meal.leftovers.map((l, i) => <li key={i}>• {l}</li>)}
         </ul>
       </section>

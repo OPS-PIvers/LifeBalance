@@ -191,7 +191,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                             <span className="font-bold text-brand-700 group-hover:text-brand-700 block mb-0.5 dark:text-brand-200 dark:group-hover:text-brand-300">{meal.name}</span>
                             <div className="flex items-center gap-2">
                                 {meal.rating && meal.rating > 0 ? (
-                                    <div className="flex items-center text-xs text-amber-500 dark:text-amber-400 font-bold">
+                                    <div className="flex items-center text-xs text-warm-500 dark:text-warm-400 font-bold">
                                         <Star size={10} fill="currentColor" className="mr-0.5" /> {meal.rating}
                                     </div>
                                 ) : null}
