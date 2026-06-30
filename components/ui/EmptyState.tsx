@@ -25,7 +25,12 @@ const ICON_BADGE_TONES: Record<EmptyStateTone, string> = {
 
 export interface EmptyStateProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title'> {
-  /** Icon node (e.g. a lucide icon) rendered inside a tinted circular badge. Omit for a text-only state. */
+  /**
+   * Icon node (e.g. a lucide icon) rendered inside a tinted circular badge.
+   * The badge normalizes the icon to a consistent 28px regardless of the size
+   * the caller passes, so empty states across the app read at the same scale.
+   * Omit for a text-only state.
+   */
   icon?: React.ReactNode;
   /** The headline. */
   title: React.ReactNode;
@@ -65,7 +70,9 @@ const EmptyState: React.FC<EmptyStateProps> = ({
     {icon && (
       <div
         className={cn(
-          'w-16 h-16 rounded-full flex items-center justify-center mb-4',
+          // Clamp the icon to a uniform 28px so a 20px and a 28px caller icon
+          // don't read at different scales inside the same fixed 64px badge.
+          'w-16 h-16 rounded-full flex items-center justify-center mb-4 [&>svg]:size-7',
           ICON_BADGE_TONES[tone]
         )}
       >
