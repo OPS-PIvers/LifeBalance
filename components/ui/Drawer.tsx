@@ -144,7 +144,9 @@ export const Drawer: React.FC<DrawerProps> = ({
                  from being misread as a swipe-to-close. */}
              <div
                className={twMerge(
-                 "w-full flex justify-center pt-3 pb-1 touch-none",
+                 // Generous vertical padding: the handle is the sole swipe-to-close
+                 // grab target now, so give it a comfortable (~40px) hit area.
+                 "w-full flex justify-center pt-4 pb-4 touch-none",
                  disableClose ? "cursor-default" : "cursor-grab active:cursor-grabbing"
                )}
                onPointerDown={(e) => { if (!disableClose) dragControls.start(e); }}
