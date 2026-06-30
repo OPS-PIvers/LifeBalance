@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink, Copy, CreditCard } from 'lucide-react';
+import { ChevronDown, Smartphone, Mic, ShoppingCart, ExternalLink, Copy, CreditCard, Bell } from 'lucide-react';
 import { getQuickAddEndpointUrl } from '@/services/apiKeyService';
 import toast from 'react-hot-toast';
 
@@ -135,7 +135,35 @@ const ShortcutSetupGuide: React.FC = () => {
         'Expenses auto-log as pending - review them in the Budget tab',
       ],
       isAutomation: true,
-      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. Apple Pay fires this trigger on the authorization event, which often arrives as a $0 pre-authorization hold (the real amount settles later on the bank side and does not re-fire the trigger). LifeBalance now captures those: a $0 charge with a merchant becomes an "awaiting amount" item — next time you open the app you\'ll be prompted to enter the real total (or fill it in later from the Action Queue). So do NOT add an "If Amount > 0" filter; let every transaction through. The API accepts positive or negative amounts and handles common formats automatically: 50, -50, "$50.00", "-$50.00", "50,00", "1.234,56", and accounting notation "(50.00)". Both signs work correctly regardless of your iOS version or locale. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
+      automationNote: 'The Transaction trigger automatically provides Amount and Merchant as variables. Apple Pay fires this trigger on the authorization event, which often arrives as a $0 pre-authorization hold (the real amount settles later on the bank side and does not re-fire the trigger). LifeBalance now captures those: a $0 charge with a merchant becomes an "awaiting amount" item — next time you open the app you\'ll be prompted to enter the real total (or fill it in later from the Action Queue). So do NOT add an "If Amount > 0" filter; let every transaction through. TIP: pair this with the "Apple Pay Real Amount" automation below — it reads your bank\'s notification and fills in the real total on that awaiting-amount item automatically, so you rarely have to type it. The API accepts positive or negative amounts and handles common formats automatically: 50, -50, "$50.00", "-$50.00", "50,00", "1.234,56", and accounting notation "(50.00)". Both signs work correctly regardless of your iOS version or locale. When adding body fields, tap the value field and select the matching variable from the list above the keyboard.',
+    },
+    {
+      id: 'wallet-bank-notification',
+      title: 'Apple Pay Real Amount (Bank Notification)',
+      icon: <Bell className="w-5 h-5" />,
+      description: 'Reads the settled amount from your bank\'s push notification — fills in the $0 pre-auth holds from the automation above',
+      endpoint: 'expense',
+      fields: [
+        { key: 'amount', value: 'Amount', valueType: 'Number', isVariable: true },
+        { key: 'merchant', value: 'Merchant', valueType: 'Text', isVariable: true },
+        { key: 'fromBankNotification', value: 'true', valueType: 'Text' },
+      ],
+      preActions: [
+        'Turn ON transaction alerts in your bank app first, so each purchase pushes a notification with the amount + merchant',
+        'Open Shortcuts app → tap Automation tab (bottom center) → tap + (top right)',
+        'Tap "When I receive a notification" (newer iOS) → choose your bank app (e.g. Wells Fargo) → tap Next',
+        'In the shortcut, add "Get Details of Shortcut Input" → choose the notification text (Title and/or Body)',
+        'Add "Match Text" to pull the amount — pattern: \\$?\\d[\\d,]*\\.\\d{2} — then "Set Variable" named Amount',
+        'Add another "Match Text"/text step to capture the store name → "Set Variable" named Merchant',
+        'Bank wording varies — run the automation once on a real notification and adjust the match until Amount and Merchant come out clean',
+      ],
+      postActions: [
+        'Tap Done → when prompted choose "Run Immediately" (not "Ask Before Running")',
+        'Leave the "fromBankNotification" field set to true — that\'s the flag that lets this fill an awaiting-amount item instead of adding a duplicate',
+        'With both this and the Apple Pay automation on, a $0 hold and the real amount merge into ONE pending transaction automatically',
+      ],
+      isAutomation: true,
+      automationNote: 'This is the companion to the Apple Pay automation above. Apple Pay can only see the $0 authorization, but your BANK\'s notification carries the real settled total — this automation parses that and sends it. The "fromBankNotification": true field is required: it tells LifeBalance to fill a recent $0 "awaiting amount" hold (matching by merchant, or by timing when the two apps report different store names) rather than create a second row. If no matching hold is found it just adds a normal pending expense. REQUIREMENTS & CAVEATS: needs a recent iOS where the notification automation can pass the notification text into the shortcut (you may need to update iOS); notification parsing is brittle — if your bank rewords its alerts the Match pattern may need updating; and a Focus or Scheduled Summary can delay/bundle notifications and stop the automation from firing. For the most reliable settled amounts, connect your bank with Plaid in Settings instead — this notification path is the no-Plaid option.',
     },
   ];
 

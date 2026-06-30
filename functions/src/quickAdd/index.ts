@@ -25,6 +25,12 @@ import {
 } from "./habitProcessor";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getPayPeriodForTransaction } from "../plaid/payPeriod";
+import {
+  RECONCILE_WINDOW_MS,
+  pickFillTarget,
+  buildFillUpdates,
+  type ReconcileCandidate,
+} from "./reconcile";
 
 const db = admin.firestore();
 
@@ -315,6 +321,15 @@ export const quickAddExpense = onRequest(
     // 4. Parse and validate request body
     const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
+    // Opt-in marker set ONLY by the bank-notification Shortcut (which parses the
+    // real settled amount out of the bank's push). It gates the reconcile step
+    // below so a regular voice-expense Shortcut — also amount>0, also
+    // source:'shortcut' — can never absorb an unrelated Apple Pay $0 stub.
+    // Shortcuts may send a Boolean or a text "true"/"1", so accept both.
+    const rawFromBank = (req.body || {}).fromBankNotification;
+    const fromBankNotification =
+      rawFromBank === true || rawFromBank === "true" || rawFromBank === 1 || rawFromBank === "1";
+
     // Convert amount to number.
     // iOS Shortcuts may send amounts as a plain number or as a formatted currency string
     // (e.g. "$50.00", "-$50.00", "USD 50.00", "50,00", "1.234,56",
@@ -446,6 +461,85 @@ export const quickAddExpense = onRequest(
       // household doc (the top-level `currency` field added by the client).
       const currency = householdData?.currency || "USD";
 
+      const transactionsPath = `households/${householdId}/transactions`;
+
+      // --- Reconcile the two Apple Pay capture paths (see reconcile.ts) ---
+      // When the bank-notification Shortcut posts the REAL settled amount, try to
+      // fill a just-created Apple Pay $0 "awaiting amount" stub instead of writing
+      // a duplicate row. Gated behind `fromBankNotification` so only that Shortcut
+      // triggers a merge; everything else keeps the original create-only path (and
+      // skips this extra read entirely).
+      if (fromBankNotification && amount > 0) {
+        try {
+          const cutoff = admin.firestore.Timestamp.fromMillis(
+            Date.now() - RECONCILE_WINDOW_MS
+          );
+          // Single where() → covered by the automatic single-field index on
+          // createdAt; the window is tiny so we filter the rest in memory.
+          const recentSnap = await db
+            .collection(transactionsPath)
+            .where("createdAt", ">=", cutoff)
+            .get();
+
+          const candidates: ReconcileCandidate[] = [];
+          const refById = new Map<
+            string,
+            admin.firestore.DocumentReference
+          >();
+          for (const d of recentSnap.docs) {
+            const data = d.data() as Record<string, unknown>;
+            // Only correlate against other Shortcut-origin pending rows — never
+            // touch manual / Plaid / receipt transactions.
+            if (data.source !== "shortcut" || data.status !== "pending_review") {
+              continue;
+            }
+            if (typeof data.amount !== "number" || !Number.isFinite(data.amount)) {
+              continue;
+            }
+            candidates.push({
+              id: d.id,
+              amount: data.amount,
+              merchant: typeof data.merchant === "string" ? data.merchant : "",
+              needsAmount: data.needsAmount === true,
+            });
+            refById.set(d.id, d.ref);
+          }
+
+          const target = pickFillTarget(
+            { amount, merchant: merchant.trim(), category },
+            candidates
+          );
+          const targetRef = target ? refById.get(target.id) : undefined;
+          if (target && targetRef) {
+            await targetRef.update(
+              buildFillUpdates({ amount, merchant: merchant.trim(), category })
+            );
+            await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
+            jsonResponse(res, 200, {
+              success: true,
+              merged: true,
+              message: `Updated pending: ${formatCurrency(amount, { currency })} at ${merchant} (filled awaiting-amount)`,
+              data: {
+                transactionId: target.id,
+                amount,
+                merchant,
+                category,
+                date: transactionDate,
+                status: "pending_review",
+              },
+            });
+            return;
+          }
+          // No unambiguous stub to fill → fall through and create a normal row.
+        } catch (reconcileErr) {
+          // Reconciliation is best-effort: a lookup/update failure must never
+          // block capture, so log and fall through to the normal create path.
+          logger.warn(
+            `Reconcile lookup failed; creating a new transaction instead: ${reconcileErr}`
+          );
+        }
+      }
+
       // Calculate the pay period for this transaction. Use the shared, ported
       // helper rather than the old `lastPaycheckDate || transactionDate`
       // shortcut: a back-dated expense (date < lastPaycheckDate) must NOT be
@@ -476,7 +570,7 @@ export const quickAddExpense = onRequest(
       };
 
       const transactionRef = await db
-        .collection(`households/${householdId}/transactions`)
+        .collection(transactionsPath)
         .add(transactionData);
 
       // Note: Don't deduct from checking yet - that happens when user verifies the transaction

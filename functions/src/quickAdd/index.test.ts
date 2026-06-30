@@ -59,7 +59,10 @@ vi.mock("firebase-admin", () => {
     serverTimestamp: () => "TS",
     increment: (n: number) => ({ __inc: n }),
   };
-  const firestore = Object.assign(() => adminMock.db, { FieldValue });
+  const Timestamp = {
+    fromMillis: (ms: number) => ({ __ts: ms }),
+  };
+  const firestore = Object.assign(() => adminMock.db, { FieldValue, Timestamp });
   return { firestore };
 });
 
@@ -523,6 +526,188 @@ describe("quickAddExpense", () => {
     );
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ data: { amount: 50 } });
+  });
+
+  // --- Bank-notification reconciliation (fromBankNotification) ---
+
+  /** Build a query-snapshot doc for the recent-transactions reconcile lookup. */
+  function txDoc(id: string, data: Record<string, unknown>) {
+    return {
+      id,
+      ref: { update: vi.fn(() => Promise.resolve()) },
+      data: () => data,
+    };
+  }
+
+  it("fromBankNotification fills the lone $0 stub (cross-merchant, time-only) instead of adding a row", async () => {
+    const stub = txDoc("stub1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Loews Sapphire Falls Fb",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [stub],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 13.31,
+          merchant: "Amatista Cookhouse",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      merged: true,
+      data: { transactionId: "stub1", amount: 13.31 },
+    });
+    // Filled the stub; did NOT create a new transaction.
+    expect(stub.ref.update).toHaveBeenCalledTimes(1);
+    const updates = stub.ref.update.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(updates).toMatchObject({
+      amount: 13.31,
+      merchant: "Amatista Cookhouse",
+      needsAmount: false,
+    });
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it("fromBankNotification does NOT merge when two unfilled stubs are present (creates a row)", async () => {
+    const s1 = txDoc("s1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Loews Sapphire Falls Fb",
+      needsAmount: true,
+    });
+    const s2 = txDoc("s2", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Some Other Hold",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [s1, s2],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 13.31,
+          merchant: "Amatista Cookhouse",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(s1.ref.update).not.toHaveBeenCalled();
+    expect(s2.ref.update).not.toHaveBeenCalled();
+    expect(res.body).not.toMatchObject({ merged: true });
+  });
+
+  it("fromBankNotification fills the merchant-matching stub even amid multiple stubs", async () => {
+    const s1 = txDoc("s1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Gas Station",
+      needsAmount: true,
+    });
+    const s2 = txDoc("s2", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Coffee Shop",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [s1, s2],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: { amount: 42, merchant: "Gas Station", fromBankNotification: true },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(s1.ref.update).toHaveBeenCalledTimes(1);
+    expect(s2.ref.update).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({ merged: true, data: { transactionId: "s1" } });
+  });
+
+  it("WITHOUT the fromBankNotification flag, a real amount never absorbs a $0 stub", async () => {
+    const stub = txDoc("stub1", {
+      source: "shortcut",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Loews",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [stub],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({ body: { amount: 20, merchant: "Lunch Place" } }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(stub.ref.update).not.toHaveBeenCalled();
+  });
+
+  it("fromBankNotification ignores non-shortcut rows when finding a stub (creates a row)", async () => {
+    // A manual/Plaid stub-shaped row must NOT be touched by reconciliation.
+    const manual = txDoc("m1", {
+      source: "manual",
+      status: "pending_review",
+      amount: 0,
+      merchant: "Loews",
+      needsAmount: true,
+    });
+    const add = vi.fn(() => Promise.resolve({ id: "txNew" }));
+    collectionOverrides[`households/${HOUSEHOLD_ID}/transactions`] = {
+      add,
+      whereGetDocs: [manual],
+    };
+    configureCollections();
+    const res = makeRes();
+    await asHandler(quickAddExpense)(
+      makeReq({
+        body: {
+          amount: 13.31,
+          merchant: "Amatista Cookhouse",
+          fromBankNotification: true,
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(200);
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(manual.ref.update).not.toHaveBeenCalled();
   });
 
   it("zero-dollar hold WITH a merchant creates an awaiting-amount stub (needsAmount:true, amount 0, pending_review)", async () => {
