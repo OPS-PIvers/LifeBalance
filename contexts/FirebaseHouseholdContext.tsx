@@ -2838,6 +2838,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       }
       if (sanitizedUpdates.accountId === undefined || sanitizedUpdates.accountId === '') {
         delete sanitizedUpdates.accountId;
+        // Untagging: omitting the field leaves the old value in Firestore, so a
+        // caller explicitly clearing a previously-tagged account must remove it
+        // with deleteField(). (The balance delta already re-routes to checking.)
+        if ('accountId' in updates && !updates.accountId && transaction.accountId) {
+          sanitizedUpdates.accountId = deleteField();
+        }
       } else if (typeof sanitizedUpdates.accountId === 'string') {
         sanitizedUpdates.accountId = sanitizedUpdates.accountId.trim();
       }
@@ -2998,7 +3004,10 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       for (const tx of newTransactions) {
         const t = resolveTargetAccount(tx.accountId?.trim() || undefined, accounts);
         if (t) {
-          deltasByAccountId.set(t.id, (deltasByAccountId.get(t.id) ?? 0) + effectiveAccountImpact({ amount: tx.amount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status }, t));
+          // Round to whole cents (as the asset paths do) so the per-account
+          // delta can't desync from the stored amount by a sub-cent.
+          const roundedAmount = roundMoney(tx.amount);
+          deltasByAccountId.set(t.id, (deltasByAccountId.get(t.id) ?? 0) + effectiveAccountImpact({ amount: roundedAmount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status }, t));
         }
       }
       for (const [accId, delta] of deltasByAccountId) {

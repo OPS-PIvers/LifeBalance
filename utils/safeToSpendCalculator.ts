@@ -234,8 +234,12 @@ export const sumPendingSpend = (
         if (tx.status !== 'pending_review') return false;
         if (tx.category === INCOME_CATEGORY) return false;
         // A pending charge on a non-checking account (savings/credit) does not
-        // reduce liquid checking funds, so it must not lower Safe-to-Spend.
-        if (tx.accountId && !checkingIds.has(tx.accountId)) return false;
+        // reduce liquid checking funds, so it must not lower Safe-to-Spend. Only
+        // apply this when accounts are known: if `accounts` is empty (no arg, or
+        // a transient cold-load state where transactions arrived before
+        // accounts) fall back to account-agnostic filtering so tagged spend
+        // isn't wrongly dropped (which would spike Safe-to-Spend).
+        if (accounts.length > 0 && tx.accountId && !checkingIds.has(tx.accountId)) return false;
         if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
         return true;
       })

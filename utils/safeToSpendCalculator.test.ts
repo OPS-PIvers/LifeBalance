@@ -1148,6 +1148,13 @@ describe('sumPendingSpend — account-aware exclusion', () => {
     expect(sumPendingSpend([tx({ accountId: undefined })], '2026-06-01')).toBe(50);
   });
 
+  it('with no accounts arg, a tagged tx also counts (cold-load fallback, no spurious exclusion)', () => {
+    // accounts unknown ⇒ account-agnostic filtering, so a tagged pending tx is
+    // NOT dropped (which would transiently spike Safe-to-Spend during load).
+    expect(sumPendingSpend([tx({ accountId: 'cc' })], '2026-06-01')).toBe(50);
+    expect(sumPendingSpend([tx({ accountId: 'cc' })], '2026-06-01', [])).toBe(50);
+  });
+
   it('a pending credit charge does not lower Safe-to-Spend', () => {
     const items: CalendarItem[] = [
       { id: 'p', title: 'Next Paycheck', amount: 2000, date: '2026-06-15', type: 'income', isPaid: false },

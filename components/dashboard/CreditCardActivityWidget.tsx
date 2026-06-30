@@ -103,8 +103,8 @@ export const CreditCardActivityWidget: React.FC<CreditCardActivityWidgetProps> =
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-brand-400 dark:text-brand-500">Net</span>
-                <span className={`font-mono tabular-nums font-bold ${net >= 0 ? 'text-money-neg' : 'text-money-pos'}`}>
-                  {net >= 0 ? '+' : '-'}{fmt(Math.abs(net))}
+                <span className={`font-mono tabular-nums font-bold ${net > 0 ? 'text-money-neg' : net < 0 ? 'text-money-pos' : 'text-brand-500 dark:text-brand-400'}`}>
+                  {net > 0 ? '+' : net < 0 ? '-' : ''}{fmt(Math.abs(net))}
                 </span>
               </div>
             </div>
