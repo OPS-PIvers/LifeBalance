@@ -65,7 +65,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
           <div>
             <p className="text-xs text-brand-500 dark:text-brand-400 font-medium mb-0.5">Today&apos;s progress</p>
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-2xl font-bold tabular-nums tracking-tight text-brand-900 dark:text-brand-50">
+              <span className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">
                 {stats.completed}/{stats.total}
               </span>
               <span className="text-sm font-semibold text-brand-400 dark:text-brand-500">done</span>
@@ -77,7 +77,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
             percent={stats.percent}
             barClassName={stats.percent === 100 ? 'text-money-pos' : 'text-warm-500'}
           >
-            <span className="font-mono text-[11px] font-bold tabular-nums text-brand-600 dark:text-brand-300">
+            <span className="stat-num text-xxs font-bold text-brand-600 dark:text-brand-300">
               {stats.percent}%
             </span>
           </ProgressRing>

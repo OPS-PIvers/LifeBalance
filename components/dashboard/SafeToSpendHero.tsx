@@ -58,8 +58,8 @@ export const SafeToSpendHero: React.FC = () => {
       >
         <div className="flex items-start justify-between">
           <div>
-            <p className="font-display text-xs font-semibold uppercase tracking-wider text-white/75">Safe to Spend</p>
-            <p className="mt-1 text-4xl font-bold font-mono tracking-tight tabular-nums text-white">
+            <p className="text-xs font-semibold uppercase tracking-wider text-white/75">Safe to Spend</p>
+            <p className="mt-1 text-4xl font-bold stat-num text-white">
               {fmt(safeToSpend)}
             </p>
             <p className="mt-1 text-xs font-medium text-white/75">
