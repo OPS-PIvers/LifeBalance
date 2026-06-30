@@ -503,7 +503,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             trigger shows a spinner while AI Optimize runs so feedback survives a
             closed menu. */}
         <div className="flex justify-between items-center">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Shopping list</h1>
+            <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Shopping list</h1>
             <div className="relative">
                 <button
                     onClick={() => setMenuOpen((o) => !o)}
@@ -541,7 +541,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
             edges; Reorder.Group stays a sibling below so its drag layer never
             shares this pinned stacking context. */}
         <div
-            className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50/95 dark:bg-brand-900/95 backdrop-blur border-b border-brand-200 dark:border-brand-800"
+            className="sticky z-20 -mx-4 px-4 py-3 bg-brand-50 dark:bg-brand-900 border-b border-brand-200 dark:border-brand-800"
             style={{ top: `${stickyTopOffset}px` }}
         >
             <div className="flex items-center gap-2">

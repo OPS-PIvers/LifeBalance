@@ -127,7 +127,7 @@ export const IngredientSelectorModal: React.FC<IngredientSelectorModalProps> = (
                             </div>
 
                             {inList && (
-                                <span className="text-xxs font-bold px-2 py-1 bg-amber-50 text-amber-600 rounded-md border border-amber-100 whitespace-nowrap dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/20">
+                                <span className="text-xxs font-bold px-2 py-1 bg-warm-50 text-warm-700 rounded-md border border-warm-200 whitespace-nowrap dark:bg-warm-900/40 dark:text-warm-200 dark:border-warm-700">
                                     In List
                                 </span>
                             )}
