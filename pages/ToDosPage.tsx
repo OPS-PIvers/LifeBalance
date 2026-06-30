@@ -574,7 +574,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   ];
 
   return (
-    <div className="pb-nav-safe pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
+    <div className={cn("pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen", isSelectionMode ? "pb-40" : "pb-nav-safe")}>
 
       <div className="flex flex-col gap-6 mb-6">
         <div className="flex items-center justify-between">
