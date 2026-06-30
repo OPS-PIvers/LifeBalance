@@ -155,7 +155,7 @@ const Dashboard: React.FC = () => {
           ) : (
             <EmptyState
               variant="surface"
-              icon={<CheckCircle2 className="w-7 h-7" />}
+              icon={<CheckCircle2 />}
               title="All caught up"
               description="Nothing needs your attention right now."
             />
