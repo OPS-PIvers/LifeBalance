@@ -216,7 +216,7 @@
      centered FAB overhang and the device safe-area, so page content never
      sits under the footer. The single source of truth for footer clearance —
      replaces the ad-hoc per-page pb-20 / pb-24 / pb-28 / pb-32. */
-  padding-bottom: calc(7rem + var(--spacing-safe));
+  padding-bottom: calc(7rem + var(--spacing-safe, 0px));
 }
 
 @utility surface-section {
