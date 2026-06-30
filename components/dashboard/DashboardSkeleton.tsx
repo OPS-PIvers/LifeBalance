@@ -23,8 +23,19 @@ export const DashboardSkeleton: React.FC = () => (
       {/* Hero (the one elevated surface) */}
       <Skeleton className="h-36 w-full rounded-lg" />
 
-      {/* Pulse strip */}
-      <Skeleton className="h-28 w-full rounded-2xl" />
+      {/* Pulse strip — mirror the titled, hairline-edged columned ledger (not a card) */}
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <div className="grid grid-cols-3 divide-x divide-brand-200 dark:divide-brand-700 border-y border-brand-200 dark:border-brand-700">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex flex-col items-center gap-2 px-2 py-4">
+              <Skeleton className="h-2.5 w-12" />
+              <Skeleton className="h-7 w-14" />
+              <Skeleton className="h-2.5 w-10" />
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Action Queue section */}
       <div className="space-y-2">

@@ -86,7 +86,7 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
             <button
               key={level}
               onClick={() => onFormChange({ effortLevel: level })}
-              className={`p-3 rounded-xl border text-center transition-all ${
+              className={`p-3 rounded-card border text-center transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 ${
                 formData.effortLevel === level
                   ? `${EFFORT_COLORS[level].bg} ${EFFORT_COLORS[level].text} border-current ring-1 ring-current`
                   : 'bg-white dark:bg-brand-700/50 border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-700'

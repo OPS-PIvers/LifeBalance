@@ -6,6 +6,13 @@ import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+  BUCKET_COLORS,
+  BUCKET_COLOR_KEYS,
+  DEFAULT_BUCKET_COLOR,
+  normalizeBucketColorKey,
+  type BucketColorKey,
+} from '@/data/bucketColors';
 
 interface BucketFormModalProps {
   isOpen: boolean;
@@ -13,24 +20,12 @@ interface BucketFormModalProps {
   editingBucket?: BudgetBucket;
 }
 
-// User-selectable categorical bucket identity colors. These are persisted DATA
-// (the chosen hue is stored on the bucket and rendered across the app), not
-// surface chrome — so the redesign's "no purple/indigo in chrome" rule does not
-// apply here, the same way the spec exempts data-viz. Kept stable so existing
-// buckets keep their color and the color-selection test stays meaningful.
-const COLORS = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-orange-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500', 'bg-cyan-500'];
-
-const getColorName = (colorClass: string) => {
-  // e.g., "bg-emerald-500" -> "emerald"
-  return colorClass.split('-')[1] ?? 'color';
-};
-
 const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, editingBucket }) => {
   const { addBucket, updateBucket, deleteBucket } = useFinance();
 
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
-  const [color, setColor] = useState(COLORS[0] ?? 'bg-emerald-500'); // COLORS[0] is always defined
+  const [color, setColor] = useState<BucketColorKey>(DEFAULT_BUCKET_COLOR);
   const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
   const [newSubBucketName, setNewSubBucketName] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -42,12 +37,12 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setName(editingBucket.name);
         setLimit(editingBucket.limit.toString());
-        setColor(editingBucket.color);
+        setColor(normalizeBucketColorKey(editingBucket.color));
         setSubBuckets(editingBucket.subBuckets || []);
       } else {
         setName('');
         setLimit('');
-        setColor(COLORS[0] ?? 'bg-emerald-500'); // COLORS[0] is always defined
+        setColor(DEFAULT_BUCKET_COLOR);
         setSubBuckets([]);
       }
       setNewSubBucketName('');
@@ -142,18 +137,18 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
         <div>
           <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase block mb-2">Color</label>
           <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Bucket color">
-            {COLORS.map(c => {
-              const colorName = getColorName(c);
-              const isSelected = color === c;
+            {BUCKET_COLOR_KEYS.map(key => {
+              const { label, bg } = BUCKET_COLORS[key];
+              const isSelected = color === key;
               return (
                 <button
-                  key={c}
-                  onClick={() => setColor(c)}
-                  className={`w-8 h-8 rounded-full ${c} ${isSelected ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-hidden focus:ring-2 focus:ring-brand-800 focus:ring-offset-1 transition-all`}
-                  aria-label={`Select ${colorName}`}
+                  key={key}
+                  onClick={() => setColor(key)}
+                  className={`w-8 h-8 rounded-full ${bg} ${isSelected ? 'ring-2 ring-brand-800 ring-offset-2' : ''} focus:outline-hidden focus:ring-2 focus:ring-brand-800 focus:ring-offset-1 transition-all`}
+                  aria-label={`Select ${label}`}
                   aria-checked={isSelected}
                   role="radio"
-                  title={colorName}
+                  title={label}
                   type="button"
                 />
               );

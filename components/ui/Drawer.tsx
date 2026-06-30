@@ -1,10 +1,19 @@
 import React, { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
+
+// Sheet motion — extracted so the sheet animates on one named curve instead of
+// inline literals, and the values retune together. The spring is a framer-motion
+// config (numeric damping/stiffness, so it can't be a CSS var); keep it in sync
+// with --ease-spring / --duration-base in index.css. Module-local (not exported)
+// to keep this component file fast-refresh-clean; promote to a shared motion
+// module if another primitive ever needs the same curve.
+const DRAWER_SPRING = { type: 'spring', damping: 25, stiffness: 200 } as const;
+const BACKDROP_FADE_SEC = 0.2; // seconds; mirrors --duration-base (200ms)
 
 interface DrawerProps {
   isOpen: boolean;
@@ -57,6 +66,12 @@ export const Drawer: React.FC<DrawerProps> = ({
 }) => {
   const titleId = useId();
   const reduceMotion = useReducedMotion();
+  // Drag-to-dismiss is driven manually from the handle bar only (see below).
+  // Without this, `drag="y"` on the whole sheet treats an inner body scroll as a
+  // sheet drag — so scrolling the content bounces the sheet and can trip the
+  // close threshold. Gating the drag to the handle lets the body scroll natively
+  // (like an iOS sheet) while still allowing swipe-down-to-close from the grip.
+  const dragControls = useDragControls();
   // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
   const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
 
@@ -92,7 +107,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : BACKDROP_FADE_SEC }}
             className="fixed inset-0 z-modal bg-brand-900/60"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
@@ -106,7 +121,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={reduceMotion ? false : { y: '100%' }}
             animate={{ y: 0 }}
             exit={reduceMotion ? { y: 0 } : { y: '100%' }}
-            transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
+            transition={reduceMotion ? { duration: 0 } : DRAWER_SPRING}
             className={twMerge(
               // `dvh` tracks the *visible* viewport, so the sheet (and its CTA)
               // isn't hidden behind the iOS software keyboard. `vh` is kept as a
@@ -118,6 +133,8 @@ export const Drawer: React.FC<DrawerProps> = ({
               className
             )}
             drag="y"
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0 }}
             dragElastic={0.2}
             onDragEnd={(_, info) => {
@@ -131,8 +148,18 @@ export const Drawer: React.FC<DrawerProps> = ({
             aria-labelledby={ariaLabelledBy || (title ? titleId : undefined)}
             aria-label={!ariaLabelledBy && !title ? ariaLabel : undefined}
           >
-             {/* Handle bar for visual cue */}
-             <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
+             {/* Handle bar — the sole drag-to-dismiss affordance. Starting the
+                 drag here (rather than on the whole sheet) keeps body scrolling
+                 from being misread as a swipe-to-close. */}
+             <div
+               className={twMerge(
+                 // Generous vertical padding: the handle is the sole swipe-to-close
+                 // grab target now, so give it a comfortable (~40px) hit area.
+                 "w-full flex justify-center pt-4 pb-4 touch-none",
+                 disableClose ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+               )}
+               onPointerDown={(e) => { if (!disableClose) dragControls.start(e); }}
+             >
                <div className="w-12 h-1.5 bg-brand-300 dark:bg-brand-600 rounded-full" />
              </div>
 

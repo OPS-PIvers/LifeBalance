@@ -13,6 +13,7 @@ import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import Input from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import Eyebrow from '@/components/ui/Eyebrow';
 
 interface ActionQueueItemProps {
   item: ActionQueueItem;
@@ -284,7 +285,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Icon */}
-          <div className={`p-3 rounded-card border ${iconClasses}`}>
+          <div className={`w-9 h-9 rounded-card border flex items-center justify-center ${iconClasses}`}>
              {iconComponent}
           </div>
           <div>
@@ -337,9 +338,9 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
       {isExpanded && (
         <div className="px-4 pb-3 sm:pb-4 pt-3 border-t border-brand-200 dark:border-brand-700 bg-brand-50/60 dark:bg-brand-900/30">
           <div className="flex justify-between items-center mb-2 sm:mb-3">
-             <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">
+             <Eyebrow as="p" className="text-xxs">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
-             </p>
+             </Eyebrow>
              <button onClick={() => setExpandedId(null)} aria-label="Collapse item"><X size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"/></button>
           </div>
 
@@ -511,7 +512,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
                 {/* Habits Section - Smart Suggestions */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5">
-                    <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Connect Habits</p>
+                    <Eyebrow as="p" className="text-xxs">Connect Habits</Eyebrow>
                     {suggestedHabits.some(s => s.confidence !== 'low') && (
                       <Sparkles size={10} className="text-warm-500" />
                     )}
@@ -601,7 +602,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
 
                 {/* Categories Section */}
                 <div className="space-y-2">
-                  <p className="text-xxs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Budget Category</p>
+                  <Eyebrow as="p" className="text-xxs">Budget Category</Eyebrow>
                   <div className="flex flex-wrap gap-2">
                     {buckets.map(bucket => (
                       <button

@@ -39,7 +39,7 @@ export const MoneyPulseWidget: React.FC = () => {
         <Row className="flex-col items-start gap-1">
           <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">Spent this week</p>
           <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="font-mono text-2xl font-bold tabular-nums tracking-tight text-brand-900 dark:text-brand-50">
+            <p className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">
               {fmt(spendingStats.thisWeek, { decimals: 0 })}
             </p>
             <div
@@ -68,7 +68,7 @@ export const MoneyPulseWidget: React.FC = () => {
         {recentTransactions.map(tx => (
           <Row key={tx.id} className="justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-400 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-500">
+              <div className="w-9 h-9 rounded-card bg-brand-100 border border-brand-200 flex items-center justify-center text-brand-400 shrink-0 dark:bg-brand-700/50 dark:border-brand-700 dark:text-brand-500">
                 <Receipt size={16} />
               </div>
               <div className="min-w-0">

@@ -28,6 +28,10 @@ const SEGMENTED_TONES = {
   warm: { activeText: 'text-warm-700 dark:text-warm-300', ring: 'focus-visible:ring-warm-500/40' },
 } as const;
 
+// SegmentedControl: an inline value toggle (role=radiogroup/radio) with no
+// tabpanel. Shares the pill-in-trough track + white active chrome with Tabs (the
+// active string is byte-identical bar the tone-driven text color) — reach for Tabs
+// instead when each option should drive a routed/tabpanel view.
 export const SegmentedControl = <T extends string>({
   options,
   value,

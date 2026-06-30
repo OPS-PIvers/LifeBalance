@@ -3,8 +3,10 @@ import { ChevronDown, ChevronUp, Pencil, Check, Edit, Trash2, AlertTriangle, Mor
 import { format, parseISO } from 'date-fns';
 import { BudgetBucket, Transaction } from '@/types/schema';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { bucketColorClass } from '@/data/bucketColors';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -119,7 +121,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
+          <div className={`w-3 h-3 rounded-full ${bucketColorClass(bucket.color)}`} />
           <span className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 text-base">{bucket.name}</span>
         </div>
 
@@ -141,7 +143,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="w-16 p-1 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-sm text-right font-mono font-bold dark:text-brand-100 outline-hidden focus:ring-2 focus:ring-accent-500/40"
+                    className="w-16 p-1 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn text-right font-mono font-bold dark:text-brand-100 outline-hidden focus:ring-2 focus:ring-accent-500/40"
                     autoFocus
                     aria-label={`Edit limit for ${bucket.name}`}
                   />
@@ -177,7 +179,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
               )}
             </div>
             {spent.pending > 0 && (
-              <span className="text-xxs text-brand-400 dark:text-brand-500">
+              <span className="text-xxs text-warm-600 dark:text-warm-400">
                 *pending review
               </span>
             )}
@@ -206,7 +208,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       {/* Progress Bar */}
       <ProgressBar
         value={percent}
-        barClassName={isOverspent ? 'bg-money-neg' : bucket.color}
+        barClassName={isOverspent ? 'bg-money-neg' : bucketColorClass(bucket.color)}
         ariaLabel={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
         className="h-2 bg-brand-100 dark:bg-brand-700 mb-4"
       />
@@ -228,7 +230,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                   <p className="text-xs text-brand-500 dark:text-brand-400 font-medium">
                     {format(parseISO(tx.date), 'MMM d')}
                     {tx.status === 'pending_review' && (
-                      <span className="ml-2 text-warm-600 dark:text-warm-400 font-bold">• Pending</span>
+                      <Badge variant="warning" size="sm" className="ml-2">Pending</Badge>
                     )}
                   </p>
                 </div>

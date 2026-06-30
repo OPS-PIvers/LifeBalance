@@ -1,9 +1,9 @@
 import React from 'react';
 import { Check, ChevronRight, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
 import {
   PresetHabit,
   EFFORT_POINTS,
-  EFFORT_COLORS,
   HABIT_CATEGORIES,
   NEGATIVE_CATEGORY,
 } from '@/data/presetHabits';
@@ -43,7 +43,7 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
           const isNegativeCategory = category === NEGATIVE_CATEGORY;
 
           return (
-            <div key={category} className={`border rounded-xl overflow-hidden ${isNegativeCategory ? 'border-money-neg/30 dark:border-money-neg/40' : 'border-brand-100 dark:border-brand-700'}`}>
+            <div key={category} className={`border rounded-card overflow-hidden ${isNegativeCategory ? 'border-money-neg/30 dark:border-money-neg/40' : 'border-brand-100 dark:border-brand-700'}`}>
               {/* Category Header */}
               <button
                 onClick={() => onToggleCategory(isExpanded ? null : category)}
@@ -91,13 +91,9 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
                               {preset.title}
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-xxs px-1.5 py-0.5 rounded-full font-medium ${
-                                preset.type === 'negative'
-                                  ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark'
-                                  : `${EFFORT_COLORS[preset.effortLevel].bg} ${EFFORT_COLORS[preset.effortLevel].text}`
-                              }`}>
+                              <Badge size="sm" variant={preset.type === 'negative' ? 'danger' : 'warning'}>
                                 {pointsDisplay} pts
-                              </span>
+                              </Badge>
                               <span className="text-xxs text-brand-400 dark:text-brand-400">
                                 {preset.period}
                               </span>

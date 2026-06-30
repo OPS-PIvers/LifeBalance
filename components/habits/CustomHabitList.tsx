@@ -1,7 +1,10 @@
 import React from 'react';
 import { Edit2, Trash2, Settings } from 'lucide-react';
 import { Habit } from '@/types/schema';
-import { EFFORT_COLORS, EFFORT_LABELS } from '@/data/presetHabits';
+import { EFFORT_LABELS } from '@/data/presetHabits';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { SurfaceList, Row } from '@/components/ui/Section';
 
 interface CustomHabitListProps {
   habits: Habit[];
@@ -24,45 +27,30 @@ const CustomHabitList: React.FC<CustomHabitListProps> = ({
           Your Custom Habits
         </h3>
       </div>
-      <div className="space-y-2">
+      <SurfaceList>
         {habits.map(habit => (
-          <div
-            key={habit.id}
-            className="flex items-center justify-between p-3 bg-white dark:bg-brand-800 border border-brand-100 dark:border-brand-700 rounded-xl"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-2 h-8 rounded-full ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
-              <div>
-                <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">{habit.title}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xxs text-brand-400 dark:text-brand-400">{habit.category}</span>
-                  {habit.effortLevel && (
-                    <span className={`text-xxs px-1.5 py-0.5 rounded-full font-medium ${EFFORT_COLORS[habit.effortLevel].bg} ${EFFORT_COLORS[habit.effortLevel].text}`}>
-                      {EFFORT_LABELS[habit.effortLevel]}
-                    </span>
-                  )}
-                </div>
+          <Row key={habit.id}>
+            <div className={`w-2 h-8 rounded-full shrink-0 ${habit.type === 'positive' ? 'bg-money-pos' : 'bg-money-neg'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-brand-800 dark:text-brand-100 text-sm">{habit.title}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-xxs text-brand-400 dark:text-brand-400">{habit.category}</span>
+                {habit.effortLevel && (
+                  <Badge size="sm" variant="warning">{EFFORT_LABELS[habit.effortLevel]}</Badge>
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => onEdit(habit)}
-                className="p-2 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-200 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg"
-                aria-label={`Edit habit: ${habit.title}`}
-              >
+            <div className="flex items-center gap-1 shrink-0">
+              <Button variant="ghost" size="icon-sm" onClick={() => onEdit(habit)} aria-label={`Edit habit: ${habit.title}`}>
                 <Edit2 size={16} />
-              </button>
-              <button
-                onClick={() => onDelete(habit)}
-                className="p-2 text-brand-400 dark:text-brand-400 hover:text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-lg"
-                aria-label={`Delete habit: ${habit.title}`}
-              >
+              </Button>
+              <Button variant="ghost-destructive" size="icon-sm" onClick={() => onDelete(habit)} aria-label={`Delete habit: ${habit.title}`}>
                 <Trash2 size={16} />
-              </button>
+              </Button>
             </div>
-          </div>
+          </Row>
         ))}
-      </div>
+      </SurfaceList>
     </div>
   );
 };

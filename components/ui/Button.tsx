@@ -2,6 +2,34 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
+/**
+ * Canonical intent → variant map. Reach for ONE variant per intent; don't add
+ * new ones. The danger family is ordered by emphasis — pick the quietest that
+ * still reads as destructive.
+ *
+ *  Affirmative / primary
+ *   - primary      Main page/dialog action (filled evergreen).
+ *   - secondary    Secondary action beside a primary (bordered, on-surface).
+ *   - subtle       Low-emphasis affirmative (tinted accent, e.g. inline "Add").
+ *   - success      Confirm/positive-money action (solid green). Use sparingly.
+ *
+ *  Low-emphasis / neutral
+ *   - ghost        Neutral icon/text button (transparent, brand text).
+ *   - ghost-brand  Neutral that warms to accent on hover/active.
+ *   - outline      Bordered neutral on the page background.
+ *   - dashed       "Add something here" affordance (dashed border).
+ *   - link         Inline text link (no padding/box).
+ *   - ghost-inverted  Ghost on a dark/hero surface (white text).
+ *
+ *  Destructive — loudest → quietest
+ *   - destructive       Solid red. Highest emphasis (e.g. final "Delete account").
+ *   - danger            Red tint + border. Medium (e.g. Delete in a confirm).
+ *   - ghost-danger      Transparent, always-red text (inline "Remove").
+ *   - ghost-destructive Neutral text that turns red on hover (a row's trash icon).
+ *
+ *  Caution
+ *   - warning      Solid amber, for caution actions. Rare.
+ */
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'dashed'| 'subtle' | 'ghost-danger' | 'success' | 'warning' | 'destructive' | 'ghost-destructive' | 'link' | 'ghost-inverted' | 'ghost-brand';
   size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
