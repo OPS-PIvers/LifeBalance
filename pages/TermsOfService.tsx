@@ -39,7 +39,7 @@ const TermsOfService: React.FC = () => {
           {/* DRAFT banner */}
           <div
             role="alert"
-            className="rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/15 p-4 text-sm text-amber-800 dark:text-amber-200"
+            className="rounded-card border border-warm-200 dark:border-warm-700 bg-warm-50 dark:bg-warm-900/40 p-4 text-sm text-warm-800 dark:text-warm-200"
           >
             <p className="font-semibold">DRAFT — pending legal review. Not yet legally binding.</p>
             <p className="mt-1">Effective date: [PLACEHOLDER: effective date]</p>
