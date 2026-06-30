@@ -322,7 +322,7 @@ const BudgetCalendar: React.FC = () => {
                   }
                 }}
                 className={`
-                  relative flex flex-col items-center justify-center h-10 w-10 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
+                  relative flex flex-col items-center justify-center h-11 w-11 mx-auto rounded-card text-sm font-medium cursor-pointer transition-[background-color,color,transform] duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40
                   ${!isSameMonth(day, monthStart) ? 'text-brand-300 dark:text-brand-600' : 'text-brand-600 dark:text-brand-300'}
                   ${isSelected ? 'bg-accent-600 dark:bg-accent-600 text-white scale-105 ring-2 ring-accent-600 ring-offset-2 ring-offset-white dark:ring-offset-brand-800' : 'hover:bg-brand-100 dark:hover:bg-brand-700/50'}
                   ${isToday(day) && !isSelected ? 'text-accent-700 dark:text-accent-300 font-bold bg-brand-100 dark:bg-brand-700/50' : ''}

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
+import ProgressBar from '@/components/ui/ProgressBar';
 import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
 
@@ -285,9 +286,12 @@ const BudgetAccounts: React.FC = () => {
               <span className="flex items-center gap-1">{hitGoal && <Star size={10} className="fill-habit-gold text-habit-gold"/>} {Math.round(progress)}% to goal</span>
               <span>Target: {fmt(account.monthlyGoal)}</span>
             </div>
-            <div className="h-1.5 w-full bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
-              <div className="h-full bg-habit-gold transition-all duration-(--duration-slow) ease-(--ease-standard)" style={{ width: `${progress}%` }} />
-            </div>
+            <ProgressBar
+              value={progress}
+              className="h-1.5 bg-brand-100 dark:bg-brand-700"
+              barClassName="bg-habit-gold"
+              ariaLabel={`${Math.round(progress)}% to goal`}
+            />
           </div>
         )}
       </div>
