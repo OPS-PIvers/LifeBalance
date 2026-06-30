@@ -131,7 +131,7 @@ const SavedViewChips: React.FC<SavedViewChipsProps> = ({ householdId, currentFil
             value={newViewName}
             onChange={(e) => setNewViewName(e.target.value)}
             placeholder="View Name..."
-            className="w-32 px-2 py-1 text-xs border border-brand-300 dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-500 rounded-md focus:outline-hidden focus:ring-1 focus:ring-accent-500"
+            className="w-32 px-2 py-1 text-xs border border-brand-300 dark:border-brand-700 dark:bg-brand-800 dark:text-brand-100 dark:placeholder:text-brand-500 rounded-btn focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500"
             autoFocus
             onBlur={() => !newViewName && setIsSaving(false)}
           />

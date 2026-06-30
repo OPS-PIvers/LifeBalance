@@ -189,7 +189,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         onChange={e => setEditTitle(e.target.value)}
                         placeholder="Title"
                         aria-label="Title"
-                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
                       />
                     </div>
                     <div className="sm:col-span-3">
@@ -199,7 +199,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         onChange={e => setEditAmount(e.target.value)}
                         placeholder="Amount"
                         aria-label="Amount"
-                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
                       />
                     </div>
                     <div className="sm:col-span-3">
@@ -207,7 +207,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                         value={editFrequency}
                         onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
                         aria-label="Frequency"
-                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/40"
                       >
                          <option value="weekly">Weekly</option>
                          <option value="bi-weekly">Bi-Weekly</option>
@@ -246,7 +246,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                           <div className="text-xxs text-brand-400 dark:text-brand-500">per instance</div>
                         </div>
 
-                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                            <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
                              <Edit2 size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300" />
                            </Button>

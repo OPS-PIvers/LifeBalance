@@ -672,7 +672,7 @@ const TransactionMasterList: React.FC = () => {
               variant="ghost-inverted"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="flex-col h-auto gap-0.5 text-red-300 hover:text-red-200 hover:bg-white/10 rounded-btn"
+              className="flex-col h-auto gap-0.5 text-money-negDark hover:text-money-neg hover:bg-white/10 rounded-btn"
             >
               <Trash2 size={18} />
               <span className="text-xxs font-medium">Delete</span>
