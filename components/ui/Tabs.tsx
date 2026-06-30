@@ -21,6 +21,10 @@ interface TabsContextValue {
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
 
+// Tabs: a routed/tabpanel control (role=tablist/tab/tabpanel + arrow-key roving
+// focus + animated TabsContent). Shares the pill-in-trough track + white active
+// chrome with SegmentedControl — reach for SegmentedControl instead for an inline
+// value toggle that drives no panel.
 export const Tabs: React.FC<TabsProps> = ({
   defaultValue,
   value,

@@ -6,6 +6,15 @@ import { twMerge } from 'tailwind-merge';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
+// Sheet motion — extracted so the sheet animates on one named curve instead of
+// inline literals, and the values retune together. The spring is a framer-motion
+// config (numeric damping/stiffness, so it can't be a CSS var); keep it in sync
+// with --ease-spring / --duration-base in index.css. Module-local (not exported)
+// to keep this component file fast-refresh-clean; promote to a shared motion
+// module if another primitive ever needs the same curve.
+const DRAWER_SPRING = { type: 'spring', damping: 25, stiffness: 200 } as const;
+const BACKDROP_FADE_SEC = 0.2; // seconds; mirrors --duration-base (200ms)
+
 interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -98,7 +107,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            transition={{ duration: reduceMotion ? 0 : BACKDROP_FADE_SEC }}
             className="fixed inset-0 z-modal bg-brand-900/60"
             onClick={disableClose ? undefined : onClose}
             data-testid="drawer-backdrop"
@@ -112,7 +121,7 @@ export const Drawer: React.FC<DrawerProps> = ({
             initial={reduceMotion ? false : { y: '100%' }}
             animate={{ y: 0 }}
             exit={reduceMotion ? { y: 0 } : { y: '100%' }}
-            transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 200 }}
+            transition={reduceMotion ? { duration: 0 } : DRAWER_SPRING}
             className={twMerge(
               // `dvh` tracks the *visible* viewport, so the sheet (and its CTA)
               // isn't hidden behind the iOS software keyboard. `vh` is kept as a
