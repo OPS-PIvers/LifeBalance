@@ -26,7 +26,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const textareaId =
       id ||
       (label
-        ? `textarea-${label.toLowerCase().replace(/\s+/g, '-')}`
+        ? `textarea-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${generatedId}`
         : generatedId);
     const errorId = `${textareaId}-error`;
 
