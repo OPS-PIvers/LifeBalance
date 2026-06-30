@@ -15,6 +15,9 @@ import { WeeklyPlanModal } from './WeeklyPlanModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
+import EmptyState from '@/components/ui/EmptyState';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
@@ -57,7 +60,7 @@ const MealPlanTab: React.FC = () => {
     shoppingList,
     groceryCatalog,
   } = useShopping();
-  const { householdId } = useHouseholdCore();
+  const { householdId, isLoading } = useHouseholdCore();
 
   // Calendar State — `selectedDate` is the focused day; the visible week is derived from it.
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -709,35 +712,45 @@ const MealPlanTab: React.FC = () => {
         </div>
 
         {/* Plan my week (AI generate / import) */}
-        <button
+        <Button
+            variant="primary"
+            className="w-full"
+            leftIcon={<Sparkles className="w-4 h-4" />}
             onClick={() => setIsWeeklyPlanOpen(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-accent-600 text-white rounded-btn text-sm font-bold hover:bg-accent-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95"
         >
-            <Sparkles className="w-4 h-4" /> Plan my week
-        </button>
+            Plan my week
+        </Button>
 
         {/* Week actions */}
         <div className="flex gap-2">
             {!isCurrentWeek && (
-                <button
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<CalendarDays className="w-3.5 h-3.5" />}
                     onClick={() => setSelectedDate(new Date())}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-50 border border-brand-200 text-brand-600 rounded-btn text-xs font-bold hover:bg-brand-100 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700"
                 >
-                    <CalendarDays className="w-3.5 h-3.5" /> Today
-                </button>
+                    Today
+                </Button>
             )}
-            <button
+            <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
+                leftIcon={<Copy className="w-3.5 h-3.5" />}
                 onClick={handleCopyLastWeek}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-brand-50 border border-brand-200 text-brand-600 rounded-btn text-xs font-bold hover:bg-brand-100 hover:text-brand-900 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-300 dark:hover:bg-brand-700 dark:hover:text-brand-50"
             >
-                <Copy className="w-3.5 h-3.5" /> Copy last week
-            </button>
-            <button
+                Copy last week
+            </Button>
+            <Button
+                variant="subtle"
+                size="sm"
+                className="flex-1"
+                leftIcon={<ShoppingCart className="w-3.5 h-3.5" />}
                 onClick={handleShopForWeek}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent-50 text-accent-700 border border-accent-200 rounded-btn text-xs font-bold hover:bg-accent-100 transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95 dark:bg-accent-900/30 dark:text-accent-200 dark:border-accent-700 dark:hover:bg-accent-900/50"
             >
-                <ShoppingCart className="w-3.5 h-3.5" /> Shop week
-            </button>
+                Shop week
+            </Button>
         </div>
       </div>
 
@@ -761,7 +774,13 @@ const MealPlanTab: React.FC = () => {
             </button>
         </div>
 
-        {dayMeals.length > 0 ? (
+        {isLoading ? (
+            <div className="space-y-2.5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-[88px] w-full rounded-card" />
+                ))}
+            </div>
+        ) : dayMeals.length > 0 ? (
             <div className="space-y-2.5">
                 {dayMeals.map((planItem) => {
                     const linkedMeal = planItem.mealId ? mealsById.get(planItem.mealId) : null;
@@ -832,16 +851,21 @@ const MealPlanTab: React.FC = () => {
                 })}
             </div>
         ) : (
-            <button
-                onClick={() => handleAddMealToDate(selectedDate)}
-                className="w-full border-2 border-dashed border-brand-200 rounded-card py-10 px-4 flex flex-col items-center gap-2 text-center hover:border-accent-300 hover:bg-accent-50 transition-colors duration-(--duration-fast) ease-(--ease-standard) group dark:border-brand-700 dark:hover:border-accent-700 dark:hover:bg-accent-900/20"
-            >
-                <span className="w-12 h-12 rounded-full bg-brand-100 group-hover:bg-accent-100 flex items-center justify-center transition-colors dark:bg-brand-700 dark:group-hover:bg-accent-900/40">
-                    <Utensils className="w-5 h-5 text-brand-400 group-hover:text-accent-600 transition-colors dark:text-brand-400 dark:group-hover:text-accent-300" />
-                </span>
-                <span className="text-sm font-semibold text-brand-500 group-hover:text-accent-600 dark:text-brand-400 dark:group-hover:text-accent-300">No meals planned</span>
-                <span className="text-xs text-brand-400 dark:text-brand-500">Tap to add a meal for this day</span>
-            </button>
+            <EmptyState
+                variant="dashed"
+                icon={<Utensils className="w-7 h-7" />}
+                title="No meals planned"
+                description="Tap to add a meal for this day"
+                action={
+                    <Button
+                        variant="secondary"
+                        leftIcon={<Plus className="w-4 h-4" />}
+                        onClick={() => handleAddMealToDate(selectedDate)}
+                    >
+                        Add meal
+                    </Button>
+                }
+            />
         )}
       </div>
 
@@ -849,7 +873,7 @@ const MealPlanTab: React.FC = () => {
       {actionSheetItem && (() => {
         const item = actionSheetItem;
         const hasRecipe = !!(item.mealId && mealsById.get(item.mealId));
-        const actionClass = "w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left font-semibold transition-colors";
+        const actionClass = "w-full flex items-center gap-3 px-4 py-3.5 rounded-btn text-left font-semibold transition-colors";
         return (
           <Drawer
             isOpen={!!actionSheetItem}
