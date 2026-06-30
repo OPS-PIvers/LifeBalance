@@ -17,6 +17,7 @@ import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Button } from '@/components/ui/Button';
 import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { haptic } from '@/utils/haptics';
@@ -98,7 +99,7 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
     addGroceryCatalogItem,
     updateQuickStockLists,
   } = useShopping();
-  const { householdId } = useHouseholdCore();
+  const { householdId, isLoading } = useHouseholdCore();
 
   // Combine default and custom categories
   const categories = useMemo(() => {
@@ -642,7 +643,17 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
         )}
 
         {/* Main List */}
-        {items.length === 0 ? (
+        {isLoading ? (
+            <div className="surface-section overflow-hidden">
+                {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-t border-brand-200 dark:border-brand-700 first:border-t-0">
+                        <Skeleton className="w-3 h-5 shrink-0" />
+                        <Skeleton className="w-5 h-5 rounded-full shrink-0" />
+                        <Skeleton className="h-5 flex-1" />
+                    </div>
+                ))}
+            </div>
+        ) : items.length === 0 ? (
              <EmptyState
                 variant="surface"
                 icon={<ShoppingCart className="w-7 h-7" />}
