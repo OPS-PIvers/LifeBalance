@@ -34,6 +34,7 @@ import {
   type DocumentData,
   Timestamp,
 } from 'firebase/firestore';
+import { normalizeBucketColorKey } from '@/data/bucketColors';
 import type {
   Account,
   BudgetBucket,
@@ -85,7 +86,8 @@ export const accountConverter: FirestoreDataConverter<Account> = {
 };
 
 // ---------------------------------------------------------------------------
-// BudgetBucket — drops the deprecated `spent` field on read.
+// BudgetBucket — drops the deprecated `spent` field on read and normalizes the
+// legacy raw-Tailwind `color` ("bg-emerald-500") to its semantic key ("emerald").
 // ---------------------------------------------------------------------------
 export const budgetBucketConverter: FirestoreDataConverter<BudgetBucket> = {
   toFirestore(bucket: BudgetBucket): DocumentData {
@@ -97,7 +99,8 @@ export const budgetBucketConverter: FirestoreDataConverter<BudgetBucket> = {
     const d = snapshot.data();
     // Drop the deprecated `spent` field so downstream consumers never see it.
     const { spent: _dropped, ...rest } = d;
-    return { ...rest, id: snapshot.id } as BudgetBucket;
+    // Backfill-on-read: legacy docs store color as a raw class; surface the key.
+    return { ...rest, id: snapshot.id, color: normalizeBucketColorKey(d.color) } as BudgetBucket;
   },
 };
 

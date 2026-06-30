@@ -94,7 +94,7 @@ export interface BudgetBucket {
   name: string;
   limit: number;
   spent?: number; // DEPRECATED: Now calculated in real-time from transactions. Will be removed after migration.
-  color: string;
+  color: string; // Key from BUCKET_COLORS (data/bucketColors). Legacy docs store a raw 'bg-*-500' class; the Firestore converter normalizes it to a key on read.
   isVariable: boolean;
   isCore: boolean;
   currentPeriodId?: string; // Current pay period ID (YYYY-MM-DD)

@@ -94,11 +94,13 @@ describe('BucketFormModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
+    // The legacy raw class on the editingBucket is normalized to its key, and the
+    // picker now persists the key (not the raw 'bg-*' class).
     expect(mockUpdateBucket).toHaveBeenCalledWith(expect.objectContaining({
       id: '1',
       name: 'Updated Groceries',
       limit: 600,
-      color: 'bg-emerald-500'
+      color: 'emerald'
     }));
     expect(mockOnClose).toHaveBeenCalled();
   });
@@ -178,7 +180,7 @@ describe('BucketFormModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /create bucket/i }));
 
     expect(mockAddBucket).toHaveBeenCalledWith(expect.objectContaining({
-      color: 'bg-blue-500'
+      color: 'blue'
     }));
   });
 });
