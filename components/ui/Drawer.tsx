@@ -1,6 +1,6 @@
 import React, { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -57,6 +57,12 @@ export const Drawer: React.FC<DrawerProps> = ({
 }) => {
   const titleId = useId();
   const reduceMotion = useReducedMotion();
+  // Drag-to-dismiss is driven manually from the handle bar only (see below).
+  // Without this, `drag="y"` on the whole sheet treats an inner body scroll as a
+  // sheet drag — so scrolling the content bounces the sheet and can trip the
+  // close threshold. Gating the drag to the handle lets the body scroll natively
+  // (like an iOS sheet) while still allowing swipe-down-to-close from the grip.
+  const dragControls = useDragControls();
   // Focus trap + restoration (moves focus in on open, traps Tab, restores on close).
   const contentRef = useFocusTrap<HTMLDivElement>(isOpen);
 
@@ -118,6 +124,8 @@ export const Drawer: React.FC<DrawerProps> = ({
               className
             )}
             drag="y"
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0 }}
             dragElastic={0.2}
             onDragEnd={(_, info) => {
@@ -131,8 +139,16 @@ export const Drawer: React.FC<DrawerProps> = ({
             aria-labelledby={ariaLabelledBy || (title ? titleId : undefined)}
             aria-label={!ariaLabelledBy && !title ? ariaLabel : undefined}
           >
-             {/* Handle bar for visual cue */}
-             <div className="w-full flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none" onClick={(e) => e.stopPropagation()}>
+             {/* Handle bar — the sole drag-to-dismiss affordance. Starting the
+                 drag here (rather than on the whole sheet) keeps body scrolling
+                 from being misread as a swipe-to-close. */}
+             <div
+               className={twMerge(
+                 "w-full flex justify-center pt-3 pb-1 touch-none",
+                 disableClose ? "cursor-default" : "cursor-grab active:cursor-grabbing"
+               )}
+               onPointerDown={(e) => { if (!disableClose) dragControls.start(e); }}
+             >
                <div className="w-12 h-1.5 bg-brand-300 dark:bg-brand-600 rounded-full" />
              </div>
 
