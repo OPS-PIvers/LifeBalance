@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateSafeToSpend, findNextPaycheckDate } from './safeToSpendCalculator';
+import { calculateSafeToSpend, findNextPaycheckDate, sumPendingSpend } from './safeToSpendCalculator';
 import { Account, BudgetBucket, CalendarItem, Transaction, INCOME_CATEGORY } from '@/types/schema';
 import { addDays, format, subDays } from 'date-fns';
 
@@ -1099,5 +1099,67 @@ describe('verified-only balance model (Plan 015 — Option A)', () => {
     );
     // No period -> full balance minus pending (once): 5000 - 75 = 4925
     expect(result).toBe(INITIAL_BALANCE - PENDING); // 4925
+  });
+});
+
+describe('sumPendingSpend — account-aware exclusion', () => {
+  const accounts: Account[] = [
+    { id: 'chk', name: 'Checking', type: 'checking', balance: 5000, lastUpdated: '' },
+    { id: 'sav', name: 'Savings', type: 'savings', balance: 10000, lastUpdated: '' },
+    { id: 'cc', name: 'Visa', type: 'credit', balance: 200, lastUpdated: '' },
+  ];
+
+  const tx = (overrides: Partial<Transaction> = {}): Transaction => ({
+    id: 'tx',
+    amount: 50,
+    merchant: 'Shop',
+    category: 'Groceries',
+    date: '2026-06-10',
+    status: 'pending_review',
+    isRecurring: false,
+    source: 'manual',
+    autoCategorized: false,
+    payPeriodId: '2026-06-01',
+    ...overrides,
+  });
+
+  it('counts an untagged pending transaction (legacy behavior)', () => {
+    expect(sumPendingSpend([tx({ accountId: undefined })], '2026-06-01', accounts)).toBe(50);
+  });
+
+  it('counts a pending transaction tagged to a checking account', () => {
+    expect(sumPendingSpend([tx({ accountId: 'chk' })], '2026-06-01', accounts)).toBe(50);
+  });
+
+  it('excludes a pending transaction tagged to a credit account', () => {
+    expect(sumPendingSpend([tx({ accountId: 'cc' })], '2026-06-01', accounts)).toBe(0);
+  });
+
+  it('excludes a pending transaction tagged to a savings account', () => {
+    expect(sumPendingSpend([tx({ accountId: 'sav' })], '2026-06-01', accounts)).toBe(0);
+  });
+
+  it('still excludes income and verified transactions', () => {
+    expect(sumPendingSpend([tx({ category: INCOME_CATEGORY })], '2026-06-01', accounts)).toBe(0);
+    expect(sumPendingSpend([tx({ status: 'verified' })], '2026-06-01', accounts)).toBe(0);
+  });
+
+  it('with no accounts arg, untagged still counts (backward compatible)', () => {
+    expect(sumPendingSpend([tx({ accountId: undefined })], '2026-06-01')).toBe(50);
+  });
+
+  it('a pending credit charge does not lower Safe-to-Spend', () => {
+    const items: CalendarItem[] = [
+      { id: 'p', title: 'Next Paycheck', amount: 2000, date: '2026-06-15', type: 'income', isPaid: false },
+    ];
+    const withCardCharge = calculateSafeToSpend(
+      accounts, items, [], '2026-06-01', [tx({ accountId: 'cc' })],
+    );
+    const withCheckingCharge = calculateSafeToSpend(
+      accounts, items, [], '2026-06-01', [tx({ accountId: 'chk' })],
+    );
+    // Credit charge leaves the full 5000 checking; checking charge subtracts 50.
+    expect(withCardCharge).toBe(5000);
+    expect(withCheckingCharge).toBe(4950);
   });
 });

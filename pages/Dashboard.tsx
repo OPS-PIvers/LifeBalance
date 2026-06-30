@@ -11,6 +11,9 @@ import { BarChart2 } from 'lucide-react';
 // deep-links into Money → Trends instead of opening a modal (redesign IA).
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
 const InsightsArchiveModal = React.lazy(() => import('@/components/modals/InsightsArchiveModal'));
+// Lazy so the heavy Drawer-based capture flow stays out of the Dashboard chunk;
+// it only loads when the "Pay down" quick action is used.
+const CaptureModal = React.lazy(() => import('@/components/modals/CaptureModal'));
 import { useActionQueue } from '@/hooks/useActionQueue';
 import { ActionQueueItemCard } from '@/components/dashboard/ActionQueueItem';
 import { InsightWidget } from '@/components/dashboard/InsightWidget';
@@ -21,6 +24,7 @@ import { PulseStripWidget } from '@/components/dashboard/PulseStripWidget';
 import { CreateChallengePayload } from '@/types/schema';
 import { DashboardSkeleton } from '@/components/dashboard/DashboardSkeleton';
 import { SafeToSpendHero } from '@/components/dashboard/SafeToSpendHero';
+import { CreditCardActivityWidget } from '@/components/dashboard/CreditCardActivityWidget';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 
 const Dashboard: React.FC = () => {
@@ -59,6 +63,10 @@ const Dashboard: React.FC = () => {
   // State for expansions/modals
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [payModalItemId, setPayModalItemId] = useState<string | null>(null);
+  // The credit card targeted by the "Pay down" quick action (opens the capture
+  // form pre-tagged as a payment toward that card).
+  const [payDownAccountId, setPayDownAccountId] = useState<string | null>(null);
+  const handlePayDown = useCallback((accountId: string) => setPayDownAccountId(accountId), []);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -96,6 +104,10 @@ const Dashboard: React.FC = () => {
             domain — Plan 090). The `space-y-6` stack collapses cleanly when it's
             removed (no doubled gap). */}
         {isModuleEnabled('money') && <SafeToSpendHero />}
+
+        {/* Credit card activity — charges vs. paydowns this period so balances
+            don't balloon (money domain). Self-nulls without any credit cards. */}
+        {isModuleEnabled('money') && <CreditCardActivityWidget onPayDown={handlePayDown} />}
 
         {/* The Pulse strip — money + habits balance, the app's thesis metric */}
         <PulseStripWidget />
@@ -195,6 +207,13 @@ const Dashboard: React.FC = () => {
           />
         )}
         {isArchiveOpen && <InsightsArchiveModal isOpen={isArchiveOpen} onClose={() => setIsArchiveOpen(false)} />}
+        {payDownAccountId && (
+          <CaptureModal
+            isOpen={!!payDownAccountId}
+            onClose={() => setPayDownAccountId(null)}
+            initialManualData={{ accountId: payDownAccountId, creditPayment: true }}
+          />
+        )}
       </Suspense>
 
       {/* Pay sheet for calendar items */}

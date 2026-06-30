@@ -134,11 +134,24 @@ export const CaptureTransactionReview: React.FC<CaptureTransactionReviewProps> =
                   <div>
                     <CompactSelect
                       value={tx.accountId || ''}
-                      onChange={(value) => onUpdateTransaction(tx.id, { accountId: value || undefined })}
+                      onChange={(value) => onUpdateTransaction(tx.id, { accountId: value || undefined, creditPayment: undefined })}
                       options={accounts.map(a => ({ id: a.id, label: a.name }))}
                       placeholder="Account..."
                     />
                   </div>
+
+                  {/* Charge / Payment — only for a credit account */}
+                  {accounts.find(a => a.id === tx.accountId)?.type === 'credit' && (
+                    <div>
+                      <CompactSelect
+                        value={tx.creditPayment ? 'payment' : 'charge'}
+                        onChange={(value) => onUpdateTransaction(tx.id, { creditPayment: value === 'payment' ? true : undefined })}
+                        options={[{ id: 'charge', label: 'Charge to card' }, { id: 'payment', label: 'Payment toward card' }]}
+                        placeholder="Charge to card"
+                        aria-label="Charge or payment"
+                      />
+                    </div>
+                  )}
                 </div>
 
               </div>

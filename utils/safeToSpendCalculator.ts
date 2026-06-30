@@ -209,6 +209,12 @@ export interface SafeToSpendBreakdown {
  *   (e.g. BudgetBuckets, bucketSpentCalculator).
  * - When `currentPeriodId` is set, only transactions in that pay period count;
  *   otherwise all pending_review spend counts. (Matches bucketSpentCalculator.)
+ * - A transaction tagged to a NON-checking account (savings/credit) is excluded:
+ *   it does not draw down liquid checking cash, so it must not reduce
+ *   Safe-to-Spend. Untagged transactions (no `accountId`) keep legacy behavior
+ *   and count as checking spend. Pass `accounts` so checking ids can be
+ *   resolved; with no accounts only the account-agnostic filters apply (the
+ *   only production caller always passes accounts).
  *
  * Exported so display surfaces (e.g. the Money → Overview Safe-to-Spend detail)
  * can itemize the same value the canonical formula subtracts — one rule, one
@@ -216,18 +222,26 @@ export interface SafeToSpendBreakdown {
  */
 export const sumPendingSpend = (
   transactions: Transaction[],
-  currentPeriodId: string = ''
-): number =>
-  sumMoney(
+  currentPeriodId: string = '',
+  accounts: Account[] = []
+): number => {
+  const checkingIds = new Set(
+    accounts.filter(a => a.type === 'checking').map(a => a.id)
+  );
+  return sumMoney(
     transactions
       .filter(tx => {
         if (tx.status !== 'pending_review') return false;
         if (tx.category === INCOME_CATEGORY) return false;
+        // A pending charge on a non-checking account (savings/credit) does not
+        // reduce liquid checking funds, so it must not lower Safe-to-Spend.
+        if (tx.accountId && !checkingIds.has(tx.accountId)) return false;
         if (currentPeriodId) return tx.payPeriodId === currentPeriodId;
         return true;
       })
       .map(tx => tx.amount)
   );
+};
 
 /**
  * Breakdown variant using pre-expanded calendar items (memo-friendly).
@@ -251,8 +265,9 @@ export const calculateSafeToSpendBreakdownFromExpanded = (
     accounts.filter(a => a.type === 'checking').map(a => a.balance)
   );
 
-  // 2. Pending spend: current-period pending_review spend (income excluded).
-  const pendingSpend = sumPendingSpend(transactions, currentPeriodId);
+  // 2. Pending spend: current-period pending_review spend (income excluded,
+  //    non-checking-tagged excluded).
+  const pendingSpend = sumPendingSpend(transactions, currentPeriodId, accounts);
 
   // 3. Without paycheck tracking, the full checking balance (minus pending) is available.
   if (!currentPeriodId) {

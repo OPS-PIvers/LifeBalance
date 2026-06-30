@@ -75,12 +75,12 @@ import {
   QuickStockList,
   HouseholdApiKey,
   PendingItem,
-  ModuleKey,
-  INCOME_CATEGORY
+  ModuleKey
 } from '@/types/schema';
 import { sanitizeFirestoreData } from '@/utils/firestoreSanitizer';
 import { normalizeToKey } from '@/utils/stringNormalizer';
 import { calculateSafeToSpendBreakdownFromExpanded, type SafeToSpendBreakdown } from '@/utils/safeToSpendCalculator';
+import { effectiveAccountImpact, resolveTargetAccount } from '@/utils/accountImpact';
 import { processToggleHabit, calculatePointsForDate, calculatePointsForDateRange, computeManagedMemberPointsReset, isHabitStale, streakForHabit, streakEndingOnForHabit, getMultiplier, getHabitResetUpdate } from '@/utils/habitLogic';
 import { getPayPeriodForTransaction } from '@/utils/paycheckPeriodCalculator';
 import { calculateBucketSpent, getTransactionsForBucket, type BucketSpent } from '@/utils/bucketSpentCalculator';
@@ -95,7 +95,7 @@ import { useHabitActions } from '@/hooks/useHabitActions';
 import { expandCalendarItems, parseRecurringId, isRecurringId } from '@/utils/calendarRecurrence';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { hashKidPin } from '@/utils/kidPin';
-import { roundMoney, sumMoney, subtractMoney } from '@/utils/money';
+import { roundMoney } from '@/utils/money';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
   BUCKET_HISTORY_LIMIT,
@@ -149,39 +149,39 @@ function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
 }
 
 // ---------------------------------------------------------------------------
-// VERIFIED-ONLY BALANCE MODEL (Plan 015 — "Option A")
+// VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE MODEL (Plan 015 "Option A" + account tagging)
+//
+// A transaction's balance impact lands on the account it is TAGGED to
+// (`tx.accountId`), falling back to the checking account when untagged
+// (backward compatible). The sign is account-type aware (see
+// utils/accountImpact.ts):
+//   - Asset (checking/savings) or untagged: income +amount, expense −amount.
+//   - Credit (balance = debt owed, stored POSITIVE): a charge increases the
+//     debt (+amount), a payment (`creditPayment === true`) decreases it.
 //
 // The checking-account balance is entered MANUALLY and is assumed by
 // Safe-to-Spend NOT to reflect un-cleared (pending_review) spending — the
-// calculator subtracts current-period pending spend separately (see
-// utils/safeToSpendCalculator.ts:sumPendingSpend). The single invariant that
-// keeps the two consistent:
+// calculator subtracts current-period pending spend separately, and now
+// excludes pending transactions tagged to non-checking accounts (see
+// utils/safeToSpendCalculator.ts:sumPendingSpend). The invariant that keeps the
+// two consistent:
 //
-//   The checking balance reflects a transaction's category-aware impact
-//   (income +amount / expense −amount) IF AND ONLY IF the transaction is
-//   `verified`. A `pending_review` transaction NEVER touches the balance; it
-//   influences Safe-to-Spend solely through the pendingSpend term. On a
-//   pending_review → verified transition the impact is applied; on
-//   verified → pending_review it is reversed; on delete only an EFFECTIVE
-//   (i.e. verified) impact is reversed. Each transaction's impact lands on the
-//   balance exactly once over its lifetime while verified.
+//   An account's balance reflects a transaction's account-aware impact IF AND
+//   ONLY IF the transaction is `verified`. A `pending_review` transaction NEVER
+//   touches any balance; on a pending → verified transition the impact is
+//   applied, on verified → pending it is reversed, on delete only an EFFECTIVE
+//   (verified) impact is reversed. Each transaction's impact lands exactly once
+//   over its lifetime while verified.
 //
-// `impactOf` is the category-aware signed amount; `effectiveImpact` gates it on
-// status. Every create/mutate/delete path computes its checking-balance delta as
-//   balanceDelta = effectiveImpact(after) − effectiveImpact(before)
-// (before = {amount:0} for create, after = {amount:0} for delete) and writes
-// increment(roundMoney(balanceDelta)) only when non-zero.
+// `effectiveAccountImpact(tx, account)` is the status-gated, account-aware
+// signed amount; `resolveTargetAccount(accountId, accounts)` picks the doc to
+// mutate. Every create/mutate/delete path computes per-account deltas as
+//   delta = effectiveAccountImpact(after, target) − effectiveAccountImpact(before, target)
+// and writes increment(roundMoney(delta)) only when non-zero. When an edit
+// MOVES a transaction between accounts the old account's impact is reversed and
+// the new account's applied (merged per-account so a single batch never writes
+// the same doc twice).
 // ---------------------------------------------------------------------------
-
-/** Category-aware signed balance impact of a transaction: income credits, expense debits. */
-function impactOf(tx: { amount: number; category: string }): number {
-  return tx.category === INCOME_CATEGORY ? tx.amount : -tx.amount;
-}
-
-/** Balance impact a transaction has ALREADY applied: its category-aware impact when verified, else 0. */
-function effectiveImpact(tx: { amount: number; category: string; status: Transaction['status'] }): number {
-  return tx.status === 'verified' ? impactOf(tx) : 0;
-}
 
 export interface HouseholdContextType {
   // State
@@ -1949,6 +1949,12 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const deleteAccount = useCallback(async (id: string) => {
     if (!householdId) return;
+    // NOTE: transactions tagged to this account are intentionally left as-is
+    // (no migration). Their `accountId` becomes a dangling reference, which
+    // resolveTargetAccount() resolves to the checking account on the next
+    // mutation. A pending charge orphaned from a deleted credit/savings account
+    // stays excluded from Safe-to-Spend (sumPendingSpend excludes any accountId
+    // not in the current checking set).
     await deleteDoc(doc(db, `households/${householdId}/accounts`, id));
     toast.success('Account deleted');
   }, [householdId]);
@@ -2595,8 +2601,14 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       if (tx.store && tx.store.trim()) {
         docData.store = tx.store.trim();
       }
-      if (tx.accountId && tx.accountId.trim()) {
-        docData.accountId = tx.accountId.trim();
+      const trimmedAccountId = tx.accountId && tx.accountId.trim() ? tx.accountId.trim() : undefined;
+      if (trimmedAccountId) {
+        docData.accountId = trimmedAccountId;
+      }
+      // creditPayment only matters on a credit account; persist only when true
+      // (absent ⇒ charge), matching the optional-field convention above.
+      if (tx.creditPayment === true) {
+        docData.creditPayment = true;
       }
       if (tx.subBucketId && tx.subBucketId.trim()) {
         docData.subBucketId = tx.subBucketId.trim();
@@ -2605,31 +2617,33 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         docData.notes = tx.notes.trim();
       }
 
-      // VERIFIED-ONLY BALANCE (Plan 015): a new transaction touches the checking
+      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: a new transaction touches a
       // balance only if it is created `verified`. A `pending_review` capture
-      // (receipt / AI scan / Apple Pay stub) does NOT debit — it influences
-      // Safe-to-Spend solely via the calculator's pendingSpend term, so debiting
-      // here too would subtract it twice. balanceDelta = effectiveImpact(after)
-      // with before = 0 (nothing existed yet).
-      const balanceDelta = effectiveImpact({ amount: roundedAmount, category: tx.category, status: tx.status });
+      // (receipt / AI scan / Apple Pay stub) does NOT move any balance — it
+      // influences Safe-to-Spend solely via the calculator's pendingSpend term,
+      // so moving a balance here too would subtract it twice. The impact lands
+      // on the TAGGED account (credit charges raise the card's debt; checking
+      // expenses debit checking), falling back to checking when untagged.
+      const target = resolveTargetAccount(trimmedAccountId, accounts);
+      const balanceDelta = effectiveAccountImpact(
+        { amount: roundedAmount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status },
+        target
+      );
 
-      // Commit the new transaction and the checking-balance delta in a SINGLE
+      // Commit the new transaction and the account-balance delta in a SINGLE
       // writeBatch so they can never partially apply. Pre-allocate the
       // transaction ref so it participates in the batch.
       const batch = writeBatch(db);
       const txRef = doc(collection(db, `households/${householdId}/transactions`));
       batch.set(txRef, docData);
 
-      // Update checking account balance only when the (verified) impact is
+      // Update the target account balance only when the (verified) impact is
       // non-zero (server-side delta avoids lost updates from concurrent edits).
-      if (balanceDelta !== 0) {
-        const checkingAcc = accounts.find(a => a.type === 'checking');
-        if (checkingAcc) {
-          batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: increment(roundMoney(balanceDelta)),
-            lastUpdated: serverTimestamp(),
-          });
-        }
+      if (balanceDelta !== 0 && target) {
+        batch.update(doc(db, `households/${householdId}/accounts`, target.id), {
+          balance: increment(roundMoney(balanceDelta)),
+          lastUpdated: serverTimestamp(),
+        });
       }
 
       await batch.commit();
@@ -2670,9 +2684,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Transaction not found');
       return;
     }
+    // The account does not change on this path, so resolve it once. Promoting a
+    // pending credit charge to verified raises the card's debt; verifying a
+    // checking expense debits checking.
+    const target = resolveTargetAccount(existingTx.accountId, accounts);
     const balanceDelta =
-      effectiveImpact({ amount: existingTx.amount, category, status: 'verified' })
-        - effectiveImpact(existingTx);
+      effectiveAccountImpact({ amount: existingTx.amount, category, creditPayment: existingTx.creditPayment, status: 'verified' }, target)
+        - effectiveAccountImpact(existingTx, target);
 
     // 1. Update Transaction
     batch.update(doc(db, `households/${householdId}/transactions`, id), {
@@ -2681,16 +2699,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       relatedHabitIds: relatedHabitIds || []
     });
 
-    // 1b. Apply the checking-balance impact of the status/category transition in
+    // 1b. Apply the account-balance impact of the status/category transition in
     // the SAME batch (server-side delta avoids lost updates from concurrent edits).
-    if (balanceDelta !== 0) {
-      const checkingAcc = accounts.find(a => a.type === 'checking');
-      if (checkingAcc) {
-        batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-          balance: increment(roundMoney(balanceDelta)),
-          lastUpdated: serverTimestamp(),
-        });
-      }
+    if (balanceDelta !== 0 && target) {
+      batch.update(doc(db, `households/${householdId}/accounts`, target.id), {
+        balance: increment(roundMoney(balanceDelta)),
+        lastUpdated: serverTimestamp(),
+      });
     }
 
     // 2. Increment Habits if any
@@ -2774,21 +2789,38 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         updates.amount = roundMoney(updates.amount);
       }
 
-      // VERIFIED-ONLY BALANCE (Plan 015): the checking-balance delta is the
-      // change in EFFECTIVE (verified-only) impact, comparing the post-update
-      // {amount, category, status} against the existing transaction. This single
-      // rule handles every case:
-      //   - amount change while verified → impact delta
-      //   - pending_review → verified     → apply the full new impact (was 0)
-      //   - verified → pending_review     → reverse the old impact (now 0)
-      //   - pending amount/category change → both effective impacts are 0 (no-op)
-      //   - category change crossing income/expense while verified → sign flip
+      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: an edit can change amount,
+      // category, status, accountId AND creditPayment simultaneously, and the
+      // OLD and NEW target accounts may differ (and be different types). Reverse
+      // the old account's effective impact and apply the new account's, then
+      // merge per-account so a single batch never writes the same doc twice.
+      // This single rule handles every case:
+      //   - amount/category/status change on the same account → net impact delta
+      //   - re-tag checking→card (or card→card)              → money moves accounts
+      //   - pending → verified / verified → pending          → apply / reverse
+      //   - credit charge ↔ payment toggle                   → sign flip on the card
       const newAmount = updates.amount ?? transaction.amount;
       const newCategory = updates.category ?? transaction.category;
       const newStatus = updates.status ?? transaction.status;
-      const balanceDelta =
-        effectiveImpact({ amount: newAmount, category: newCategory, status: newStatus })
-          - effectiveImpact(transaction);
+      const newAccountId = 'accountId' in updates
+        ? (updates.accountId?.trim() || undefined)
+        : transaction.accountId;
+      const newCreditPayment = 'creditPayment' in updates ? updates.creditPayment : transaction.creditPayment;
+
+      const oldTarget = resolveTargetAccount(transaction.accountId, accounts);
+      const newTarget = resolveTargetAccount(newAccountId, accounts);
+
+      const reverseDelta = -effectiveAccountImpact(transaction, oldTarget);
+      const applyDelta = effectiveAccountImpact(
+        { amount: newAmount, category: newCategory, creditPayment: newCreditPayment, status: newStatus },
+        newTarget
+      );
+
+      // Merge by account id: when old and new resolve to the SAME doc, Firestore
+      // rejects two writes to it in one batch, so collapse to a single net delta.
+      const deltasByAccountId = new Map<string, number>();
+      if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
+      if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
 
       // Recalculate pay period if date changed
       let payPeriodId = transaction.payPeriodId;
@@ -2809,6 +2841,15 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       } else if (typeof sanitizedUpdates.accountId === 'string') {
         sanitizedUpdates.accountId = sanitizedUpdates.accountId.trim();
       }
+      // creditPayment is only persisted when true (absent ⇒ charge). If the
+      // caller is explicitly clearing a previously-true flag, remove it from the
+      // doc with deleteField(); otherwise just drop the non-true value.
+      if (sanitizedUpdates.creditPayment !== true) {
+        delete sanitizedUpdates.creditPayment;
+        if ('creditPayment' in updates && updates.creditPayment !== true && transaction.creditPayment) {
+          sanitizedUpdates.creditPayment = deleteField();
+        }
+      }
       if (sanitizedUpdates.subBucketId === undefined || sanitizedUpdates.subBucketId === '') {
         delete sanitizedUpdates.subBucketId;
       } else if (typeof sanitizedUpdates.subBucketId === 'string') {
@@ -2820,7 +2861,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         sanitizedUpdates.notes = sanitizedUpdates.notes.trim();
       }
 
-      // Atomically commit the transaction update and the account balance delta in
+      // Atomically commit the transaction update and the account balance deltas in
       // a single writeBatch so they can never partially apply.
       const updateBatch = writeBatch(db);
 
@@ -2829,13 +2870,13 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         payPeriodId,
       });
 
-      // Update checking account balance if the effective impact changed (atomic
-      // server-side delta).
-      if (balanceDelta !== 0) {
-        const checkingAcc = accounts.find(a => a.type === 'checking');
-        if (checkingAcc) {
-          updateBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: increment(roundMoney(balanceDelta)),
+      // Apply each account's net effective-impact delta (atomic server-side
+      // increment). A re-tag moves money off the old account and onto the new.
+      for (const [accId, delta] of deltasByAccountId) {
+        const rounded = roundMoney(delta);
+        if (rounded !== 0) {
+          updateBatch.update(doc(db, `households/${householdId}/accounts`, accId), {
+            balance: increment(rounded),
             lastUpdated: serverTimestamp(),
           });
         }
@@ -2880,26 +2921,25 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         return;
       }
 
-      // Atomically restore the checking account balance and delete the
+      // Atomically restore the target account balance and delete the
       // transaction in a single writeBatch so they can never partially apply
       // (server-side delta avoids lost updates from concurrent edits / stale
       // local state).
       const deleteBatch = writeBatch(db);
 
-      // VERIFIED-ONLY BALANCE (Plan 015): reverse only the EFFECTIVE impact.
-      // A verified transaction had applied its category-aware impact, so deleting
-      // it reverses that (balanceDelta = 0 − effectiveImpact(before)); a
-      // pending_review transaction never touched the balance, so deleting it must
-      // NOT move the balance (its effectiveImpact is 0).
-      const balanceDelta = -effectiveImpact(transaction);
-      if (balanceDelta !== 0) {
-        const checkingAcc = accounts.find(a => a.type === 'checking');
-        if (checkingAcc) {
-          deleteBatch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: increment(roundMoney(balanceDelta)),
-            lastUpdated: serverTimestamp(),
-          });
-        }
+      // VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: reverse only the EFFECTIVE impact,
+      // on the account the transaction was tagged to. A verified transaction had
+      // applied its account-aware impact, so deleting it reverses that (e.g.
+      // deleting a verified card charge lowers the card's debt again); a
+      // pending_review transaction never touched any balance, so deleting it must
+      // NOT move a balance (its effective impact is 0).
+      const target = resolveTargetAccount(transaction.accountId, accounts);
+      const balanceDelta = -effectiveAccountImpact(transaction, target);
+      if (balanceDelta !== 0 && target) {
+        deleteBatch.update(doc(db, `households/${householdId}/accounts`, target.id), {
+          balance: increment(roundMoney(balanceDelta)),
+          lastUpdated: serverTimestamp(),
+        });
       }
 
       deleteBatch.delete(doc(db, `households/${householdId}/transactions`, id));
@@ -2942,22 +2982,30 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         });
       });
 
-      // 3. VERIFIED-ONLY BALANCE (Plan 015): the net checking-balance change is
-      // Σ effectiveImpact(newSplit) − effectiveImpact(original). When a VERIFIED
-      // expense is split into verified expenses summing to the same total this is
-      // 0 (the historical no-op). But splitting a PENDING_REVIEW capture into
-      // verified splits (the splits modal auto-verifies) must now debit the
-      // balance, since the pending original never debited it — without this the
-      // verified splits would silently skip their debit.
-      const splitsImpact = sumMoney(
-        newTransactions.map(tx => effectiveImpact({ amount: tx.amount, category: tx.category, status: tx.status }))
-      );
-      const balanceDelta = subtractMoney(splitsImpact, effectiveImpact(originalTx));
-      if (balanceDelta !== 0) {
-        const checkingAcc = accounts.find(a => a.type === 'checking');
-        if (checkingAcc) {
-          batch.update(doc(db, `households/${householdId}/accounts`, checkingAcc.id), {
-            balance: increment(roundMoney(balanceDelta)),
+      // 3. VERIFIED-ONLY, ACCOUNT-ROUTED BALANCE: the net change is
+      // Σ effectiveAccountImpact(newSplit, its target) − effectiveAccountImpact(original, its target).
+      // Splits may land on different accounts than the original and from each
+      // other, so accumulate per-account and merge (a single batch must not write
+      // the same account doc twice). When a VERIFIED expense is split into
+      // verified expenses on the same account summing to the same total this nets
+      // to 0 (historical no-op); splitting a PENDING_REVIEW capture into verified
+      // splits applies their now-effective impact to the correct accounts.
+      const deltasByAccountId = new Map<string, number>();
+      const origTarget = resolveTargetAccount(originalTx.accountId, accounts);
+      if (origTarget) {
+        deltasByAccountId.set(origTarget.id, (deltasByAccountId.get(origTarget.id) ?? 0) - effectiveAccountImpact(originalTx, origTarget));
+      }
+      for (const tx of newTransactions) {
+        const t = resolveTargetAccount(tx.accountId?.trim() || undefined, accounts);
+        if (t) {
+          deltasByAccountId.set(t.id, (deltasByAccountId.get(t.id) ?? 0) + effectiveAccountImpact({ amount: tx.amount, category: tx.category, creditPayment: tx.creditPayment, status: tx.status }, t));
+        }
+      }
+      for (const [accId, delta] of deltasByAccountId) {
+        const rounded = roundMoney(delta);
+        if (rounded !== 0) {
+          batch.update(doc(db, `households/${householdId}/accounts`, accId), {
+            balance: increment(rounded),
             lastUpdated: serverTimestamp(),
           });
         }

@@ -55,6 +55,9 @@ vi.mock('@/components/dashboard/ActivityFeedWidget', () => ({
 vi.mock('@/components/dashboard/KidsChoresWidget', () => ({
   KidsChoresWidget: () => null,
 }));
+vi.mock('@/components/dashboard/CreditCardActivityWidget', () => ({
+  CreditCardActivityWidget: () => null,
+}));
 vi.mock('@/components/dashboard/ActionQueueItem', () => ({
   ActionQueueItemCard: () => null,
 }));

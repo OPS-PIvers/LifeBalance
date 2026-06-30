@@ -19,6 +19,7 @@ interface CaptureTransactionManualProps {
     subBucketId?: string;
     store?: string;
     accountId?: string;
+    creditPayment?: boolean;
   };
   onAddTransaction: (transaction: Transaction) => Promise<void>;
   onClose: () => void;
@@ -58,6 +59,14 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
   const [subBucketId, setSubBucketId] = useState<string | undefined>(() => initialData?.subBucketId);
   const [store, setStore] = useState(() => initialData?.store || '');
   const [accountId, setAccountId] = useState(() => initialData?.accountId || '');
+  const [creditPayment, setCreditPayment] = useState(() => initialData?.creditPayment ?? false);
+
+  // Whether the chosen account is a credit card — only then is the
+  // Charge/Payment toggle meaningful (a payment pays the card DOWN).
+  const isSelectedAccountCredit = useMemo(
+    () => accounts.find(a => a.id === accountId)?.type === 'credit',
+    [accounts, accountId]
+  );
 
   const [isRecurring, setIsRecurring] = useState(false);
   const [transactionDate, setTransactionDate] = useState(() => initialData?.date || getLocalDateString());
@@ -153,7 +162,10 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
       relatedHabitIds: selectedHabitIds.length > 0 ? selectedHabitIds : undefined,
       subBucketId: validatedSubBucketId,
       store: store || undefined,
-      accountId: accountId || undefined
+      accountId: accountId || undefined,
+      // Only meaningful for a credit account; a charge (false) raises the card's
+      // balance, a payment (true) pays it down. Undefined for asset accounts.
+      creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined
     };
 
     try {
@@ -235,6 +247,26 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           ))}
         </Select>
       </div>
+
+      {isSelectedAccountCredit && (
+        <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
+          <div>
+            <span id="credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
+              {creditPayment ? 'Payment toward card' : 'Charge to card'}
+            </span>
+            <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
+              {creditPayment
+                ? 'Lowers this card’s balance (paying it down).'
+                : 'Raises this card’s balance; never affects Safe-to-Spend.'}
+            </p>
+          </div>
+          <Switch
+            checked={creditPayment}
+            onCheckedChange={setCreditPayment}
+            aria-labelledby="credit-payment-label"
+          />
+        </div>
+      )}
 
       <div>
         <label id="manual-category-label" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-2">Category</label>

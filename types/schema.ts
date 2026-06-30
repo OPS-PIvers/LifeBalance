@@ -131,6 +131,11 @@ export interface Transaction {
   subBucketId?: string;
   store?: string;
   accountId?: string;
+  /** When the transaction is tagged to a CREDIT account, marks it as a PAYMENT
+   *  toward the card (reduces the credit balance) rather than a charge (which
+   *  increases it). Meaningless / ignored for checking & savings accounts.
+   *  Absent ⇒ treated as a charge. Never represents income or bucket spend. */
+  creditPayment?: boolean;
   notes?: string;
   createdAt?: string; // ISO timestamp
   /** Apple Pay $0 pre-authorization stub (created by the quickAddExpense Cloud
