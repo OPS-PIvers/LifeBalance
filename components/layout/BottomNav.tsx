@@ -77,7 +77,7 @@ const BottomNav: React.FC = () => {
   // Active tab reads in the evergreen accent (the app's primary), inactive in the
   // calm paper neutrals. No glass — a solid surface with a hairline top edge.
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex flex-col items-center justify-center w-full min-h-[44px] gap-1 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
+    `relative flex flex-col items-center justify-center w-full h-16 gap-1 transition-colors duration-(--duration-fast) ease-(--ease-standard) ${
       isActive
         ? 'text-accent-600 dark:text-accent-300'
         : 'text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300'
@@ -93,6 +93,15 @@ const BottomNav: React.FC = () => {
       <NavLink key={item.key} to={item.to} end={item.end} className={navLinkClass}>
         {({ isActive }) => (
           <>
+            {/* Non-color active affordance: a short accent indicator bar at the
+                top edge of the active tab, so the selection reads without relying
+                on color alone. */}
+            {isActive && (
+              <span
+                aria-hidden="true"
+                className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-accent-600 dark:bg-accent-300"
+              />
+            )}
             <div className="relative">
               <Icon className={iconClass(isActive)} />
               <CountBadge count={badge} />

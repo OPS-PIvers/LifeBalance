@@ -44,7 +44,7 @@ const OfflineBanner: React.FC = () => {
         // Visual style: warm-amber warning, consistent with the app palette
         'bg-warm-500 dark:bg-warm-600',
         'text-white text-xs font-semibold text-center',
-        'px-4 py-2 shadow-raised',
+        'px-4 py-2 border-t border-warm-600 dark:border-warm-700',
         // No animation by default; keep it simple and motion-safe
       ].join(' ')}
     >

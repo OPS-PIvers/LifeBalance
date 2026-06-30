@@ -104,7 +104,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         </div>
       </main>
 
-      <div className="flex-none z-20">
+      <div className="flex-none z-sticky">
         <BottomNav />
       </div>
 
