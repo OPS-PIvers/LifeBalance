@@ -614,15 +614,17 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                  top-right "…" overflow menu, matching the Shopping list header.
                  The primary add now lives in the sticky quick-add bar below. */
               <div className="relative">
-                <button
+                <Button
+                  variant="ghost-brand"
+                  size="icon"
                   onClick={() => setMenuOpen((o) => !o)}
                   aria-label="To-do list actions"
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  className="p-2 text-brand-500 hover:text-accent-600 hover:bg-brand-100 rounded-full transition-colors dark:text-brand-400 dark:hover:text-accent-300 dark:hover:bg-brand-700/50"
+                  className="rounded-full min-w-11 min-h-11"
                 >
                   <MoreHorizontal className="w-5 h-5" />
-                </button>
+                </Button>
                 {menuOpen && (
                   <Menu
                     isOpen={menuOpen}
@@ -827,8 +829,8 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
         <div className="fixed bottom-24 left-0 right-0 px-4 md:px-0 flex justify-center z-50 pointer-events-none">
-          <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-2xl shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
-            <div className="px-3 font-bold text-sm border-r border-white/10">
+          <div className="bg-brand-900 dark:bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4">
+            <div className="px-3 font-semibold text-sm border-r border-white/10">
               {selectedIds.size} selected
             </div>
 
@@ -861,7 +863,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
               layout="vertical"
               onClick={() => setShowBatchDeleteConfirm(true)}
               disabled={isBatchProcessing}
-              className="h-auto py-1 px-3 font-normal text-rose-300 hover:text-rose-200 hover:bg-rose-500/20"
+              className="h-auto py-1 px-3 font-normal text-money-negDark hover:text-money-negDark hover:bg-money-neg/20"
               aria-label="Delete selected items"
             >
               <Trash2 size={18} />
