@@ -1050,7 +1050,7 @@ interface TodoRowProps {
 }
 
 const badgeStyleMap = {
-  rose: 'bg-money-bgNeg text-money-neg border border-money-neg/20 dark:bg-money-neg/15 dark:text-money-neg dark:border-money-neg/25',
+  rose: 'bg-money-bgNeg text-money-neg border border-money-neg/20 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/25',
   amber: 'bg-warm-50 text-warm-700 border border-warm-200 dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/25',
   blue: 'bg-habit-blue/10 text-habit-blue border border-habit-blue/20 dark:bg-habit-blue/15 dark:text-habit-blue dark:border-habit-blue/25',
 } as const;
@@ -1131,7 +1131,7 @@ const TodoRow = React.memo(function TodoRow({
 
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {isOverdue ? (
-              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-bold bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-neg">
+              <div className="flex items-center gap-1 text-xs px-2 py-1 rounded-sm font-bold bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark">
                 <AlertCircle size={10} />
                 Overdue ({format(dueDate, 'MMM d')})
               </div>
@@ -1211,7 +1211,7 @@ const TodoRow = React.memo(function TodoRow({
                     toast.success('Task deleted');
                   });
                 }}
-                className="hover:text-money-neg active:text-money-neg active:bg-money-bgNeg dark:hover:text-money-neg dark:active:bg-money-neg/15"
+                className="hover:text-money-neg active:text-money-neg active:bg-money-bgNeg dark:hover:text-money-negDark dark:active:bg-money-neg/15"
                 aria-label="Delete task"
               >
                 <Trash2 size={16} />

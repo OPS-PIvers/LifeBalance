@@ -78,7 +78,7 @@ export const KidsChoresWidget: React.FC = React.memo(() => {
                   <p
                     className={`text-xs font-semibold ${
                       allDone
-                        ? 'text-money-pos dark:text-money-pos'
+                        ? 'text-money-pos dark:text-money-posDark'
                         : 'text-warm-600 dark:text-warm-300'
                     }`}
                   >

@@ -49,9 +49,9 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
                 onClick={() => onToggleCategory(isExpanded ? null : category)}
                 className={`w-full flex items-center justify-between p-3 transition-colors ${isNegativeCategory ? 'bg-money-bgNeg dark:bg-money-neg/10 hover:bg-money-bgNeg dark:hover:bg-money-neg/20' : 'bg-brand-50 dark:bg-brand-700/50 hover:bg-brand-100 dark:hover:bg-brand-700'}`}
               >
-                <span className={`font-semibold text-sm ${isNegativeCategory ? 'text-money-neg dark:text-red-300' : 'text-brand-700 dark:text-brand-200'}`}>{category}</span>
+                <span className={`font-semibold text-sm ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-700 dark:text-brand-200'}`}>{category}</span>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs ${isNegativeCategory ? 'text-money-neg dark:text-money-neg' : 'text-brand-400 dark:text-brand-400'}`}>
+                  <span className={`text-xs ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-400 dark:text-brand-400'}`}>
                     {enabledCount} / {categoryPresets.length} active
                   </span>
                   <ChevronRight
@@ -93,7 +93,7 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className={`text-xxs px-1.5 py-0.5 rounded-full font-medium ${
                                 preset.type === 'negative'
-                                  ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300'
+                                  ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark'
                                   : `${EFFORT_COLORS[preset.effortLevel].bg} ${EFFORT_COLORS[preset.effortLevel].text}`
                               }`}>
                                 {pointsDisplay} pts

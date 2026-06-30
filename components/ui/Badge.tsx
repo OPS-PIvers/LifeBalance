@@ -18,9 +18,9 @@ export const Badge: React.FC<BadgeProps> = ({
     default: 'bg-accent-50 text-accent-700 border border-accent-200 dark:bg-accent-800/40 dark:text-accent-200 dark:border-accent-700',
     neutral: 'bg-brand-100 text-brand-600 border border-brand-200 dark:bg-brand-700/50 dark:text-brand-300 dark:border-brand-700',
     brand: 'bg-accent-50 text-accent-700 border border-accent-200 dark:bg-accent-800/40 dark:text-accent-200 dark:border-accent-700',
-    success: 'bg-money-bgPos text-money-pos border border-money-pos/30 dark:bg-money-pos/15 dark:text-emerald-300 dark:border-money-pos/40',
+    success: 'bg-money-bgPos text-money-pos border border-money-pos/30 dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/40',
     warning: 'bg-warm-50 text-warm-700 border border-warm-200 dark:bg-warm-900/40 dark:text-warm-200 dark:border-warm-700',
-    danger: 'bg-money-bgNeg text-money-neg border border-money-neg/30 dark:bg-money-neg/15 dark:text-red-300 dark:border-money-neg/40',
+    danger: 'bg-money-bgNeg text-money-neg border border-money-neg/30 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/40',
     outline: 'bg-transparent border border-brand-200 text-brand-600 dark:border-brand-700 dark:text-brand-400',
   };
 

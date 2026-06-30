@@ -798,7 +798,7 @@ const MealPlanTab: React.FC = () => {
                                         </Badge>
                                     )}
                                 </div>
-                                <div className={clsx("font-semibold tracking-tight leading-snug line-clamp-2", isCooked ? "text-money-pos dark:text-money-pos" : "text-brand-900 dark:text-brand-50")}>
+                                <div className={clsx("font-semibold tracking-tight leading-snug line-clamp-2", isCooked ? "text-money-pos dark:text-money-posDark" : "text-brand-900 dark:text-brand-50")}>
                                     {mealName}
                                 </div>
 
@@ -871,7 +871,7 @@ const MealPlanTab: React.FC = () => {
               <button onClick={() => sheetEdit(item)} className={clsx(actionClass, "text-brand-700 hover:bg-brand-100 dark:text-brand-200 dark:hover:bg-brand-700/50")}>
                 <Edit2 className="w-5 h-5 text-brand-400 dark:text-brand-500" /> Edit
               </button>
-              <button onClick={() => sheetDelete(item)} className={clsx(actionClass, "text-money-neg hover:bg-money-bgNeg dark:text-money-neg dark:hover:bg-money-neg/15")}>
+              <button onClick={() => sheetDelete(item)} className={clsx(actionClass, "text-money-neg hover:bg-money-bgNeg dark:text-money-negDark dark:hover:bg-money-neg/15")}>
                 <Trash2 className="w-5 h-5" /> Delete
               </button>
             </div>

@@ -558,7 +558,7 @@ const Settings: React.FC = () => {
                 </div>
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-btn border ${
                   notificationStatus === 'granted' ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30' :
-                  notificationStatus === 'denied' ? 'text-money-neg bg-money-bgNeg border-money-neg/30 dark:bg-money-neg/15 dark:text-money-neg dark:border-money-neg/30' :
+                  notificationStatus === 'denied' ? 'text-money-neg bg-money-bgNeg border-money-neg/30 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/30' :
                   'text-accent-700 bg-accent-50 border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
                 }`}>
                   {notificationStatus === 'granted' ? 'Enabled' :

@@ -385,7 +385,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                   onChange={e => setEditStoreName(e.target.value)}
                                   className="flex-1 p-1.5 border border-brand-300 rounded-sm text-sm outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
                                />
-                               <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-pos dark:hover:text-money-pos dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
+                               <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
                                <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
                              </div>
                            </div>
@@ -470,7 +470,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                 <span className="text-brand-700 dark:text-brand-200 font-medium">{cat}</span>
                                 <button
                                     onClick={() => removeCategory(cat)}
-                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-500 dark:hover:text-rose-300 dark:hover:bg-rose-500/15"
+                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-500 dark:hover:text-money-negDark dark:hover:bg-money-neg/15"
                                     aria-label={`Remove category ${cat}`}
                                 >
                                     <X className="w-3 h-3" />

@@ -131,6 +131,12 @@
   --color-money-neg: #d4483f;
   --color-money-bgPos: #eef6f1;
   --color-money-bgNeg: #fbeeec;
+  /* Dark-mode text counterparts for the semantic money colors. Set to
+     Tailwind's exact red-300 / emerald-300 so they drop in for the raw
+     dark:text-red-300 / dark:text-emerald-300 literals that were repeated
+     across ~11 files — semantic danger/positive text is now defined once. */
+  --color-money-posDark: oklch(84.5% 0.143 164.978);
+  --color-money-negDark: oklch(80.8% 0.114 19.571);
 
   /* Habit tokens — retuned off the generic palette. habit-blue keeps its
      token name for compatibility but is now a slate-teal so it stops reading

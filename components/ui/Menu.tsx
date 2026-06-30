@@ -41,7 +41,7 @@ interface MenuProps {
 const TONE_LABEL: Record<MenuItemTone, string> = {
   default: 'text-brand-700 dark:text-brand-200',
   primary: 'text-accent-700 dark:text-accent-200',
-  danger: 'text-money-neg dark:text-red-400',
+  danger: 'text-money-neg dark:text-money-negDark',
   info: 'text-habit-blue dark:text-habit-blue',
 };
 
