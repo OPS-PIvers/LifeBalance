@@ -646,7 +646,8 @@ const ShoppingListTab: React.FC<ShoppingListTabProps> = ({ stickyTopOffset = 0 }
         {isLoading ? (
             <div className="surface-section overflow-hidden">
                 {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3.5 border-t border-brand-200 dark:border-brand-700 first:border-t-0">
+                    <div key={i} className="flex items-center gap-3 px-3 py-2.5 border-t border-brand-200 dark:border-brand-700 first:border-t-0">
+                        <Skeleton className="w-3 h-5 shrink-0" />
                         <Skeleton className="w-5 h-5 rounded-full shrink-0" />
                         <Skeleton className="h-5 flex-1" />
                     </div>
