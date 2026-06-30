@@ -16,22 +16,22 @@ export const EFFORT_CONFIG: Record<EffortLevel, EffortConfig> = {
   easy: {
     points: 1,
     label: 'Easy',
-    colors: { bg: 'bg-green-100', text: 'text-green-700' },
+    colors: { bg: 'bg-warm-50 dark:bg-warm-900/30', text: 'text-warm-700 dark:text-warm-300' },
   },
   medium: {
     points: 2,
     label: 'Medium',
-    colors: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+    colors: { bg: 'bg-warm-100 dark:bg-warm-900/40', text: 'text-warm-700 dark:text-warm-200' },
   },
   hard: {
     points: 3,
     label: 'Hard',
-    colors: { bg: 'bg-orange-100', text: 'text-orange-700' },
+    colors: { bg: 'bg-warm-200 dark:bg-warm-800/50', text: 'text-warm-800 dark:text-warm-200' },
   },
   very_hard: {
     points: 5,
     label: 'Very Hard',
-    colors: { bg: 'bg-red-100', text: 'text-red-700' },
+    colors: { bg: 'bg-warm-300 dark:bg-warm-700/50', text: 'text-warm-900 dark:text-warm-100' },
   },
 };
 

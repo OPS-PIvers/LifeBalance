@@ -243,7 +243,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                 size="sm"
                 className="gap-1 transition-colors"
               >
-                <StreakFlame streakDays={habit.streakDays} period={habit.period} size={10} />
+                <StreakFlame streakDays={habit.streakDays} period={habit.period} size={10} className="text-habit-streak" />
                 {habit.streakDays} {streakUnitLabel}{habit.streakDays !== 1 ? 's' : ''}
               </Badge>
             )}
