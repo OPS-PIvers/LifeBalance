@@ -348,7 +348,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   // Ensure user is authenticated (should be guaranteed by ProtectedRoute, but defensive check)
   if (!currentUser) {
     return (
-      <div className="pb-24 pt-6 px-4 max-w-2xl mx-auto">
+      <div className="pb-nav-safe pt-6 px-4 max-w-2xl mx-auto">
         <div className="surface-section p-6 text-money-neg">
           <p className="font-display font-semibold tracking-tight text-lg">Authentication required</p>
           <p className="text-sm opacity-90 mt-1">Please log in to manage your to-do list.</p>
@@ -574,14 +574,14 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
   ];
 
   return (
-    <div className="pb-32 pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
+    <div className="pb-nav-safe pt-8 px-4 max-w-2xl mx-auto space-y-8 min-h-screen">
 
       <div className="flex flex-col gap-6 mb-6">
         <div className="flex items-center justify-between">
           <div>
             {isSelectionMode ? (
               <div className="flex flex-col">
-                <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Select tasks</h1>
+                <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Select tasks</h1>
                 <button
                     onClick={handleSelectAll}
                     className="text-sm text-accent-600 dark:text-accent-300 font-medium flex items-center gap-1 mt-1 hover:text-accent-700 dark:hover:text-accent-200"
@@ -591,7 +591,7 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
                 </button>
               </div>
             ) : (
-              <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
+              <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">To-do list</h1>
             )}
           </div>
 

@@ -214,7 +214,7 @@ const MigrateSubmissions: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 p-4 pb-24">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 p-4 pb-nav-safe">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">

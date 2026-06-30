@@ -38,7 +38,7 @@ const HABIT_TABS = ['track', 'history', 'coach', 'rewards', 'challenges', 'insig
 const ChallengeHubModal = React.lazy(() => import('@/components/modals/ChallengeHubModal'));
 
 const HabitsSkeleton: React.FC = () => (
-  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-28 pt-6" aria-busy="true" aria-live="polite">
+  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6" aria-busy="true" aria-live="polite">
     <span className="sr-only">Loading habits…</span>
     <div className="px-4 mb-6">
       {/* Header row */}
@@ -280,7 +280,7 @@ const Habits: React.FC = () => {
   const hasNoHabits = habits.length === 0;
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-28 pt-6">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe pt-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         {/* Editorial title + single overflow menu (collapses Export/Adjust/Reorder/Manage) */}
         <div className="px-4 mb-6 flex flex-col gap-4">
