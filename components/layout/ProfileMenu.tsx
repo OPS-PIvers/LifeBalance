@@ -196,7 +196,7 @@ const ProfileMenu: React.FC<ProfileMenuProps> = ({ isOpen, onClose }) => {
 
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-money-neg dark:text-red-400 hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-btn transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-money-neg dark:text-money-negDark hover:bg-money-bgNeg dark:hover:bg-money-neg/15 rounded-btn transition-colors text-left"
           role="menuitem"
           tabIndex={-1}
         >

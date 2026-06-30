@@ -78,7 +78,7 @@ export const HabitCoach: React.FC = () => {
               <div key={idx} className="surface-section p-5 flex gap-4">
                 <div className={`p-3 rounded-card h-fit shrink-0 ${
                   insight.type === 'praise' ? 'bg-warm-100 text-warm-600 dark:bg-warm-900/30 dark:text-warm-200' :
-                  insight.type === 'critique' ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300' :
+                  insight.type === 'critique' ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark' :
                   'bg-habit-blue/10 text-habit-blue dark:bg-habit-blue/15 dark:text-habit-blue'
                 }`}>
                   {insight.type === 'praise' ? <Trophy size={20} /> :

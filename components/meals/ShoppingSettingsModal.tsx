@@ -470,7 +470,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                 <span className="text-brand-700 dark:text-brand-200 font-medium">{cat}</span>
                                 <button
                                     onClick={() => removeCategory(cat)}
-                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-500 dark:hover:text-rose-300 dark:hover:bg-rose-500/15"
+                                    className="p-1 text-brand-400 hover:text-money-neg hover:bg-money-bgNeg rounded-full transition-colors dark:text-brand-500 dark:hover:text-money-negDark dark:hover:bg-money-neg/15"
                                     aria-label={`Remove category ${cat}`}
                                 >
                                     <X className="w-3 h-3" />

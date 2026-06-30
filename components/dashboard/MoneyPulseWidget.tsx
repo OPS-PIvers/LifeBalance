@@ -47,7 +47,7 @@ export const MoneyPulseWidget: React.FC = () => {
                 noPrior
                   ? 'bg-brand-100 text-brand-500 dark:bg-brand-700 dark:text-brand-300'
                   : spendingStats.isHigher
-                    ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300'
+                    ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-money-negDark'
                     : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos'
               }`}
             >

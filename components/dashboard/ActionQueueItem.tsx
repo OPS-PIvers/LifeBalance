@@ -270,7 +270,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
     if (isTodoQueueItem(item)) {
       return {
         iconComponent: <ListTodo size={18} />,
-        iconClasses: 'bg-money-bgNeg border-money-neg/20 text-money-neg dark:bg-money-neg/15 dark:border-money-neg/30 dark:text-red-300',
+        iconClasses: 'bg-money-bgNeg border-money-neg/20 text-money-neg dark:bg-money-neg/15 dark:border-money-neg/30 dark:text-money-negDark',
       };
     }
     return {
