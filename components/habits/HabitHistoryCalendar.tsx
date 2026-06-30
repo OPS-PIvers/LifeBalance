@@ -191,7 +191,7 @@ const HabitHistoryCalendar: React.FC = () => {
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={cn(
                       "w-10 h-10 rounded-card flex items-center justify-center font-bold shrink-0",
-                      isPositive ? "bg-money-bgPos dark:bg-money-pos/15 text-money-pos" : "bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark"
+                      isPositive ? "bg-money-bgPos dark:bg-money-pos/15 text-money-pos dark:text-money-posDark" : "bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark"
                     )}>
                       {isPositive ? <CheckCircle2 size={20} /> : <Flame size={20} />}
                     </div>

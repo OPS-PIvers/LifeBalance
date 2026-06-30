@@ -187,7 +187,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             </Button>
           )}
           {isCooked && (
-             <div className="flex-2 flex items-center justify-center gap-2 bg-money-bgPos text-money-pos font-bold rounded-xl border border-money-pos/20 opacity-80 cursor-default dark:bg-money-pos/15 dark:text-money-pos dark:border-money-pos/25">
+             <div className="flex-2 flex items-center justify-center gap-2 bg-money-bgPos text-money-pos font-bold rounded-xl border border-money-pos/20 opacity-80 cursor-default dark:bg-money-pos/15 dark:text-money-posDark dark:border-money-pos/25">
                 <CheckCircle2 size={18} /> Bon Appétit!
              </div>
           )}

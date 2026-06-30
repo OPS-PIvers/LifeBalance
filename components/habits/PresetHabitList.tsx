@@ -51,7 +51,7 @@ const PresetHabitList: React.FC<PresetHabitListProps> = ({
               >
                 <span className={`font-semibold text-sm ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-700 dark:text-brand-200'}`}>{category}</span>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs ${isNegativeCategory ? 'text-money-neg dark:text-money-neg' : 'text-brand-400 dark:text-brand-400'}`}>
+                  <span className={`text-xs ${isNegativeCategory ? 'text-money-neg dark:text-money-negDark' : 'text-brand-400 dark:text-brand-400'}`}>
                     {enabledCount} / {categoryPresets.length} active
                   </span>
                   <ChevronRight

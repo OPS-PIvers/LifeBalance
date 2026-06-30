@@ -62,7 +62,7 @@ export const ActivityFeedWidget: React.FC = React.memo(() => {
               <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                 activity.type === 'transaction'
                   ? 'bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200'
-                  : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos'
+                  : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-posDark'
               }`}>
                 {activity.type === 'transaction' ? <Receipt size={16} /> : <CheckSquare size={16} />}
               </div>
