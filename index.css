@@ -219,6 +219,14 @@
   padding-bottom: calc(7rem + var(--spacing-safe, 0px));
 }
 
+@utility stat-num {
+  /* Display-number treatment for metrics and money: monospaced, tabular
+     figures, tight tracking. Size / weight / color stay with the consumer.
+     Replaces the inline font-mono + tabular-nums + tracking-tight triple
+     re-declared on large metrics across the dashboard, habits, and settings. */
+  @apply font-mono tabular-nums tracking-tight;
+}
+
 @utility surface-section {
   /* Grouped-flat surface (iOS Settings / Things / Copilot Money): a solid
      calm panel with a hairline border, deliberate radius, and NO shadow by
