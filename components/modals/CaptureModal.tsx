@@ -26,6 +26,10 @@ import { CaptureMenu } from './CaptureMenu';
 interface CaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** When provided, the modal opens straight into the manual transaction form
+   *  pre-filled with this data (e.g. the dashboard "Pay down" quick action
+   *  passes a credit account + creditPayment). */
+  initialManualData?: ManualInitialData;
 }
 
 type ModalView = 'menu' | 'camera' | 'upload' | 'manual' | 'processing' | 'review';
@@ -53,9 +57,10 @@ interface ManualInitialData {
   subBucketId?: string;
   store?: string;
   accountId?: string;
+  creditPayment?: boolean;
 }
 
-const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
+const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose, initialManualData }) => {
   const { addTransaction, updateTransaction, buckets, transactions, accounts } = useFinance();
   const { habits } = useGamification();
   const { currentUser, members, householdId } = useHouseholdCore();
@@ -182,6 +187,22 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
       hasInitialized.current = false;
     }
   }, [isOpen, currentUser, members]);
+
+  // Caller-supplied prefill (e.g. dashboard "Pay down"): jump straight to the
+  // manual transaction form with the account/payment pre-tagged. Done during
+  // render on the open edge (rather than in an effect) to match the codebase's
+  // no-setState-in-effect rule; the prev-tracker fires the prefill exactly once
+  // per open and resets when the modal closes.
+  const [prefilledForOpen, setPrefilledForOpen] = useState(false);
+  if (isOpen && initialManualData && !prefilledForOpen) {
+    setPrefilledForOpen(true);
+    setActiveTab('transaction');
+    setManualInitialData(initialManualData);
+    setView('manual');
+  }
+  if (!isOpen && prefilledForOpen) {
+    setPrefilledForOpen(false);
+  }
 
   // Reset state when closing
   const handleClose = () => {
@@ -479,7 +500,8 @@ const CaptureModal: React.FC<CaptureModalProps> = ({ isOpen, onClose }) => {
           relatedHabitIds: tx.relatedHabitIds,
           subBucketId: tx.subBucketId,
           store: resolvedStore,
-          accountId: tx.accountId
+          accountId: tx.accountId,
+          creditPayment: tx.creditPayment
         };
         return addTransaction(newTransaction);
       })

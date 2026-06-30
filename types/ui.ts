@@ -9,4 +9,5 @@ export interface ParsedTransaction {
   subBucketId?: string;
   store?: string;
   accountId?: string;
+  creditPayment?: boolean;
 }

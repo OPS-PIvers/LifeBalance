@@ -7,6 +7,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 
@@ -29,6 +30,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   const [subBucketId, setSubBucketId] = useState<string | undefined>(() => transaction?.subBucketId);
   const [store, setStore] = useState(() => transaction?.store || '');
   const [accountId, setAccountId] = useState(() => transaction?.accountId || '');
+  const [creditPayment, setCreditPayment] = useState(() => transaction?.creditPayment ?? false);
   const [date, setDate] = useState(() => transaction?.date ?? '');
   const [status, setStatus] = useState<'verified' | 'pending_review'>(() => transaction?.status ?? 'verified');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -40,6 +42,9 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
   // Find selected bucket and its sub-buckets
   const selectedBucket = buckets.find(b => b.name === category);
   const subBuckets = selectedBucket?.subBuckets || [];
+
+  // The Charge/Payment toggle only applies to a credit account.
+  const isSelectedAccountCredit = accounts.find(a => a.id === accountId)?.type === 'credit';
 
   // Re-populate the form when the transaction prop changes. Done during render
   // (on the reference-change edge) rather than in an effect so it doesn't
@@ -55,6 +60,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
       setSubBucketId(transaction.subBucketId);
       setStore(transaction.store || '');
       setAccountId(transaction.accountId || '');
+      setCreditPayment(transaction.creditPayment ?? false);
       setDate(transaction.date);
       setStatus(transaction.status);
     }
@@ -98,6 +104,10 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         subBucketId: subBucketId || undefined,
         store: store || undefined,
         accountId: accountId || undefined,
+        // Always pass the key so toggling Payment off on a credit transaction
+        // clears the stored flag (the context removes a now-false flag via
+        // deleteField). Undefined for non-credit accounts.
+        creditPayment: isSelectedAccountCredit && creditPayment ? true : undefined,
         date,
         status,
       });
@@ -274,6 +284,27 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
             ))}
           </Select>
         </div>
+
+        {isSelectedAccountCredit && (
+          <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
+            <div>
+              <span id="edit-credit-payment-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">
+                {creditPayment ? 'Payment toward card' : 'Charge to card'}
+              </span>
+              <p className="text-xs text-brand-400 dark:text-brand-400 mt-0.5">
+                {creditPayment
+                  ? 'Lowers this card’s balance (paying it down).'
+                  : 'Raises this card’s balance; never affects Safe-to-Spend.'}
+              </p>
+            </div>
+            <Switch
+              checked={creditPayment}
+              onCheckedChange={setCreditPayment}
+              disabled={isSaving}
+              aria-labelledby="edit-credit-payment-label"
+            />
+          </div>
+        )}
 
         <Input
           id="edit-date"
