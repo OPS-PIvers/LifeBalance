@@ -11,6 +11,7 @@ import {
   BUCKET_COLOR_KEYS,
   DEFAULT_BUCKET_COLOR,
   normalizeBucketColorKey,
+  type BucketColorKey,
 } from '@/data/bucketColors';
 
 interface BucketFormModalProps {
@@ -24,7 +25,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
 
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
-  const [color, setColor] = useState<string>(DEFAULT_BUCKET_COLOR);
+  const [color, setColor] = useState<BucketColorKey>(DEFAULT_BUCKET_COLOR);
   const [subBuckets, setSubBuckets] = useState<SubBucket[]>([]);
   const [newSubBucketName, setNewSubBucketName] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
