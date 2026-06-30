@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp, History, Download, Loader2 } from 'lucide-react
 import { Button } from '@/components/ui/Button';
 import { Section } from '@/components/ui/Section';
 import EmptyState from '@/components/ui/EmptyState';
+import ProgressBar from '@/components/ui/ProgressBar';
 import { generateCsvExport } from '@/utils/exportUtils';
 import toast from 'react-hot-toast';
 
@@ -187,12 +188,12 @@ const BudgetHistory: React.FC = () => {
                       <span className="font-mono tabular-nums">{fmt(group.totalSpent)} spent</span>
                       <span className="font-mono tabular-nums">{fmt(group.totalLimit)} limit</span>
                     </div>
-                    <div className="h-2 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-(--duration-slow) ease-(--ease-standard) ${getProgressColor(group.totalSpent, group.totalLimit)}`}
-                        style={{ width: `${percentUsed}%` }}
-                      />
-                    </div>
+                    <ProgressBar
+                      value={percentUsed}
+                      className="h-2 bg-brand-100 dark:bg-brand-700"
+                      barClassName={getProgressColor(group.totalSpent, group.totalLimit)}
+                      ariaLabel={`${Math.round(percentUsed)}% of limit used`}
+                    />
                   </div>
 
                   <div className="flex justify-center pt-3 text-brand-400 dark:text-brand-500">
@@ -224,12 +225,12 @@ const BudgetHistory: React.FC = () => {
                               {fmt(bucket.totalSpent)} <span className="text-brand-300 dark:text-brand-500 font-normal">/ {fmt(bucket.limit)}</span>
                             </span>
                           </div>
-                          <div className="h-1.5 bg-brand-100 dark:bg-brand-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${getProgressColor(bucket.totalSpent, bucket.limit)}`}
-                              style={{ width: `${bucketPercent}%` }}
-                            />
-                          </div>
+                          <ProgressBar
+                            value={bucketPercent}
+                            className="h-1.5 bg-brand-100 dark:bg-brand-700"
+                            barClassName={getProgressColor(bucket.totalSpent, bucket.limit)}
+                            ariaLabel={`${Math.round(bucketPercent)}% of limit used`}
+                          />
                         </div>
                       );
                     })}
