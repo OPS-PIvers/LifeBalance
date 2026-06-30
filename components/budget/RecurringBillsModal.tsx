@@ -246,7 +246,7 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                           <div className="text-xxs text-brand-400 dark:text-brand-500">per instance</div>
                         </div>
 
-                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                        <div className="hidden sm:flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
                            <Button variant="ghost" size="icon-sm" onClick={() => startEditing(item)} aria-label={`Edit ${item.title}`}>
                              <Edit2 size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300" />
                            </Button>
