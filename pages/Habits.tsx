@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
+import Eyebrow from '@/components/ui/Eyebrow';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import HabitCreatorWizard from '@/components/modals/HabitCreatorWizard';
 import SmartHabitAdjustModal from '@/components/modals/SmartHabitAdjustModal';
@@ -336,7 +337,7 @@ const Habits: React.FC = () => {
           <div className="px-4 mb-6">
             <button
               onClick={() => navigate('/migrate-submissions')}
-              className="w-full bg-warm-500 hover:bg-warm-600 text-white rounded-card p-4 shadow-raised transition-[background-color,transform] duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+              className="w-full bg-warm-500 hover:bg-warm-600 text-white rounded-lg p-4 shadow-raised transition-[background-color,transform] duration-(--duration-fast) ease-(--ease-standard) active:scale-[0.99] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -380,9 +381,9 @@ const Habits: React.FC = () => {
 
             {categories.map((category) => (
               <div key={category}>
-                <h2 className="font-display text-xs font-semibold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-3 ml-1">
+                <Eyebrow as="h2" className="mb-2 px-1">
                   {category}
-                </h2>
+                </Eyebrow>
                 <HabitCategoryList category={category} habits={groupedHabits[category] ?? []} />
               </div>
             ))}
@@ -415,11 +416,11 @@ const Habits: React.FC = () => {
           so it stays fully dormant in a normal household. */}
       {kidModeEnabled && kidsWithChores.length > 0 && (
         <section className="px-4 pb-6" aria-label="Kids chores">
-          <h2 className="flex items-center gap-2 font-display text-xs font-semibold text-warm-600 dark:text-warm-300 uppercase tracking-wider mb-3 ml-1">
+          <Eyebrow as="h2" tone="warm" className="flex items-center gap-2 mb-2 px-1">
             <Star size={14} className="fill-current" />
             Kids&apos; chores
-          </h2>
-          <div className="space-y-5">
+          </Eyebrow>
+          <div className="space-y-6">
             {kidsWithChores.map(({ kid, chores }) => (
               <KidChoresGroup key={kid.uid} kid={kid} chores={chores} />
             ))}

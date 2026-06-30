@@ -4,9 +4,11 @@ import { calculateChallengeProgress, type ChallengeProgress } from '@/utils/chal
 import { getEffectiveTargetValue } from '@/utils/migrations/challengeMigration';
 import { getLocalDateString } from '@/utils/dateHelpers';
 import { format, parseISO } from 'date-fns';
-import { Check, Pencil, Plus, Trophy, Target } from 'lucide-react';
+import { Check, Pencil, Plus, Trophy, Target, Snowflake } from 'lucide-react';
 import { Section } from '@/components/ui/Section';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/ui/EmptyState';
 import type { Challenge } from '@/types/schema';
 
 /** The active monthly challenge rendered as the one elevated "hero" surface. */
@@ -120,21 +122,13 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
             todayDayOfMonth={todayDayOfMonth}
           />
         ) : (
-          <button
-            type="button"
-            onClick={onOpenChallengeHub}
-            className="w-full flex flex-col items-center text-center py-10 px-6 surface-section hover:border-warm-300 dark:hover:border-warm-700 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
-          >
-            <span className="w-14 h-14 rounded-full bg-warm-100 dark:bg-warm-900/30 text-warm-600 dark:text-warm-200 flex items-center justify-center mb-3">
-              <Target size={26} />
-            </span>
-            <span className="font-display text-base font-semibold text-brand-900 dark:text-brand-50">
-              Start a challenge
-            </span>
-            <span className="text-sm text-brand-500 dark:text-brand-400 mt-1 max-w-xs">
-              Set a monthly goal tied to your habits and rally the household.
-            </span>
-          </button>
+          <EmptyState
+            variant="dashed"
+            icon={<Target size={28} />}
+            title="Start a challenge"
+            description="Set a monthly goal tied to your habits and rally the household."
+            action={<Button variant="warning" onClick={onOpenChallengeHub}>Get started</Button>}
+          />
         )}
       </Section>
 
@@ -203,14 +197,14 @@ const HabitsChallengesTab: React.FC<HabitsChallengesTabProps> = ({ onOpenChallen
             {Array.from({ length: maxTokens }, (_, i) => (
               <div
                 key={i}
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all ${
+                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
                   i < tokenCount
                     ? 'bg-habit-blue/15 dark:bg-habit-blue/20 ring-2 ring-habit-blue/40'
                     : 'bg-brand-100 dark:bg-brand-700/50 opacity-50'
                 }`}
                 aria-hidden="true"
               >
-                ❄️
+                <Snowflake size={22} className={i < tokenCount ? 'text-habit-blue' : 'text-brand-400 dark:text-brand-500'} />
               </div>
             ))}
           </div>
