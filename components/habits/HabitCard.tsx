@@ -83,7 +83,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
   // card. Hierarchy comes from spacing + a quiet active tint (money-pos /
   // money-neg), not from a per-card border/shadow.
   const containerClasses = cn(
-    "relative flex items-center justify-between px-4 py-3.5 transition-colors duration-(--duration-base) ease-(--ease-standard) select-none group/card",
+    "relative flex items-center justify-between px-4 py-3.5 transition-[transform,background-color] duration-(--duration-base) ease-(--ease-standard) has-[.main-overlay:active]:scale-[0.99] select-none group/card",
     !isActive && "bg-white dark:bg-brand-800 hover:bg-brand-50 dark:hover:bg-brand-700/40",
     isActive && isPositive && "bg-money-bgPos dark:bg-money-pos/10",
     isActive && !isPositive && "bg-money-bgNeg dark:bg-money-neg/10"
@@ -150,7 +150,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
         {/* Invisible clickable overlay for main card interaction */}
         <button
           onClick={handleCardClick}
-          className="absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
+          className="main-overlay absolute inset-0 w-full h-full cursor-pointer focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 rounded-card"
           aria-label={`Toggle habit: ${habit.title}, current count: ${habit.count}`}
           tabIndex={0}
           style={{ zIndex: 1 }}
@@ -216,7 +216,7 @@ const HabitCard: React.FC<HabitCardProps> = React.memo(({ habit, dragHandle }) =
                   e.stopPropagation();
                   setIsMenuOpen(!isMenuOpen);
                 }}
-                className="p-1 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
+                className="p-2 -m-1 text-brand-300 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 pointer-events-auto"
                 aria-label="Habit options menu"
                 aria-haspopup="menu"
                 aria-expanded={isMenuOpen}
