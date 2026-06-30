@@ -855,7 +855,7 @@ const MealPlanTab: React.FC = () => {
                 variant="dashed"
                 icon={<Utensils className="w-7 h-7" />}
                 title="No meals planned"
-                description="Tap to add a meal for this day"
+                description="Nothing planned for this day yet."
                 action={
                     <Button
                         variant="secondary"
