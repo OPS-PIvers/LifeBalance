@@ -54,20 +54,22 @@ class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full text-center space-y-4">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-8 h-8 text-red-600" />
+        <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4">
+          <div className="surface-section shadow-raised p-6 max-w-md w-full text-center space-y-4">
+            <div className="w-16 h-16 bg-money-bgNeg dark:bg-money-neg/15 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-8 h-8 text-money-neg dark:text-money-negDark" />
             </div>
 
-            <h1 className="text-xl font-bold text-brand-800">Something went wrong</h1>
+            <h1 className="font-display text-xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
+              Something went wrong
+            </h1>
 
-            <p className="text-sm text-brand-500">
+            <p className="text-sm text-brand-500 dark:text-brand-400">
               The application encountered an unexpected error.
             </p>
 
             {this.state.error && (
-              <div className="bg-red-50 p-3 rounded-lg text-left overflow-auto max-h-32 text-xs text-red-700 font-mono break-all">
+              <div className="bg-money-bgNeg dark:bg-money-neg/15 p-3 rounded-card text-left overflow-auto max-h-32 text-xs text-money-neg dark:text-money-negDark font-mono break-all">
                 {this.state.error.toString()}
               </div>
             )}
@@ -76,7 +78,7 @@ class ErrorBoundary extends React.Component<Props, State> {
               <Button
                 size="lg"
                 onClick={this.handleReload}
-                className="w-full bg-brand-600 text-white hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-700"
+                className="w-full"
                 leftIcon={<RefreshCw size={18} />}
               >
                 <span>Reload Page</span>
@@ -86,9 +88,8 @@ class ErrorBoundary extends React.Component<Props, State> {
                 variant="link"
                 size="sm"
                 onClick={this.handleClearCacheAndReload}
-                className="text-brand-400 hover:text-brand-600 underline dark:text-brand-400 dark:hover:text-brand-600"
               >
-                Clear Cache & Reload
+                Clear Cache &amp; Reload
               </Button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, PlayCircle, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useHousehold } from '@/contexts/FirebaseHouseholdContext';
 import {
   doc,
@@ -75,10 +75,10 @@ const MigrateSubmissions: React.FC = () => {
   // Show loading state while household data is loading
   if (!householdSettings || !currentUser) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-brand-50 via-white to-brand-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600 mx-auto mb-4" />
-          <p className="text-brand-400">Loading household data...</p>
+          <Loader2 className="w-12 h-12 text-accent-600 dark:text-accent-300 animate-spin mx-auto mb-4" />
+          <p className="text-brand-500 dark:text-brand-400">Loading household data...</p>
         </div>
       </div>
     );
@@ -214,7 +214,7 @@ const MigrateSubmissions: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-brand-50 via-white to-brand-50 p-4 pb-24">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 p-4 pb-24">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
@@ -224,19 +224,19 @@ const MigrateSubmissions: React.FC = () => {
             onClick={() => navigate(-1)}
             aria-label="Go back"
           >
-            <ArrowLeft size={24} className="text-brand-600" />
+            <ArrowLeft size={24} className="text-brand-600 dark:text-brand-300" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-brand-800">Migrate Habit Submissions</h1>
-            <p className="text-sm text-brand-400">Backfill historical data for submission logs</p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">Migrate Habit Submissions</h1>
+            <p className="text-sm text-brand-500 dark:text-brand-400">Backfill historical data for submission logs</p>
           </div>
         </div>
 
         {/* Info Card */}
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
+        <div className="bg-accent-50 dark:bg-accent-900/30 border border-accent-200 dark:border-accent-700 rounded-card p-4 mb-6">
           <div className="flex gap-3">
-            <AlertCircle className="text-blue-600 shrink-0" size={20} />
-            <div className="text-sm text-blue-800">
+            <AlertCircle className="text-accent-600 dark:text-accent-300 shrink-0" size={20} />
+            <div className="text-sm text-brand-700 dark:text-brand-200">
               <p className="font-bold mb-2">What this does:</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>Creates detailed submission records from your existing habit completion dates</li>
@@ -250,32 +250,32 @@ const MigrateSubmissions: React.FC = () => {
         </div>
 
         {/* Stats Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-bold text-brand-800 mb-4">Migration Summary</h2>
+        <div className="surface-section p-6 mb-6">
+          <h2 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-50 mb-4">Migration Summary</h2>
           <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-brand-50 rounded-xl">
-              <div className="text-2xl font-bold text-brand-800">{habitsToMigrate.length}</div>
-              <div className="text-xs text-brand-400">Habits to migrate</div>
+            <div className="text-center p-4 bg-brand-50 dark:bg-brand-700/40 rounded-card">
+              <div className="stat-num text-2xl font-bold text-brand-900 dark:text-brand-50">{habitsToMigrate.length}</div>
+              <div className="text-xs text-brand-500 dark:text-brand-400">Habits to migrate</div>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-xl">
-              <div className="text-2xl font-bold text-green-600">{stats.habitsProcessed}</div>
-              <div className="text-xs text-green-600">Processed</div>
+            <div className="text-center p-4 bg-money-bgPos dark:bg-money-pos/15 rounded-card">
+              <div className="stat-num text-2xl font-bold text-money-pos dark:text-money-posDark">{stats.habitsProcessed}</div>
+              <div className="text-xs text-money-pos dark:text-money-posDark">Processed</div>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-xl">
-              <div className="text-2xl font-bold text-purple-600">{stats.submissionsCreated}</div>
-              <div className="text-xs text-purple-600">Submissions created</div>
+            <div className="text-center p-4 bg-accent-50 dark:bg-accent-900/30 rounded-card">
+              <div className="stat-num text-2xl font-bold text-accent-700 dark:text-accent-300">{stats.submissionsCreated}</div>
+              <div className="text-xs text-accent-700 dark:text-accent-300">Submissions created</div>
             </div>
           </div>
         </div>
 
         {/* Current Progress */}
         {isRunning && currentHabit && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+          <div className="surface-section p-6 mb-6">
             <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600" />
+              <Loader2 className="w-6 h-6 text-accent-600 dark:text-accent-300 animate-spin shrink-0" />
               <div>
-                <p className="text-sm font-bold text-brand-800">Processing...</p>
-                <p className="text-xs text-brand-400">{currentHabit}</p>
+                <p className="text-sm font-bold text-brand-900 dark:text-brand-50">Processing...</p>
+                <p className="text-xs text-brand-500 dark:text-brand-400">{currentHabit}</p>
               </div>
             </div>
           </div>
@@ -283,10 +283,10 @@ const MigrateSubmissions: React.FC = () => {
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-6">
+          <div className="bg-money-bgNeg dark:bg-money-neg/15 border border-money-neg/20 dark:border-money-neg/30 rounded-card p-4 mb-6">
             <div className="flex gap-3">
-              <AlertCircle className="text-red-600 shrink-0" size={20} />
-              <div className="text-sm text-red-800">
+              <AlertCircle className="text-money-neg dark:text-money-negDark shrink-0" size={20} />
+              <div className="text-sm text-money-neg dark:text-money-negDark">
                 <p className="font-bold mb-1">Migration Error</p>
                 <p>{error}</p>
               </div>
@@ -296,10 +296,10 @@ const MigrateSubmissions: React.FC = () => {
 
         {/* Success */}
         {isComplete && (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-6">
+          <div className="bg-money-bgPos dark:bg-money-pos/15 border border-money-pos/20 dark:border-money-pos/30 rounded-card p-4 mb-6">
             <div className="flex gap-3">
-              <CheckCircle className="text-green-600 shrink-0" size={20} />
-              <div className="text-sm text-green-800">
+              <CheckCircle className="text-money-pos dark:text-money-posDark shrink-0" size={20} />
+              <div className="text-sm text-money-pos dark:text-money-posDark">
                 <p className="font-bold mb-1">Migration Complete!</p>
                 <p>
                   Successfully migrated {stats.habitsProcessed} habit(s) with {stats.submissionsCreated} total
@@ -318,7 +318,7 @@ const MigrateSubmissions: React.FC = () => {
               onClick={runMigration}
               isLoading={isRunning}
               disabled={habitsToMigrate.length === 0}
-              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900 dark:bg-brand-800 dark:hover:bg-brand-900"
+              className="flex-1 py-4"
               leftIcon={<PlayCircle size={20} />}
             >
               {isRunning ? 'Running Migration...' : 'Run Migration'}
@@ -328,7 +328,7 @@ const MigrateSubmissions: React.FC = () => {
             <Button
               size="lg"
               onClick={() => navigate(-1)}
-              className="flex-1 py-4 bg-brand-800 text-white hover:bg-brand-900 dark:bg-brand-800 dark:hover:bg-brand-900"
+              className="flex-1 py-4"
             >
               Done
             </Button>
@@ -336,7 +336,7 @@ const MigrateSubmissions: React.FC = () => {
         </div>
 
         {habitsToMigrate.length === 0 && !isRunning && (
-          <p className="text-center text-brand-400 text-sm mt-4">
+          <p className="text-center text-brand-500 dark:text-brand-400 text-sm mt-4">
             No habits to migrate. All habits either have submission tracking enabled or have no completed dates.
           </p>
         )}
