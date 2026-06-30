@@ -535,7 +535,7 @@ const Settings: React.FC = () => {
             <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
               <SurfaceList>
                 <Row
-                  interactive
+                  interactive={notificationStatus === 'default'}
                   role="button"
                   tabIndex={notificationStatus === 'default' ? 0 : -1}
                   aria-disabled={notificationStatus !== 'default'}
