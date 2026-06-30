@@ -6,6 +6,7 @@ import { Sparkles, History, Wand2, ArrowRight, Wallet, CheckCircle2, Plus, Troph
 import { CreateChallengePayload, Insight, InsightAction } from '@/types/schema';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
+import Eyebrow from '@/components/ui/Eyebrow';
 
 interface InsightWidgetProps {
   onOpenArchive: () => void;
@@ -89,7 +90,7 @@ export const InsightWidget: React.FC<InsightWidgetProps> = React.memo(({ onOpenA
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-warm-600 dark:text-warm-300">AI Insight</h3>
+            <Eyebrow as="h3" tone="warm">AI Insight</Eyebrow>
             <div className="flex gap-2">
               <Button
                 variant="secondary"

@@ -59,7 +59,7 @@ export const ActivityFeedWidget: React.FC = React.memo(() => {
         {recentActivity.map(activity => (
           <Row key={`${activity.type}-${activity.id}`} className="justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+              <div className={`w-9 h-9 rounded-card flex items-center justify-center shrink-0 ${
                 activity.type === 'transaction'
                   ? 'bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200'
                   : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-posDark'
