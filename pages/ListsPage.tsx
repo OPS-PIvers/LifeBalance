@@ -92,11 +92,11 @@ const ListsPage: React.FC = () => {
           // value the shopping tab uses. 0 when the strip is hidden.
           <ToDosPage stickyTopOffset={stickyTopOffset} />
         ) : activeTab === 'meals' ? (
-          <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
+          <div className="max-w-4xl mx-auto px-4 pb-nav-safe pt-4">
             <MealPlanTab />
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto px-4 pb-20 pt-4">
+          <div className="max-w-4xl mx-auto px-4 pb-nav-safe pt-4">
             {/* Offset the shopping add bar so it pins just under this page's
                 sticky tab strip (measured ~73px: px-4 pt-4 pb-2 + TabsList). */}
             <ShoppingListTab stickyTopOffset={stickyTopOffset} />

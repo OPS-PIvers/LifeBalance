@@ -5,6 +5,7 @@ import BudgetAccounts from '@/components/budget/BudgetAccounts';
 import TransactionMasterList from '@/components/budget/TransactionMasterList';
 import MoneyOverview from '@/components/budget/MoneyOverview';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import PageHeader from '@/components/ui/PageHeader';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Skeleton, SkeletonText } from '@/components/ui/Skeleton';
 import { useDeepLinkTab } from '@/hooks/useDeepLinkTab';
@@ -21,7 +22,7 @@ const BudgetTrends = React.lazy(loadBudgetTrends);
 const MONEY_TABS = ['overview', 'calendar', 'buckets', 'accounts', 'transactions', 'trends'] as const;
 
 const BudgetSkeleton: React.FC = () => (
-  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32" aria-busy="true" aria-live="polite">
+  <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe" aria-busy="true" aria-live="polite">
     <span className="sr-only">Loading money…</span>
 
     {/* Editorial title placeholder */}
@@ -75,16 +76,8 @@ const Budget: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32">
-      {/* Editorial page title */}
-      <div className="px-5 pt-8 pb-6">
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50">
-          Money
-        </h1>
-        <p className="mt-1 text-sm text-brand-500 dark:text-brand-400 font-medium">
-          Your accounts, bills, and spending.
-        </p>
-      </div>
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
+      <PageHeader title="Money" subtitle="Your accounts, bills, and spending." />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="px-4">

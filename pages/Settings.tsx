@@ -389,14 +389,14 @@ const Settings: React.FC = () => {
 
   if (!householdSettings) {
     return (
-      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center pb-24">
+      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center pb-nav-safe">
         <Loader2 className="w-8 h-8 text-accent-600 dark:text-accent-400 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-24 px-4 pt-6">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6">
       <div className="max-w-2xl mx-auto space-y-6">
 
         <h1 className="font-display text-3xl font-semibold tracking-tight text-brand-900 dark:text-brand-50 px-1">

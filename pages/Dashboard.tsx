@@ -65,7 +65,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-32">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe">
 
       {/* Editorial greeting header */}
       <div className="px-5 pt-8 pb-6 flex items-end justify-between">
