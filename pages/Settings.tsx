@@ -14,7 +14,6 @@ import {
   Users,
   Crown,
   LogOut,
-  Loader2,
   User,
   Shield,
   Pencil,
@@ -45,6 +44,8 @@ import Select from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard';
 import { SurfaceList, Row } from '@/components/ui/Section';
+import { Badge } from '@/components/ui/Badge';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { isModuleEnabled } from '@/utils/moduleVisibility';
 import type { ModuleKey } from '@/types/schema';
@@ -389,8 +390,14 @@ const Settings: React.FC = () => {
 
   if (!householdSettings) {
     return (
-      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center pb-nav-safe">
-        <Loader2 className="w-8 h-8 text-accent-600 dark:text-accent-400 animate-spin" />
+      <div className="min-h-screen bg-brand-50 dark:bg-brand-900 pb-nav-safe px-4 pt-6" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading settings…</span>
+        <div className="max-w-2xl mx-auto space-y-6">
+          <Skeleton className="h-9 w-40" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-card" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -526,28 +533,37 @@ const Settings: React.FC = () => {
             )}
 
             <div className="mt-6 pt-6 border-t border-brand-200 dark:border-brand-700">
-              <button
-                onClick={handleEnableNotifications}
-                disabled={notificationStatus === 'granted' || notificationStatus === 'denied'}
-                className="w-full flex items-center justify-between p-3.5 surface-section hover:bg-brand-50 dark:hover:bg-brand-700/40 transition-colors duration-(--duration-fast) ease-(--ease-standard) group disabled:opacity-70 disabled:cursor-not-allowed"
-                aria-label={
-                  notificationStatus === 'granted'
-                    ? 'Push notifications enabled'
-                    : notificationStatus === 'denied'
-                    ? 'Push notifications denied by browser'
-                    : 'Enable push notifications'
-                }
-                aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+              <SurfaceList>
+                <Row
+                  interactive={notificationStatus === 'default'}
+                  role="button"
+                  tabIndex={notificationStatus === 'default' ? 0 : -1}
+                  aria-disabled={notificationStatus !== 'default'}
+                  onClick={() => { if (notificationStatus === 'default') handleEnableNotifications(); }}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && notificationStatus === 'default') {
+                      e.preventDefault();
+                      handleEnableNotifications();
+                    }
+                  }}
+                  className={notificationStatus !== 'default' ? 'opacity-70 pointer-events-none' : undefined}
+                  aria-label={
+                    notificationStatus === 'granted'
+                      ? 'Push notifications enabled'
+                      : notificationStatus === 'denied'
+                      ? 'Push notifications denied by browser'
+                      : 'Enable push notifications'
+                  }
+                  aria-describedby={notificationStatus === 'denied' ? 'notification-denied-help' : undefined}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
                     notificationStatus === 'granted'
                       ? 'bg-money-bgPos text-money-pos dark:bg-accent-500/15 dark:text-accent-300'
-                      : 'bg-brand-100 text-brand-400 group-hover:text-accent-600 dark:bg-brand-700 dark:text-brand-500 dark:group-hover:text-accent-300'
+                      : 'bg-brand-100 text-brand-400 dark:bg-brand-700 dark:text-brand-500'
                   }`}>
                     <Bell size={18} />
                   </div>
-                  <div className="text-left">
+                  <div className="flex-1 text-left">
                     <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Push Notifications</p>
                     <p className="text-xs text-brand-500 dark:text-brand-400">
                       {notificationStatus === 'granted' ? 'Notifications enabled' :
@@ -555,16 +571,16 @@ const Settings: React.FC = () => {
                        'Enable alerts on this device'}
                     </p>
                   </div>
-                </div>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-btn border ${
-                  notificationStatus === 'granted' ? 'text-money-pos bg-money-bgPos border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30' :
-                  notificationStatus === 'denied' ? 'text-money-neg bg-money-bgNeg border-money-neg/30 dark:bg-money-neg/15 dark:text-money-negDark dark:border-money-neg/30' :
-                  'text-accent-700 bg-accent-50 border-accent-200 dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30'
-                }`}>
-                  {notificationStatus === 'granted' ? 'Enabled' :
-                   notificationStatus === 'denied' ? 'Denied' : 'Enable'}
-                </span>
-              </button>
+                  <Badge
+                    variant={notificationStatus === 'granted' ? 'success' : notificationStatus === 'denied' ? 'danger' : 'brand'}
+                    size="sm"
+                    className="shrink-0"
+                  >
+                    {notificationStatus === 'granted' ? 'Enabled' :
+                     notificationStatus === 'denied' ? 'Denied' : 'Enable'}
+                  </Badge>
+                </Row>
+              </SurfaceList>
               {notificationStatus === 'denied' && (
                 <p id="notification-denied-help" className="sr-only">
                   Notifications have been denied by your browser. To enable them, please update your browser settings to allow notifications for this site.
