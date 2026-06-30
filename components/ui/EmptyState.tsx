@@ -72,7 +72,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         className={cn(
           // Clamp the icon to a uniform 28px so a 20px and a 28px caller icon
           // don't read at different scales inside the same fixed 64px badge.
-          'w-16 h-16 rounded-full flex items-center justify-center mb-4 [&>svg]:size-7',
+          // Descendant selector (not direct-child) so a wrapped icon still clamps.
+          'w-16 h-16 rounded-full flex items-center justify-center mb-4 [&_svg]:size-7',
           ICON_BADGE_TONES[tone]
         )}
       >
