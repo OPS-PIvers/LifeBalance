@@ -37,4 +37,14 @@ describe('Card', () => {
     // In many setups with cn(), the last class wins in the generated string, or is deduped.
     // We just check that shadow-none is present.
   });
+
+  it('adds a hover/press affordance when interactive', () => {
+    const { container } = render(<Card interactive>Content</Card>);
+    expect(container.firstChild).toHaveClass('cursor-pointer', 'active:scale-[0.98]');
+  });
+
+  it('has no interactive affordance by default', () => {
+    const { container } = render(<Card>Content</Card>);
+    expect(container.firstChild).not.toHaveClass('cursor-pointer');
+  });
 });

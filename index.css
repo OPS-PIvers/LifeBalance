@@ -230,8 +230,9 @@
 @utility surface-section {
   /* Grouped-flat surface (iOS Settings / Things / Copilot Money): a solid
      calm panel with a hairline border, deliberate radius, and NO shadow by
-     default. Hierarchy comes from type + spacing, not blur/shadow. */
-  @apply bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-2xl;
+     default. Hierarchy comes from type + spacing, not blur/shadow. Uses the
+     card radius so co-located Card / Modal / Skeleton corners match. */
+  @apply bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-card;
 }
 
 @utility hairline-divider {

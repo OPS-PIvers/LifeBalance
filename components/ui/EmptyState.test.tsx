@@ -51,4 +51,18 @@ describe('EmptyState', () => {
     const { container } = render(<EmptyState title="Empty" className="mt-8" />);
     expect(container.firstChild).toHaveClass('mt-8');
   });
+
+  it('uses the neutral icon-badge tone by default', () => {
+    const { container } = render(
+      <EmptyState title="Empty" icon={<svg data-testid="icon" />} />
+    );
+    expect(container.querySelector('.rounded-full')).toHaveClass('text-brand-400');
+  });
+
+  it('applies the danger icon-badge tone', () => {
+    const { container } = render(
+      <EmptyState title="Failed" tone="danger" icon={<svg data-testid="icon" />} />
+    );
+    expect(container.querySelector('.rounded-full')).toHaveClass('text-money-neg');
+  });
 });
