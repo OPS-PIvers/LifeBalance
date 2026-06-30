@@ -2,6 +2,7 @@ import React from 'react';
 import { cn } from '@/utils/cn';
 
 export type EmptyStateVariant = 'plain' | 'surface' | 'dashed';
+export type EmptyStateTone = 'default' | 'danger';
 
 /**
  * Wrapper treatments:
@@ -13,7 +14,13 @@ const WRAPPERS: Record<EmptyStateVariant, string> = {
   plain: 'py-12 px-4',
   surface: 'surface-section py-12 px-6',
   dashed:
-    'border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-2xl bg-white/50 dark:bg-brand-800/40 py-14 px-6',
+    'border-2 border-dashed border-brand-200 dark:border-brand-700 rounded-card bg-white/50 dark:bg-brand-800/40 py-14 px-6',
+};
+
+/** Icon-badge color by tone. `danger` styles this as an error / empty-error state. */
+const ICON_BADGE_TONES: Record<EmptyStateTone, string> = {
+  default: 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500',
+  danger: 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg dark:text-money-negDark',
 };
 
 export interface EmptyStateProps
@@ -28,6 +35,8 @@ export interface EmptyStateProps
   action?: React.ReactNode;
   /** Surface treatment. Defaults to `plain` (no surface of its own). */
   variant?: EmptyStateVariant;
+  /** Icon-badge tone. `danger` styles it as an error / empty-error state. */
+  tone?: EmptyStateTone;
 }
 
 /**
@@ -41,6 +50,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   action,
   variant = 'plain',
+  tone = 'default',
   className,
   ...props
 }) => (
@@ -53,7 +63,12 @@ const EmptyState: React.FC<EmptyStateProps> = ({
     {...props}
   >
     {icon && (
-      <div className="w-16 h-16 rounded-full bg-brand-100 dark:bg-brand-700/50 flex items-center justify-center mb-4 text-brand-400 dark:text-brand-500">
+      <div
+        className={cn(
+          'w-16 h-16 rounded-full flex items-center justify-center mb-4',
+          ICON_BADGE_TONES[tone]
+        )}
+      >
         {icon}
       </div>
     )}

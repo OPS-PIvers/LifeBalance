@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Card from './Card';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('Card', () => {
   it('renders children correctly', () => {
@@ -36,5 +36,39 @@ describe('Card', () => {
     // Depending on tailwind-merge configuration, shadow-glass might be removed or present but overridden.
     // In many setups with cn(), the last class wins in the generated string, or is deduped.
     // We just check that shadow-none is present.
+  });
+
+  it('adds a hover/press affordance when interactive', () => {
+    const { container } = render(<Card interactive>Content</Card>);
+    expect(container.firstChild).toHaveClass('cursor-pointer', 'active:scale-[0.98]');
+  });
+
+  it('has no interactive affordance by default', () => {
+    const { container } = render(<Card>Content</Card>);
+    expect(container.firstChild).not.toHaveClass('cursor-pointer');
+  });
+
+  it('exposes button semantics when interactive', () => {
+    const { container } = render(<Card interactive>Go</Card>);
+    const card = container.firstChild as HTMLElement;
+    expect(card).toHaveAttribute('role', 'button');
+    expect(card).toHaveAttribute('tabindex', '0');
+  });
+
+  it('activates onClick via the keyboard when interactive', () => {
+    const onClick = vi.fn();
+    render(
+      <Card interactive onClick={onClick}>
+        Go
+      </Card>
+    );
+    const card = screen.getByRole('button', { name: 'Go' });
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no button semantics when not interactive', () => {
+    const { container } = render(<Card>Plain</Card>);
+    expect(container.firstChild).not.toHaveAttribute('role');
   });
 });
