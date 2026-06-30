@@ -34,8 +34,8 @@ const HabitsInsightsTab: React.FC = () => {
     <Suspense
       fallback={
         <div className="space-y-6" aria-busy="true">
-          <Skeleton className="h-80 w-full rounded-2xl" />
-          <Skeleton className="h-56 w-full rounded-2xl" />
+          <Skeleton className="h-80 w-full rounded-card" />
+          <Skeleton className="h-56 w-full rounded-card" />
         </div>
       }
     >

@@ -3,6 +3,7 @@ import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdC
 import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { Gift, Lock } from 'lucide-react';
 import { Section } from '@/components/ui/Section';
+import { Button } from '@/components/ui/Button';
 import PendingRedemptionsPanel from '@/components/habits/PendingRedemptionsPanel';
 import RedemptionHistoryPanel from '@/components/habits/RedemptionHistoryPanel';
 import RewardManagerPanel from '@/components/habits/RewardManagerPanel';
@@ -77,21 +78,19 @@ const HabitsRewardsTab: React.FC = () => {
                     canAfford ? '' : 'opacity-60'
                   }`}
                 >
-                  <div className="text-4xl mb-3 self-center" aria-hidden="true">{reward.icon}</div>
+                  <div className="text-2xl mb-3 self-center" aria-hidden="true">{reward.icon}</div>
                   <h3 className="font-semibold text-brand-900 dark:text-brand-50 text-sm text-center mb-1">
                     {reward.title}
                   </h3>
                   <p className="font-mono text-xs font-bold tabular-nums text-warm-600 dark:text-warm-300 text-center mb-4">
                     {reward.cost} pts
                   </p>
-                  <button
+                  <Button
+                    variant="warning"
+                    size="sm"
+                    className="w-full mt-auto"
                     onClick={() => canAfford && !busy && handleRedeem(reward.id)}
                     disabled={!canAfford || busy}
-                    className={`mt-auto py-2 rounded-btn text-xs font-bold transition-[transform,background-color] duration-(--duration-fast) ease-(--ease-standard) active:scale-95 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40 ${
-                      canAfford
-                        ? 'bg-accent-600 text-white hover:bg-accent-700 dark:bg-accent-500 dark:hover:bg-accent-400'
-                        : 'bg-brand-100 dark:bg-brand-700/50 text-brand-400 dark:text-brand-500 cursor-not-allowed'
-                    }`}
                   >
                     {canAfford ? (
                       busy ? 'Redeeming…' : 'Redeem'
@@ -100,7 +99,7 @@ const HabitsRewardsTab: React.FC = () => {
                         <Lock size={11} /> Locked
                       </span>
                     )}
-                  </button>
+                  </Button>
                 </div>
               );
             })}
