@@ -138,7 +138,7 @@ const HouseholdSetup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-brand-50 dark:bg-brand-900 flex items-center justify-center p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-brand-800 rounded-lg border border-brand-200 dark:border-brand-700 shadow-raised p-8 space-y-6">
           {/* Header */}
