@@ -128,6 +128,18 @@ describe('budgetBucketConverter', () => {
     const partial = { name: 'Utilities', limit: 200, color: '#blue', isVariable: false, isCore: true };
     expect(() => budgetBucketConverter.fromFirestore(fakeSnap('bucket-3', partial))).not.toThrow();
   });
+
+  it('(b) legacy raw-class color is normalized to its semantic key on read', () => {
+    const legacy = { ...wellFormed, color: 'bg-blue-500' };
+    const result = budgetBucketConverter.fromFirestore(fakeSnap('bucket-color', legacy));
+    expect(result.color).toBe('blue');
+  });
+
+  it('(b) unrecognized color falls back to the default key on read', () => {
+    // wellFormed.color is '#green' — neither a key nor a bg-* class.
+    const result = budgetBucketConverter.fromFirestore(fakeSnap('bucket-default', wellFormed));
+    expect(result.color).toBe('emerald');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import ProgressBar from '@/components/ui/ProgressBar';
+import { bucketColorClass } from '@/data/bucketColors';
 
 interface BudgetBucketCardProps {
   bucket: BudgetBucket;
@@ -120,7 +121,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
         aria-label={`Toggle ${bucketTransactions.length} transactions for ${bucket.name} - currently ${isExpanded ? 'expanded' : 'collapsed'}`}
       >
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${bucket.color}`} />
+          <div className={`w-3 h-3 rounded-full ${bucketColorClass(bucket.color)}`} />
           <span className="font-semibold tracking-tight text-brand-900 dark:text-brand-100 text-base">{bucket.name}</span>
         </div>
 
@@ -207,7 +208,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
       {/* Progress Bar */}
       <ProgressBar
         value={percent}
-        barClassName={isOverspent ? 'bg-money-neg' : bucket.color}
+        barClassName={isOverspent ? 'bg-money-neg' : bucketColorClass(bucket.color)}
         ariaLabel={`${bucket.name} spending: ${Math.round(percent)}% of ${fmt(bucket.limit, { decimals: 0 })} limit`}
         className="h-2 bg-brand-100 dark:bg-brand-700 mb-4"
       />
