@@ -14,6 +14,7 @@ import { showDeleteConfirmation } from '@/utils/toastHelpers';
 import { generateCsvExport } from '@/utils/exportUtils';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { QuickAddBar } from '@/components/ui/QuickAddBar';
 import EmptyState from '@/components/ui/EmptyState';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
@@ -661,25 +662,16 @@ const ToDosPage: React.FC<ToDosPageProps> = ({ stickyTopOffset = 0 }) => {
           style={{ top: `${stickyTopOffset}px` }}
         >
           <div className="flex items-center gap-2">
-            <form onSubmit={handleQuickAdd} className="relative flex-1">
-              <input
-                ref={quickAddRef}
-                type="text"
-                value={quickText}
-                onChange={(e) => setQuickText(e.target.value)}
-                placeholder="Add a task (e.g. Take out trash)..."
-                aria-label="Quick add task"
-                className="w-full pl-4 pr-12 py-3 bg-white border border-brand-200 rounded-btn focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 transition-colors duration-(--duration-fast) ease-(--ease-standard) outline-hidden placeholder:text-brand-400 dark:bg-brand-800 dark:border-brand-600 dark:text-brand-50 dark:placeholder:text-brand-500"
-              />
-              <button
-                type="submit"
-                disabled={!quickText.trim()}
-                aria-label="Add task"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-accent-600 text-white rounded-btn hover:bg-accent-700 disabled:opacity-50 disabled:bg-brand-300 transition-colors dark:bg-accent-600 dark:hover:bg-accent-500 dark:disabled:bg-brand-600"
-              >
-                <Plus size={20} />
-              </button>
-            </form>
+            <QuickAddBar
+              onSubmit={handleQuickAdd}
+              inputRef={quickAddRef}
+              value={quickText}
+              onChange={setQuickText}
+              placeholder="Add a task (e.g. Take out trash)..."
+              aria-label="Quick add task"
+              disabled={!quickText.trim()}
+              submitLabel="Add task"
+            />
 
             {/* Details — opens the full form to set a custom due date / assignee.
                 Kept first-class & always visible (like the shopping filter pill).

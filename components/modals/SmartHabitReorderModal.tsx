@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Sparkles, Check, Loader, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
+import { SurfaceList, Row } from '@/components/ui/Section';
 import type { HabitReorganizationPlan } from '@/services/geminiService.types';
 import { Habit } from '@/types/schema';
 
@@ -126,12 +128,9 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
           <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
-            <button
-              onClick={onClose}
-              className="mt-4 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg text-sm font-bold hover:bg-brand-200 dark:hover:bg-brand-700"
-            >
+            <Button variant="ghost" onClick={onClose} className="mt-4">
               Close
-            </button>
+            </Button>
           </div>
         ) : plan && previewHabits ? (
           <div className="space-y-6">
@@ -149,9 +148,9 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
               {previewHabits.categories.map(category => (
                 <div key={category} className="space-y-2">
                   <h3 className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider ml-2">{category}</h3>
-                  <div className="bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-xl overflow-hidden divide-y divide-brand-200">
+                  <SurfaceList>
                     {(previewHabits.grouped[category] ?? []).map(habit => (
-                      <div key={habit.id} className="p-3 flex items-center justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
+                      <Row key={habit.id} className="justify-between hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors">
                         <div className="flex items-center gap-3">
                            {/* Old category indicator if changed? maybe too cluttered */}
                            <span className="font-medium text-brand-700 dark:text-brand-200 text-sm">{habit.title}</span>
@@ -170,9 +169,9 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
                             }
                             return null;
                         })()}
-                      </div>
+                      </Row>
                     ))}
-                  </div>
+                  </SurfaceList>
                 </div>
               ))}
             </div>
@@ -183,19 +182,18 @@ const SmartHabitReorderModal: React.FC<SmartHabitReorderModalProps> = ({ isOpen,
       {/* Footer */}
       {plan && !isLoading && (
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-xl transition-colors"
-          >
+          <Button variant="ghost" size="lg" onClick={onClose} className="flex-1">
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="warning"
+            size="lg"
             onClick={handleApply}
-            className="flex-1 py-3 bg-warm-500 text-white font-semibold text-sm rounded-btn hover:bg-warm-600 shadow-btn-primary active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) flex items-center justify-center gap-2 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+            leftIcon={<Check size={18} />}
+            className="flex-1"
           >
-            <Check size={18} />
             Apply Changes
-          </button>
+          </Button>
         </div>
       )}
     </Drawer>

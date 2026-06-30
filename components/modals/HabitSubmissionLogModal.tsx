@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useId } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Plus, Edit2, Trash2, Calendar, TrendingUp, Award, Flame, BarChart3, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Habit, HabitSubmission } from '@/types/schema';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
@@ -6,8 +6,12 @@ import { format, parseISO, startOfWeek, endOfWeek, subWeeks, startOfMonth, endOf
 import { getLocalDateString } from '@/utils/dateHelpers';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import EmptyState from '@/components/ui/EmptyState';
+import Input from '@/components/ui/Input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 
 interface HabitSubmissionLogModalProps {
   isOpen: boolean;
@@ -29,19 +33,6 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
   const [activeTab, setActiveTab] = useState<'log' | 'stats' | 'calendar'>('log');
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [deleteSubmissionId, setDeleteSubmissionId] = useState<string | null>(null);
-
-  // IDs for ARIA tab panel association
-  const logTabId = useId();
-  const statsTabId = useId();
-  const calendarTabId = useId();
-  const logPanelId = useId();
-  const statsPanelId = useId();
-  const calendarPanelId = useId();
-
-  // IDs for form label association
-  const dateInputId = useId();
-  const timeInputId = useId();
-  const countInputId = useId();
 
   // Form state
   const [formDate, setFormDate] = useState('');
@@ -228,109 +219,56 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
       title={`Habit Analytics - ${habit.title}`}
       noPadding={true}
     >
-      {/* Tab Navigation */}
-      <div className="px-4 pt-3 pb-0 border-b border-brand-200 dark:border-brand-700">
-        <div
-          role="tablist"
-          aria-label="Habit analytics tabs"
-          className="flex gap-1 bg-brand-50 dark:bg-brand-700/50 p-1 rounded-xl"
-        >
-          <button
-            role="tab"
-            id={logTabId}
-            aria-selected={activeTab === 'log'}
-            aria-controls={logPanelId}
-            tabIndex={activeTab === 'log' ? 0 : -1}
-            onClick={() => setActiveTab('log')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('stats'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('calendar'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'log'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Log
-          </button>
-          <button
-            role="tab"
-            id={statsTabId}
-            aria-selected={activeTab === 'stats'}
-            aria-controls={statsPanelId}
-            tabIndex={activeTab === 'stats' ? 0 : -1}
-            onClick={() => setActiveTab('stats')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('calendar'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('log'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'stats'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <BarChart3 className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Stats
-          </button>
-          <button
-            role="tab"
-            id={calendarTabId}
-            aria-selected={activeTab === 'calendar'}
-            aria-controls={calendarPanelId}
-            tabIndex={activeTab === 'calendar' ? 0 : -1}
-            onClick={() => setActiveTab('calendar')}
-            onKeyDown={(e) => {
-              if (e.key === 'ArrowRight') { e.preventDefault(); setActiveTab('log'); }
-              if (e.key === 'ArrowLeft') { e.preventDefault(); setActiveTab('stats'); }
-            }}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 ${
-              activeTab === 'calendar'
-                ? 'bg-white dark:bg-brand-800 text-brand-800 dark:text-brand-100 shadow-xs'
-                : 'text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300'
-            }`}
-          >
-            <Calendar className="inline-block w-4 h-4 mr-1.5" aria-hidden="true" />
-            Calendar
-          </button>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'log' | 'stats' | 'calendar')}>
+        {/* Tab Navigation */}
+        <div className="px-4 pt-3 pb-0 border-b border-brand-200 dark:border-brand-700">
+          <TabsList>
+            <TabsTrigger value="log" className="flex-1">
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              Log
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1">
+              <BarChart3 className="w-4 h-4" aria-hidden="true" />
+              Stats
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex-1">
+              <Calendar className="w-4 h-4" aria-hidden="true" />
+              Calendar
+            </TabsTrigger>
+          </TabsList>
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="scroll-contain-y">
-        {isLoading ? (
-          <div className="text-center py-12 text-brand-400 dark:text-brand-400">
-            <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
-            Loading...
-          </div>
-        ) : activeTab === 'calendar' ? (
-          <div
-            role="tabpanel"
-            id={calendarPanelId}
-            aria-labelledby={calendarTabId}
-            className="p-4 space-y-4"
-          >
+        {/* Content */}
+        <div className="scroll-contain-y">
+          {isLoading ? (
+            <div className="text-center py-12 text-brand-400 dark:text-brand-400">
+              <div className="animate-spin w-8 h-8 border-4 border-brand-200 dark:border-brand-700 border-t-brand-600 rounded-full mx-auto mb-3"></div>
+              Loading...
+            </div>
+          ) : (
+          <>
+          <TabsContent value="calendar" className="p-4 space-y-4">
             {/* Calendar Controls */}
             <div className="flex items-center justify-between bg-white dark:bg-brand-800 p-2 rounded-xl border border-brand-200 dark:border-brand-700 shadow-xs">
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setCalendarDate(subMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Previous month"
               >
                 <ChevronLeft size={20} />
-              </button>
+              </Button>
               <h3 className="text-lg font-bold text-brand-800 dark:text-brand-100">
                 {format(calendarDate, 'MMMM yyyy')}
               </h3>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setCalendarDate(addMonths(calendarDate, 1))}
-                className="p-2 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors"
                 aria-label="Next month"
               >
                 <ChevronRight size={20} />
-              </button>
+              </Button>
             </div>
 
             {/* Calendar Grid */}
@@ -397,14 +335,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 </p>
               </div>
             </div>
-          </div>
-        ) : activeTab === 'stats' ? (
-          <div
-            role="tabpanel"
-            id={statsPanelId}
-            aria-labelledby={statsTabId}
-            className="p-4 space-y-4"
-          >
+          </TabsContent>
+
+          <TabsContent value="stats" className="p-4 space-y-4">
             {/* Stats Overview */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-money-bgPos dark:bg-money-pos/10 p-4 rounded-xl border border-money-pos/30">
@@ -530,22 +463,20 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 description="Start logging submissions to see analytics"
               />
             )}
-          </div>
-        ) : (
-          <div
-            role="tabpanel"
-            id={logPanelId}
-            aria-labelledby={logTabId}
-            className="p-4"
-          >
+          </TabsContent>
+
+          <TabsContent value="log" className="p-4">
             {/* Add New Submission Button */}
             {!isAddMode && (
-              <button
+              <Button
+                variant="warning"
+                size="lg"
                 onClick={() => setIsAddMode(true)}
-                className="w-full mb-4 py-3 bg-warm-500 text-white font-semibold rounded-btn flex items-center justify-center gap-2 hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+                leftIcon={<Plus size={16} />}
+                className="w-full mb-4"
               >
-                <Plus size={16} /> Add Submission
-              </button>
+                Add Submission
+              </Button>
             )}
 
             {/* Add Form */}
@@ -553,52 +484,42 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
               <div className="mb-4 p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-200 dark:border-brand-700">
                 <h3 className="font-bold text-sm text-brand-700 dark:text-brand-200 mb-3">New Submission</h3>
                 <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div>
-                    <label htmlFor={dateInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Date</label>
-                    <input
-                      id={dateInputId}
-                      type="date"
-                      value={formDate}
-                      onChange={(e) => setFormDate(e.target.value)}
-                      max={getLocalDateString()}
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={timeInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Time</label>
-                    <input
-                      id={timeInputId}
-                      type="time"
-                      value={formTime}
-                      onChange={(e) => setFormTime(e.target.value)}
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor={countInputId} className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
-                    <input
-                      id={countInputId}
-                      type="number"
-                      value={formCount}
-                      onChange={(e) => setFormCount(e.target.value)}
-                      min="1"
-                      className="w-full p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
-                    />
-                  </div>
+                  <Input
+                    label="Date"
+                    type="date"
+                    value={formDate}
+                    onChange={(e) => setFormDate(e.target.value)}
+                    max={getLocalDateString()}
+                  />
+                  <Input
+                    label="Time"
+                    type="time"
+                    value={formTime}
+                    onChange={(e) => setFormTime(e.target.value)}
+                  />
+                  <Input
+                    label="Count"
+                    type="number"
+                    value={formCount}
+                    onChange={(e) => setFormCount(e.target.value)}
+                    min="1"
+                  />
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => setIsAddMode(false)}
-                    className="flex-1 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-lg hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
+                    className="flex-1"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="warning"
                     onClick={handleAdd}
-                    className="flex-1 py-2 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+                    className="flex-1"
                   >
                     Add
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -627,9 +548,9 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                           </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0 ml-2">
-                          <span className="text-xs bg-money-bgPos dark:bg-money-pos/15 text-money-pos px-2 py-0.5 rounded-full font-bold">
+                          <Badge variant={dayTotal > 0 ? 'success' : dayTotal < 0 ? 'danger' : 'neutral'} size="md">
                             {dayTotal > 0 ? '+' : ''}{dayTotal} pts
-                          </span>
+                          </Badge>
                           <span className="text-xxs text-brand-400 dark:text-brand-400 font-bold">
                             {dayCount} log{dayCount !== 1 ? 's' : ''}
                           </span>
@@ -643,14 +564,12 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                                 <span className="text-sm font-mono font-bold text-brand-800 dark:text-brand-100">
                                   {format(parseISO(sub.timestamp), 'h:mm a')}
                                 </span>
-                                <span className="text-xs bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full font-bold">
+                                <Badge variant="neutral" size="md">
                                   ×{sub.count}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                                  sub.pointsEarned >= 0 ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos' : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                                }`}>
+                                </Badge>
+                                <Badge variant={sub.pointsEarned > 0 ? 'success' : sub.pointsEarned < 0 ? 'danger' : 'neutral'} size="md">
                                   {sub.pointsEarned > 0 ? '+' : ''}{sub.pointsEarned} pts
-                                </span>
+                                </Badge>
                               </div>
                               <div className="text-xxs text-brand-400 dark:text-brand-400 mt-1 flex items-center gap-2 flex-wrap">
                                 <span>{sub.multiplierApplied}x multiplier</span>
@@ -662,23 +581,25 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                               </div>
                             </div>
                             <div className="flex items-center gap-1 ml-3 shrink-0">
-                              <button
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => {
                                   setEditingSubmission(sub);
                                   setFormCount(sub.count.toString());
                                 }}
-                                className="p-2 text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
                                 aria-label="Edit submission"
                               >
                                 <Edit2 size={14} />
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="ghost-destructive"
+                                size="icon"
                                 onClick={() => handleDelete(sub.id)}
-                                className="p-2 text-brand-400 hover:text-money-neg hover:bg-money-neg/10 rounded-lg transition-colors duration-(--duration-fast) ease-(--ease-standard)"
                                 aria-label="Delete submission"
                               >
                                 <Trash2 size={14} />
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -688,32 +609,34 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
                 })
               )}
             </div>
-          </div>
-        )}
-      </div>
+          </TabsContent>
+          </>
+          )}
+        </div>
+      </Tabs>
 
       {/* Edit Modal (nested) */}
       {editingSubmission && (
         <div className="absolute inset-0 bg-white dark:bg-brand-800 z-10 p-4 flex flex-col">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-brand-800 dark:text-brand-100">Edit Submission</h3>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={() => setEditingSubmission(null)}
-              className="text-brand-400 dark:text-brand-400 hover:text-brand-600 dark:hover:text-brand-300 p-1 hover:bg-brand-50 dark:hover:bg-brand-700/50 rounded-lg transition-colors"
               aria-label="Close edit"
             >
               <X size={20} />
-            </button>
+            </Button>
           </div>
 
           <div className="mb-4">
-            <label className="text-xs text-brand-400 dark:text-brand-400 block mb-1 font-bold">Count</label>
-            <input
+            <Input
+              label="Count"
               type="number"
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
               min="1"
-              className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
             />
           </div>
 
@@ -725,18 +648,22 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
           </div>
 
           <div className="mt-auto flex gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={() => setEditingSubmission(null)}
-              className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-bold rounded-xl hover:bg-brand-50 dark:hover:bg-brand-700/50 active:scale-98 transition-all"
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="warning"
+              size="lg"
               onClick={handleUpdate}
-              className="flex-1 py-3 bg-warm-500 text-white font-semibold rounded-btn hover:bg-warm-600 active:scale-[0.98] transition-all duration-(--duration-fast) ease-(--ease-standard) shadow-btn-primary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-warm-500/40"
+              className="flex-1"
             >
               Save Changes
-            </button>
+            </Button>
           </div>
         </div>
       )}

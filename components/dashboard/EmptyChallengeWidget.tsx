@@ -1,6 +1,8 @@
 import React from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { Plus, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { isYearlyGoalOnTrack } from '@/utils/yearlyGoal';
 
 interface EmptyChallengeWidgetProps {
   onOpenModal: () => void;
@@ -35,19 +37,9 @@ export const EmptyChallengeWidget: React.FC<EmptyChallengeWidgetProps> = ({ onOp
               <span className="text-xs text-brand-400 dark:text-brand-500 font-medium">Yearly goal:</span>
               <span className="text-xs font-bold text-brand-700 dark:text-brand-200">{primaryYearlyGoal.title}</span>
             </div>
-            <div
-              className={`text-xs font-bold px-2 py-1 rounded-btn ${
-                primaryYearlyGoal.successfulMonths.length >=
-                primaryYearlyGoal.requiredMonths - 2
-                  ? 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos'
-                  : 'bg-warm-50 text-warm-600 dark:bg-warm-900/30 dark:text-warm-300'
-              }`}
-            >
-              {primaryYearlyGoal.successfulMonths.length >=
-              primaryYearlyGoal.requiredMonths - 2
-                ? 'On Track'
-                : 'Needs Attention'}
-            </div>
+            <Badge variant={isYearlyGoalOnTrack(primaryYearlyGoal) ? 'success' : 'warning'} size="sm">
+              {isYearlyGoalOnTrack(primaryYearlyGoal) ? 'On Track' : 'Needs Attention'}
+            </Badge>
           </div>
         </div>
       ) : (

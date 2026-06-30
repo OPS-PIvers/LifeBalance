@@ -1,6 +1,8 @@
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import { Habit, EffortLevel } from '@/types/schema';
 import {
   EFFORT_POINTS,
@@ -42,29 +44,23 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
     <div className="p-6 space-y-5">
 
       {/* Title */}
-      <div>
-        <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Habit Name</label>
-        <input
-          type="text"
-          value={formData.title}
-          onChange={e => onFormChange({ title: e.target.value })}
-          placeholder="e.g., Practice guitar"
-          className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl text-brand-900 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 focus:ring-2 focus:ring-brand-300 focus:border-brand-300 outline-hidden"
-        />
-      </div>
+      <Input
+        label="Habit Name"
+        type="text"
+        value={formData.title}
+        onChange={e => onFormChange({ title: e.target.value })}
+        placeholder="e.g., Practice guitar"
+      />
 
       {/* Category & Type */}
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Category</label>
-          <select
-            value={formData.category}
-            onChange={e => onFormChange({ category: e.target.value })}
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl text-brand-900 dark:text-brand-100"
-          >
-            {CUSTOM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
+        <Select
+          label="Category"
+          value={formData.category}
+          onChange={e => onFormChange({ category: e.target.value })}
+        >
+          {CUSTOM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </Select>
         <div>
           <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Type</label>
           <SegmentedControl
@@ -108,44 +104,44 @@ const CustomHabitForm: React.FC<CustomHabitFormProps> = ({
       {/* Scoring Type */}
       <div>
         <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">Scoring Strategy</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => onFormChange({ scoringType: 'threshold' })}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              formData.scoringType === 'threshold'
-                ? 'bg-white dark:bg-brand-700 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200 dark:ring-brand-600'
-                : 'bg-brand-50 dark:bg-brand-700/50 border-transparent hover:bg-white dark:hover:bg-brand-700'
-            }`}
-          >
-            <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Threshold</span>
-            <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points when target is met</span>
-          </button>
-          <button
-            onClick={() => onFormChange({ scoringType: 'incremental' })}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              formData.scoringType === 'incremental'
-                ? 'bg-white dark:bg-brand-700 border-brand-300 dark:border-brand-600 shadow-xs ring-1 ring-brand-200 dark:ring-brand-600'
-                : 'bg-brand-50 dark:bg-brand-700/50 border-transparent hover:bg-white dark:hover:bg-brand-700'
-            }`}
-          >
-            <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Incremental</span>
-            <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points for every tap</span>
-          </button>
-        </div>
+        <SegmentedControl
+          tone="warm"
+          name="Scoring Strategy"
+          value={formData.scoringType}
+          onChange={(val) => onFormChange({ scoringType: val as 'incremental' | 'threshold' })}
+          options={[
+            {
+              value: 'threshold',
+              label: (
+                <span className="block text-left">
+                  <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Threshold</span>
+                  <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points when target is met</span>
+                </span>
+              ),
+            },
+            {
+              value: 'incremental',
+              label: (
+                <span className="block text-left">
+                  <span className="block font-bold text-sm text-brand-800 dark:text-brand-100">Incremental</span>
+                  <span className="block text-xxs text-brand-400 dark:text-brand-400 mt-0.5">Points for every tap</span>
+                </span>
+              ),
+            },
+          ]}
+        />
       </div>
 
       {/* Target & Period */}
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Target Count</label>
-          <input
-            type="number"
-            min="1"
-            value={formData.targetCount}
-            onChange={e => onFormChange({ targetCount: e.target.value })}
-            className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl text-center font-mono font-bold text-brand-900 dark:text-brand-100"
-          />
-        </div>
+        <Input
+          label="Target Count"
+          type="number"
+          min="1"
+          value={formData.targetCount}
+          onChange={e => onFormChange({ targetCount: e.target.value })}
+          className="text-center font-mono font-bold"
+        />
         <div>
           <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">Period</label>
           <SegmentedControl

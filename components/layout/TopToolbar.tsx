@@ -8,6 +8,7 @@ import { useKidModeEnabled } from '@/hooks/useKidModeEnabled';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { LazyMount } from '@/components/ui/LazyMount';
+import CountBadge from '@/components/ui/CountBadge';
 import { preloadOnIdle } from '@/utils/preloadOnIdle';
 import ProfileMenu from './ProfileMenu';
 
@@ -91,14 +92,7 @@ const TopToolbar: React.FC = () => {
               >
                 {/* Plan 080d-2 — pending kid-redemption-request badge. Dormant unless
                     Kid Mode is on and there is at least one request awaiting review. */}
-                {pendingRedemptionCount > 0 && (
-                  <span
-                    className="absolute -top-2 -right-2 z-10 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-money-neg text-white text-[10px] font-bold leading-none ring-2 ring-brand-800"
-                    aria-hidden="true"
-                  >
-                    {pendingRedemptionCount > 9 ? '9+' : pendingRedemptionCount}
-                  </span>
-                )}
+                <CountBadge count={pendingRedemptionCount} className="-top-2 z-10 ring-brand-800" />
                 {/* Daily Points (warm gold star) */}
                 <div className="flex flex-col items-end">
                   <div className="flex items-center gap-1">

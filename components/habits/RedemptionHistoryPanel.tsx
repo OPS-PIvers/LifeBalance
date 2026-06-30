@@ -1,7 +1,7 @@
 import React from 'react';
 import { History } from 'lucide-react';
 import { parseISO, isValid, formatDistanceToNowStrict } from 'date-fns';
-import { Section } from '@/components/ui/Section';
+import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import type { HouseholdMember, RewardRedemptionRecord } from '@/types/schema';
 
 /**
@@ -37,11 +37,11 @@ const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history
         </span>
       }
     >
-      <ul className="surface-section overflow-hidden [&>*:first-child]:border-t-0">
+      <SurfaceList>
         {history.map((rec) => {
           const when = timeAgo(rec.redeemedAt);
           return (
-            <li key={rec.id} className="flex items-center gap-3 px-4 py-3 hairline-divider">
+            <Row key={rec.id} dense>
               <span className="text-2xl shrink-0" aria-hidden="true">{rec.icon}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-brand-900 dark:text-brand-50">
@@ -55,10 +55,10 @@ const RedemptionHistoryPanel: React.FC<RedemptionHistoryPanelProps> = ({ history
               <span className="shrink-0 font-mono text-xs font-bold tabular-nums text-money-neg">
                 −{rec.cost} pts
               </span>
-            </li>
+            </Row>
           );
         })}
-      </ul>
+      </SurfaceList>
     </Section>
   );
 };

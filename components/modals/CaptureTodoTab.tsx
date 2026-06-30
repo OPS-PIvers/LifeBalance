@@ -1,7 +1,9 @@
-import React, { useId } from 'react';
+import React from 'react';
 import { Calendar, AlertCircle } from 'lucide-react';
 import { HouseholdMember } from '@/types/schema';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
+import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 
 interface CaptureTodoTabProps {
   text: string;
@@ -24,42 +26,25 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
   members,
   onSubmit,
 }) => {
-  const taskInputId = useId();
-  const dueDateInputId = useId();
   const taskInputRef = useAutoFocus<HTMLInputElement>();
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div>
-        <label htmlFor={taskInputId} className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
-          Task
-        </label>
-        <input
-          ref={taskInputRef}
-          id={taskInputId}
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Enter task description"
-          className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 focus:outline-hidden"
-        />
-      </div>
+      <Input
+        ref={taskInputRef}
+        label="Task"
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Enter task description"
+      />
 
-      <div>
-        <label htmlFor={dueDateInputId} className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
-          Due Date
-        </label>
-        <div className="relative w-full">
-          <input
-            id={dueDateInputId}
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="block w-full min-w-0 p-3 pl-10 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 focus:outline-hidden appearance-none"
-            style={{ WebkitAppearance: 'none' }}
-          />
-          <Calendar size={18} className="absolute left-3 top-3.5 text-brand-400 dark:text-brand-400 pointer-events-none" />
-        </div>
-      </div>
+      <Input
+        label="Due Date"
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        icon={<Calendar size={18} />}
+      />
 
       <fieldset>
         <legend className="block text-xs font-bold text-brand-500 dark:text-brand-400 uppercase tracking-wider mb-1">
@@ -98,15 +83,14 @@ export const CaptureTodoTab: React.FC<CaptureTodoTabProps> = ({
         )}
       </fieldset>
 
-      <button
+      <Button
         onClick={onSubmit}
         disabled={members.length === 0 || !text.trim()}
-        className={`w-full py-3.5 bg-accent-600 dark:bg-accent-500 text-white font-semibold rounded-btn shadow-btn-primary transition-all duration-(--duration-fast) ease-(--ease-standard) mt-4 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 ${
-          members.length === 0 || !text.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-accent-700 dark:hover:bg-accent-400 active:scale-[0.98]'
-        }`}
+        size="lg"
+        className="w-full mt-4"
       >
         Create Task
-      </button>
+      </Button>
     </div>
   );
 };

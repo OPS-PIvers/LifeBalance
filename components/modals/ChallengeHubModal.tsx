@@ -8,6 +8,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { format, parseISO, subDays } from 'date-fns';
 import YearlyGoalFormModal from './YearlyGoalFormModal';
 import { Drawer } from '@/components/ui/Drawer';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface ChallengeHubModalProps {
   isOpen: boolean;
@@ -274,14 +279,16 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 {kidModeEnabled && (
                   <div className="rounded-2xl border-2 border-warm-200 dark:border-warm-500/40 bg-warm-50 dark:bg-warm-500/10 p-4">
                     {!showFamilyForm ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="warning"
+                        size="lg"
                         onClick={() => setShowFamilyForm(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-warm-500 px-4 py-3 text-sm font-bold text-white active:scale-95 transition-transform"
+                        leftIcon={<Users size={18} />}
+                        className="w-full"
                       >
-                        <Users size={18} />
                         New family challenge
-                      </button>
+                      </Button>
                     ) : (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
@@ -292,18 +299,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         </div>
 
                         {/* Title */}
-                        <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase">
-                            Title
-                          </label>
-                          <input
-                            type="text"
-                            value={familyTitle}
-                            onChange={(e) => setFamilyTitle(e.target.value)}
-                            placeholder="e.g., Family Fitness Month"
-                            className="w-full mt-1 p-3 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-500/40 rounded-xl focus:border-warm-400 outline-hidden text-brand-900 dark:text-white"
-                          />
-                        </div>
+                        <Input
+                          label="Title"
+                          type="text"
+                          value={familyTitle}
+                          onChange={(e) => setFamilyTitle(e.target.value)}
+                          placeholder="e.g., Family Fitness Month"
+                        />
 
                         {/* Description */}
                         <div>
@@ -319,20 +321,15 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                         </div>
 
                         {/* Optional Target */}
-                        <div>
-                          <label className="text-xxs font-bold text-warm-500 dark:text-warm-300 uppercase">
-                            Target completions (Optional)
-                          </label>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            value={familyTarget}
-                            onChange={(e) => setFamilyTarget(e.target.value)}
-                            placeholder="e.g., 60"
-                            className="w-full mt-1 p-3 bg-white dark:bg-brand-800 border border-warm-200 dark:border-warm-500/40 rounded-xl focus:border-warm-400 outline-hidden text-brand-900 dark:text-white"
-                          />
-                        </div>
+                        <Input
+                          label="Target completions (Optional)"
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          value={familyTarget}
+                          onChange={(e) => setFamilyTarget(e.target.value)}
+                          placeholder="e.g., 60"
+                        />
 
                         {/* Habit multi-select */}
                         <div>
@@ -379,21 +376,24 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                         {/* Actions */}
                         <div className="flex gap-2 pt-1">
-                          <button
+                          <Button
                             type="button"
+                            variant="secondary"
                             onClick={resetFamilyForm}
-                            className="flex-1 rounded-xl bg-warm-100 dark:bg-warm-500/20 px-4 py-2.5 text-sm font-bold text-warm-700 dark:text-warm-200 active:scale-95 transition-transform"
+                            className="flex-1"
                           >
                             Cancel
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
+                            variant="warning"
                             onClick={handleCreateFamilyChallenge}
-                            disabled={!familyTitle.trim() || savingFamily}
-                            className="flex-1 rounded-xl bg-warm-500 px-4 py-2.5 text-sm font-bold text-white active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!familyTitle.trim()}
+                            isLoading={savingFamily}
+                            className="flex-1"
                           >
-                            {savingFamily ? 'Creating…' : 'Create'}
-                          </button>
+                            Create
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -401,18 +401,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 )}
 
                 {/* Title */}
-                <div>
-                  <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase">
-                    Challenge Title
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g., No Spend November"
-                    className="w-full mt-1 p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:border-brand-400 outline-hidden"
-                  />
-                </div>
+                <Input
+                  label="Challenge Title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., No Spend November"
+                />
 
                 {/* Description */}
                 <div>
@@ -432,30 +427,32 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                   <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
                     Target Type
                   </label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setTargetType('count')}
-                      className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                        targetType === 'count'
-                          ? 'border-brand-400 dark:border-brand-600 bg-brand-50 dark:bg-brand-700/50'
-                          : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-800 dark:text-brand-100">Count</span>
-                      <span className="text-xs text-brand-400 dark:text-brand-400">Total completions</span>
-                    </button>
-                    <button
-                      onClick={() => setTargetType('percentage')}
-                      className={`flex-1 p-4 rounded-xl border-2 transition-all ${
-                        targetType === 'percentage'
-                          ? 'border-brand-400 dark:border-brand-600 bg-brand-50 dark:bg-brand-700/50'
-                          : 'border-brand-100 dark:border-brand-700 hover:border-brand-200 dark:hover:border-brand-600'
-                      }`}
-                    >
-                      <span className="block font-bold text-brand-800 dark:text-brand-100">Percentage</span>
-                      <span className="text-xs text-brand-400 dark:text-brand-400">% of days completed</span>
-                    </button>
-                  </div>
+                  <SegmentedControl
+                    tone="warm"
+                    name="Target type"
+                    value={targetType}
+                    onChange={setTargetType}
+                    options={[
+                      {
+                        value: 'count',
+                        label: (
+                          <span className="block">
+                            <span className="block font-bold text-brand-800 dark:text-brand-100">Count</span>
+                            <span className="text-xs text-brand-400 dark:text-brand-400">Total completions</span>
+                          </span>
+                        ),
+                      },
+                      {
+                        value: 'percentage',
+                        label: (
+                          <span className="block">
+                            <span className="block font-bold text-brand-800 dark:text-brand-100">Percentage</span>
+                            <span className="text-xs text-brand-400 dark:text-brand-400">% of days completed</span>
+                          </span>
+                        ),
+                      },
+                    ]}
+                  />
                 </div>
 
                 {/* Target Slider */}
@@ -480,23 +477,18 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
 
                 {/* Yearly Goal Selector */}
                 {yearlyGoals.length > 0 && (
-                  <div>
-                    <label className="text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-2 block">
-                      Link to Yearly Goal (Optional)
-                    </label>
-                    <select
-                      value={selectedYearlyGoalId}
-                      onChange={(e) => setSelectedYearlyGoalId(e.target.value)}
-                      className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:border-brand-400 outline-hidden"
-                    >
-                      <option value="">No yearly goal</option>
-                      {yearlyGoals.map((goal) => (
-                        <option key={goal.id} value={goal.id}>
-                          {goal.title} ({goal.year})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <Select
+                    label="Link to Yearly Goal (Optional)"
+                    value={selectedYearlyGoalId}
+                    onChange={(e) => setSelectedYearlyGoalId(e.target.value)}
+                  >
+                    <option value="">No yearly goal</option>
+                    {yearlyGoals.map((goal) => (
+                      <option key={goal.id} value={goal.id}>
+                        {goal.title} ({goal.year})
+                      </option>
+                    ))}
+                  </Select>
                 )}
 
                 {/* Habit Selector */}
@@ -525,18 +517,16 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                               {selectedHabitIds.includes('suggested-habit') && <Check size={14} strokeWidth={3} />}
                             </div>
                             <span className="text-sm font-medium text-brand-700 dark:text-brand-200">
-                              {suggestedHabit.title} <span className="ml-2 text-xxs font-bold text-brand-500 dark:text-brand-400 bg-brand-100 dark:bg-brand-700/50 px-2 py-0.5 rounded-full">NEW</span>
+                              {suggestedHabit.title} <Badge variant="neutral" size="sm" className="ml-2">NEW</Badge>
                             </span>
                           </div>
-                          <div
-                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
-                              (suggestedHabit.type || 'positive') === 'positive'
-                                ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
-                                : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                            }`}
+                          <Badge
+                            variant={(suggestedHabit.type || 'positive') === 'positive' ? 'success' : 'danger'}
+                            size="sm"
+                            className="uppercase"
                           >
                             {(suggestedHabit.type || 'positive') === 'positive' ? 'Good' : 'Bad'}
-                          </div>
+                          </Badge>
                         </div>
                     )}
 
@@ -566,15 +556,13 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                               {habit.title}
                             </span>
                           </div>
-                          <div
-                            className={`px-2 py-1 rounded-full text-xxs font-bold uppercase ${
-                              habit.type === 'positive'
-                                ? 'bg-money-bgPos dark:bg-money-pos/15 text-money-pos'
-                                : 'bg-money-bgNeg dark:bg-money-neg/15 text-money-neg'
-                            }`}
+                          <Badge
+                            variant={habit.type === 'positive' ? 'success' : 'danger'}
+                            size="sm"
+                            className="uppercase"
                           >
                             {habit.type === 'positive' ? 'Good' : 'Bad'}
-                          </div>
+                          </Badge>
                         </div>
                       );
                     })}
@@ -677,13 +665,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
                 ) : (
                   <div className="text-center py-12">
                     <p className="text-brand-400 dark:text-brand-400 mb-4">No yearly goal set</p>
-                    <button
+                    <Button
+                      size="lg"
                       onClick={() => setIsYearlyGoalFormOpen(true)}
-                      className="px-6 py-3 bg-brand-800 text-white font-bold rounded-xl active:scale-95 transition-transform flex items-center gap-2 mx-auto"
+                      leftIcon={<Plus size={18} />}
+                      className="mx-auto"
                     >
-                      <Plus size={18} />
                       Create Yearly Goal
-                    </button>
+                    </Button>
                   </div>
                 )}
               </TabsContent>
@@ -849,13 +838,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
           {/* Footer Actions */}
           <div className="p-4 border-t border-brand-100 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50 shrink-0">
             {activeTab === 'challenge' && (
-              <button
+              <Button
+                size="lg"
                 onClick={handleSaveChallenge}
                 disabled={!title}
-                className="w-full py-3 bg-brand-800 text-white font-bold rounded-xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 Save Challenge
-              </button>
+              </Button>
             )}
             {activeTab === 'yearly' && displayYearlyGoal && (
               <div className="text-center">
@@ -865,12 +855,14 @@ const ChallengeHubModal: React.FC<ChallengeHubModalProps> = ({ isOpen, onClose, 
               </div>
             )}
             {activeTab === 'freeze' && (
-              <button
+              <Button
+                variant="secondary"
+                size="lg"
                 onClick={onClose}
-                className="w-full py-3 bg-brand-100 dark:bg-brand-700/50 text-brand-700 dark:text-brand-200 font-bold rounded-xl active:scale-95 transition-transform"
+                className="w-full"
               >
                 Close
-              </button>
+              </Button>
             )}
           </div>
         </Tabs>

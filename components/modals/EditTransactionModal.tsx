@@ -4,6 +4,7 @@ import { Trash2, Loader2, Copy } from 'lucide-react';
 import { Transaction } from '@/types/schema';
 import { useFinance, useShopping } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import { getLocalDateString } from '@/utils/dateHelpers';
@@ -322,52 +323,36 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
         </div>
 
         {/* Secondary Actions Row */}
-        {!showDeleteConfirm && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleDuplicate}
-              disabled={isSaving}
-              className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Copy size={16} />
-              Duplicate
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={isSaving}
-              className="flex-1 py-3 bg-money-bgNeg text-money-neg font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Trash2 size={16} />
-              Delete
-            </button>
-          </div>
-        )}
-
-        {/* Delete Confirmation */}
-        {showDeleteConfirm && (
-          <div className="space-y-2 p-3 bg-money-bgNeg rounded-xl">
-            <p className="text-sm text-center text-money-neg font-bold">
-              Are you sure? This cannot be undone.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={isSaving}
-                className="flex-1 py-2 bg-white dark:bg-brand-800 text-brand-600 dark:text-brand-300 font-semibold rounded-btn border border-brand-200 dark:border-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isSaving}
-                className="flex-1 py-2 bg-money-neg text-white font-semibold rounded-btn disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="flex gap-2">
+          <button
+            onClick={handleDuplicate}
+            disabled={isSaving}
+            className="flex-1 py-3 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 text-brand-600 dark:text-brand-300 font-semibold rounded-btn hover:bg-brand-50 dark:hover:bg-brand-700/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Copy size={16} />
+            Duplicate
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isSaving}
+            className="flex-1 py-3 bg-money-bgNeg text-money-neg font-semibold rounded-btn hover:bg-money-neg/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
+        </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete transaction?"
+        message="Are you sure? This cannot be undone."
+        confirmLabel="Delete"
+        confirmVariant="destructive"
+        isConfirming={isSaving}
+      />
     </Drawer>
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Drawer } from '@/components/ui/Drawer';
+import Select from '@/components/ui/Select';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -54,25 +55,19 @@ const BatchCategorizeModal: React.FC<BatchCategorizeModalProps> = ({
           Select a new category for the <strong>{count}</strong> selected transactions.
         </p>
 
-        <div>
-          <label htmlFor="batch-category" className="block text-xs font-bold text-brand-400 dark:text-brand-400 uppercase mb-1">
-            New Category
-          </label>
-          <select
-            id="batch-category"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            disabled={isSaving}
-            className="w-full p-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-colors disabled:opacity-70"
-          >
-            <option value="">Select Category...</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="New Category"
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          disabled={isSaving}
+        >
+          <option value="">Select Category...</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {cat}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {/* Footer */}

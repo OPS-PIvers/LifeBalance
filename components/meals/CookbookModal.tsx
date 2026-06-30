@@ -2,7 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Meal } from '@/types/schema';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Search, ChevronRight, Copy, X, ArrowUpAZ, Calendar, Star, ChefHat } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -129,35 +131,17 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
 
           <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
              {/* Sort Dropdown (Simplified as buttons for mobile friendliness) */}
-             <div className="flex bg-white dark:bg-brand-700/50 rounded-lg p-1 border border-brand-200 dark:border-brand-600 shrink-0">
-                <button
-                    type="button"
-                    onClick={() => setSortBy('name')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'name' ? 'bg-brand-50 text-brand-600 dark:bg-brand-700/40 dark:text-brand-300' : 'text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300'}`}
-                    title="Sort by Name"
-                    aria-label="Sort by Name"
-                >
-                    <ArrowUpAZ size={16} />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setSortBy('lastCooked')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'lastCooked' ? 'bg-brand-50 text-brand-600 dark:bg-brand-700/40 dark:text-brand-300' : 'text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300'}`}
-                    title="Sort by Recently Cooked"
-                    aria-label="Sort by Recently Cooked"
-                >
-                    <Calendar size={16} />
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setSortBy('rating')}
-                    className={`p-1.5 rounded-md transition-colors ${sortBy === 'rating' ? 'bg-brand-50 text-brand-600 dark:bg-brand-700/40 dark:text-brand-300' : 'text-brand-400 hover:text-brand-600 dark:text-brand-500 dark:hover:text-brand-300'}`}
-                    title="Sort by Rating"
-                    aria-label="Sort by Rating"
-                >
-                    <Star size={16} />
-                </button>
-             </div>
+             <SegmentedControl
+                name="Sort recipes"
+                value={sortBy}
+                onChange={setSortBy}
+                className="shrink-0"
+                options={[
+                    { value: 'name', label: <ArrowUpAZ size={16} aria-hidden="true" />, ariaLabel: 'Sort by Name' },
+                    { value: 'lastCooked', label: <Calendar size={16} aria-hidden="true" />, ariaLabel: 'Sort by Recently Cooked' },
+                    { value: 'rating', label: <Star size={16} aria-hidden="true" />, ariaLabel: 'Sort by Rating' },
+                ]}
+             />
 
              <div className="h-6 w-px bg-brand-200 dark:bg-brand-700 mx-1 shrink-0" />
 
@@ -219,7 +203,7 @@ export const CookbookModal: React.FC<CookbookModalProps> = ({
                                 {meal.tags && meal.tags.length > 0 && (
                                     <div className="hidden sm:flex gap-1">
                                         {meal.tags.slice(0, 2).map(t => (
-                                            <span key={t} className="text-xxs px-1.5 py-0.5 bg-brand-100 text-brand-500 rounded-md font-medium dark:bg-brand-700/50 dark:text-brand-400">{t}</span>
+                                            <Badge key={t} variant="neutral" size="sm">{t}</Badge>
                                         ))}
                                         {meal.tags.length > 2 && <span className="text-xxs text-brand-400 dark:text-brand-500">+{meal.tags.length - 2}</span>}
                                     </div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Key, Plus, Copy, Trash2, AlertTriangle, Clock, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
 import { HouseholdApiKey, ApiKeyPermissions } from '@/types/schema';
 import {
   generateApiKey,
@@ -11,6 +13,7 @@ import {
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Badge } from '@/components/ui/Badge';
 
 interface ApiKeyManagerProps {
   householdId: string;
@@ -199,14 +202,14 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               </div>
               <div className="flex flex-wrap gap-1">
                 {key.permissions.habits && (
-                  <span className="text-xs bg-warm-50 text-warm-700 border border-warm-200 px-2 py-0.5 rounded-full dark:bg-warm-500/15 dark:text-warm-300 dark:border-warm-500/30">
+                  <Badge variant="warning" size="md">
                     Habits
-                  </span>
+                  </Badge>
                 )}
                 {key.permissions.expenses && (
-                  <span className="text-xs bg-accent-50 text-accent-700 border border-accent-200 px-2 py-0.5 rounded-full dark:bg-accent-500/15 dark:text-accent-300 dark:border-accent-500/30">
+                  <Badge variant="default" size="md">
                     Expenses
-                  </span>
+                  </Badge>
                 )}
                 {key.permissions.shoppingList && (
                   <span className="text-xs bg-habit-blue/15 text-habit-blue border border-habit-blue/30 px-2 py-0.5 rounded-full">
@@ -224,57 +227,52 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
         <div className="surface-section bg-brand-50 dark:bg-brand-800 p-4 space-y-4">
           <h4 className="font-display font-semibold text-brand-900 dark:text-brand-100">Create New API Key</h4>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-1.5">
-              Key Name
-            </label>
-            <input
-              type="text"
-              value={newKeyName}
-              onChange={(e) => setNewKeyName(e.target.value)}
-              placeholder="e.g., iPhone Shortcut"
-              className="w-full px-3 py-2 bg-white dark:bg-brand-900 border border-brand-200 dark:border-brand-700 rounded-btn text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)"
-            />
-          </div>
+          <Input
+            label="Key Name"
+            type="text"
+            value={newKeyName}
+            onChange={(e) => setNewKeyName(e.target.value)}
+            placeholder="e.g., iPhone Shortcut"
+          />
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-brand-500 dark:text-brand-400 mb-2">
               Permissions
             </label>
             <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="perm-habits" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Habits (toggle habits)</label>
+                <Switch
+                  id="perm-habits"
                   checked={permissions.habits}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, habits: e.target.checked })
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, habits: checked })
                   }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
+                  aria-label="Habits (toggle habits)"
                 />
-                <span className="text-sm text-brand-700 dark:text-brand-200">Habits (toggle habits)</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="perm-expenses" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Expenses (add transactions)</label>
+                <Switch
+                  id="perm-expenses"
                   checked={permissions.expenses}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, expenses: e.target.checked })
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, expenses: checked })
                   }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
+                  aria-label="Expenses (add transactions)"
                 />
-                <span className="text-sm text-brand-700 dark:text-brand-200">Expenses (add transactions)</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="perm-shopping" className="text-sm text-brand-700 dark:text-brand-200 cursor-pointer">Shopping List (add items)</label>
+                <Switch
+                  id="perm-shopping"
                   checked={permissions.shoppingList}
-                  onChange={(e) =>
-                    setPermissions({ ...permissions, shoppingList: e.target.checked })
+                  onCheckedChange={(checked) =>
+                    setPermissions({ ...permissions, shoppingList: checked })
                   }
-                  className="rounded-sm border-brand-300 dark:border-brand-600 text-accent-600 focus:ring-accent-500"
+                  aria-label="Shopping List (add items)"
                 />
-                <span className="text-sm text-brand-700 dark:text-brand-200">Shopping List (add items)</span>
-              </label>
+              </div>
             </div>
           </div>
 
@@ -340,9 +338,9 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
                   <span className="font-semibold text-brand-600 dark:text-brand-300 line-through">
                     {key.name}
                   </span>
-                  <span className="text-xs bg-brand-200 dark:bg-brand-700 text-brand-600 dark:text-brand-300 px-2 py-0.5 rounded-full">
+                  <Badge variant="neutral" size="md">
                     Revoked
-                  </span>
+                  </Badge>
                 </div>
                 <Button
                   variant="ghost-danger"

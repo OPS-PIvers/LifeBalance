@@ -6,6 +6,7 @@ import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, 
 import { Account } from '@/types/schema';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import Input from '@/components/ui/Input';
@@ -199,11 +200,9 @@ const BudgetAccounts: React.FC = () => {
             </div>
             <div>
               <p className="font-semibold text-brand-900 dark:text-brand-100">{account.name}</p>
-              <span className={`text-xxs font-bold uppercase px-2 py-0.5 rounded-full ${
-                isLiability ? 'bg-money-bgNeg text-money-neg dark:bg-money-neg/15 dark:text-red-300' : 'bg-money-bgPos text-money-pos dark:bg-money-pos/15 dark:text-money-pos'
-              }`}>
+              <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
                 {account.type}
-              </span>
+              </Badge>
             </div>
             {isSavings && (
               <Button

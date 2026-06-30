@@ -60,10 +60,45 @@ describe('SegmentedControl', () => {
     expect(btn2).toHaveClass('text-red-500');
   });
 
+  it('uses evergreen accent active text by default', () => {
+    const plain = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }];
+    render(<SegmentedControl options={plain} value="a" onChange={() => {}} />);
+    expect(screen.getByRole('radio', { name: 'A' })).toHaveClass('text-accent-700');
+  });
+
+  it('uses warm active text for tone="warm"', () => {
+    const plain = [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }];
+    render(<SegmentedControl options={plain} value="a" onChange={() => {}} tone="warm" />);
+    const active = screen.getByRole('radio', { name: 'A' });
+    expect(active).toHaveClass('text-warm-700');
+    expect(active).not.toHaveClass('text-accent-700');
+  });
+
+  it('lets a per-option activeClassName override the tone', () => {
+    render(<SegmentedControl options={options} value="opt2" onChange={() => {}} tone="warm" />);
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
+    // opt2 has activeClassName="text-red-500" → it wins over the warm default
+    expect(btn2).toHaveClass('text-red-500');
+    expect(btn2).not.toHaveClass('text-warm-700');
+  });
+
   it('applies radiogroup role and name', () => {
     render(<SegmentedControl options={options} value="opt1" onChange={() => {}} name="My Group" />);
     const group = screen.getByRole('radiogroup', { name: /my group/i });
     expect(group).toBeInTheDocument();
+  });
+
+  it('disables all options and blocks selection when disabled', () => {
+    const handleChange = vi.fn();
+    render(<SegmentedControl options={options} value="opt1" onChange={handleChange} disabled name="Disabled Group" />);
+    const btn2 = screen.getByRole('radio', { name: /option 2/i });
+    expect(btn2).toBeDisabled();
+    fireEvent.click(btn2);
+    expect(handleChange).not.toHaveBeenCalled();
+    // arrow-key nav is also blocked
+    fireEvent.keyDown(screen.getByRole('radio', { name: /option 1/i }), { key: 'ArrowRight' });
+    expect(handleChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('radiogroup', { name: /disabled group/i })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('conditionally applies border based on showBorder prop', () => {

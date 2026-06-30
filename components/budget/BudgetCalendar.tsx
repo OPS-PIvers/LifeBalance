@@ -13,6 +13,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 import EmptyState from '@/components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import RecurringBillsModal from './RecurringBillsModal';
@@ -591,15 +592,11 @@ const BudgetCalendar: React.FC = () => {
 
              <div className="flex items-center justify-between">
                <label id="recurring-label" className="text-sm font-semibold text-brand-700 dark:text-brand-200">Recurring?</label>
-               <button
-                role="switch"
-                aria-checked={isRecurring}
-                aria-labelledby="recurring-label"
-                onClick={() => setIsRecurring(!isRecurring)}
-                className={`w-11 h-6 rounded-full relative transition-colors duration-(--duration-base) ${isRecurring ? 'bg-accent-600' : 'bg-brand-300 dark:bg-brand-600'}`}
-               >
-                 <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-(--duration-base) ease-(--ease-standard) ${isRecurring ? 'translate-x-5' : ''}`} />
-               </button>
+               <Switch
+                 checked={isRecurring}
+                 onCheckedChange={setIsRecurring}
+                 aria-label="Recurring?"
+               />
              </div>
 
              {isRecurring && (

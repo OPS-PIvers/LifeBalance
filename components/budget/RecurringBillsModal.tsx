@@ -7,8 +7,6 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Trash2, Edit2, Check, Repeat, TrendingUp, TrendingDown, MoreVertical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Drawer } from '@/components/ui/Drawer';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
 
 interface RecurringBillsModalProps {
@@ -115,27 +113,37 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
   };
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} noPadding={true} ariaLabel="Recurring Bills">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-card">
-            <Repeat size={20} />
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      noPadding={true}
+      ariaLabel="Recurring Bills"
+      header={
+        <div className="px-6 py-4 border-b border-brand-200 dark:border-brand-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-card">
+              <Repeat size={20} />
+            </div>
+            <div>
+              <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Recurring Manager</h3>
+              <p className="text-xs text-brand-500 dark:text-brand-400">Manage your subscriptions and bills</p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-display text-lg font-semibold text-brand-900 dark:text-brand-100">Recurring Manager</h3>
-            <p className="text-xs text-brand-500 dark:text-brand-400">Manage your subscriptions and bills</p>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50"
+            aria-label="Close drawer"
+          >
+            <X size={20} />
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300 rounded-full hover:bg-brand-100 dark:hover:bg-brand-700/50"
-          aria-label="Close drawer"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
+      }
+      footer={
+        <div className="p-4 bg-brand-50 dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 text-center text-xs text-brand-400 dark:text-brand-500">
+          Changes made here affect all future generated events.
+        </div>
+      }
+    >
       {/* Summary Cards */}
       <div className="p-6 grid grid-cols-2 gap-4 shrink-0 bg-brand-50 dark:bg-brand-900">
           <div className="surface-section p-5">
@@ -173,33 +181,38 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
                 {editingId === item.id ? (
                   // Edit Mode
                   <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    {/* Compact inline edit fields — raw, not the full-width Input/Select
+                        primitives whose w-full p-3 wrapper breaks this dense grid row. */}
                     <div className="sm:col-span-4">
-                      <Input
+                      <input
                         value={editTitle}
                         onChange={e => setEditTitle(e.target.value)}
                         placeholder="Title"
-                        className="h-10 text-sm"
+                        aria-label="Title"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
                       />
                     </div>
                     <div className="sm:col-span-3">
-                      <Input
+                      <input
                         type="number"
                         value={editAmount}
                         onChange={e => setEditAmount(e.target.value)}
                         placeholder="Amount"
-                        className="h-10 text-sm"
+                        aria-label="Amount"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
                       />
                     </div>
                     <div className="sm:col-span-3">
-                      <Select
+                      <select
                         value={editFrequency}
                         onChange={e => setEditFrequency(e.target.value as 'weekly' | 'bi-weekly' | 'monthly')}
-                        className="h-10 text-sm"
+                        aria-label="Frequency"
+                        className="w-full h-10 px-3 text-sm bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-btn outline-hidden text-brand-900 dark:text-brand-100 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30"
                       >
                          <option value="weekly">Weekly</option>
                          <option value="bi-weekly">Bi-Weekly</option>
                          <option value="monthly">Monthly</option>
-                      </Select>
+                      </select>
                     </div>
                     <div className="sm:col-span-2 flex justify-end gap-1">
                       <Button size="icon-sm" variant="success" onClick={() => saveEditing(item)} aria-label={`Save changes to ${editTitle}`}>
@@ -260,11 +273,6 @@ const RecurringBillsModal: React.FC<RecurringBillsModalProps> = ({ isOpen, onClo
               </div>
             ))
           )}
-      </div>
-
-      {/* Footer */}
-      <div className="sticky bottom-0 p-4 bg-brand-50 dark:bg-brand-800 border-t border-brand-200 dark:border-brand-700 text-center text-xs text-brand-400 dark:text-brand-500">
-         Changes made here affect all future generated events.
       </div>
 
       {/* Mobile Action Drawer */}

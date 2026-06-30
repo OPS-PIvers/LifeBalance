@@ -11,6 +11,7 @@ import { CaptureTransactionManual } from '@/components/modals/CaptureTransaction
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import EmptyState from '@/components/ui/EmptyState';
 import toast from 'react-hot-toast';
 import { generateCsvExport } from '@/utils/exportUtils';
@@ -373,14 +374,14 @@ const TransactionMasterList: React.FC = () => {
       <div className="surface-section p-5 space-y-3">
         {/* Search Bar */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400 dark:text-brand-500" size={18} />
-          <input
+          <Input
             type="text"
+            icon={<Search size={18} />}
             aria-label="Search transactions"
             placeholder="Search merchant or amount..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-card outline-hidden focus:border-accent-400 focus:ring-2 focus:ring-accent-500/20 transition-colors dark:text-brand-100 dark:placeholder:text-brand-500"
+            className="pr-10"
           />
           {searchTerm && (
             <Button

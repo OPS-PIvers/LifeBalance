@@ -2,8 +2,9 @@ import React, { useMemo } from 'react';
 import { useGamification } from '@/contexts/FirebaseHouseholdContext';
 import { isHabitStale } from '@/utils/habitLogic';
 import { format, startOfToday } from 'date-fns';
-import { Check, Flame, ArrowRight, Plus } from 'lucide-react';
+import { Check, Flame, Plus } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import SectionActionLink from '@/components/ui/SectionActionLink';
 import { Section, SurfaceList, Row } from '@/components/ui/Section';
 import { cn } from '@/utils/cn';
 import ProgressRing from '@/components/ui/ProgressRing';
@@ -55,12 +56,7 @@ export const DailyHabitsWidget: React.FC = React.memo(() => {
     <Section
       title="Today's habits"
       action={
-        <Link
-          to="/habits"
-          className="text-xs font-semibold text-brand-500 dark:text-brand-400 hover:text-accent-700 dark:hover:text-accent-300 flex items-center gap-1 transition-colors"
-        >
-          View all <ArrowRight size={12} />
-        </Link>
+        <SectionActionLink to="/habits">View all</SectionActionLink>
       }
     >
       <SurfaceList>

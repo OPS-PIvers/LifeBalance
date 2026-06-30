@@ -14,6 +14,7 @@ import { RecipeImportModal } from './RecipeImportModal';
 import { WeeklyPlanModal } from './WeeklyPlanModal';
 import { Drawer } from '@/components/ui/Drawer';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Badge } from '@/components/ui/Badge';
 import { Sparkles } from 'lucide-react';
 import { haptic } from '@/utils/haptics';
 import clsx from 'clsx';
@@ -792,9 +793,9 @@ const MealPlanTab: React.FC = () => {
                                         {planItem.type || 'dinner'}
                                     </span>
                                     {isCooked && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-money-bgPos text-money-pos text-xxs font-bold border border-money-pos/30 dark:bg-money-pos/15 dark:text-money-pos dark:border-money-pos/25">
+                                        <Badge variant="success" size="sm" className="gap-1">
                                             <CheckCircle2 size={10} /> Cooked
-                                        </span>
+                                        </Badge>
                                     )}
                                 </div>
                                 <div className={clsx("font-semibold tracking-tight leading-snug line-clamp-2", isCooked ? "text-money-pos dark:text-money-pos" : "text-brand-900 dark:text-brand-50")}>

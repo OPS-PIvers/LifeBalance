@@ -6,6 +6,9 @@ import { Transaction, Habit, BudgetBucket, Store, Account } from '@/types/schema
 import { suggestHabitsForTransaction } from '@/utils/habitSuggestions';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
+import { Switch } from '@/components/ui/Switch';
 
 interface CaptureTransactionManualProps {
   initialData?: {
@@ -194,59 +197,43 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
         </div>
       </div>
 
-      <div>
-        <label htmlFor="manual-merchant" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Merchant</label>
-        <input
-          id="manual-merchant"
-          type="text"
-          value={merchant}
-          onChange={(e) => setMerchant(e.target.value)}
-          placeholder="e.g. Starbucks"
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium"
-        />
-      </div>
+      <Input
+        label="Merchant"
+        type="text"
+        value={merchant}
+        onChange={(e) => setMerchant(e.target.value)}
+        placeholder="e.g. Starbucks"
+      />
 
-      <div>
-        <label htmlFor="manual-date" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Date</label>
-        <input
-          id="manual-date"
-          type="date"
-          value={transactionDate}
-          onChange={(e) => setTransactionDate(e.target.value)}
-          className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium"
-        />
-      </div>
+      <Input
+        label="Date"
+        type="date"
+        value={transactionDate}
+        onChange={(e) => setTransactionDate(e.target.value)}
+      />
 
       <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="manual-store" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Store (Optional)</label>
-          <select
-            id="manual-store"
-            value={store}
-            onChange={(e) => setStore(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium appearance-none"
-          >
-            <option value="">Select Store...</option>
-            {stores.map(s => (
-              <option key={s.id} value={s.name}>{s.name}</option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="Store (Optional)"
+          value={store}
+          onChange={(e) => setStore(e.target.value)}
+        >
+          <option value="">Select Store...</option>
+          {stores.map(s => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
+        </Select>
 
-        <div>
-          <label htmlFor="manual-account" className="block text-xs font-semibold text-brand-400 dark:text-brand-400 uppercase tracking-wider mb-1">Account (Optional)</label>
-          <select
-            id="manual-account"
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="w-full px-4 py-3 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-xl focus:ring-2 focus:ring-accent-500/30 outline-hidden font-medium appearance-none"
-          >
-            <option value="">Select Account...</option>
-            {accounts.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </div>
+        <Select
+          label="Account (Optional)"
+          value={accountId}
+          onChange={(e) => setAccountId(e.target.value)}
+        >
+          <option value="">Select Account...</option>
+          {accounts.map(a => (
+            <option key={a.id} value={a.id}>{a.name}</option>
+          ))}
+        </Select>
       </div>
 
       <div>
@@ -409,15 +396,11 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
 
       <div className="flex items-center justify-between p-4 bg-brand-50 dark:bg-brand-700/50 rounded-xl border border-brand-100 dark:border-brand-700">
         <span id="recurring-label" className="text-sm font-medium text-brand-700 dark:text-brand-200">Recurring Transaction</span>
-        <button
-          role="switch"
-          aria-checked={isRecurring}
-          aria-labelledby="recurring-label"
-          onClick={() => setIsRecurring(!isRecurring)}
-          className={`relative w-11 h-6 rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-accent-500/40 ${isRecurring ? 'bg-money-pos' : 'bg-brand-300 dark:bg-brand-600'}`}
-        >
-          <span className={`absolute top-1 left-1 w-4 h-4 bg-white dark:bg-brand-800 rounded-full transition-transform ${isRecurring ? 'translate-x-5' : 'translate-x-0'}`} />
-        </button>
+        <Switch
+          checked={isRecurring}
+          onCheckedChange={setIsRecurring}
+          aria-label="Recurring Transaction"
+        />
       </div>
 
       <div className="flex items-center gap-2 p-3 bg-money-bgPos dark:bg-money-pos/15 rounded-xl border border-money-pos/30">

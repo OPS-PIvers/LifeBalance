@@ -2,6 +2,9 @@ import React from 'react';
 import { ShoppingItem, Store as StoreType, QuickStockList } from '@/types/schema';
 import { Store, Trash2, ShoppingBag } from 'lucide-react';
 import { TEMPLATE_ICONS } from '@/data/templateIcons';
+import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 
 interface ShoppingItemFormProps {
   item: ShoppingItem;
@@ -26,55 +29,41 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
     [item, onChange]
   );
 
-  const fieldClass =
-    'w-full mt-1 p-3 bg-brand-50 border border-brand-200 rounded-btn focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 text-brand-900 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-50 transition-colors duration-(--duration-fast) ease-(--ease-standard)';
-  const labelClass = 'text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider';
-
   return (
     <div className="flex flex-col h-full">
         <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-            <div>
-                <label className={labelClass}>Item name</label>
-                <input
-                    type="text"
-                    name="name"
-                    value={item.name}
+            <Input
+                label="Item name"
+                type="text"
+                name="name"
+                value={item.name}
+                onChange={handleFieldChange}
+            />
+            <div className="grid grid-cols-2 gap-4">
+                 <Select
+                    label="Category"
+                    name="category"
+                    value={item.category || 'Uncategorized'}
                     onChange={handleFieldChange}
-                    className={`${fieldClass} font-medium`}
+                 >
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </Select>
+                <Input
+                    label="Quantity"
+                    type="text"
+                    name="quantity"
+                    value={item.quantity || ''}
+                    onChange={handleFieldChange}
                 />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className={labelClass}>Category</label>
-                    <select
-                        name="category"
-                        value={item.category || 'Uncategorized'}
-                        onChange={handleFieldChange}
-                        className={fieldClass}
-                    >
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className={labelClass}>Quantity</label>
-                    <input
-                        type="text"
-                        name="quantity"
-                        value={item.quantity || ''}
-                        onChange={handleFieldChange}
-                        className={fieldClass}
-                    />
-                </div>
-            </div>
             <div>
-                <label className={labelClass}>Store</label>
-                <input
+                <Input
+                    label="Store"
                     type="text"
                     name="store"
                     value={item.store || ''}
                     onChange={handleFieldChange}
                     placeholder="Optional"
-                    className={`${fieldClass} placeholder:text-brand-400 dark:placeholder:text-brand-500`}
                 />
                  {/* Quick Store Chips in Edit Modal */}
                  {stores.length > 0 && (
@@ -100,7 +89,7 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
             {/* Quick List assignment — moved out of the row to keep the list dense. */}
             {quickStockLists && quickStockLists.length > 0 && onQuickListChange && (
                 <div>
-                    <label className={labelClass}>Quick list</label>
+                    <label className="text-xs font-bold text-brand-400 dark:text-brand-500 uppercase tracking-wider">Quick list</label>
                     <div className="flex flex-wrap gap-2 mt-2">
                         {quickStockLists.map(list => {
                             const ListIcon = (list.icon && templateIconMap.get(list.icon)) || ShoppingBag;
@@ -126,23 +115,28 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
             )}
 
             {onDelete && (
-                <button
+                <Button
                     type="button"
+                    variant="ghost-danger"
+                    size="sm"
+                    leftIcon={<Trash2 size={16} />}
                     onClick={onDelete}
-                    className="flex items-center gap-2 text-sm font-medium text-money-neg hover:bg-money-bgNeg dark:hover:bg-money-neg/10 px-3 py-2 -mx-1 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+                    className="-mx-1"
                 >
-                    <Trash2 size={16} /> Delete item
-                </button>
+                    Delete item
+                </Button>
             )}
         </div>
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-800 shrink-0">
-            <button
+            <Button
+                variant="primary"
+                size="lg"
                 onClick={onSave}
                 disabled={!item.name.trim()}
-                className="w-full py-3 bg-accent-600 text-white font-bold rounded-btn active:scale-95 disabled:opacity-50 hover:bg-accent-700 transition-all duration-(--duration-fast) ease-(--ease-standard) dark:bg-accent-600 dark:hover:bg-accent-500"
+                className="w-full"
             >
                 Save changes
-            </button>
+            </Button>
         </div>
     </div>
   );

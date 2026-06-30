@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { createHousehold, joinHousehold } from '@/services/householdService';
 import { parseInviteCode } from '@/utils/inviteLink';
 import { Button } from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import toast from 'react-hot-toast';
 
 type ViewMode = 'choice' | 'create' | 'join';
@@ -189,20 +190,15 @@ const HouseholdSetup: React.FC = () => {
                 <span>Back</span>
               </button>
 
-              <div>
-                <label className="block text-sm font-semibold text-brand-700 dark:text-brand-200 mb-2">
-                  Household name
-                </label>
-                <input
-                  type="text"
-                  value={householdName}
-                  onChange={(e) => setHouseholdName(e.target.value)}
-                  placeholder="e.g., Smith Family"
-                  className="w-full px-4 py-3 bg-white border border-brand-200 dark:border-brand-700 dark:bg-brand-900/40 text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-card focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400"
-                  required
-                  disabled={loading}
-                />
-              </div>
+              <Input
+                label="Household name"
+                type="text"
+                value={householdName}
+                onChange={(e) => setHouseholdName(e.target.value)}
+                placeholder="e.g., Smith Family"
+                required
+                disabled={loading}
+              />
 
               <ConsentCheckbox
                 id="consent-create"
@@ -237,15 +233,13 @@ const HouseholdSetup: React.FC = () => {
               </button>
 
               <div>
-                <label className="block text-sm font-semibold text-brand-700 dark:text-brand-200 mb-2">
-                  Invite code
-                </label>
-                <input
+                <Input
+                  label="Invite code"
                   type="text"
                   value={inviteCode}
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
-                  className="w-full px-4 py-3 bg-white border border-brand-200 dark:border-brand-700 dark:bg-brand-900/40 text-brand-800 dark:text-brand-100 placeholder:text-brand-400 dark:placeholder:text-brand-500 rounded-card focus:outline-hidden focus:ring-2 focus:ring-accent-500/40 focus:border-accent-400 font-mono text-lg tracking-wider text-center uppercase"
+                  className="font-mono text-lg tracking-wider text-center uppercase"
                   maxLength={6}
                   required
                   disabled={loading}

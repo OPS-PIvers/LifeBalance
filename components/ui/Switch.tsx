@@ -7,8 +7,21 @@ interface SwitchProps {
   disabled?: boolean;
   className?: string;
   id?: string;
+  /** Checked-track color. 'accent' (default, evergreen) or 'warm' (amber — gamification surfaces). */
+  tone?: 'accent' | 'warm';
   'aria-label'?: string;
 }
+
+const SWITCH_TONES = {
+  accent: {
+    on: 'peer-checked:bg-accent-600 dark:peer-checked:bg-accent-500',
+    ring: 'peer-focus-visible:ring-accent-500/40',
+  },
+  warm: {
+    on: 'peer-checked:bg-warm-500 dark:peer-checked:bg-warm-500',
+    ring: 'peer-focus-visible:ring-warm-500/40',
+  },
+} as const;
 
 export const Switch: React.FC<SwitchProps> = ({
   checked,
@@ -16,6 +29,7 @@ export const Switch: React.FC<SwitchProps> = ({
   disabled = false,
   className,
   id,
+  tone = 'accent',
   'aria-label': ariaLabel,
 }) => {
   // Fall back to a generated id so the <label htmlFor> always associates with
@@ -42,8 +56,9 @@ export const Switch: React.FC<SwitchProps> = ({
       />
       <div className={cn(
         "w-11 h-6 rounded-full peer transition-colors duration-(--duration-base) ease-(--ease-standard)",
-        "bg-brand-300 dark:bg-brand-700 peer-focus-visible:outline-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500/40",
-        "peer-checked:bg-accent-600 dark:peer-checked:bg-accent-500",
+        "bg-brand-300 dark:bg-brand-700 peer-focus-visible:outline-hidden peer-focus-visible:ring-2",
+        SWITCH_TONES[tone].ring,
+        SWITCH_TONES[tone].on,
         // Knob styles
         "after:content-[''] after:absolute after:top-[2px] after:left-[2px]",
         "after:bg-white after:border-brand-300 after:border after:rounded-full",

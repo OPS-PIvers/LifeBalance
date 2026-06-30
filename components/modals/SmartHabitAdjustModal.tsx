@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Sparkles, X, Check, ArrowRight, Loader, AlertTriangle } from 'lucide-react';
 import { useGamification, useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
 import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 import EmptyState from '@/components/ui/EmptyState';
 import type { HabitPointAdjustmentSuggestion } from '@/services/geminiService.types';
 import toast from 'react-hot-toast';
@@ -114,12 +115,9 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
           <div className="flex flex-col items-center justify-center py-12 text-center text-money-neg">
             <AlertTriangle size={32} className="mb-3 opacity-50" />
             <p className="font-bold">{error}</p>
-            <button
-              onClick={onClose}
-              className="mt-4 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-600 dark:text-brand-300 rounded-lg text-sm font-bold hover:bg-brand-200 dark:hover:bg-brand-700"
-            >
+            <Button variant="ghost" onClick={onClose} className="mt-4">
               Close
-            </button>
+            </Button>
           </div>
         ) : suggestions.length === 0 ? (
           <EmptyState
@@ -158,22 +156,24 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 sm:flex-col shrink-0">
-                    <button
+                    <Button
+                      variant="warning"
                       onClick={() => handleAccept(suggestion)}
-                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-warm-500 text-white rounded-btn font-semibold hover:bg-warm-600 active:scale-95 transition-all"
+                      leftIcon={<Check size={18} />}
+                      className="flex-1 sm:w-full"
                       title="Accept Change"
                     >
-                      <Check size={18} />
                       <span className="sm:hidden">Accept</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
                       onClick={() => handleIgnore(suggestion.habitId)}
-                      className="flex-1 sm:w-full flex items-center justify-center gap-2 px-4 py-2 bg-brand-100 dark:bg-brand-700/50 text-brand-500 dark:text-brand-400 rounded-xl font-bold hover:bg-brand-200 dark:hover:bg-brand-700 active:scale-95 transition-all"
+                      leftIcon={<X size={18} />}
+                      className="flex-1 sm:w-full"
                       title="Ignore"
                     >
-                      <X size={18} />
                       <span className="sm:hidden">Ignore</span>
-                    </button>
+                    </Button>
                   </div>
 
                 </div>
@@ -186,12 +186,9 @@ const SmartHabitAdjustModal: React.FC<SmartHabitAdjustModalProps> = ({ isOpen, o
       {/* Footer */}
       {suggestions.length > 0 && !isLoading && (
         <div className="p-4 border-t border-brand-200 dark:border-brand-700 bg-brand-50 dark:bg-brand-700/50">
-          <button
-            onClick={onClose}
-            className="w-full py-3 text-brand-500 dark:text-brand-400 font-bold text-sm hover:text-brand-700 dark:hover:text-brand-200 transition-colors"
-          >
+          <Button variant="ghost" size="lg" onClick={onClose} className="w-full">
             Done Reviewing
-          </button>
+          </Button>
         </div>
       )}
     </Drawer>
