@@ -211,6 +211,14 @@
   @apply overflow-y-auto overscroll-contain;
 }
 
+@utility pb-nav-safe {
+  /* Bottom padding that clears the fixed BottomNav (h-16 = 4rem) plus the
+     centered FAB overhang and the device safe-area, so page content never
+     sits under the footer. The single source of truth for footer clearance —
+     replaces the ad-hoc per-page pb-20 / pb-24 / pb-28 / pb-32. */
+  padding-bottom: calc(7rem + var(--spacing-safe, 0px));
+}
+
 @utility surface-section {
   /* Grouped-flat surface (iOS Settings / Things / Copilot Money): a solid
      calm panel with a hairline border, deliberate radius, and NO shadow by
