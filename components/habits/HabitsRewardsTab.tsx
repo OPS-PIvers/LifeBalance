@@ -90,11 +90,10 @@ const HabitsRewardsTab: React.FC = () => {
                     size="sm"
                     className="w-full mt-auto"
                     onClick={() => canAfford && !busy && handleRedeem(reward.id)}
-                    disabled={!canAfford || busy}
+                    disabled={!canAfford}
+                    isLoading={busy}
                   >
-                    {canAfford ? (
-                      busy ? 'Redeeming…' : 'Redeem'
-                    ) : (
+                    {canAfford ? 'Redeem' : (
                       <span className="inline-flex items-center gap-1">
                         <Lock size={11} /> Locked
                       </span>
