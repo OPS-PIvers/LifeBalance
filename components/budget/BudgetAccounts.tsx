@@ -101,15 +101,23 @@ const BudgetAccounts: React.FC = () => {
     setNewCardLast4('');
   };
 
-  const handleSetGoal = () => {
+  const handleSetGoal = async () => {
     if (isGoalModalOpen && goalAmount) {
-      setAccountGoal(isGoalModalOpen, parseFloat(goalAmount));
-      setIsGoalModalOpen(null);
-      setGoalAmount('');
+      // Await the write and only close on success, so a failed Firestore write
+      // surfaces an error (no unhandled rejection) and the user can retry
+      // without losing the drawer.
+      try {
+        await setAccountGoal(isGoalModalOpen, parseFloat(goalAmount));
+        setIsGoalModalOpen(null);
+        setGoalAmount('');
+      } catch (error) {
+        console.error('Failed to set savings goal', error);
+        toast.error('Failed to set goal. Please try again.');
+      }
     }
   };
 
-  const handleSetCard = () => {
+  const handleSetCard = async () => {
     if (isCardModalOpen) {
       // Reject a partial entry here (before saving) and keep the drawer open so
       // the user doesn't lose what they typed. An empty input is allowed — it
@@ -119,9 +127,17 @@ const BudgetAccounts: React.FC = () => {
         toast.error('Card digits must be the last 4 numbers');
         return;
       }
-      setAccountCardLast4(isCardModalOpen, cardDigits);
-      setIsCardModalOpen(null);
-      setCardDigits('');
+      // Await the write and only close on success, so a failed Firestore write
+      // surfaces an error (no unhandled rejection) and the drawer stays open to
+      // retry.
+      try {
+        await setAccountCardLast4(isCardModalOpen, cardDigits);
+        setIsCardModalOpen(null);
+        setCardDigits('');
+      } catch (error) {
+        console.error('Failed to save card digits', error);
+        toast.error('Failed to save card digits. Please try again.');
+      }
     }
   };
 

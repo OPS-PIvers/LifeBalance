@@ -33,6 +33,7 @@ import {
 } from "./reconcile";
 import {
   matchAccountByLast4,
+  normalizeCardLast4,
   normalizeUsDate,
   type AccountLike,
 } from "./accountMatch";
@@ -454,6 +455,14 @@ export const quickAddExpense = onRequest(
       ) {
         errorResponse(res, 400, "cardLast4 must be a short string (e.g. '8899')", "BAD_REQUEST");
         return;
+      }
+      // Sanitize the request body IN-PLACE to just the last 4 digits (or null)
+      // before anything logs it: logApiCall persists req.body, so a Shortcut
+      // that mis-captures a full card number must never leave more than the last
+      // 4 digits in our audit logs. Account matching below still reads the
+      // original `rawCardLast4` (normalizeCardLast4 handles the mask forms).
+      if (req.body) {
+        req.body.cardLast4 = normalizeCardLast4(rawCardLast4);
       }
     }
 

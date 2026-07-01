@@ -142,9 +142,10 @@ export function buildFillUpdates(
   if (incoming.category && incoming.category !== "Uncategorized") {
     updates.category = incoming.category;
   }
-  // Tag the filled stub with the resolved account (card last-4 match) when the
-  // Apple Pay stub itself was untagged — routes the merged row to the right
-  // account for the review/verify step.
+  // Tag the filled stub with the resolved account (card last-4 match) whenever
+  // the incoming event carries one. pickFillTarget has already guaranteed the
+  // chosen stub is either untagged or the SAME account, so this only ever sets
+  // or re-affirms the correct account for the review/verify step.
   if (incoming.accountId) {
     updates.accountId = incoming.accountId;
   }
