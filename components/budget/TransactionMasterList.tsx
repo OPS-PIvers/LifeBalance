@@ -642,7 +642,7 @@ const TransactionMasterList: React.FC = () => {
 
       {/* Floating Action Bar (FAB) for Batch Actions */}
       {isSelectionMode && selectedIds.size > 0 && (
-        <div className="fixed bottom-20 left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 px-4 md:px-0 flex justify-center z-dropdown pointer-events-none">
           <div className="bg-brand-800 text-white p-2 rounded-card shadow-raised border border-brand-700 flex items-center gap-2 pointer-events-auto animate-in slide-in-from-bottom-4 duration-(--duration-base)">
             <div className="px-3 font-bold text-sm border-r border-brand-700">
               {selectedIds.size} selected

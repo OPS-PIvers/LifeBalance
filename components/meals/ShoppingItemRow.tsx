@@ -167,18 +167,22 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
             </div>
         )}
 
-        {/* Checkbox (Alternative to Swipe) */}
+        {/* Checkbox (Alternative to Swipe) - p-3 -m-3 enlarges tappable area to ~44px */}
         <button
             onClick={handleCheck}
             aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-            className={clsx(
-                "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
-                item.isPurchased
-                    ? "bg-money-pos border-money-pos text-white"
-                    : "border-brand-300 hover:border-accent-500 text-transparent dark:border-brand-600 dark:hover:border-accent-400"
-            )}
+            className="group p-3 -m-3 shrink-0"
         >
-            <Check size={12} strokeWidth={3} />
+            <span
+                className={clsx(
+                    "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                    item.isPurchased
+                        ? "bg-money-pos border-money-pos text-white"
+                        : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
+                )}
+            >
+                <Check size={12} strokeWidth={3} />
+            </span>
         </button>
 
         {/* Content — tap opens the edit drawer where store / quick-list / delete live. */}

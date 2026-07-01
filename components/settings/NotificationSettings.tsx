@@ -45,7 +45,7 @@ const DEFAULT_PREFERENCES: NotificationPreferences = {
 // preference row. Solid surface + hairline border + evergreen focus ring, no
 // glass/gradient — matches the redesigned Select/input language.
 const inlineControlClass =
-  'text-sm px-3 py-1.5 border border-brand-200 dark:border-brand-700 rounded-btn bg-white dark:bg-brand-900 text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)';
+  'text-base sm:text-sm px-3 py-1.5 border border-brand-200 dark:border-brand-700 rounded-btn bg-white dark:bg-brand-900 text-brand-900 dark:text-brand-100 outline-hidden focus:border-accent-500 focus:ring-2 focus:ring-accent-500/30 transition-all duration-(--duration-fast) ease-(--ease-standard)';
 
 const getHourOptions = () => {
   return Array.from({ length: 24 }, (_, i) => {

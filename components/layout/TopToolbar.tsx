@@ -70,7 +70,7 @@ const TopToolbar: React.FC = () => {
           <div className="flex items-center gap-3 ml-auto">
             <button
               onClick={() => setIsFeedbackOpen(true)}
-              className="p-1.5 text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard)"
+              className="min-w-11 min-h-11 flex items-center justify-center text-brand-300 hover:text-white hover:bg-brand-700 rounded-full transition-colors duration-(--duration-fast) ease-(--ease-standard)"
               aria-label="Send Feedback"
             >
               <AlertCircle size={18} />

@@ -40,7 +40,7 @@ export const Switch: React.FC<SwitchProps> = ({
     <label
       htmlFor={inputId}
       className={cn(
-        "relative inline-flex items-center shrink-0",
+        "relative inline-flex items-center shrink-0 py-2.5",
         disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
         className
       )}

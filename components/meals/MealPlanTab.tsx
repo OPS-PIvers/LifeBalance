@@ -631,12 +631,12 @@ const MealPlanTab: React.FC = () => {
   return (
     <div className="space-y-5 pb-20">
       {/* Calendar Header */}
-      <div className="surface-section p-4 sm:p-5 space-y-4">
+      <div className="surface-section p-3 sm:p-5 space-y-4">
         {/* Week navigation */}
         <div className="flex items-center justify-between gap-2">
             <button
                 onClick={() => setSelectedDate(d => addDays(d, -7))}
-                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                 aria-label="Previous week"
             >
                 <ChevronLeft className="w-5 h-5" />
@@ -651,7 +651,7 @@ const MealPlanTab: React.FC = () => {
             </div>
             <button
                 onClick={() => setSelectedDate(d => addDays(d, 7))}
-                className="p-2 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
+                className="p-3 text-brand-400 hover:text-brand-600 hover:bg-brand-100 rounded-full transition-colors active:scale-95 dark:text-brand-500 dark:hover:text-brand-300 dark:hover:bg-brand-700/50"
                 aria-label="Next week"
             >
                 <ChevronRight className="w-5 h-5" />
@@ -673,7 +673,7 @@ const MealPlanTab: React.FC = () => {
                         aria-label={`${day.ariaLabel}${count > 0 ? `, ${count} meals planned` : ''}`}
                         aria-pressed={isSelected}
                         className={clsx(
-                            "flex-1 flex flex-col items-center gap-1 py-2 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
+                            "flex-1 flex flex-col items-center gap-1 py-2.5 rounded-btn transition-colors duration-(--duration-fast) ease-(--ease-standard) active:scale-95",
                             isSelected
                                 ? "bg-accent-600"
                                 : "hover:bg-brand-100 dark:hover:bg-brand-700/50"

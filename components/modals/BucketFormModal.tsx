@@ -164,7 +164,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
                 <span className="text-sm font-medium text-brand-700 dark:text-brand-200">{sb.name}</span>
                 <button
                   onClick={() => handleRemoveSubBucket(sb.id)}
-                  className="text-brand-400 dark:text-brand-400 hover:text-money-neg"
+                  className="p-3.5 -m-2.5 text-brand-400 dark:text-brand-400 hover:text-money-neg"
                   aria-label={`Remove ${sb.name} sub-category`}
                 >
                   <X size={16} />
@@ -179,7 +179,7 @@ const BucketFormModal: React.FC<BucketFormModalProps> = ({ isOpen, onClose, edit
               onChange={e => setNewSubBucketName(e.target.value)}
               placeholder="New sub-category..."
               aria-label="New sub-category name"
-              className="flex-1 px-3 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
+              className="flex-1 px-3 py-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-base focus:outline-hidden focus:ring-2 focus:ring-accent-500/30"
               onKeyDown={e => {
                 if (e.key === 'Enter') {
                   e.preventDefault();

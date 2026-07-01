@@ -240,6 +240,10 @@ const HouseholdSetup: React.FC = () => {
                   onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                   placeholder="ABC123"
                   className="font-mono text-lg tracking-wider text-center uppercase"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="off"
                   maxLength={6}
                   required
                   disabled={loading}

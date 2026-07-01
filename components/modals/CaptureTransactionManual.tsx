@@ -192,6 +192,7 @@ export const CaptureTransactionManual: React.FC<CaptureTransactionManualProps> =
           <input
             ref={amountInputRef}
             type="number"
+            inputMode="decimal"
             value={amount}
             aria-label="Amount"
             onChange={(e) => {

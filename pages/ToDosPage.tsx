@@ -1121,10 +1121,12 @@ const TodoRow = React.memo(function TodoRow({
                 toast.error('Failed to complete to-do');
               }
             }}
-            className="mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0 border-brand-300 hover:border-accent-500 hover:bg-accent-50 active:bg-accent-100 dark:border-brand-600 dark:hover:border-accent-400 dark:hover:bg-accent-900/30"
+            className="group mt-0.5 p-2.5 -m-2.5 shrink-0"
             aria-label={`Complete task: ${item.text}`}
           >
-            <Check size={14} className="text-transparent hover:text-current active:text-current focus:text-current transition-colors" />
+            <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors border-brand-300 group-hover:border-accent-500 group-hover:bg-accent-50 group-active:bg-accent-100 dark:border-brand-600 dark:group-hover:border-accent-400 dark:group-hover:bg-accent-900/30">
+              <Check size={14} className="text-transparent group-hover:text-current group-active:text-current group-focus-visible:text-current transition-colors" />
+            </span>
           </button>
         )}
 
