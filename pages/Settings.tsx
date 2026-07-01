@@ -143,6 +143,9 @@ const Settings: React.FC = () => {
 
   // Section State
   const [openSection, setOpenSection] = useState<string | null>('profile');
+  // The write-once API key from the current session, lifted so the setup guide
+  // can pre-fill and copy the Authorization header the moment a key is created.
+  const [sessionApiKey, setSessionApiKey] = useState<string | null>(null);
 
   const handleToggleSection = (id: string) => {
     setOpenSection(prev => prev === id ? null : id);
@@ -1044,13 +1047,14 @@ const Settings: React.FC = () => {
                 userId={user?.uid || ''}
                 apiKeys={apiKeys || []}
                 isAdmin={currentUser?.role === 'admin'}
+                onKeyGenerated={setSessionApiKey}
               />
             </div>
 
             {/* Setup Guide */}
             <div className="border-t border-brand-200 dark:border-brand-700 pt-6">
               <h4 className="font-semibold mb-4 tracking-wider uppercase text-xs text-brand-500 dark:text-brand-400">Setup Guide</h4>
-              <ShortcutSetupGuide />
+              <ShortcutSetupGuide apiKey={sessionApiKey} />
             </div>
           </div>
         </CollapsibleCard>
