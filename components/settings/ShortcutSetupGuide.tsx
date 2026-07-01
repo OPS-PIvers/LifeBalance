@@ -61,16 +61,28 @@ const copyText = async (text: string, label: string): Promise<void> => {
   }
 };
 
-/** A full-width tappable row that copies a literal value. */
-const CopyRow: React.FC<{ label: string; value: string; hint?: string }> = ({
+/**
+ * A full-width tappable row that copies a literal value. When `disabled` (e.g. the
+ * Authorization row before a key exists), it shows the placeholder but isn't
+ * copyable — copying `Bearer YOUR_API_KEY` would only mislead.
+ * NOTE: `outline-hidden` is the correct Tailwind v4 utility (the v4 rename of v3's
+ * `outline-none`); it keeps a transparent outline for forced-colors accessibility.
+ */
+const CopyRow: React.FC<{ label: string; value: string; hint?: string; disabled?: boolean }> = ({
   label,
   value,
   hint,
+  disabled,
 }) => (
   <button
     type="button"
+    disabled={disabled}
     onClick={() => copyText(value, label)}
-    className="group w-full flex items-center gap-3 rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-3 py-2 text-left hover:border-accent-300 dark:hover:border-accent-500/50 hover:bg-accent-50/60 dark:hover:bg-accent-500/5 transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900"
+    className={`group w-full flex items-center gap-3 rounded-btn border border-brand-200 dark:border-brand-700 bg-white dark:bg-brand-900 px-3 py-2 text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-brand-900 ${
+      disabled
+        ? 'opacity-70 cursor-not-allowed'
+        : 'hover:border-accent-300 dark:hover:border-accent-500/50 hover:bg-accent-50/60 dark:hover:bg-accent-500/5'
+    }`}
   >
     <div className="min-w-0 flex-1">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-brand-400 dark:text-brand-500">
@@ -79,10 +91,12 @@ const CopyRow: React.FC<{ label: string; value: string; hint?: string }> = ({
       <p className="font-mono text-xs text-brand-800 dark:text-brand-100 break-all">{value}</p>
       {hint && <p className="text-[11px] text-brand-500 dark:text-brand-400 mt-0.5">{hint}</p>}
     </div>
-    <span className="shrink-0 flex items-center gap-1 text-accent-600 dark:text-accent-400 text-xs font-semibold group-hover:text-accent-700 dark:group-hover:text-accent-300">
-      <Copy className="w-3.5 h-3.5" />
-      Copy
-    </span>
+    {!disabled && (
+      <span className="shrink-0 flex items-center gap-1 text-accent-600 dark:text-accent-400 text-xs font-semibold group-hover:text-accent-700 dark:group-hover:text-accent-300">
+        <Copy className="w-3.5 h-3.5" />
+        Copy
+      </span>
+    )}
   </button>
 );
 
@@ -412,6 +426,7 @@ const ShortcutSetupGuide: React.FC<ShortcutSetupGuideProps> = ({ apiKey }) => {
                         label="Authorization"
                         value={authValue}
                         hint={apiKey ? undefined : 'Generate a key above to fill this in'}
+                        disabled={!apiKey}
                       />
                       <CopyRow label="Content-Type" value="application/json" />
 
