@@ -244,7 +244,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                 onChange={e => setTagInput(e.target.value)}
                                 placeholder="Add custom tag..."
                                 aria-label="Add custom tag"
-                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 focus:border-accent-500 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                className="w-full py-1.5 pl-3 pr-8 rounded-full bg-brand-50 border border-brand-200 text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddTag())}
                             />
                             <button
@@ -298,7 +298,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   id="ingredient-name"
                                   type="text"
                                   placeholder="Item name"
-                                  className="flex-1 rounded-xl border-brand-200 bg-white focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                  className="flex-1 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                   value={ingredientName}
                                   onChange={(e) => setIngredientName(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
@@ -307,7 +307,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                                   aria-label="Ingredient quantity"
                                   type="text"
                                   placeholder="Qty"
-                                  className="w-20 rounded-xl border-brand-200 bg-white focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                                  className="w-20 rounded-xl border-brand-200 bg-white text-base focus:border-accent-500 focus:ring-accent-500/40 outline-hidden p-2.5 dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                                   value={ingredientQty}
                                   onChange={(e) => setIngredientQty(e.target.value)}
                                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddIngredient())}
