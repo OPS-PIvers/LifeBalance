@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Account } from '@/types/schema';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -76,7 +77,14 @@ const BudgetAccounts: React.FC = () => {
       : -1;
 
     // Keep only the last 4 digits so "...8899" and "8899" both store cleanly.
-    const digits = newCardLast4.replace(/\D/g, '').slice(-4);
+    // A partial (1-3 digit) entry would store a value that can never match an
+    // incoming card, so reject it rather than saving something silently useless.
+    const rawDigits = newCardLast4.replace(/\D/g, '');
+    if (rawDigits && rawDigits.length < 4) {
+      toast.error('Card digits must be the last 4 numbers');
+      return;
+    }
+    const digits = rawDigits.slice(-4);
     const newAccount: Account = {
       id: crypto.randomUUID(),
       name: newName,
@@ -103,7 +111,14 @@ const BudgetAccounts: React.FC = () => {
 
   const handleSetCard = () => {
     if (isCardModalOpen) {
-      // Empty input clears the tag (setAccountCardLast4 handles the deleteField).
+      // Reject a partial entry here (before saving) and keep the drawer open so
+      // the user doesn't lose what they typed. An empty input is allowed — it
+      // clears the tag (setAccountCardLast4 handles the deleteField).
+      const rawDigits = cardDigits.replace(/\D/g, '');
+      if (rawDigits && rawDigits.length < 4) {
+        toast.error('Card digits must be the last 4 numbers');
+        return;
+      }
       setAccountCardLast4(isCardModalOpen, cardDigits);
       setIsCardModalOpen(null);
       setCardDigits('');

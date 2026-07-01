@@ -1952,9 +1952,16 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
   const setAccountCardLast4 = useCallback(async (id: string, cardLast4: string) => {
     if (!householdId) return;
+    // Defensive guard (the UI validates too): a non-empty but sub-4-digit value
+    // would store something that can never match an incoming card, so reject it.
+    const rawDigits = cardLast4.replace(/\D/g, '');
+    if (rawDigits && rawDigits.length < 4) {
+      toast.error('Card digits must be the last 4 numbers');
+      return;
+    }
     // Keep only digits and cap at the last 4 so "...8899" / "8899" both store as
     // "8899". An empty result clears the field (untags the card).
-    const digits = cardLast4.replace(/\D/g, '').slice(-4);
+    const digits = rawDigits.slice(-4);
     await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
       cardLast4: digits ? digits : deleteField(),
     });
