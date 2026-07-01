@@ -8,6 +8,7 @@ import {
   Copy,
   CreditCard,
   Bell,
+  Mail,
   CheckCircle2,
   KeyRound,
   Sparkles,
@@ -273,6 +274,59 @@ const EXAMPLES: ShortcutExample[] = [
     ],
     automationNote:
       'Companion to the Apple Wallet automation above. Apple Pay only sees the $0 authorization; your bank\'s notification carries the real total — this parses it and sends it. The "fromBankNotification": true flag fills a recent $0 "awaiting amount" hold (by merchant, or by timing when the two apps report different store names) instead of creating a second row; if nothing matches it just adds a normal expense. Caveats: needs a recent iOS that passes notification text into the shortcut; parsing is brittle if your bank rewords alerts; a Focus or Scheduled Summary can delay notifications. For the most reliable settled amounts, connect your bank with Plaid instead — this is the no-Plaid option.',
+  },
+  {
+    id: 'wells-fargo-email',
+    title: 'Wells Fargo Email Auto-Log',
+    icon: <Mail className="w-5 h-5" />,
+    description: "Parses the purchase email (amount, merchant, card, date) and routes it to the matching account",
+    endpoint: 'expense',
+    isAutomation: true,
+    fields: [
+      { key: 'amount', value: 'Amount', valueType: 'Number', isVariable: true },
+      { key: 'merchant', value: 'Merchant', valueType: 'Text', isVariable: true },
+      { key: 'cardLast4', value: 'Card', valueType: 'Text', isVariable: true },
+      { key: 'date', value: 'Date', valueType: 'Text', isVariable: true },
+      { key: 'fromBankNotification', value: 'true', valueType: 'Text' },
+    ],
+    buildSteps: [
+      'First tag your accounts: Budget tab → each debit/credit account → ⋯ → "Add Card Digits" → enter its last 4 (e.g. 8899). The email sends the card number and we route the transaction to the account that matches.',
+      'In Wells Fargo online banking, turn on purchase email alerts for each card (you did this already).',
+      'Shortcuts app → Automation tab → tap + → choose the Email trigger ("When I get an email"); set From to the Wells Fargo alert address and Subject contains "purchase". If your iOS has no Email trigger, skip to the Share Sheet fallback in step 7.',
+      'Set "Run Immediately" → add "Get Details of Email" (or use the passed-in email) and get its Contents / Body as text',
+      'Add four "Match Text" actions over that body — one per regex below — each followed by "Get Item from List → First Item" then "Set Variable" (Amount, Merchant, Card, Date)',
+      'Wire those four variables into the JSON body fields below; keep fromBankNotification = true',
+      'No Email trigger? Build the same steps as a normal shortcut that takes "Shortcut Input", turn ON "Show in Share Sheet", then open a WF email → Share → run it. Everything else is identical.',
+    ],
+    snippets: [
+      {
+        label: 'Amount regex (Match Text)',
+        value: '(?<=purchase of \\$)[\\d,]+\\.\\d{2}',
+        hint: 'Grabs "6.02" from "purchase of $6.02" (ignores the "over $1.00" in the subject)',
+      },
+      {
+        label: 'Merchant regex (Match Text)',
+        value: '(?<=Merchant: ).*',
+        hint: 'Grabs the store name after "Merchant:" (e.g. "Google CLOUD")',
+      },
+      {
+        label: 'Card last-4 regex (Match Text)',
+        value: '(?<=card )\\D*\\d{4}',
+        hint: 'Grabs "...8899" after "credit card"; we keep just the 4 digits',
+      },
+      {
+        label: 'Date regex (Match Text)',
+        value: '\\d{2}/\\d{2}/\\d{4}',
+        hint: 'Grabs "07/01/2026"; the API accepts MM/DD/YYYY and stores it as the purchase date',
+      },
+    ],
+    finishSteps: [
+      'Tap Done → choose "Run Immediately"',
+      'Each Wells Fargo purchase email now creates a pending transaction on the matching card — review it in the Budget tab',
+      'Leave fromBankNotification = true so this also fills any matching Apple Pay $0 hold instead of duplicating it',
+    ],
+    automationNote:
+      'Built for the Wells Fargo "You made a purchase of $X with credit card ...8899" emails. It parses the amount, merchant, card last-4, and date, then POSTs them. The cardLast4 is matched against the "Card Digits" you set on each account (Budget tab → account → ⋯) so a debit-card email lands on your checking account and a credit-card email on that card. The date is read from the email (MM/DD/YYYY accepted). Caveats: iOS Email-trigger automations vary by version — if yours lacks one, use the Share Sheet fallback (open the email → Share → run the shortcut). Parsing is brittle if Wells Fargo rewords the email, and a Focus/Scheduled Summary can delay delivery. For hands-off settled amounts, connecting the bank with Plaid is still the most reliable path.',
   },
 ];
 

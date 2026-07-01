@@ -276,6 +276,9 @@ export interface HouseholdContextType {
   addAccount: (account: Account) => Promise<void>;
   updateAccountBalance: (id: string, newBalance: number) => Promise<void>;
   setAccountGoal: (id: string, goal: number) => Promise<void>;
+  /** Set (or clear, with an empty string) the last-4 card digits used to
+   *  auto-route incoming Shortcut/Wells-Fargo-email transactions to this account. */
+  setAccountCardLast4: (id: string, cardLast4: string) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   updateAccountOrder: (accountId: string, newOrder: number) => Promise<void>;
   reorderAccounts: (orderedIds: string[]) => Promise<void>;
@@ -447,7 +450,7 @@ export type FinanceContextValue = Pick<HouseholdContextType,
   | 'transactionWindowStart' | 'isLoadingOlderTransactions' | 'hasMoreTransactions'
   | 'loadOlderTransactions' | 'loadAllTransactions'
   | 'isLoadingOlderBucketHistory' | 'hasMoreBucketHistory' | 'loadAllBucketHistory'
-  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'deleteAccount'
+  | 'addAccount' | 'updateAccountBalance' | 'setAccountGoal' | 'setAccountCardLast4' | 'deleteAccount'
   | 'updateAccountOrder' | 'reorderAccounts'
   | 'addBucket' | 'updateBucket' | 'deleteBucket' | 'updateBucketLimit' | 'reallocateBucket'
   | 'addCalendarItem' | 'updateCalendarItem' | 'deleteCalendarItem' | 'payCalendarItem' | 'deferCalendarItem'
@@ -1945,6 +1948,24 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       monthlyGoal: goal,
     });
     toast.success('Goal set');
+  }, [householdId]);
+
+  const setAccountCardLast4 = useCallback(async (id: string, cardLast4: string) => {
+    if (!householdId) return;
+    // Defensive guard (the UI validates too): a non-empty but sub-4-digit value
+    // would store something that can never match an incoming card, so reject it.
+    const rawDigits = cardLast4.replace(/\D/g, '');
+    if (rawDigits && rawDigits.length < 4) {
+      toast.error('Card digits must be the last 4 numbers');
+      return;
+    }
+    // Keep only digits and cap at the last 4 so "...8899" / "8899" both store as
+    // "8899". An empty result clears the field (untags the card).
+    const digits = rawDigits.slice(-4);
+    await updateDoc(doc(db, `households/${householdId}/accounts`, id), {
+      cardLast4: digits ? digits : deleteField(),
+    });
+    toast.success(digits ? 'Card digits saved' : 'Card digits cleared');
   }, [householdId]);
 
   const deleteAccount = useCallback(async (id: string) => {
@@ -4538,6 +4559,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     addAccount,
     updateAccountBalance,
     setAccountGoal,
+    setAccountCardLast4,
     deleteAccount,
     updateAccountOrder,
     reorderAccounts,
@@ -4561,7 +4583,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     safeToSpend, safeToSpendBreakdown, accounts, buckets, calendarItems, transactions, currentPeriodId, bucketSpentMap, bucketHistory,
     transactionWindowStart, isLoadingOlderTransactions, hasMoreTransactions, loadOlderTransactions, loadAllTransactions,
     isLoadingOlderBucketHistory, hasMoreBucketHistory, loadAllBucketHistory,
-    addAccount, updateAccountBalance, setAccountGoal, deleteAccount, updateAccountOrder, reorderAccounts,
+    addAccount, updateAccountBalance, setAccountGoal, setAccountCardLast4, deleteAccount, updateAccountOrder, reorderAccounts,
     addBucket, updateBucket, deleteBucket, updateBucketLimit, reallocateBucket,
     addCalendarItem, updateCalendarItem, deleteCalendarItem, payCalendarItem, deferCalendarItem,
     addTransaction, updateTransactionCategory, updateTransaction, deleteTransaction, splitTransaction,
