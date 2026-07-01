@@ -341,7 +341,7 @@ export const ActionQueueItemCard: React.FC<ActionQueueItemProps> = memo(({
              <Eyebrow as="p" className="text-xxs">
                {isCalendarQueueItem(item) ? 'Actions' : isEditing ? 'Edit Transaction' : 'Select Category'}
              </Eyebrow>
-             <button onClick={() => setExpandedId(null)} aria-label="Collapse item" className="p-2.5 -m-2.5"><X size={14} className="text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"/></button>
+             <button onClick={() => setExpandedId(null)} aria-label="Collapse item" className="p-2.5 -m-2.5 text-brand-400 dark:text-brand-500 hover:text-brand-600 dark:hover:text-brand-300"><X size={14}/></button>
           </div>
 
           {isCalendarQueueItem(item) ? (

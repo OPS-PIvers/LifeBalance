@@ -171,14 +171,14 @@ const ShoppingItemRowComponent: React.FC<ShoppingItemRowProps> = ({ item, stores
         <button
             onClick={handleCheck}
             aria-label={item.isPurchased ? `Mark ${item.name} as not purchased` : `Mark ${item.name} as purchased`}
-            className="p-3 -m-3 shrink-0"
+            className="group p-3 -m-3 shrink-0"
         >
             <span
                 className={clsx(
                     "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
                     item.isPurchased
                         ? "bg-money-pos border-money-pos text-white"
-                        : "border-brand-300 hover:border-accent-500 text-transparent dark:border-brand-600 dark:hover:border-accent-400"
+                        : "border-brand-300 group-hover:border-accent-500 text-transparent dark:border-brand-600 dark:group-hover:border-accent-400"
                 )}
             >
                 <Check size={12} strokeWidth={3} />
