@@ -31,6 +31,11 @@ import {
   buildFillUpdates,
   type ReconcileCandidate,
 } from "./reconcile";
+import {
+  matchAccountByLast4,
+  normalizeUsDate,
+  type AccountLike,
+} from "./accountMatch";
 
 const db = admin.firestore();
 
@@ -321,6 +326,12 @@ export const quickAddExpense = onRequest(
     // 4. Parse and validate request body
     const { amount: rawAmount, merchant, category = "Uncategorized", date, notes } = req.body || {};
 
+    // Optional card last-4 (e.g. Wells Fargo email sends "...8899") used to
+    // auto-route this expense to the matching account. An explicit `accountId`
+    // takes precedence; both are resolved after the household read below.
+    const rawCardLast4 = (req.body || {}).cardLast4;
+    const rawAccountId = (req.body || {}).accountId;
+
     // Opt-in marker set ONLY by the bank-notification Shortcut (which parses the
     // real settled amount out of the bank's push). It gates the reconcile step
     // below so a regular voice-expense Shortcut — also amount>0, also
@@ -433,22 +444,53 @@ export const quickAddExpense = onRequest(
       }
     }
 
-    // Resolve the transaction date. Prefer the explicit `date`; otherwise fall
-    // back to the caller-local `today` (yyyy-MM-dd) — same as quickAddHabit —
-    // because Cloud Functions run in UTC and `new Date()` is the UTC server day,
-    // which is wrong for evening US users. The server date is the last resort.
+    // Card last-4 arrives as a short string ("...8899") or a number; anything
+    // longer than a masked-card fragment is bogus. Actual digit extraction /
+    // account matching happens after the household read below.
+    if (rawCardLast4 !== undefined && rawCardLast4 !== null) {
+      if (
+        (typeof rawCardLast4 !== "string" && typeof rawCardLast4 !== "number") ||
+        String(rawCardLast4).length > 30
+      ) {
+        errorResponse(res, 400, "cardLast4 must be a short string (e.g. '8899')", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    // An explicit accountId (when provided) must be a valid Firestore id.
+    if (rawAccountId !== undefined && rawAccountId !== null) {
+      if (typeof rawAccountId !== "string" || !isValidFirestoreId(rawAccountId)) {
+        errorResponse(res, 400, "accountId contains invalid characters", "BAD_REQUEST");
+        return;
+      }
+    }
+
+    // Resolve the transaction date. Prefer the explicit `date` (accepted as
+    // YYYY-MM-DD or US MM/DD/YYYY — the Wells Fargo email format — normalized to
+    // ISO); otherwise fall back to the caller-local `today` (yyyy-MM-dd) — same
+    // as quickAddHabit — because Cloud Functions run in UTC and `new Date()` is
+    // the UTC server day, wrong for evening US users. Server date is last resort.
     const rawToday = (req.body || {}).today;
     const localToday =
       typeof rawToday === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawToday)
         ? rawToday
         : undefined;
-    const transactionDate =
-      date || localToday || format(new Date(), "yyyy-MM-dd");
 
-    // Validate date format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
-      errorResponse(res, 400, "date must be in YYYY-MM-DD format", "BAD_REQUEST");
-      return;
+    let transactionDate: string;
+    if (date !== undefined && date !== null && date !== "") {
+      const normalizedDate = normalizeUsDate(date);
+      if (!normalizedDate) {
+        errorResponse(
+          res,
+          400,
+          "date must be in YYYY-MM-DD or MM/DD/YYYY format",
+          "BAD_REQUEST"
+        );
+        return;
+      }
+      transactionDate = normalizedDate;
+    } else {
+      transactionDate = localToday || format(new Date(), "yyyy-MM-dd");
     }
 
     try {
@@ -462,6 +504,36 @@ export const quickAddExpense = onRequest(
       const currency = householdData?.currency || "USD";
 
       const transactionsPath = `households/${householdId}/transactions`;
+
+      // Resolve the target account. An explicit `accountId` wins; otherwise the
+      // card last-4 (Wells Fargo email sends "...8899") is matched against the
+      // household's accounts so the transaction is routed to the right card. A
+      // read is only incurred when a card hint is present and no explicit id.
+      let resolvedAccountId: string | undefined =
+        typeof rawAccountId === "string" && rawAccountId.trim()
+          ? rawAccountId.trim()
+          : undefined;
+      if (!resolvedAccountId && rawCardLast4 !== undefined && rawCardLast4 !== null) {
+        try {
+          const accountsSnap = await db
+            .collection(`households/${householdId}/accounts`)
+            .get();
+          const accountList: AccountLike[] = accountsSnap.docs.map((d) => {
+            const data = d.data() as Record<string, unknown>;
+            return {
+              id: d.id,
+              cardLast4:
+                typeof data.cardLast4 === "string" ? data.cardLast4 : undefined,
+            };
+          });
+          resolvedAccountId = matchAccountByLast4(rawCardLast4, accountList) ?? undefined;
+        } catch (accountErr) {
+          // Account routing is best-effort: never block capture on it. The
+          // transaction is created untagged and falls back to the checking
+          // account during review.
+          logger.warn(`Account match failed; leaving transaction untagged: ${accountErr}`);
+        }
+      }
 
       // --- Reconcile the two Apple Pay capture paths (see reconcile.ts) ---
       // When the bank-notification Shortcut posts the REAL settled amount, try to
@@ -501,18 +573,20 @@ export const quickAddExpense = onRequest(
               amount: data.amount,
               merchant: typeof data.merchant === "string" ? data.merchant : "",
               needsAmount: data.needsAmount === true,
+              accountId:
+                typeof data.accountId === "string" ? data.accountId : undefined,
             });
             refById.set(d.id, d.ref);
           }
 
           const target = pickFillTarget(
-            { amount, merchant: merchant.trim(), category },
+            { amount, merchant: merchant.trim(), category, accountId: resolvedAccountId },
             candidates
           );
           const targetRef = target ? refById.get(target.id) : undefined;
           if (target && targetRef) {
             await targetRef.update(
-              buildFillUpdates({ amount, merchant: merchant.trim(), category })
+              buildFillUpdates({ amount, merchant: merchant.trim(), category, accountId: resolvedAccountId })
             );
             await logApiCall(householdId, apiKey.substring(0, 16), "expense", req.body, 200);
             jsonResponse(res, 200, {
@@ -526,6 +600,7 @@ export const quickAddExpense = onRequest(
                 category,
                 date: transactionDate,
                 status: "pending_review",
+                accountId: resolvedAccountId ?? null,
               },
             });
             return;
@@ -564,6 +639,9 @@ export const quickAddExpense = onRequest(
         payPeriodId,
         notes: notes || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        // Route to the card matched by last-4 (or explicit accountId). Omitted
+        // when nothing matched so review falls back to the checking account.
+        ...(resolvedAccountId ? { accountId: resolvedAccountId } : {}),
         // Apple Pay $0 pre-auth stub: flags the review UI that the real amount
         // still needs to be entered. Omitted for normal (amount > 0) expenses.
         ...(amount === 0 ? { needsAmount: true } : {}),
@@ -593,6 +671,7 @@ export const quickAddExpense = onRequest(
           category,
           date: transactionDate,
           status: "pending_review",
+          accountId: resolvedAccountId ?? null,
         },
       });
     } catch (error) {

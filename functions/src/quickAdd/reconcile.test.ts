@@ -143,6 +143,66 @@ describe("buildFillUpdates", () => {
     const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" });
     expect(updates).not.toHaveProperty("status");
   });
+
+  it("tags the resolved account when the incoming event carries one", () => {
+    const updates = buildFillUpdates({
+      amount: 13.31,
+      merchant: "Amatista",
+      accountId: "cred-123",
+    });
+    expect(updates).toMatchObject({ accountId: "cred-123" });
+  });
+
+  it("omits accountId when the incoming event has none", () => {
+    const updates = buildFillUpdates({ amount: 13.31, merchant: "Amatista" });
+    expect(updates).not.toHaveProperty("accountId");
+  });
+});
+
+describe("pickFillTarget — account awareness", () => {
+  it("does not fill a stub tagged to a DIFFERENT account than the incoming card", () => {
+    const debitStub: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Coffee",
+      amount: 0,
+      needsAmount: true,
+      accountId: "checking",
+    };
+    const target = pickFillTarget(
+      { amount: 5, merchant: "Coffee", accountId: "credit" },
+      [debitStub],
+    );
+    expect(target).toBeNull();
+  });
+
+  it("fills a same-account stub", () => {
+    const stub: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Coffee",
+      amount: 0,
+      needsAmount: true,
+      accountId: "credit",
+    };
+    const target = pickFillTarget(
+      { amount: 5, merchant: "Coffee", accountId: "credit" },
+      [stub],
+    );
+    expect(target?.id).toBe("s1");
+  });
+
+  it("still fills an untagged stub (typical Apple Pay case) — backward compatible", () => {
+    const untagged: ReconcileCandidate = {
+      id: "s1",
+      merchant: "Loews",
+      amount: 0,
+      needsAmount: true,
+    };
+    const target = pickFillTarget(
+      { amount: 13.31, merchant: "Amatista", accountId: "credit" },
+      [untagged],
+    );
+    expect(target?.id).toBe("s1");
+  });
 });
 
 describe("RECONCILE_WINDOW_MS", () => {

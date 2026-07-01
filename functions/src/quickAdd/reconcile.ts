@@ -44,6 +44,11 @@ export interface ReconcileCandidate {
   merchant: string;
   /** True for an Apple Pay $0 awaiting-amount stub. */
   needsAmount: boolean;
+  /** Account the stub is tagged to, if any. Apple Pay stubs are usually
+   *  untagged (the Wallet automation sends no card), so this is normally
+   *  absent — but when present it's used to avoid merging a purchase from one
+   *  card into a stub belonging to a different card. */
+  accountId?: string;
 }
 
 /** The incoming bank-notification event, already parsed/normalized. */
@@ -52,6 +57,10 @@ export interface IncomingExpense {
   merchant: string;
   /** Optional category; only overwrites the stub's when non-default. */
   category?: string;
+  /** Account resolved from the card last-4 (Wells Fargo email path), if any.
+   *  When set, a candidate tagged to a *different* account is ineligible, and
+   *  a filled stub inherits this account. */
+  accountId?: string;
 }
 
 /**
@@ -89,7 +98,16 @@ export function pickFillTarget(
   incoming: IncomingExpense,
   candidates: readonly ReconcileCandidate[],
 ): ReconcileCandidate | null {
-  const stubs = candidates.filter((c) => c.needsAmount && c.amount === 0);
+  const stubs = candidates.filter((c) => {
+    if (!c.needsAmount || c.amount !== 0) return false;
+    // Never fill a stub that's explicitly tagged to a DIFFERENT account than
+    // the incoming purchase. Untagged stubs (the usual Apple Pay case) stay
+    // eligible so this is a strict tighten, never a regression.
+    if (incoming.accountId && c.accountId && c.accountId !== incoming.accountId) {
+      return false;
+    }
+    return true;
+  });
   if (stubs.length === 0) return null;
 
   const key = normalizeMerchant(incoming.merchant);
@@ -123,6 +141,12 @@ export function buildFillUpdates(
   };
   if (incoming.category && incoming.category !== "Uncategorized") {
     updates.category = incoming.category;
+  }
+  // Tag the filled stub with the resolved account (card last-4 match) when the
+  // Apple Pay stub itself was untagged — routes the merged row to the right
+  // account for the review/verify step.
+  if (incoming.accountId) {
+    updates.accountId = incoming.accountId;
   }
   return updates;
 }

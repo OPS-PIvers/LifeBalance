@@ -82,6 +82,13 @@ export interface Account {
   lastUpdated: string;
   monthlyGoal?: number;
   order?: number; // Display order within asset/liability group
+  /** Last 4 digits of the debit/credit card tied to this account (e.g. "8899").
+   *  Used to auto-route incoming Shortcut/bank-notification transactions to the
+   *  right account: the Wells Fargo email automation sends the card's last 4
+   *  ("...8899") and quickAddExpense matches it against this field. Optional —
+   *  accounts without a card (savings) or the user hasn't tagged one leave it
+   *  unset, and untagged transactions fall back to the checking account. */
+  cardLast4?: string;
 }
 
 export interface SubBucket {

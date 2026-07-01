@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '@/contexts/FirebaseHouseholdContext';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
-import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark } from 'lucide-react';
+import { Pencil, Check, Plus, Target, Star, GripVertical, Trash2, MoreVertical, Landmark, CreditCard } from 'lucide-react';
 import { Account } from '@/types/schema';
 import { sumMoney, subtractMoney } from '@/utils/money';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -15,7 +15,7 @@ import Select from '@/components/ui/Select';
 import EmptyState from '@/components/ui/EmptyState';
 
 const BudgetAccounts: React.FC = () => {
-  const { accounts, updateAccountBalance, addAccount, setAccountGoal, deleteAccount, reorderAccounts } = useFinance();
+  const { accounts, updateAccountBalance, addAccount, setAccountGoal, setAccountCardLast4, deleteAccount, reorderAccounts } = useFinance();
   const fmt = useFormatCurrency();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -25,10 +25,15 @@ const BudgetAccounts: React.FC = () => {
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<Account['type']>('checking');
   const [newBalance, setNewBalance] = useState('');
+  const [newCardLast4, setNewCardLast4] = useState('');
 
   // Set Goal Modal
   const [isGoalModalOpen, setIsGoalModalOpen] = useState<string | null>(null);
   const [goalAmount, setGoalAmount] = useState('');
+
+  // Set Card Digits Modal (id of the account being tagged, or null)
+  const [isCardModalOpen, setIsCardModalOpen] = useState<string | null>(null);
+  const [cardDigits, setCardDigits] = useState('');
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -70,18 +75,22 @@ const BudgetAccounts: React.FC = () => {
       ? Math.max(...relevantAccounts.map(a => a.order ?? 0))
       : -1;
 
+    // Keep only the last 4 digits so "...8899" and "8899" both store cleanly.
+    const digits = newCardLast4.replace(/\D/g, '').slice(-4);
     const newAccount: Account = {
       id: crypto.randomUUID(),
       name: newName,
       type: newType,
       balance: parseFloat(newBalance),
       lastUpdated: new Date().toISOString(),
-      order: maxOrder + 1
+      order: maxOrder + 1,
+      ...(digits ? { cardLast4: digits } : {}),
     };
     addAccount(newAccount);
     setIsAddModalOpen(false);
     setNewName('');
     setNewBalance('');
+    setNewCardLast4('');
   };
 
   const handleSetGoal = () => {
@@ -89,6 +98,15 @@ const BudgetAccounts: React.FC = () => {
       setAccountGoal(isGoalModalOpen, parseFloat(goalAmount));
       setIsGoalModalOpen(null);
       setGoalAmount('');
+    }
+  };
+
+  const handleSetCard = () => {
+    if (isCardModalOpen) {
+      // Empty input clears the tag (setAccountCardLast4 handles the deleteField).
+      setAccountCardLast4(isCardModalOpen, cardDigits);
+      setIsCardModalOpen(null);
+      setCardDigits('');
     }
   };
 
@@ -201,9 +219,17 @@ const BudgetAccounts: React.FC = () => {
             </div>
             <div>
               <p className="font-semibold text-brand-900 dark:text-brand-100">{account.name}</p>
-              <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
-                {account.type}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge variant={isLiability ? 'danger' : 'success'} size="sm" className="uppercase">
+                  {account.type}
+                </Badge>
+                {account.cardLast4 && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-brand-500 dark:text-brand-400">
+                    <CreditCard size={11} aria-hidden />
+                    ···{account.cardLast4}
+                  </span>
+                )}
+              </div>
             </div>
             {isSavings && (
               <Button
@@ -402,6 +428,21 @@ const BudgetAccounts: React.FC = () => {
             onChange={e => setNewBalance(e.target.value)}
             className="font-mono"
           />
+          {newType !== 'savings' && (
+            <div>
+              <Input
+                inputMode="numeric"
+                placeholder="Card last 4 digits (optional)"
+                value={newCardLast4}
+                onChange={e => setNewCardLast4(e.target.value)}
+                maxLength={19}
+                className="font-mono"
+              />
+              <p className="text-xs text-brand-500 dark:text-brand-400 mt-1">
+                Lets bank-alert Shortcuts (e.g. Wells Fargo emails) route purchases to this account.
+              </p>
+            </div>
+          )}
           <Button
             onClick={handleAddAccount}
             className="w-full py-3 mt-2"
@@ -433,6 +474,34 @@ const BudgetAccounts: React.FC = () => {
           className="w-full py-3"
         >
           Set Goal
+        </Button>
+      </Drawer>
+
+      {/* Card Digits Drawer */}
+      <Drawer
+        isOpen={!!isCardModalOpen}
+        onClose={() => setIsCardModalOpen(null)}
+        title="Card Last 4 Digits"
+      >
+        <p className="text-sm text-brand-500 dark:text-brand-400 mb-4">
+          Enter the last 4 digits of the card tied to this account. Bank-alert
+          Shortcuts (e.g. Wells Fargo purchase emails) use this to route
+          transactions to the right account. Leave blank to clear.
+        </p>
+        <Input
+          inputMode="numeric"
+          placeholder="e.g. 8899"
+          value={cardDigits}
+          onChange={e => setCardDigits(e.target.value)}
+          maxLength={19}
+          className="font-mono mb-4"
+          autoFocus
+        />
+        <Button
+          onClick={handleSetCard}
+          className="w-full py-3"
+        >
+          Save
         </Button>
       </Drawer>
 
@@ -470,6 +539,22 @@ const BudgetAccounts: React.FC = () => {
                   }}
                 >
                   Set Savings Goal
+                </Button>
+              )}
+
+              {/* Set / edit card last-4 (debit & credit cards) */}
+              {actionAccount.type !== 'savings' && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-lg py-4"
+                  leftIcon={<CreditCard className="text-brand-500" />}
+                  onClick={() => {
+                    setCardDigits(actionAccount.cardLast4 ?? '');
+                    setIsCardModalOpen(actionAccount.id);
+                    setActionAccount(null);
+                  }}
+                >
+                  {actionAccount.cardLast4 ? 'Edit Card Digits' : 'Add Card Digits'}
                 </Button>
               )}
 
