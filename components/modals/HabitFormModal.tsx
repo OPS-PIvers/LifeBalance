@@ -305,6 +305,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
             <Input
               label={showAssignControl ? 'Chore Points' : 'Points'}
               type="number"
+              inputMode="numeric"
               value={basePoints}
               onChange={e => setBasePoints(e.target.value)}
               className="text-center font-mono font-bold"
@@ -316,6 +317,7 @@ const HabitFormModal: React.FC<HabitFormModalProps> = ({ isOpen, onClose, editin
                  <input
                   id="habit-target"
                   type="number"
+                  inputMode="numeric"
                   value={targetCount}
                   onChange={e => setTargetCount(e.target.value)}
                   className="w-20 p-2 bg-white dark:bg-brand-800 border border-brand-200 dark:border-brand-700 rounded-lg text-center font-mono font-bold"

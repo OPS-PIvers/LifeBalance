@@ -258,7 +258,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                 <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
-                        size="icon-sm"
+                        size="icon"
                         onClick={() => handleToggleHabit(item.id, 'down')}
                         aria-label="Decrease daily count"
                     >
@@ -267,7 +267,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     <span className="font-bold w-6 text-center">{item.count}</span>
                     <Button
                         variant="secondary"
-                        size="icon-sm"
+                        size="icon"
                         onClick={() => handleToggleHabit(item.id, 'up')}
                         aria-label="Increase daily count"
                     >
@@ -318,7 +318,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                  <div className="flex items-center gap-3">
                     <Button
                         variant="secondary"
-                        size="icon-sm"
+                        size="icon"
                         onClick={() => handleUpdateTotalCount(item, item.totalCount - 1)}
                         aria-label="Decrease total count"
                     >
@@ -327,7 +327,7 @@ const PointsBreakdownModal: React.FC<PointsBreakdownModalProps> = ({
                     <span className="font-bold min-w-12 text-center">{item.totalCount}</span>
                     <Button
                         variant="secondary"
-                        size="icon-sm"
+                        size="icon"
                         onClick={() => handleUpdateTotalCount(item, item.totalCount + 1)}
                         aria-label="Increase total count"
                     >

@@ -338,7 +338,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                       value={newStoreName}
                       onChange={(e) => setNewStoreName(e.target.value)}
                       placeholder="Store Name (e.g. Costco)"
-                      className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                      className="flex-1 p-2.5 bg-brand-50 border border-brand-200 rounded-xl text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                     />
                     <Button
                       type="submit"
@@ -383,7 +383,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                                   type="text"
                                   value={editStoreName}
                                   onChange={e => setEditStoreName(e.target.value)}
-                                  className="flex-1 p-1.5 border border-brand-300 rounded-sm text-sm outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
+                                  className="flex-1 p-1.5 border border-brand-300 rounded-sm text-base outline-hidden dark:bg-brand-700/50 dark:border-brand-500/40 dark:text-brand-200"
                                />
                                <Button variant="ghost" size="icon-sm" onClick={handleUpdateStore} className="text-money-pos hover:text-money-pos hover:bg-money-bgPos dark:text-money-posDark dark:hover:text-money-posDark dark:hover:bg-money-pos/15" aria-label="Save store name"><Save className="w-4 h-4"/></Button>
                                <Button variant="ghost" size="icon-sm" onClick={() => setEditingStoreId(null)} className="text-brand-400 hover:bg-brand-100/50 dark:hover:bg-brand-700/50" aria-label="Cancel editing"><X className="w-4 h-4"/></Button>
@@ -441,7 +441,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                             onChange={(e) => setNewCategoryName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && addCategory()}
                             placeholder="Category Name"
-                            className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                            className="flex-1 p-2 border border-brand-300 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                         />
                         <Button
                             variant="primary"
@@ -561,7 +561,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         value={editingTemplate.name}
                         onChange={e => setEditingTemplate({...editingTemplate, name: e.target.value})}
                         placeholder="Template Name (e.g. Weekly Basics)"
-                        className="flex-1 p-2 border border-brand-300 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="flex-1 p-2 border border-brand-300 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                         autoFocus
                       />
                     </div>
@@ -611,7 +611,7 @@ const ShoppingSettingsModal: React.FC<Props> = ({ isOpen, onClose, initialTempla
                         value={itemSearch}
                         onChange={e => setItemSearch(e.target.value)}
                         placeholder="Search or add new item..."
-                        className="w-full pl-9 p-2 bg-brand-50/50 border border-brand-200 rounded-lg text-sm focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
+                        className="w-full pl-9 p-2 bg-brand-50/50 border border-brand-200 rounded-lg text-base focus:ring-2 focus:ring-accent-500/40 outline-hidden dark:bg-brand-700/50 dark:border-brand-600 dark:text-brand-200 dark:placeholder:text-brand-500"
                       />
                     </div>
 

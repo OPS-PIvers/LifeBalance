@@ -167,7 +167,7 @@ export const Drawer: React.FC<DrawerProps> = ({
              {title && (
                <div className="px-4 py-3 flex items-center justify-between border-b border-brand-200 dark:border-brand-700 shrink-0">
                  <h3 id={titleId} className="font-display font-semibold text-lg text-brand-800 dark:text-brand-100">{title}</h3>
-                 <button onClick={onClose} className="p-2 text-brand-400 hover:text-brand-600 rounded-full hover:bg-brand-100 dark:text-brand-500 dark:hover:text-brand-200 dark:hover:bg-brand-700" aria-label="Close drawer" disabled={disableClose}>
+                 <button onClick={onClose} className="p-2.5 min-w-11 min-h-11 flex items-center justify-center text-brand-400 hover:text-brand-600 rounded-full hover:bg-brand-100 dark:text-brand-500 dark:hover:text-brand-200 dark:hover:bg-brand-700" aria-label="Close drawer" disabled={disableClose}>
                    <X size={20} />
                  </button>
                </div>

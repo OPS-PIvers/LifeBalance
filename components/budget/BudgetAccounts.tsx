@@ -304,6 +304,7 @@ const BudgetAccounts: React.FC = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  inputMode="decimal"
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
                   className="w-24 bg-brand-50 dark:bg-brand-700/50 border border-brand-200 dark:border-brand-700 rounded-btn px-2 py-1 text-right font-mono font-bold outline-hidden focus:ring-2 focus:ring-accent-500/40 dark:text-brand-100"
@@ -454,6 +455,7 @@ const BudgetAccounts: React.FC = () => {
           </Select>
           <Input
             type="number"
+            inputMode="decimal"
             placeholder="Current Balance"
             value={newBalance}
             onChange={e => setNewBalance(e.target.value)}
@@ -494,6 +496,7 @@ const BudgetAccounts: React.FC = () => {
         </p>
         <Input
           type="number"
+          inputMode="decimal"
           placeholder="Goal Amount"
           value={goalAmount}
           onChange={e => setGoalAmount(e.target.value)}

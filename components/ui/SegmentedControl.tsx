@@ -92,7 +92,7 @@ export const SegmentedControl = <T extends string>({
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => handleKeyDown(e, index)}
             className={cn(
-              "flex-1 py-2 rounded-sm text-sm font-bold transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed",
+              "flex-1 min-h-11 py-2 rounded-sm text-sm font-bold transition-all duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden focus-visible:ring-2 disabled:cursor-not-allowed",
               toneStyles.ring,
               isActive
                 ? cn("bg-white border border-brand-200 dark:bg-brand-700 dark:border-brand-600", option.activeClassName || toneStyles.activeText)

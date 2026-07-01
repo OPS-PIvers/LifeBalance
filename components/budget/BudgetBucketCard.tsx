@@ -140,6 +140,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={localLimit}
                     onChange={e => setLocalLimit(e.target.value)}
                     onKeyDown={handleKeyDown}
@@ -197,7 +198,7 @@ export const BudgetBucketCard: React.FC<BudgetBucketCardProps> = memo(({
             variant="ghost"
             size="icon-sm"
             onClick={(e) => { e.stopPropagation(); onEditBucket(bucket); }}
-            className="text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300"
+            className="min-w-11 min-h-11 sm:min-w-0 sm:min-h-0 text-brand-300 dark:text-brand-600 hover:text-brand-600 dark:hover:text-brand-300"
             aria-label={`Edit ${bucket.name} bucket`}
           >
             <Pencil size={14} />

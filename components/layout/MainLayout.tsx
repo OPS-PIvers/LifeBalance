@@ -94,7 +94,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
         <TopToolbar />
       </div>
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden relative scroll-smooth w-full">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative scroll-smooth w-full">
         <div className="pb-8">
           {/* key=pathname resets the boundary on navigation so a crashed page
               does not stay crashed after the user navigates away */}

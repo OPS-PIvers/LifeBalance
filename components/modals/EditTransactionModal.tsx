@@ -201,6 +201,7 @@ const EditTransactionModal: React.FC<EditTransactionModalProps> = ({ isOpen, onC
           id="edit-amount"
           label="Amount"
           type="number"
+          inputMode="decimal"
           step="0.01"
           disabled={isSaving}
           value={amount}

@@ -186,6 +186,7 @@ const SplitTransactionModal: React.FC<SplitTransactionModalProps> = ({ isOpen, o
                   id={`split-amount-${split.id}`}
                   label="Amount"
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   value={split.amount}
                   onChange={(e) => updateSplit(split.id, 'amount', e.target.value)}

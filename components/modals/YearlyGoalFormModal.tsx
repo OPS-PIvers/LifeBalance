@@ -110,6 +110,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
           <Input
             label="Year"
             type="number"
+            inputMode="numeric"
             value={year || ''}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);
@@ -124,6 +125,7 @@ const YearlyGoalFormModal: React.FC<YearlyGoalFormModalProps> = ({
             label="Required Months"
             required
             type="number"
+            inputMode="numeric"
             value={requiredMonths || ''}
             onChange={(e) => {
               const val = parseInt(e.target.value, 10);

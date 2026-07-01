@@ -622,7 +622,7 @@ const HabitSubmissionLogModal: React.FC<HabitSubmissionLogModalProps> = ({
             <h3 className="font-bold text-brand-800 dark:text-brand-100">Edit Submission</h3>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               onClick={() => setEditingSubmission(null)}
               aria-label="Close edit"
             >

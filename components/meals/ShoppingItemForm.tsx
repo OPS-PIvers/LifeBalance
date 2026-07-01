@@ -73,7 +73,7 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                                 key={store.id}
                                 type="button"
                                 onClick={() => onChange({...item, store: store.name})}
-                                className={`px-2 py-1 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
+                                className={`px-2.5 py-2 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
                                     item.store?.toLowerCase() === store.name.toLowerCase()
                                     ? 'bg-accent-100 text-accent-800 border-accent-200 dark:bg-accent-900/40 dark:text-accent-200 dark:border-accent-700'
                                     : 'bg-white text-brand-500 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600 dark:hover:bg-brand-700'
@@ -100,7 +100,7 @@ export const ShoppingItemForm: React.FC<ShoppingItemFormProps> = ({ item, onChan
                                     type="button"
                                     // Empty string toggles the item OFF the list (matches the row's prior behaviour).
                                     onClick={() => onQuickListChange(item, isActive ? '' : list.id)}
-                                    className={`px-2 py-1 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
+                                    className={`px-2.5 py-2 rounded-sm text-xs font-medium border transition-colors duration-(--duration-fast) ease-(--ease-standard) flex items-center gap-1 ${
                                         isActive
                                         ? 'bg-accent-100 text-accent-800 border-accent-200 dark:bg-accent-900/40 dark:text-accent-200 dark:border-accent-700'
                                         : 'bg-white text-brand-500 border-brand-200 hover:bg-brand-50 dark:bg-brand-700/50 dark:text-brand-400 dark:border-brand-600 dark:hover:bg-brand-700'

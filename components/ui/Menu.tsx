@@ -105,7 +105,7 @@ export const Menu: React.FC<MenuProps> = ({
               item.onSelect();
             }}
             className={[
-              'w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden disabled:opacity-50 disabled:cursor-not-allowed',
+              'w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-left transition-colors duration-(--duration-fast) ease-(--ease-standard) focus:outline-hidden disabled:opacity-50 disabled:cursor-not-allowed',
               TONE_LABEL[tone],
               TONE_BG[tone],
             ].join(' ')}
