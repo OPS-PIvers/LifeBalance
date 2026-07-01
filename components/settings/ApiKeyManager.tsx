@@ -20,6 +20,12 @@ interface ApiKeyManagerProps {
   userId: string;
   apiKeys: HouseholdApiKey[];
   isAdmin: boolean;
+  /**
+   * Called with the raw key the moment it's generated (write-once). Lets the
+   * sibling setup guide pre-fill and copy the `Bearer …` Authorization header,
+   * so the user never has to hunt for the key.
+   */
+  onKeyGenerated?: (key: string) => void;
 }
 
 const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
@@ -27,6 +33,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
   userId,
   apiKeys,
   isAdmin,
+  onKeyGenerated,
 }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
@@ -68,6 +75,7 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
       );
 
       setNewlyCreatedKey(result.key);
+      onKeyGenerated?.(result.key);
       setNewKeyName('');
       setIsCreating(false);
       toast.success('API key created! Copy it now - it won\'t be shown again.');
@@ -140,26 +148,38 @@ const ApiKeyManager: React.FC<ApiKeyManagerProps> = ({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-white dark:bg-brand-900 px-3 py-2 rounded-btn border border-warm-200 dark:border-warm-500/30 text-sm font-mono break-all text-brand-900 dark:text-brand-100">
-              {newlyCreatedKey}
-            </code>
+          <code className="block bg-white dark:bg-brand-900 px-3 py-2 rounded-btn border border-warm-200 dark:border-warm-500/30 text-sm font-mono break-all text-brand-900 dark:text-brand-100">
+            {newlyCreatedKey}
+          </code>
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="primary"
+              size="sm"
+              onClick={() => handleCopyKey(`Bearer ${newlyCreatedKey}`)}
+              leftIcon={<Copy className="w-4 h-4" />}
+            >
+              Copy Authorization header
+            </Button>
+            <Button
+              variant="secondary"
               size="sm"
               onClick={() => handleCopyKey(newlyCreatedKey)}
               leftIcon={<Copy className="w-4 h-4" />}
             >
-              Copy
+              Copy key only
             </Button>
           </div>
+          <p className="text-xs text-warm-700 dark:text-warm-300">
+            The setup guide below is now pre-filled with this key — paste the Authorization header
+            straight into your shortcuts.
+          </p>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setNewlyCreatedKey(null)}
             className="w-full"
           >
-            I have copied the key
+            Done — I&apos;ve copied it
           </Button>
         </div>
       )}
