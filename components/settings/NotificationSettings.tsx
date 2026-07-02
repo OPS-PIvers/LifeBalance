@@ -57,20 +57,28 @@ const getHourOptions = () => {
   });
 };
 
+// Merge saved preferences over the defaults one section at a time. Legacy
+// Firestore docs can predate newer sections (e.g. billReminders), and a
+// shallow spread of such a doc would leave those sections undefined and crash
+// the render on `.enabled`. Also falls back to the browser timezone so
+// existing users don't silently default to UTC.
+const mergePreferences = (current?: NotificationPreferences): NotificationPreferences => ({
+  habitReminders: { ...DEFAULT_PREFERENCES.habitReminders, ...current?.habitReminders },
+  actionQueueReminders: { ...DEFAULT_PREFERENCES.actionQueueReminders, ...current?.actionQueueReminders },
+  budgetAlerts: { ...DEFAULT_PREFERENCES.budgetAlerts, ...current?.budgetAlerts },
+  streakWarnings: { ...DEFAULT_PREFERENCES.streakWarnings, ...current?.streakWarnings },
+  billReminders: { ...DEFAULT_PREFERENCES.billReminders, ...current?.billReminders },
+  timezone: current?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+});
+
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   householdId,
   currentPreferences,
   onSave
 }) => {
-  // Initialize preferences with timezone fallback to prevent UTC default for existing users
-  const [preferences, setPreferences] = useState<NotificationPreferences>(() => {
-    const base = currentPreferences || DEFAULT_PREFERENCES;
-    return {
-      ...base,
-      // If DB has no timezone, use the browser's current one
-      timezone: base.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-    };
-  });
+  const [preferences, setPreferences] = useState<NotificationPreferences>(() =>
+    mergePreferences(currentPreferences)
+  );
   const [isSaving, setIsSaving] = useState(false);
 
   const hourOptions = getHourOptions();
@@ -83,11 +91,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   if (prevCurrentPreferences !== currentPreferences) {
     setPrevCurrentPreferences(currentPreferences);
     if (currentPreferences) {
-      setPreferences({
-        ...currentPreferences,
-        // Preserve existing timezone or fallback to browser's
-        timezone: currentPreferences.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
-      });
+      setPreferences(mergePreferences(currentPreferences));
     }
   }
 
@@ -354,7 +358,7 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({
                   type="number"
                   min="0"
                   step="10"
-                  value={preferences.budgetAlerts.threshold || 100}
+                  value={preferences.budgetAlerts.threshold ?? 100}
                   onChange={(e) => handleThresholdChange(Number(e.target.value))}
                   className={`w-20 ${inlineControlClass}`}
                   aria-label="Low balance alert threshold in dollars"
