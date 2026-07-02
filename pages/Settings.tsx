@@ -405,7 +405,8 @@ const Settings: React.FC = () => {
     // Sort admins first
     if (a.role === 'admin' && b.role !== 'admin') return -1;
     if (a.role !== 'admin' && b.role === 'admin') return 1;
-    return a.displayName.localeCompare(b.displayName);
+    // Legacy member docs can lack displayName despite the schema type — sort them safely.
+    return (a.displayName || '').localeCompare(b.displayName || '');
   });
 
   return (
@@ -922,24 +923,15 @@ const Settings: React.FC = () => {
         {/* Account */}
         <Section title="Account">
           <SurfaceList>
-            <Row
-              interactive
-              role="button"
-              tabIndex={0}
+            <DisclosureRow
+              icon={
+                <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
+                  <LogOut size={18} className="text-brand-500 dark:text-brand-400" />
+                </div>
+              }
+              title="Sign Out"
               onClick={handleSignOut}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleSignOut();
-                }
-              }}
-              aria-label="Sign out"
-            >
-              <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-700 flex items-center justify-center shrink-0">
-                <LogOut size={18} className="text-brand-500 dark:text-brand-400" />
-              </div>
-              <span className="flex-1 font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Sign Out</span>
-            </Row>
+            />
           </SurfaceList>
         </Section>
 

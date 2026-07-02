@@ -5,7 +5,7 @@ import { Landmark } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getFunctionsInstance } from '@/firebase.config';
 import { useHouseholdCore } from '@/contexts/FirebaseHouseholdContext';
-import { Section, SurfaceList, Row } from '@/components/ui/Section';
+import { Section, SurfaceList, DisclosureRow } from '@/components/ui/Section';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 /**
@@ -106,55 +106,24 @@ const ConnectBankCard: React.FC = () => {
   return (
     <Section title="Bank">
       <SurfaceList>
-        <Row
-          interactive
-          role="button"
-          tabIndex={connectDisabled ? -1 : 0}
-          aria-disabled={connectDisabled}
-          onClick={() => { if (!connectDisabled) handleConnect(); }}
-          onKeyDown={(e) => {
-            if ((e.key === 'Enter' || e.key === ' ') && !connectDisabled) {
-              e.preventDefault();
-              handleConnect();
-            }
-          }}
-          className={connectDisabled ? 'opacity-60 pointer-events-none' : undefined}
-          aria-label="Connect a bank via Plaid"
-        >
-          <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
-            <Landmark size={18} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-brand-900 dark:text-brand-50 text-sm tracking-tight">
-              Connect a bank
-            </p>
-            <p className="text-xs text-brand-500 dark:text-brand-400">
-              {busy
-                ? 'Connecting…'
-                : 'Securely link an account via Plaid — transactions sync automatically.'}
-            </p>
-          </div>
-        </Row>
+        <DisclosureRow
+          disabled={connectDisabled}
+          icon={
+            <div className="w-10 h-10 rounded-full bg-accent-50 text-accent-700 dark:bg-accent-800/40 dark:text-accent-200 flex items-center justify-center shrink-0">
+              <Landmark size={18} />
+            </div>
+          }
+          title="Connect a bank"
+          subtitle={busy ? 'Connecting…' : 'Securely link via Plaid — auto-sync transactions'}
+          onClick={handleConnect}
+        />
 
-        <Row
-          interactive
-          role="button"
-          tabIndex={disconnectDisabled ? -1 : 0}
-          aria-disabled={disconnectDisabled}
-          onClick={() => { if (!disconnectDisabled) setConfirmDisconnect(true); }}
-          onKeyDown={(e) => {
-            if ((e.key === 'Enter' || e.key === ' ') && !disconnectDisabled) {
-              e.preventDefault();
-              setConfirmDisconnect(true);
-            }
-          }}
-          className={disconnectDisabled ? 'opacity-60 pointer-events-none' : undefined}
-          aria-label="Disconnect bank"
-        >
-          <span className="flex-1 text-sm font-medium text-money-neg dark:text-money-neg">
-            Disconnect bank
-          </span>
-        </Row>
+        <DisclosureRow
+          destructive
+          disabled={disconnectDisabled}
+          title="Disconnect bank"
+          onClick={() => setConfirmDisconnect(true)}
+        />
       </SurfaceList>
 
       <ConfirmDialog

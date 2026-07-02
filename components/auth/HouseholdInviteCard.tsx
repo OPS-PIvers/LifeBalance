@@ -3,7 +3,7 @@ import { Copy, Check, Share2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { buildInviteUrl } from '@/utils/inviteLink';
 import { Button } from '@/components/ui/Button';
-import { SurfaceList, Row } from '@/components/ui/Section';
+import { SurfaceList, Row, DisclosureRow } from '@/components/ui/Section';
 
 interface Props {
   inviteCode: string;
@@ -81,27 +81,16 @@ const HouseholdInviteCard: React.FC<Props> = ({ inviteCode }) => {
           </Button>
         </Row>
 
-        <Row
-          interactive
-          role="button"
-          tabIndex={0}
+        <DisclosureRow
+          icon={
+            <div className="w-10 h-10 rounded-full bg-accent-50 dark:bg-accent-500/15 flex items-center justify-center shrink-0">
+              <Share2 size={18} className="text-accent-600 dark:text-accent-300" />
+            </div>
+          }
+          title="Share invite link"
+          subtitle="One-tap joining for family members"
           onClick={handleShareLink}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleShareLink();
-            }
-          }}
-          aria-label="Share invite link"
-        >
-          <div className="w-10 h-10 rounded-full bg-accent-50 dark:bg-accent-500/15 flex items-center justify-center shrink-0">
-            <Share2 size={18} className="text-accent-600 dark:text-accent-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-brand-900 dark:text-brand-100 text-sm tracking-tight">Share invite link</p>
-            <p className="text-xs text-brand-500 dark:text-brand-400">One-tap joining for family members</p>
-          </div>
-        </Row>
+        />
       </SurfaceList>
 
       <p className="text-xs text-brand-500 dark:text-brand-400 px-1">
