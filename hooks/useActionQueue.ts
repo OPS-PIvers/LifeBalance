@@ -6,6 +6,7 @@ import {
 import { Transaction, CalendarItem, ToDo } from '@/types/schema';
 import { useFinance, useTodos, useExpandedCalendarItems } from '@/contexts/FirebaseHouseholdContext';
 import { useModuleVisibility } from '@/hooks/useModuleVisibility';
+import { getLocalDateString } from '@/utils/dateHelpers';
 
 // ToDoActionQueueItem normalizes the ToDo interface for the action queue
 // by replacing 'completeByDate' with 'date' to match Transaction and CalendarItem.
@@ -69,10 +70,15 @@ export const useActionQueue = () => {
     !item.isPaid && (isBefore(parseISO(item.date), endToday) || isSameDay(parseISO(item.date), today))
   ).map(i => ({ ...i, queueType: 'calendar' as const })) : [], [showMoney, expandedCalendarItems, endToday, today]);
 
-  // 2. Pending Transactions — money domain
+  // 2. Pending Transactions — money domain. A row deferred via the queue's
+  // swipe/bulk "Defer" is snoozed (hidden) while its reviewSnoozedUntil is
+  // still in the future; both sides are local yyyy-MM-dd, so lexical compare
+  // is chronological. It still counts toward pendingSpend / Safe-to-Spend.
+  const localToday = useMemo(() => getLocalDateString(), []);
   const pendingTx: ActionQueueItem[] = useMemo(() => showMoney ? transactions.filter(t =>
-    t.status === 'pending_review'
-  ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions]);
+    t.status === 'pending_review' &&
+    !(t.reviewSnoozedUntil && t.reviewSnoozedUntil > localToday)
+  ).map(t => ({ ...t, queueType: 'transaction' as const })) : [], [showMoney, transactions, localToday]);
 
   // 3. Immediate To-Dos (Overdue, Today or Tomorrow) — Plan→To-Dos domain
   // Filter out todos with invalid dates early to prevent issues downstream
