@@ -196,6 +196,33 @@ describe('useActionQueue', () => {
     expect(result.current.actionQueue.map((i) => i.id)).toEqual(['pending']);
   });
 
+  it('hides snoozed pending transactions until their reviewSnoozedUntil passes', () => {
+    setMocks({
+      transactions: [
+        // Snoozed until tomorrow → hidden today.
+        makeTransaction({
+          id: 'snoozed',
+          date: '2026-06-14',
+          status: 'pending_review',
+          reviewSnoozedUntil: '2026-06-17',
+        }),
+        // Snooze expired (today) → visible again.
+        makeTransaction({
+          id: 'expired',
+          date: '2026-06-14',
+          status: 'pending_review',
+          reviewSnoozedUntil: '2026-06-16',
+        }),
+        makeTransaction({ id: 'never-snoozed', date: '2026-06-14', status: 'pending_review' }),
+      ],
+    });
+    const { result } = renderHook(() => useActionQueue());
+    const ids = result.current.actionQueue.map((i) => i.id);
+    expect(ids).not.toContain('snoozed');
+    expect(ids).toContain('expired');
+    expect(ids).toContain('never-snoozed');
+  });
+
   it('keeps an Apple Pay $0 stub in the queue even after it was dismissed from the on-open drawer', () => {
     setMocks({
       transactions: [

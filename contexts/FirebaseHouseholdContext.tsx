@@ -183,6 +183,14 @@ function mapTodoDoc(d: QueryDocumentSnapshot<ToDo>): ToDo {
 // the same doc twice).
 // ---------------------------------------------------------------------------
 
+/** Options accepted by mutations that normally toast per call. `silent: true`
+ *  suppresses the per-item success toast so BULK flows (Action Queue
+ *  multi-select) can show one summary toast instead of N stacked ones.
+ *  Error toasts are never suppressed. */
+export interface MutationOpts {
+  silent?: boolean;
+}
+
 export interface HouseholdContextType {
   // State
   /** True during the initial cold load before the first household snapshot resolves. */
@@ -293,15 +301,18 @@ export interface HouseholdContextType {
   // Calendar Actions
   addCalendarItem: (item: CalendarItem) => Promise<void>;
   updateCalendarItem: (item: CalendarItem) => Promise<void>;
-  deleteCalendarItem: (id: string) => Promise<void>;
-  payCalendarItem: (itemId: string, accountId: string) => Promise<void>;
-  deferCalendarItem: (itemId: string) => Promise<void>;
+  deleteCalendarItem: (id: string, opts?: MutationOpts) => Promise<void>;
+  payCalendarItem: (itemId: string, accountId: string, opts?: MutationOpts) => Promise<void>;
+  deferCalendarItem: (itemId: string, opts?: MutationOpts) => Promise<void>;
 
   // Transaction Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>) => Promise<void>;
-  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[]) => Promise<void>;
-  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
-  deleteTransaction: (id: string) => Promise<void>;
+  /** Verify a pending transaction under `category`. Optional `accountId`
+   *  additionally (re)tags the transaction so the verify-time balance impact
+   *  lands on that account (used by the Action Queue's smart approve). */
+  updateTransactionCategory: (id: string, category: string, relatedHabitIds?: string[], accountId?: string) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => Promise<void>;
+  deleteTransaction: (id: string, opts?: MutationOpts) => Promise<void>;
   splitTransaction: (originalTransactionId: string, newTransactions: Omit<Transaction, 'id' | 'createdAt' | 'payPeriodId' | 'createdBy'>[]) => Promise<void>;
   /** Stamp `needsAmountPromptedAt` on Apple Pay $0 stubs so the on-open
    *  "awaiting amount" drawer won't auto-surface them again (they remain in the
@@ -2253,7 +2264,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
-  const deleteRecurringInstance = useCallback(async (syntheticId: string) => {
+  const deleteRecurringInstance = useCallback(async (syntheticId: string, opts?: MutationOpts) => {
     if (!householdId || !user) return;
 
     try {
@@ -2273,7 +2284,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       if (existingInstance) {
         // If it's already a paid/deleted instance, just delete that record
         await deleteDoc(doc(db, `households/${householdId}/calendarItems`, existingInstance.id));
-        toast.success('Instance deleted');
+        if (!opts?.silent) toast.success('Instance deleted');
         return;
       }
 
@@ -2290,7 +2301,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdBy: user.uid,
       });
 
-      toast.success('Instance deleted');
+      if (!opts?.silent) toast.success('Instance deleted');
     } catch (error) {
       console.error('[deleteRecurringInstance] Failed:', error);
       toast.error('Failed to delete instance. Please try again.');
@@ -2298,7 +2309,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, user, calendarItems]);
 
-  const deleteCalendarItem = useCallback(async (id: string) => {
+  const deleteCalendarItem = useCallback(async (id: string, opts?: MutationOpts) => {
     if (!householdId) return;
 
     try {
@@ -2307,11 +2318,11 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       if (isRecurringInstance) {
         // Delete only this instance, not the entire series
-        await deleteRecurringInstance(id);
+        await deleteRecurringInstance(id, opts);
       } else {
         // Direct deletion for non-recurring items or templates
         await deleteDoc(doc(db, `households/${householdId}/calendarItems`, id));
-        toast.success('Event deleted');
+        if (!opts?.silent) toast.success('Event deleted');
       }
     } catch (error) {
       console.error('[deleteCalendarItem] Failed:', error);
@@ -2320,7 +2331,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, deleteRecurringInstance]);
 
-  const payCalendarItem = useCallback(async (itemId: string, accountId: string) => {
+  const payCalendarItem = useCallback(async (itemId: string, accountId: string, opts?: MutationOpts) => {
     if (!householdId || !user) return;
 
     try {
@@ -2429,7 +2440,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         lastUpdated: serverTimestamp(),
       });
 
-      // 3. Create transaction
+      // 3. Create transaction. `accountId` records which account the bill was
+      // paid from — it's what lets the Action Queue's swipe-approve suggest
+      // "the account you used last time" for this bill going forward.
       const newTransactionRef = doc(collection(db, `households/${householdId}/transactions`));
       payBatch.set(newTransactionRef, {
         amount: item.amount,
@@ -2441,6 +2454,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         source: 'recurring',
         autoCategorized: true,
         payPeriodId,
+        accountId,
         createdBy: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -2449,7 +2463,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       // DO NOT update bucket.spent - it's now calculated in real-time from transactions
 
-      toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
+      if (!opts?.silent) toast.success(item.type === 'expense' ? 'Bill Paid' : 'Income Received');
     } catch (error) {
       console.error('[payCalendarItem] Failed:', error);
       toast.error('Failed to process payment. Please try again.');
@@ -2457,7 +2471,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, user, accounts, calendarItems, buckets, householdSettings, handlePaycheckApproval]);
 
-  const deferCalendarItem = useCallback(async (itemId: string) => {
+  const deferCalendarItem = useCallback(async (itemId: string, opts?: MutationOpts) => {
     if (!householdId || !user) return;
 
     // Common date calculation logic:
@@ -2529,8 +2543,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         createdBy: user.uid,
       });
 
-      const formattedDate = format(parseISO(newDate), 'MMM d');
-      toast.success(`Deferred to ${formattedDate}`);
+      if (!opts?.silent) {
+        toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
+      }
     } else {
       // Non-recurring item - just move the date
       const item = calendarItems.find(i => i.id === itemId);
@@ -2542,8 +2557,9 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
         date: newDate,
       });
 
-      const formattedDate = format(parseISO(newDate), 'MMM d');
-      toast.success(`Deferred to ${formattedDate}`);
+      if (!opts?.silent) {
+        toast.success(`Deferred to ${format(parseISO(newDate), 'MMM d')}`);
+      }
     }
   }, [householdId, user, calendarItems]);
 
@@ -2677,7 +2693,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId, user, householdSettings, accounts]);
 
-  const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[]) => {
+  const updateTransactionCategory = useCallback(async (id: string, category: string, relatedHabitIds?: string[], accountId?: string) => {
     if (!householdId || !currentUser) return;
 
     // Verifying a pending transaction may also increment related habits and the
@@ -2705,28 +2721,46 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
       toast.error('Transaction not found');
       return;
     }
-    // The account does not change on this path, so resolve it once. Promoting a
-    // pending credit charge to verified raises the card's debt; verifying a
-    // checking expense debits checking.
-    const target = resolveTargetAccount(existingTx.accountId, accounts);
-    const balanceDelta =
-      effectiveAccountImpact({ amount: existingTx.amount, category, creditPayment: existingTx.creditPayment, status: 'verified' }, target)
-        - effectiveAccountImpact(existingTx, target);
+    // An optional `accountId` (Action Queue smart approve) re-tags the
+    // transaction, so the OLD and NEW target accounts may differ. Reverse the
+    // old account's effective impact (0 for a pending row) and apply the new
+    // account's, merged per-account so one batch never writes the same doc
+    // twice — the same rule `updateTransaction` uses. Promoting a pending
+    // credit charge to verified raises the card's debt; verifying a checking
+    // expense debits checking.
+    const newAccountId = accountId?.trim() || undefined;
+    const oldTarget = resolveTargetAccount(existingTx.accountId, accounts);
+    const newTarget = resolveTargetAccount(newAccountId ?? existingTx.accountId, accounts);
 
-    // 1. Update Transaction
+    const reverseDelta = -effectiveAccountImpact(existingTx, oldTarget);
+    const applyDelta = effectiveAccountImpact(
+      { amount: existingTx.amount, category, creditPayment: existingTx.creditPayment, status: 'verified' },
+      newTarget
+    );
+    const deltasByAccountId = new Map<string, number>();
+    if (oldTarget) deltasByAccountId.set(oldTarget.id, (deltasByAccountId.get(oldTarget.id) ?? 0) + reverseDelta);
+    if (newTarget) deltasByAccountId.set(newTarget.id, (deltasByAccountId.get(newTarget.id) ?? 0) + applyDelta);
+
+    // 1. Update Transaction. Verifying resolves any Action-Queue snooze, so the
+    // stale marker doesn't linger on the doc.
     batch.update(doc(db, `households/${householdId}/transactions`, id), {
       category,
       status: 'verified',
-      relatedHabitIds: relatedHabitIds || []
+      relatedHabitIds: relatedHabitIds || [],
+      ...(newAccountId ? { accountId: newAccountId } : {}),
+      ...(existingTx.reviewSnoozedUntil ? { reviewSnoozedUntil: deleteField() } : {}),
     });
 
     // 1b. Apply the account-balance impact of the status/category transition in
     // the SAME batch (server-side delta avoids lost updates from concurrent edits).
-    if (balanceDelta !== 0 && target) {
-      batch.update(doc(db, `households/${householdId}/accounts`, target.id), {
-        balance: increment(roundMoney(balanceDelta)),
-        lastUpdated: serverTimestamp(),
-      });
+    for (const [accId, delta] of deltasByAccountId) {
+      const rounded = roundMoney(delta);
+      if (rounded !== 0) {
+        batch.update(doc(db, `households/${householdId}/accounts`, accId), {
+          balance: increment(rounded),
+          lastUpdated: serverTimestamp(),
+        });
+      }
     }
 
     // 2. Increment Habits if any
@@ -2793,7 +2827,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     toast.success('Verified & Categorized!');
   }, [householdId, currentUser, habits, transactions, accounts]);
 
-  const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>) => {
+  const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>, opts?: MutationOpts) => {
     if (!householdId) return;
 
     try {
@@ -2911,7 +2945,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       await updateBatch.commit();
 
-      toast.success('Transaction updated!');
+      if (!opts?.silent) toast.success('Transaction updated!');
     } catch (error) {
       console.error('[updateTransaction] Failed:', error);
       toast.error('Failed to update transaction');
@@ -2938,7 +2972,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
     }
   }, [householdId]);
 
-  const deleteTransaction = useCallback(async (id: string) => {
+  const deleteTransaction = useCallback(async (id: string, opts?: MutationOpts) => {
     if (!householdId) return;
 
     try {
@@ -2973,7 +3007,7 @@ export const FirebaseHouseholdProvider: React.FC<{ children: ReactNode }> = ({ c
 
       await deleteBatch.commit();
 
-      toast.success('Transaction deleted');
+      if (!opts?.silent) toast.success('Transaction deleted');
     } catch (error) {
       console.error('[deleteTransaction] Failed:', error);
       toast.error('Failed to delete transaction');
